@@ -552,3 +552,25 @@ export async function impersonateUserFn(input: { data: { userId: string } }) {
   return { success: true };
 }
 
+export async function deleteUserFn(input: { data: { userId: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  const db = await getDb();
+
+  const user = await db.collection("users").findOne({ _id: data.userId as any });
+  if (!user) throw new Error("User not found");
+
+  // Delete the user account
+  await db.collection("users").deleteOne({ _id: data.userId as any });
+
+  // If user was an owner, also clean up their associated employee licenses
+  if (user.role === "owner" && user.business_id) {
+    await db.collection("licenses").deleteMany({
+      type: "employee",
+      business_id: user.business_id,
+      used: false,
+    });
+  }
+
+  return { success: true };
+}

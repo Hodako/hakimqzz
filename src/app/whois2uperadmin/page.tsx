@@ -21,6 +21,7 @@ import {
   suspendBusinessFn,
   deleteBusinessFn,
   impersonateUserFn,
+  deleteUserFn,
 } from "@/lib/rpc-admin";
 import {
   Trash2,
@@ -56,9 +57,13 @@ export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<"feed" | "businesses" | "users" | "licenses">("feed");
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Safe cascade delete modal state
+  // Safe cascade delete modal state — Business
   const [bizToDelete, setBizToDelete] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  // Safe delete modal state — User
+  const [userToDelete, setUserToDelete] = useState<{ id: string; full_name: string; email: string } | null>(null);
+  const [userDeleteConfirmText, setUserDeleteConfirmText] = useState("");
 
   const stats = useQuery({
     queryKey: ["platform-stats"],
@@ -613,7 +618,7 @@ export default function SuperAdminPage() {
                       <th className="p-4">User Detail</th>
                       <th className="p-4">Role & Business</th>
                       <th className="p-4">Registered On</th>
-                      <th className="p-4 text-right">User ID</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40">
@@ -686,6 +691,19 @@ export default function SuperAdminPage() {
                               >
                                 <LogIn className="size-3.5 mr-1" />
                                 Login As
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-8 text-xs font-semibold cursor-pointer bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive hover:text-white"
+                                onClick={() => {
+                                  setUserToDelete({ id: u.id, full_name: u.full_name || u.email, email: u.email });
+                                  setUserDeleteConfirmText("");
+                                }}
+                                title="Delete this user"
+                              >
+                                <Trash2 className="size-3.5 mr-1" />
+                                Delete
                               </Button>
                             </div>
                           </td>
@@ -907,6 +925,80 @@ export default function SuperAdminPage() {
                 className="h-9 font-semibold shadow-inner"
               >
                 Confirm Cascade Delete
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════ USER DELETE CONFIRMATION MODAL ═══════════ */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setUserToDelete(null); setUserDeleteConfirmText(""); }} />
+          <Card className="relative z-10 glass-card w-full max-w-md p-6 space-y-4 border-destructive/30 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-destructive/10 rounded-lg shrink-0">
+                <Trash2 className="size-5 text-destructive" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg text-foreground">Delete User Account</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                You are about to delete <strong className="text-foreground font-bold">"{userToDelete.full_name}"</strong>.
+              </p>
+              <p className="text-xs text-muted-foreground">{userToDelete.email}</p>
+              <p className="text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20 text-xs">
+                <strong>WARNING:</strong> The user account will be permanently removed. If this is a business owner, their unused employee licenses will also be deleted.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="text-xs text-foreground font-semibold">
+                To confirm, type{" "}
+                <span className="text-destructive font-mono">"Delete {userToDelete.full_name}"</span>:
+              </label>
+              <Input
+                type="text"
+                className="beveled-card bg-muted/20 border-destructive/30"
+                placeholder={`Delete ${userToDelete.full_name}`}
+                value={userDeleteConfirmText}
+                onChange={e => setUserDeleteConfirmText(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2.5 justify-end pt-1 text-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUserToDelete(null); setUserDeleteConfirmText(""); }}
+                className="beveled-button h-9"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={userDeleteConfirmText !== `Delete ${userToDelete.full_name}`}
+                onClick={async () => {
+                  try {
+                    await deleteUserFn({ data: { userId: userToDelete.id } });
+                    toast.success(`User "${userToDelete.full_name}" has been deleted.`);
+                    qc.invalidateQueries({ queryKey: ["users-admin"] });
+                    qc.invalidateQueries({ queryKey: ["platform-stats"] });
+                    setUserToDelete(null);
+                    setUserDeleteConfirmText("");
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to delete user");
+                  }
+                }}
+                className="h-9 font-semibold shadow-inner"
+              >
+                Confirm Delete User
               </Button>
             </div>
           </Card>
