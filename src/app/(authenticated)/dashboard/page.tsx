@@ -99,46 +99,115 @@ function KPICard({
   const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
   
   // Padding & Text Size depending on size setting
-  let sizePadding = "p-4 gap-2";
-  let labelSize = "text-xs";
-  let valSize = "text-xl";
-  let subSize = "text-[10px]";
+  let sizePadding = "p-3 sm:p-4 gap-1.5 sm:gap-2";
+  let labelSize = "text-[10px] sm:text-xs";
+  let valSize = "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg md:text-xl truncate w-full";
+  let subSize = "text-[9px] sm:text-[10px]";
   
   if (size === "small") {
-    sizePadding = "p-2.5 gap-1";
-    labelSize = "text-[10px]";
-    valSize = "text-base";
-    subSize = "text-[9px]";
+    sizePadding = "p-2 sm:p-2.5 gap-1";
+    labelSize = "text-[9px] sm:text-[10px]";
+    valSize = "text-[11px] min-[360px]:text-xs min-[400px]:text-sm sm:text-base truncate w-full";
+    subSize = "text-[8px] sm:text-[9px]";
   } else if (size === "large") {
-    sizePadding = "p-5 gap-3";
-    labelSize = "text-sm";
-    valSize = "text-2xl";
-    subSize = "text-xs";
+    sizePadding = "p-4 sm:p-5 gap-2.5 sm:gap-3";
+    labelSize = "text-xs sm:text-sm";
+    valSize = "text-sm min-[360px]:text-base min-[400px]:text-lg sm:text-xl md:text-2xl truncate w-full";
+    subSize = "text-[10px] sm:text-xs";
   }
+
+  // Dynamic Theme Mapping for soft light gradients and shadows
+  const getCardTheme = () => {
+    switch (color) {
+      case "bg-emerald-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-emerald-50/20 to-emerald-500/5 dark:from-zinc-900 dark:via-emerald-950/10 dark:to-emerald-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(16,185,129,0.06)] dark:shadow-[0_4px_16px_rgba(16,185,129,0.03)]",
+          border: "border-emerald-500/20 hover:border-emerald-500/40"
+        };
+      case "bg-rose-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-rose-50/20 to-rose-500/5 dark:from-zinc-900 dark:via-rose-950/10 dark:to-rose-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(244,63,94,0.06)] dark:shadow-[0_4px_16px_rgba(244,63,94,0.03)]",
+          border: "border-rose-500/20 hover:border-rose-500/40"
+        };
+      case "bg-indigo-500":
+      case "bg-indigo-600":
+        return {
+          gradient: "bg-gradient-to-br from-white via-indigo-50/20 to-indigo-500/5 dark:from-zinc-900 dark:via-indigo-950/10 dark:to-indigo-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(99,102,241,0.06)] dark:shadow-[0_4px_16px_rgba(99,102,241,0.03)]",
+          border: "border-indigo-500/20 hover:border-indigo-500/40"
+        };
+      case "bg-amber-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-amber-50/20 to-amber-500/5 dark:from-zinc-900 dark:via-amber-950/10 dark:to-amber-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(245,158,11,0.06)] dark:shadow-[0_4px_16px_rgba(245,158,11,0.03)]",
+          border: "border-amber-500/20 hover:border-amber-500/40"
+        };
+      case "bg-amber-600":
+        return {
+          gradient: "bg-gradient-to-br from-white via-amber-50/25 to-amber-600/5 dark:from-zinc-900 dark:via-amber-950/15 dark:to-amber-600/5",
+          shadow: "shadow-[0_4px_16px_rgba(217,119,6,0.06)] dark:shadow-[0_4px_16px_rgba(217,119,6,0.03)]",
+          border: "border-amber-600/20 hover:border-amber-600/40"
+        };
+      case "bg-sky-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-sky-50/20 to-sky-500/5 dark:from-zinc-900 dark:via-sky-950/10 dark:to-sky-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(14,165,233,0.06)] dark:shadow-[0_4px_16px_rgba(14,165,233,0.03)]",
+          border: "border-sky-500/20 hover:border-sky-500/40"
+        };
+      case "bg-teal-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(20,184,166,0.06)] dark:shadow-[0_4px_16px_rgba(20,184,166,0.03)]",
+          border: "border-teal-500/20 hover:border-teal-500/40"
+        };
+      case "bg-pink-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-pink-50/20 to-pink-500/5 dark:from-zinc-900 dark:via-pink-950/10 dark:to-pink-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(236,72,153,0.06)] dark:shadow-[0_4px_16px_rgba(236,72,153,0.03)]",
+          border: "border-pink-500/20 hover:border-pink-500/40"
+        };
+      case "bg-orange-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-orange-50/20 to-orange-500/5 dark:from-zinc-900 dark:via-orange-950/10 dark:to-orange-500/5",
+          shadow: "shadow-[0_4px_16px_rgba(249,115,22,0.06)] dark:shadow-[0_4px_16px_rgba(249,115,22,0.03)]",
+          border: "border-orange-500/20 hover:border-orange-500/40"
+        };
+      default:
+        return {
+          gradient: "bg-gradient-to-br from-white to-zinc-50/50 dark:from-zinc-900 dark:to-zinc-950/50",
+          shadow: "shadow-[0_4px_12px_rgba(0,0,0,0.04)]",
+          border: "border-border/80 hover:border-primary/20"
+        };
+    }
+  };
+
+  const themeStyle = getCardTheme();
 
   return (
     <Card
       onClick={onClick}
-      className={`flex flex-col hover:shadow-md transition-all ${sizePadding} ${alignClass} ${className || ""} ${
+      className={`flex flex-col hover:shadow-md transition-all ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border ${
         onClick
-          ? "cursor-pointer hover:border-primary/45 active:scale-[0.97] active:bg-accent/40 shadow-sm hover:shadow-md active:shadow-inner"
+          ? "cursor-pointer hover:border-primary/45 active:scale-[0.97] active:bg-accent/40 active:shadow-inner"
           : ""
       }`}
     >
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
         <span className={`${labelSize} font-medium text-muted-foreground`}>{label}</span>
         {imageUrl ? (
-          <div className="size-8 flex items-center justify-center shrink-0">
-            <img src={imageUrl} className={`size-8 object-contain ${imageClassName || ""}`} alt={label} />
+          <div className="size-6 sm:size-8 flex items-center justify-center shrink-0">
+            <img src={imageUrl} className={`size-6 sm:size-8 object-contain ${imageClassName || ""}`} alt={label} />
           </div>
         ) : Icon ? (
-          <div className={`size-8 rounded-lg ${color} flex items-center justify-center shrink-0`}>
-            <Icon className="size-4 text-white" />
+          <div className={`size-6 sm:size-8 rounded-lg ${color} flex items-center justify-center shrink-0`}>
+            <Icon className="size-3.5 sm:size-4 text-white" />
           </div>
         ) : null}
       </div>
-      <div className={`flex flex-col ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"}`}>
-        <div className={`${valSize} font-bold tracking-tight`}>{value}</div>
+      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"}`}>
+        <div className={`${valSize} font-bold tracking-tight text-foreground`} title={value}>{value}</div>
         {sub && <div className={`${subSize} text-muted-foreground mt-0.5`}>{sub}</div>}
       </div>
       {trend && (
@@ -273,7 +342,7 @@ export default function Dashboard() {
 
   // Widget ordering state
   const [widgetOrder, setWidgetOrder] = useState<string[]>([
-    'kpis', 'valuations', 'graphs', 'reminders', 'quickLinks', 'bestSelling', 'recent'
+    'kpis', 'valuations', 'graphs', 'pie', 'reminders', 'quickLinks', 'bestSelling', 'recent'
   ]);
 
   const loadWidgetOrder = () => {
@@ -283,13 +352,21 @@ export default function Dashboard() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          if (!parsed.includes('pie')) {
+            const idx = parsed.indexOf('graphs');
+            if (idx !== -1) {
+              parsed.splice(idx + 1, 0, 'pie');
+            } else {
+              parsed.push('pie');
+            }
+          }
           setWidgetOrder(parsed);
         }
       } catch (e) {
         console.error(e);
       }
     } else {
-      setWidgetOrder(['kpis', 'valuations', 'graphs', 'reminders', 'quickLinks', 'bestSelling', 'recent']);
+      setWidgetOrder(['kpis', 'valuations', 'graphs', 'pie', 'reminders', 'quickLinks', 'bestSelling', 'recent']);
     }
   };
 
@@ -847,7 +924,7 @@ export default function Dashboard() {
         const gridColsClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : "grid-cols-2";
 
         return (
-          <Card key="kpis" className="p-3 border border-border space-y-3 bg-card/65 backdrop-blur-sm beveled-card">
+          <Card key="kpis" className="p-3.5 border border-border space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("key_metrics")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => { playTapSound(); setCollapsed(prev => ({ ...prev, kpis: !prev.kpis })); }}>
@@ -867,20 +944,20 @@ export default function Dashboard() {
 
       case "valuations":
         return (
-          <Card key="valuations" className="p-3 border border-border space-y-2 bg-card/65 backdrop-blur-sm beveled-card">
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{lang === "bn" ? "পণ্য স্টক মূল্য (ইনভেন্টরি)" : "Stock & Inventory Valuation"}</div>
+          <Card key="valuations" className="p-3.5 border border-border space-y-2 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{lang === "bn" ? "পণ্য স্টক মূল্য (ইনভেন্টরি)" : "Stock & Inventory Valuation"}</div>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2 bg-secondary/50 rounded-lg flex items-center justify-between gap-1.5">
-                <div className="min-w-0">
+              <div className="p-2.5 bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5 border border-teal-500/15 rounded-lg flex items-center justify-between gap-1.5 shadow-[0_2px_8px_rgba(20,184,166,0.04)]">
+                <div className="min-w-0 flex-1">
                   <div className="text-[9px] text-muted-foreground">{t("inventory_val_cost")}</div>
-                  <div className="font-bold text-sm mt-0.5">{fmtMoney(totalStockCostValuation)}</div>
+                  <div className="font-bold text-xs min-[360px]:text-sm mt-0.5 text-foreground">{fmtMoney(totalStockCostValuation)}</div>
                 </div>
                 <img src="https://img.icons8.com/bubbles/100/buy.png" className="size-8 object-contain shrink-0" alt="buy" />
               </div>
-              <div className="p-2 bg-secondary/50 rounded-lg flex items-center justify-between gap-1.5">
-                <div className="min-w-0">
+              <div className="p-2.5 bg-gradient-to-br from-white via-pink-50/20 to-pink-500/5 dark:from-zinc-900 dark:via-pink-950/10 dark:to-pink-500/5 border border-pink-500/15 rounded-lg flex items-center justify-between gap-1.5 shadow-[0_2px_8px_rgba(236,72,153,0.04)]">
+                <div className="min-w-0 flex-1">
                   <div className="text-[9px] text-muted-foreground">{t("inventory_val_sale")}</div>
-                  <div className="font-bold text-sm mt-0.5">{fmtMoney(totalStockSaleValuation)}</div>
+                  <div className="font-bold text-xs min-[360px]:text-sm mt-0.5 text-foreground">{fmtMoney(totalStockSaleValuation)}</div>
                 </div>
                 <Package className="size-5 text-muted-foreground shrink-0" />
               </div>
@@ -890,7 +967,7 @@ export default function Dashboard() {
 
       case "graphs":
         return (
-          <Card key="graphs" id="analytics-chart-mobile" className="p-3 space-y-3 bg-card/65 backdrop-blur-sm beveled-card">
+          <Card key="graphs" id="analytics-chart-mobile" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("custom_graphs")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setCollapsed(prev => ({ ...prev, graphs: !prev.graphs }))}>
@@ -946,9 +1023,51 @@ export default function Dashboard() {
           </Card>
         );
 
+      case "pie":
+        return (
+          <Card key="pie" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("payment_method_breakdown")}</span>
+              <Button variant="ghost" size="icon" className="size-7" onClick={() => { playTapSound(); setCollapsed(prev => ({ ...prev, pie: !prev.pie })); }}>
+                {collapsed.pie ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+              </Button>
+            </div>
+
+            {!collapsed.pie && (
+              <div className="space-y-2">
+                {pieData.length === 0 ? (
+                  <div className="h-32 flex items-center justify-center text-xs text-muted-foreground">{t("no_activity")}</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={140}>
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={55} dataKey="value" paddingAngle={3}>
+                          {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v: any) => `৳${Number(v).toLocaleString()}`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-dashed">
+                      {pieData.map(d => (
+                        <div key={d.name} className="flex flex-col items-center p-1.5 bg-secondary/30 rounded text-center min-w-0">
+                          <span className="text-[8px] text-muted-foreground truncate max-w-full flex items-center gap-1">
+                            <span className="size-1.5 rounded-full shrink-0" style={{ background: d.color }} />
+                            {d.name}
+                          </span>
+                          <span className="text-[10px] font-bold mt-0.5 text-foreground truncate max-w-full">{fmtMoney(d.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </Card>
+        );
+
       case "reminders":
         return (
-          <Card key="reminders" className="p-3 space-y-3 bg-card/65 backdrop-blur-sm beveled-card">
+          <Card key="reminders" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("reminders")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setCollapsed(prev => ({ ...prev, reminders: !prev.reminders }))}>
@@ -997,7 +1116,7 @@ export default function Dashboard() {
               { to: "/sales", icon: ShoppingBag, label: t("sales"), perm: "sales" as const },
               { to: "/parties", icon: Users, label: t("parties"), perm: "parties" as const },
             ].filter(item => canAccess(perms, item.perm)).map(({ to, icon: Icon, label }) => (
-              <Link key={to} href={to} className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors">
+              <Link key={to} href={to} className="flex flex-col items-center gap-1 p-2 rounded-xl border border-border bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 hover:bg-accent shadow-[0_4px_12px_rgba(0,0,0,0.02)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.15)] transition-colors">
                 <Icon className="size-4 text-primary" />
                 <span className="text-[10px] font-medium text-center">{label}</span>
               </Link>
@@ -1007,7 +1126,7 @@ export default function Dashboard() {
 
       case "bestSelling":
         return topDemandedProducts.length > 0 ? (
-          <Card key="bestSelling" className="p-3 bg-card/65 backdrop-blur-sm beveled-card">
+          <Card key="bestSelling" className="p-3.5 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <h2 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted-foreground">{t("best_selling")} ({t("qty")})</h2>
             <div className="space-y-1.5">
               {topDemandedProducts.map((p, i) => (
@@ -1044,11 +1163,11 @@ export default function Dashboard() {
             </div>
             {!collapsed.recent && (
               <div className="space-y-2">
-                <Card className="divide-y divide-border overflow-hidden">
+                <Card className="divide-y divide-border overflow-hidden bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 border border-border/80 shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)]">
                   {recentSalesToShow.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">{t("no_activity")}</div>}
                   {recentSalesToShow.map(s => (
                     <div key={s.id} className="p-2.5 flex items-center justify-between gap-3 text-xs">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{s.product_name}</div>
                         <div className="text-[10px] text-muted-foreground">{s.type === "cash" ? t("cash") : s.type === "online" ? t("online_sell") : t("credit")} · {fmtDateTime(s.created_at)}</div>
                       </div>
@@ -1240,7 +1359,7 @@ export default function Dashboard() {
       case "graphs":
         return (
           <div key="graphs" className="grid grid-cols-3 gap-4 col-span-3">
-            <Card id="analytics-chart-desktop" className="col-span-2 p-5 space-y-4 bg-card/65 backdrop-blur-sm beveled-card">
+            <Card id="analytics-chart-desktop" className="col-span-2 p-5 space-y-4 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">{t("custom_graphs")}</h2>
                 <div className="flex items-center gap-3 text-xs">
@@ -1287,7 +1406,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </Card>
 
-            <Card className="p-5 flex flex-col justify-between bg-card/65 backdrop-blur-sm beveled-card">
+            <Card className="p-5 flex flex-col justify-between bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80">
               <div>
                 <h2 className="text-sm font-semibold mb-4">{t("payment_method_breakdown")}</h2>
                 {pieData.length === 0 ? (
@@ -1323,7 +1442,7 @@ export default function Dashboard() {
       case "reminders":
         return (
           <div key="reminders" className="col-span-1">
-            <Card className="p-5 space-y-4 h-full bg-card/65 backdrop-blur-sm beveled-card">
+            <Card className="p-5 space-y-4 h-full bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80">
               <div className="flex items-center justify-between border-b pb-2">
                 <h2 className="text-sm font-semibold flex items-center gap-1.5">
                   <Calendar className="size-4 text-primary" /> {t("reminders")}
@@ -1364,7 +1483,7 @@ export default function Dashboard() {
       case "bestSelling":
         return (
           <div key="bestSelling" className="col-span-1">
-            <Card className="p-5 h-full bg-card/65 backdrop-blur-sm beveled-card flex flex-col justify-between">
+            <Card className="p-5 h-full bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80 flex flex-col justify-between">
               <div>
                 <h2 className="text-sm font-semibold mb-4">{t("best_selling")} ({lang === "bn" ? "পরিমাণ" : "Qty"})</h2>
                 {topDemandedProducts.length === 0 ? (
@@ -1403,7 +1522,7 @@ export default function Dashboard() {
       case "recent":
         return (
           <div key="recent" className="col-span-1">
-            <Card className="p-5 flex flex-col justify-between h-full bg-card/65 backdrop-blur-sm beveled-card">
+            <Card className="p-5 flex flex-col justify-between h-full bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold">{t("recent_activity")}</h2>
