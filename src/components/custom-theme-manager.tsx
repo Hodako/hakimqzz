@@ -220,8 +220,8 @@ export function CustomThemeManager() {
       css += `
         /* Neumorphism (Morphism) Overrides */
         :root {
-          --background: #e0e0e0 !important;
-          --card: #e0e0e0 !important;
+          --background: #e5e7eb !important;
+          --card: #e5e7eb !important;
           --radius: 20px !important;
         }
         .dark {
@@ -239,16 +239,34 @@ export function CustomThemeManager() {
           border-radius: 20px !important;
           backdrop-filter: none !important;
           -webkit-backdrop-filter: none !important;
-          box-shadow: 7px 7px 14px rgba(0, 0, 0, 0.08), -7px -7px 14px rgba(255, 255, 255, 0.7) !important;
+          box-shadow:
+            -10px -10px 20px white,
+            10px 10px 20px rgb(153, 161, 175),
+            inset -10px -10px 20px rgb(209, 213, 220) !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card {
-          box-shadow: 7px 7px 14px rgba(0, 0, 0, 0.45), -7px -7px 14px rgba(255, 255, 255, 0.04) !important;
+        .dark .card, .dark .beveled-card, .dark .glass-card, .dark [class*="glass-card"], .dark [class*="beveled-card"] {
+          box-shadow:
+            -10px -10px 20px rgba(255, 255, 255, 0.03),
+            10px 10px 20px rgba(0, 0, 0, 0.5),
+            inset -10px -10px 20px rgba(255, 255, 255, 0.02) !important;
         }
         .card:hover, .beveled-card:hover, .glass-card:hover {
-          box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.1), -10px -10px 20px rgba(255, 255, 255, 0.8) !important;
+          box-shadow:
+            -12px -12px 24px white,
+            12px 12px 24px rgb(153, 161, 175),
+            inset -6px -6px 12px rgb(209, 213, 220) !important;
         }
         .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
-          box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.55), -10px -10px 20px rgba(255, 255, 255, 0.06) !important;
+          box-shadow:
+            -12px -12px 24px rgba(255, 255, 255, 0.04),
+            12px 12px 24px rgba(0, 0, 0, 0.6),
+            inset -6px -6px 12px rgba(255, 255, 255, 0.03) !important;
+        }
+        .card .size-6, .card .size-8, .beveled-card .size-9, .card .size-9, .card .size-7 {
+          box-shadow: -2px -2px 4px white, 2px 2px 4px rgb(153, 161, 175) !important;
+        }
+        .dark .card .size-6, .dark .card .size-8, .dark .beveled-card .size-9, .dark .card .size-9, .dark .card .size-7 {
+          box-shadow: -2px -2px 4px rgba(255, 255, 255, 0.03), 2px 2px 4px rgba(0, 0, 0, 0.5) !important;
         }
         button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
           border-radius: 12px !important;

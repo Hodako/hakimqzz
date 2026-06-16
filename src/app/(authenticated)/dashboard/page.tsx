@@ -905,7 +905,7 @@ export default function Dashboard() {
             </Link>
           ) : <div key="due" className="hidden" />,
           cashbox: canAccess(perms, "expenses") ? (
-            <Link href="/cash-management/cashbox" className={`block ${kpiConfig.columns > 1 ? "col-span-2 h-36" : "h-full"}`} key="cashbox" onClick={() => playTapSound()}>
+            <Link href="/cash-management/cashbox" className={`block ${kpiConfig.columns > 1 ? "col-span-2 h-24 sm:h-36" : "h-full"}`} key="cashbox" onClick={() => playTapSound()}>
               <KPICard
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
