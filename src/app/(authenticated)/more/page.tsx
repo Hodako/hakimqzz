@@ -17,6 +17,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const businessLinks = [
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
@@ -41,6 +43,7 @@ export default function MorePage() {
   const { user, logout, isUploading, uploadProgress, uploadProfilePic } = useAuth();
   const perms = resolvePermissions(user?.role ?? "employee", user?.permissions);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
 
   // Theme states
   const [theme, setTheme] = useState({
@@ -238,63 +241,8 @@ export default function MorePage() {
     { name: "Dark Texture", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600&auto=format&fit=crop" },
   ];
 
-  return (
-    <div className="space-y-5 pb-6">
-      {/* Profile Header */}
-      <Card className="p-4 bg-gradient-to-br from-primary/10 via-indigo-500/5 to-background border-primary/20 beveled-card">
-        <div className="flex items-center gap-4">
-          <div className="relative shrink-0 select-none">
-            <Avatar
-              onClick={handleAvatarClick}
-              className={`size-14 border-2 border-background shadow-md shrink-0 cursor-pointer transition-transform active:scale-95 group hover:brightness-90 ${isUploading ? 'pointer-events-none' : ''}`}
-            >
-              <AvatarImage src={user?.avatar_url || "https://png.pngtree.com/png-vector/20231019/ourmid/pngtree-user-profile-avatar-png-image_10211467.png"} alt="Profile" />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-indigo-600 text-white font-bold text-lg">{initials}</AvatarFallback>
-            </Avatar>
-
-            {isUploading ? (
-              <div className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center text-[9px] text-white font-bold pointer-events-none">
-                <span>{uploadProgress}%</span>
-                <div className="w-8 h-1 bg-white/30 rounded-full mt-1 overflow-hidden">
-                  <div className="h-full bg-emerald-400" style={{ width: `${uploadProgress}%` }} />
-                </div>
-              </div>
-            ) : (
-              <div
-                onClick={handleAvatarClick}
-                className="absolute inset-0 bg-black/35 opacity-0 hover:opacity-100 rounded-full flex items-center justify-center text-[8px] text-white font-medium cursor-pointer transition-opacity pointer-events-none"
-              >
-                {lang === "bn" ? "আপলোড" : "Upload"}
-              </div>
-            )}
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              className="hidden"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-base text-zinc-950 dark:text-zinc-50 truncate">{user?.full_name || "User"}</h2>
-              <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-wide border uppercase ${
-                user?.role === "owner"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                  : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300"
-              }`}>
-                {user?.role === "owner" ? (lang === "bn" ? "মালিক" : "Owner") : (lang === "bn" ? "কর্মচারী" : "Employee")}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-1 uppercase tracking-wider">
-              {user?.business_name || "Dream Fashion"}
-            </div>
-          </div>
-        </div>
-      </Card>
-
+  const renderOperations = () => (
+    <>
       {/* Group 1: Business Operations */}
       {visibleBiz.length > 0 && (
         <div className="space-y-2.5">
@@ -346,9 +294,30 @@ export default function MorePage() {
           </div>
         </div>
       )}
+    </>
+  );
 
-      {/* Group 3: Themes Customization */}
-      <div className="space-y-2.5">
+  const renderSignOut = () => (
+    <div className="pt-2">
+      <Button
+        onClick={() => {
+          if (confirm(lang === "bn" ? "আপনি কি লগআউট করতে চান?" : "Are you sure you want to sign out?")) {
+            logout();
+          }
+        }}
+        variant="outline"
+        className="w-full h-10 border-rose-500/20 text-rose-600 hover:bg-rose-500/5 dark:hover:bg-rose-950/20 beveled-button rounded-xl text-xs font-semibold"
+      >
+        <LogOut className="size-4 mr-2" />
+        {lang === "bn" ? "লগ আউট" : "Sign Out"}
+      </Button>
+    </div>
+  );
+
+
+
+  const renderThemeCustomization = () => (
+    <div className="space-y-2.5">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 flex items-center gap-1.5">
           <Palette className="size-4 text-primary" />
           {lang === "bn" ? "থিম ও লেআউট কাস্টমাইজেশন" : "Themes & Customization"}
@@ -806,22 +775,87 @@ export default function MorePage() {
 
         </Card>
       </div>
+    );
+  return (
+    <div className="space-y-5 pb-6">
+      {/* Profile Header */}
+      <Card className="p-4 bg-gradient-to-br from-primary/10 via-indigo-500/5 to-background border-primary/20 beveled-card">
+        <div className="flex items-center gap-4">
+          <div className="relative shrink-0 select-none">
+            <Avatar
+              onClick={handleAvatarClick}
+              className={`size-14 border-2 border-background shadow-md shrink-0 cursor-pointer transition-transform active:scale-95 group hover:brightness-90 ${isUploading ? 'pointer-events-none' : ''}`}
+            >
+              <AvatarImage src={user?.avatar_url || "https://png.pngtree.com/png-vector/20231019/ourmid/pngtree-user-profile-avatar-png-image_10211467.png"} alt="Profile" />
+              <AvatarFallback className="bg-gradient-to-br from-primary to-indigo-600 text-white font-bold text-lg">{initials}</AvatarFallback>
+            </Avatar>
 
-      {/* Sign Out Button */}
-      <div className="pt-2">
-        <Button
-          onClick={() => {
-            if (confirm(lang === "bn" ? "আপনি কি লগআউট করতে চান?" : "Are you sure you want to sign out?")) {
-              logout();
-            }
-          }}
-          variant="outline"
-          className="w-full h-10 border-rose-500/20 text-rose-600 hover:bg-rose-500/5 dark:hover:bg-rose-950/20 beveled-button rounded-xl text-xs font-semibold"
-        >
-          <LogOut className="size-4 mr-2" />
-          {lang === "bn" ? "লগ আউট" : "Sign Out"}
-        </Button>
-      </div>
+            {isUploading ? (
+              <div className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center text-[9px] text-white font-bold pointer-events-none">
+                <span>{uploadProgress}%</span>
+                <div className="w-8 h-1 bg-white/30 rounded-full mt-1 overflow-hidden">
+                  <div className="h-full bg-emerald-400" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={handleAvatarClick}
+                className="absolute inset-0 bg-black/35 opacity-0 hover:opacity-100 rounded-full flex items-center justify-center text-[8px] text-white font-medium cursor-pointer transition-opacity pointer-events-none"
+              >
+                {lang === "bn" ? "আপলোড" : "Upload"}
+              </div>
+            )}
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-bold text-base text-zinc-950 dark:text-zinc-50 truncate">{user?.full_name || "User"}</h2>
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-wide border uppercase ${
+                user?.role === "owner"
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                  : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300"
+              }`}>
+                {user?.role === "owner" ? (lang === "bn" ? "মালিক" : "Owner") : (lang === "bn" ? "কর্মচারী" : "Employee")}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
+            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-1 uppercase tracking-wider">
+              {user?.business_name || "Dream Fashion"}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {isMobile ? (
+        <Tabs defaultValue="menu" className="space-y-4">
+          <TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
+            <TabsTrigger value="menu" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "মেনু ও লিংক" : "Menu & Operations"}</TabsTrigger>
+            <TabsTrigger value="ui" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "ইউআই সেটিংস" : "UI Customization"}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="menu" className="space-y-5 outline-none mt-0">
+            {renderOperations()}
+            {renderSignOut()}
+          </TabsContent>
+
+          <TabsContent value="ui" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
+            {renderThemeCustomization()}
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <div className="space-y-5">
+          {renderOperations()}
+          {renderThemeCustomization()}
+          {renderSignOut()}
+        </div>
+      )}
     </div>
   );
 }
