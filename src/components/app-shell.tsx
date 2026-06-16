@@ -9,7 +9,7 @@ import {
   Home, Package, ShoppingBag, Users, MoreHorizontal,
   LogOut, Languages, Banknote, DollarSign, Settings,
   BarChart3, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, Sparkles,
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/lib/i18n";
@@ -32,10 +32,11 @@ import {
 import type { PermissionSet } from "@/lib/permissions";
 import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/permission-guard";
+import { FloatingAiChat } from "@/components/floating-ai-chat";
 
 type NavItem = {
   to: string;
-  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator";
+  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits";
   icon: React.ElementType;
   perm?: keyof PermissionSet;
 };
@@ -72,6 +73,7 @@ const desktopNavGroups: NavGroup[] = [
       { to: "/losses", labelKey: "losses", icon: TrendingDown, perm: "reports" },
       { to: "/trackback", labelKey: "trackback", icon: BarChart3, perm: "reports" },
       { to: "/purchase-reports", labelKey: "products_buy", icon: ShoppingCart, perm: "reports" },
+      { to: "/ai-audits", labelKey: "ai_audits", icon: Sparkles, perm: "reports" },
       { to: "/settings", labelKey: "settings", icon: Settings, perm: "settings" },
     ],
   },
@@ -385,6 +387,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       )}
+      <FloatingAiChat />
     </div>
   );
 }

@@ -227,6 +227,8 @@ const dict = {
   inventory_val_cost: { bn: "মালের কেনা দাম (স্টক মূল্য)", en: "Stock Cost Value" },
   inventory_val_sale: { bn: "মালের বিক্রয় দাম (স্টক মূল্য)", en: "Stock Retail Value" },
   key_metrics: { bn: "মূল হিসাবসমূহ", en: "Key Metrics" },
+  ai_audits: { bn: "এআই অডিট", en: "AI Audits" },
+  ai_audits_desc: { bn: "এআই এজেন্টের সাথে ব্যবসার আর্থিক ও স্টক বিশ্লেষণ", en: "Analyze financials & stock with AI" },
 } as const;
 
 export type DictKey = keyof typeof dict;

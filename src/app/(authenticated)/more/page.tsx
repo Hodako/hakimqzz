@@ -36,6 +36,7 @@ const financeLinks = [
   { to: "/losses",         labelKey: "losses",          desc: "Analyze transactional losses", icon: TrendingDown, perm: "reports" as const },
   { to: "/trackback",      labelKey: "trackback",       desc: "Comparative metrics chart", icon: BarChart3,    perm: "reports"    as const },
   { to: "/reports",        labelKey: "reports_generator", desc: "Generate custom PDF reports", icon: FileText, perm: "reports"    as const },
+  { to: "/ai-audits",      labelKey: "ai_audits",       desc: "Chat with AI about your business", icon: Sparkles, perm: "reports"    as const },
 ] as const;
 
 export default function MorePage() {
