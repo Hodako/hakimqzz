@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -137,95 +137,106 @@ export function SaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{t("new_sale")}</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <Tabs value={type} onValueChange={(v) => setType(v as "cash" | "credit" | "online")}>
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="cash">{t("cash_sale")}</TabsTrigger>
-              <TabsTrigger value="credit">{t("credit_sale")}</TabsTrigger>
-              <TabsTrigger value="online">{t("online_sell")}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+      {/* Fixed height dialog — prevents resize/jump when cart or dropdowns change */}
+      <DialogContent className="max-w-md w-full h-[90dvh] max-h-[90dvh] flex flex-col overflow-hidden p-0">
+        {/* Pinned header */}
+        <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-border">
+          <DialogTitle>{t("new_sale")}</DialogTitle>
+        </DialogHeader>
 
-          <div className="border border-border rounded-lg p-3 space-y-2">
-            <Field label={t("select_product")}>
-              <ProductSearchSelect products={products} value={draft.productId} onChange={v => setDraft(d => ({ ...d, productId: v }))} />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label={t("qty")}><Input inputMode="numeric" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
-              <Field label={t("sell_price")}><Input inputMode="decimal" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
-            </div>
-            <Button type="button" variant="outline" size="sm" className="w-full" onClick={addToCart}>
-              <Plus className="size-3.5 mr-1" />{t("add_to_cart")}
-            </Button>
-          </div>
+        {/* Scrollable body — only this area grows/shrinks */}
+        <div className="flex-1 overflow-y-auto px-5 py-3">
+          <form id="sale-form" onSubmit={submit} className="space-y-3">
+            <Tabs value={type} onValueChange={(v) => setType(v as "cash" | "credit" | "online")}>
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="cash">{t("cash_sale")}</TabsTrigger>
+                <TabsTrigger value="credit">{t("credit_sale")}</TabsTrigger>
+                <TabsTrigger value="online">{t("online_sell")}</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {cart.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">{t("cart")} ({cart.length})</Label>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {cart.map((line, i) => {
-                  const p = products.find(x => x.id === line.productId);
-                  return (
-                    <div key={i} className="flex flex-col gap-1 border border-border rounded-md p-2 text-xs bg-muted/10">
-                      <div className="flex items-center justify-between font-semibold">
-                        <span className="truncate flex-1 text-zinc-800 dark:text-zinc-200">{p?.name}</span>
-                        <Button type="button" variant="ghost" size="icon" className="size-6 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mt-1">
-                        <div className="space-y-0.5">
-                          <span className="text-[9px] text-muted-foreground">{t("qty")}</span>
-                          <Input
-                            className="h-7 text-xs bg-background"
-                            type="number"
-                            value={line.qty}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setCart(prev => prev.map((x, idx) => idx === i ? { ...x, qty: val } : x));
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[9px] text-muted-foreground">{t("sell_price")}</span>
-                          <Input
-                            className="h-7 text-xs bg-background"
-                            type="number"
-                            value={line.sellPrice}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setCart(prev => prev.map((x, idx) => idx === i ? { ...x, sellPrice: val } : x));
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {type === "credit" && (
-            <>
-              <Field label={t("party")}>
-                <Select value={partyId} onValueChange={setPartyId}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    {parties.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div className="border border-border rounded-lg p-3 space-y-2">
+              <Field label={t("select_product")}>
+                <ProductSearchSelect products={products} value={draft.productId} onChange={v => setDraft(d => ({ ...d, productId: v }))} />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t("paid_amount")}><Input inputMode="decimal" placeholder={t("paid_amount")} value={paid} onChange={e => setPaid(e.target.value)} /></Field>
-                <Field label={t("due_amount")}><div className="h-9 px-3 grid items-center rounded-md bg-warning/10 font-semibold text-sm">{fmtMoney(due)}</div></Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={t("qty")}><Input inputMode="numeric" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
+                <Field label={t("sell_price")}><Input inputMode="decimal" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
               </div>
-            </>
-          )}
+              <Button type="button" variant="outline" size="sm" className="w-full" onClick={addToCart}>
+                <Plus className="size-3.5 mr-1" />{t("add_to_cart")}
+              </Button>
+            </div>
 
-          <div className="flex items-center justify-between text-sm border-t border-border pt-3">
+            {cart.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">{t("cart")} ({cart.length})</Label>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {cart.map((line, i) => {
+                    const p = products.find(x => x.id === line.productId);
+                    return (
+                      <div key={i} className="flex flex-col gap-1 border border-border rounded-md p-2 text-xs bg-muted/10">
+                        <div className="flex items-center justify-between font-semibold">
+                          <span className="truncate flex-1 text-zinc-800 dark:text-zinc-200">{p?.name}</span>
+                          <Button type="button" variant="ghost" size="icon" className="size-6 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          <div className="space-y-0.5">
+                            <span className="text-[9px] text-muted-foreground">{t("qty")}</span>
+                            <Input
+                              className="h-7 text-xs bg-background"
+                              type="number"
+                              value={line.qty}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setCart(prev => prev.map((x, idx) => idx === i ? { ...x, qty: val } : x));
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[9px] text-muted-foreground">{t("sell_price")}</span>
+                            <Input
+                              className="h-7 text-xs bg-background"
+                              type="number"
+                              value={line.sellPrice}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setCart(prev => prev.map((x, idx) => idx === i ? { ...x, sellPrice: val } : x));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {type === "credit" && (
+              <>
+                <Field label={t("party")}>
+                  <Select value={partyId} onValueChange={setPartyId}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      {parties.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={t("paid_amount")}><Input inputMode="decimal" placeholder={t("paid_amount")} value={paid} onChange={e => setPaid(e.target.value)} /></Field>
+                  <Field label={t("due_amount")}><div className="h-9 px-3 grid items-center rounded-md bg-warning/10 font-semibold text-sm">{fmtMoney(due)}</div></Field>
+                </div>
+              </>
+            )}
+          </form>
+        </div>
+
+        {/* Pinned footer — total + action buttons */}
+        <div className="shrink-0 border-t border-border px-5 py-3 space-y-2 bg-background">
+          <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">{t("total")}</span>
             <span className="font-semibold">{fmtMoney(sellTotal)}</span>
           </div>
@@ -233,12 +244,11 @@ export function SaleDialog({
             <span>{t("profit")}</span>
             <span className="text-success font-medium">{fmtMoney(profitTotal)}</span>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-            <Button type="submit" disabled={busy || cart.length === 0}>{busy ? "…" : t("record_sale")}</Button>
-          </DialogFooter>
-        </form>
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="sale-form" className="flex-1" disabled={busy || cart.length === 0}>{busy ? "…" : t("record_sale")}</Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
