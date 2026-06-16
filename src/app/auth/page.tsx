@@ -7,10 +7,6 @@ import { SpeedLoader } from "@/components/speed-loader";
 import { useAuth } from "@/hooks/use-auth";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { loginFn, registerFn } from "@/lib/rpc";
 import type { AuthUser } from "@/hooks/use-auth";
@@ -23,6 +19,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
 
   useEffect(() => {
     if (!loading) {
@@ -69,65 +66,398 @@ export default function AuthPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <header className="flex items-center justify-between p-4">
-        <AppLogo size="sm" alt="HakimEzy" />
-        <div className="flex gap-1 rounded-full glass-card p-1 text-xs">
-          <button type="button" onClick={() => setLang("bn")} className={`px-3 py-1 rounded-full ${lang === "bn" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>বাংলা</button>
-          <button type="button" onClick={() => setLang("en")} className={`px-3 py-1 rounded-full ${lang === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>EN</button>
-        </div>
-      </header>
-      <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="glass-card w-full max-w-md p-6">
-          <div className="text-center mb-6 flex flex-col items-center gap-2">
-            <AppLogo size="lg" alt="HakimEzy" />
-            <h1 className="text-xl font-serif font-bold">HakimEzy</h1>
-            <p className="text-sm text-muted-foreground">{t("tagline")}</p>
-          </div>
-          <Tabs defaultValue="signin">
-            <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="signin">{t("sign_in")}</TabsTrigger>
-              <TabsTrigger value="signup">{t("sign_up")}</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin">
-              <form onSubmit={signIn} className="space-y-3 pt-4">
-                <Field label={t("email")}>
-                  <Input type="email" required placeholder="you@business.com" value={email} onChange={e => setEmail(e.target.value)} />
-                </Field>
-                <Field label={t("password")}>
-                  <Input type="password" required placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} />
-                </Field>
-                <Button type="submit" disabled={busy} className="w-full">{busy ? "…" : t("sign_in")}</Button>
-              </form>
-            </TabsContent>
-            <TabsContent value="signup">
-              <form onSubmit={signUp} className="space-y-3 pt-4">
-                <Field label={t("full_name")}>
-                  <Input placeholder="Your full name" value={fullName} onChange={e => setFullName(e.target.value)} />
-                </Field>
-                <Field label={t("email")}>
-                  <Input type="email" required placeholder="owner@hakimezy.com" value={email} onChange={e => setEmail(e.target.value)} />
-                </Field>
-                <Field label={t("password")}>
-                  <Input type="password" required minLength={6} placeholder="Min. 6 characters" value={password} onChange={e => setPassword(e.target.value)} />
-                </Field>
-                <p className="text-xs text-muted-foreground">After signup you will activate with a license key (HZ-… or EMP-…).</p>
-                <Button type="submit" disabled={busy} className="w-full">{busy ? "…" : t("create_account")}</Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </Card>
-      </main>
-    </div>
-  );
-}
+  async function handleSubmit(e: React.FormEvent) {
+    if (activeTab === "signin") {
+      await signIn(e);
+    } else {
+      await signUp(e);
+    }
+  }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      {children}
+    <div className="auth-page min-h-screen grid grid-cols-1 md:grid-cols-12">
+      {/* Dynamic Scoped Styles */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .auth-page .form {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          background-color: #ffffff;
+          padding: 30px;
+          width: 100%;
+          max-width: 440px;
+          border-radius: 20px;
+          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .dark .auth-page .form {
+          background-color: #18181b;
+          border: 1px solid #27272a;
+        }
+
+        .auth-page .flex-column > label {
+          color: #374151;
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .dark .auth-page .flex-column > label {
+          color: #e4e4e7;
+        }
+
+        .auth-page .inputForm {
+          border: 1.5px solid #ecedec;
+          border-radius: 10px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          padding-left: 12px;
+          padding-right: 12px;
+          transition: 0.2s ease-in-out;
+          background-color: #fcfcfc;
+        }
+        .dark .auth-page .inputForm {
+          border: 1.5px solid #27272a;
+          background-color: #09090b;
+        }
+
+        .auth-page .input {
+          margin-left: 10px;
+          border-radius: 10px;
+          border: none;
+          width: 85%;
+          height: 100%;
+          font-size: 14px;
+          background-color: transparent !important;
+          color: #09090b !important;
+        }
+        .dark .auth-page .input {
+          color: #fafafa !important;
+        }
+
+        .auth-page .input:focus {
+          outline: none;
+        }
+
+        .auth-page .inputForm:focus-within {
+          border: 1.5px solid #2d79f3;
+          box-shadow: 0 0 0 2px rgba(45, 121, 243, 0.15);
+        }
+
+        .auth-page .flex-row {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 10px;
+          justify-content: space-between;
+        }
+
+        .auth-page .flex-row > div > label {
+          font-size: 13px;
+          color: #4b5563;
+          font-weight: 400;
+        }
+        .dark .auth-page .flex-row > div > label {
+          color: #a1a1aa;
+        }
+
+        .auth-page .span {
+          font-size: 13px;
+          color: #2d79f3;
+          font-weight: 500;
+          cursor: pointer;
+        }
+        .auth-page .span:hover {
+          text-decoration: underline;
+        }
+
+        .auth-page .p {
+          text-align: center;
+          color: #4b5563;
+          font-size: 13px;
+          margin: 5px 0;
+        }
+        .dark .auth-page .p {
+          color: #a1a1aa;
+        }
+
+        .auth-page .btn {
+          width: 100%;
+          height: 45px;
+          border-radius: 10px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          font-weight: 500;
+          font-size: 14px;
+          gap: 10px;
+          border: 1px solid #ededef;
+          background-color: white;
+          color: #18181b;
+          cursor: pointer;
+          transition: 0.2s ease-in-out;
+        }
+        .dark .auth-page .btn {
+          background-color: #18181b;
+          border: 1px solid #27272a;
+          color: #f4f4f5;
+        }
+
+        .auth-page .btn:hover {
+          border: 1px solid #2d79f3;
+          background-color: #f8fafc;
+        }
+        .dark .auth-page .btn:hover {
+          background-color: #242427;
+        }
+
+        .auth-page .inputForm svg {
+          fill: #9ca3af;
+        }
+      ` }} />
+
+      {/* Left panel: Modern inventory dashboard split-screen illustration */}
+      <div 
+        className="hidden md:flex md:col-span-6 lg:col-span-7 relative flex-col justify-between p-12 text-white select-none overflow-hidden bg-cover bg-center"
+        style={{ backgroundImage: `linear-gradient(rgba(9, 9, 11, 0.82), rgba(9, 9, 11, 0.85)), url('/login_illustration.png')` }}
+      >
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
+
+        {/* Top brand header */}
+        <div className="flex items-center gap-3 relative z-10">
+          <AppLogo size="md" alt="HakimEzy" />
+          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">HakimEzy</span>
+        </div>
+
+        {/* Middle graphics and selling description */}
+        <div className="space-y-6 relative z-10 max-w-lg my-auto">
+          <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">
+            {lang === "bn" ? "পোশাক ব্যবসায়ীদের আস্থার প্রতীক" : "Designed for Fashion Retailers"}
+          </span>
+          <h2 className="text-4xl lg:text-5xl font-bold font-serif leading-tight">
+            {lang === "bn" ? "আপনার পোশাক ব্যবসা পরিচালনা এখন আরও সহজ" : "Next-Gen Inventory Control for Clothing Stores"}
+          </h2>
+          <p className="text-sm text-zinc-300 leading-relaxed">
+            {lang === "bn" 
+              ? "স্টক মূল্যায়ন, ক্যাশ ফ্লো, পার্টি লেজার, মুনাফা ট্র্যাকিং এবং কাস্টমাইজড থিম সব মিলবে এক প্ল্যাটফর্মে।" 
+              : "Track live stock valuation, overhead expenses, sales margins, and print professional invoices with custom styled branding templates."}
+          </p>
+
+          {/* Bullet points with icons */}
+          <div className="grid grid-cols-2 gap-4 pt-4 text-xs text-zinc-200">
+            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <span className="text-lg">📦</span>
+              <div>
+                <div className="font-semibold text-white">Live Stock Valuation</div>
+                <div className="text-[10px] text-zinc-400">Detailed buy cost vs sales value</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <span className="text-lg">💰</span>
+              <div>
+                <div className="font-semibold text-white">Products Net Profit</div>
+                <div className="text-[10px] text-zinc-400">Direct sales margins calculations</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <span className="text-lg">🎨</span>
+              <div>
+                <div className="font-semibold text-white">Beautiful UI Styles</div>
+                <div className="text-[10px] text-zinc-400">Brutalism, Morphism & Flowerism</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <span className="text-lg">🧾</span>
+              <div>
+                <div className="font-semibold text-white">Quick Invoicing</div>
+                <div className="text-[10px] text-zinc-400">SMS & PDF bill prints</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom copyright placeholder */}
+        <div className="text-xs text-zinc-500 relative z-10">
+          © {new Date().getFullYear()} HakimEzy. Powered by Dream Fashion.
+        </div>
+      </div>
+
+      {/* Right panel: Form input and Language selectors */}
+      <div className="col-span-12 md:col-span-6 lg:col-span-5 flex flex-col justify-between p-6 bg-slate-50 dark:bg-zinc-950 min-h-screen md:min-h-0 overflow-y-auto">
+        
+        {/* Top Row: Language switcher */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 md:hidden">
+            <AppLogo size="sm" alt="HakimEzy" />
+            <span className="font-serif text-lg font-bold">HakimEzy</span>
+          </div>
+          <div className="flex gap-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 p-0.5 text-[10px] ml-auto">
+            <button 
+              type="button" 
+              onClick={() => setLang("bn")} 
+              className={`px-3 py-1 rounded-full cursor-pointer transition-colors ${lang === "bn" ? "bg-primary text-white font-semibold" : "text-zinc-500"}`}
+            >
+              বাংলা
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setLang("en")} 
+              className={`px-3 py-1 rounded-full cursor-pointer transition-colors ${lang === "en" ? "bg-primary text-white font-semibold" : "text-zinc-500"}`}
+            >
+              EN
+            </button>
+          </div>
+        </div>
+
+        {/* Center: Uiverse style Form */}
+        <div className="flex justify-center items-center my-6">
+          <form onSubmit={handleSubmit} className="form">
+            <div className="text-center mb-2 flex flex-col items-center gap-1">
+              <h1 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
+                {activeTab === "signin" ? t("sign_in") : t("sign_up")}
+              </h1>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {activeTab === "signin" ? "Login to access your store dashboard" : "Create a new owner account for your clothing business"}
+              </p>
+            </div>
+
+            {/* Field: Full Name (Only on Signup) */}
+            {activeTab === "signup" && (
+              <>
+                <div className="flex-column">
+                  <label>{t("full_name")}</label>
+                </div>
+                <div className="inputForm">
+                  <svg height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                  <input 
+                    type="text" 
+                    required
+                    className="input" 
+                    placeholder="Your full name" 
+                    value={fullName} 
+                    onChange={e => setFullName(e.target.value)} 
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Field: Email */}
+            <div className="flex-column">
+              <label>{t("email")}</label>
+            </div>
+            <div className="inputForm">
+              <svg height="16" viewBox="0 0 32 32" width="16" xmlns="http://www.w3.org/2000/svg">
+                <g id="Layer_3" data-name="Layer 3">
+                  <path d="m30.853 13.87a15 15 0 0 0 -29.729 4.082 15.1 15.1 0 0 0 12.876 12.918 15.6 15.6 0 0 0 2.016.13 14.85 14.85 0 0 0 7.715-2.145 1 1 0 1 0 -1.031-1.711 13.007 13.007 0 1 1 5.458-6.529 2.149 2.149 0 0 1 -4.158-.759v-10.856a1 1 0 0 0 -2 0v1.726a8 8 0 1 0 .2 10.325 4.135 4.135 0 0 0 7.83.274 15.2 15.2 0 0 0 .823-7.455zm-14.853 8.13a6 6 0 1 1 6-6 6.006 6.006 0 0 1 -6 6z"></path>
+                </g>
+              </svg>
+              <input 
+                type="email" 
+                required
+                className="input" 
+                placeholder="Enter your Email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+              />
+            </div>
+            
+            {/* Field: Password */}
+            <div className="flex-column">
+              <label>{t("password")}</label>
+            </div>
+            <div className="inputForm">
+              <svg height="16" viewBox="-64 0 512 512" width="16" xmlns="http://www.w3.org/2000/svg">
+                <path d="m336 512h-288c-26.453125 0-48-21.523438-48-48v-224c0-26.476562 21.546875-48 48-48h288c26.453125 0 48 21.523438 48 48v224c0 26.476562-21.546875 48-48 48zm-288-288c-8.8125 0-16 7.167969-16 16v224c0 8.832031 7.1875 16 16 16h288c8.8125 0 16-7.167969 16-16v-224c0-8.832031-7.1875-16-16-16zm0 0"></path>
+                <path d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0"></path>
+              </svg>        
+              <input 
+                type="password" 
+                required
+                minLength={activeTab === "signup" ? 6 : undefined}
+                className="input" 
+                placeholder="Enter your Password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+              />
+            </div>
+            
+            {/* Remember Me / Forgot Password */}
+            <div className="flex-row my-1.5">
+              <div className="flex items-center gap-1.5">
+                <input id="remember" type="checkbox" className="rounded accent-primary cursor-pointer" />
+                <label htmlFor="remember" className="select-none cursor-pointer">Remember me</label>
+              </div>
+              <span className="span">Forgot password?</span>
+            </div>
+
+            {/* Premium Button with Nested Gradient Bevel Effect (Get Started Style) */}
+            <div className="w-full mt-2 bg-gradient-to-b from-stone-300/40 to-transparent p-[3px] rounded-[16px] select-none">
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full group p-[3px] rounded-[12px] bg-gradient-to-b from-white to-stone-200/40 shadow-[0_1px_3px_rgba(0,0,0,0.5)] active:shadow-[0_0px_1px_rgba(0,0,0,0.5)] active:scale-[0.995] cursor-pointer border-0"
+              >
+                <div className="bg-gradient-to-b from-stone-200/40 to-white/80 rounded-[8px] py-2.5 text-center flex justify-center items-center">
+                  <span className="font-bold text-zinc-800 text-sm">
+                    {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {/* Info Message */}
+            {activeTab === "signup" && (
+              <p className="text-[10px] text-zinc-400 text-center leading-normal mt-1">
+                After signup you will activate with a license key (HZ-… or EMP-…).
+              </p>
+            )}
+
+            {/* Toggle Signin / Signup */}
+            <p className="p mt-2">
+              {activeTab === "signin" ? "Don't have an account? " : "Already have an account? "}
+              <span 
+                onClick={() => setActiveTab(activeTab === "signin" ? "signup" : "signin")} 
+                className="span font-semibold"
+              >
+                {activeTab === "signin" ? "Sign Up" : "Sign In"}
+              </span>
+            </p>
+
+            {/* Or With divider */}
+            <p className="p text-[11px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest my-2 select-none">— Or With —</p>
+
+            {/* Social log-in row */}
+            <div className="flex-row">
+              <button type="button" onClick={() => toast.info("Google sign-in is disabled")} className="btn google flex-1 border-0">
+                <svg version="1.1" width="16" id="Layer_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4">
+                  <path style={{ fill: "#FBBB00" }} d="M113.47,309.408L95.648,375.94l-65.139,1.378C11.042,341.211,0,299.9,0,256c0-42.451,10.324-82.483,28.624-117.732h0.014l57.992,10.632l25.404,57.644c-5.317,15.501-8.215,32.141-8.215,49.456C103.821,274.792,107.225,292.797,113.47,309.408z"></path>
+                  <path style={{ fill: "#518EF8" }} d="M507.527,208.176C510.467,223.662,512,239.655,512,256c0,18.328-1.927,36.206-5.598,53.451c-12.462,58.683-45.025,109.925-90.134,146.187l-0.014-0.014l-73.044-3.727l-10.338-64.535c29.932-17.554,53.324-45.025,65.646-77.911h-136.89V208.176h138.887L507.527,208.176L507.527,208.176z"></path>
+                  <path style={{ fill: "#28B446" }} d="M416.253,455.624l0.014,0.014C372.396,490.901,316.666,512,256,512c-97.491,0-182.252-54.491-225.491-134.681l82.961-67.91c21.619,57.698,77.278,98.771,142.53,98.771c28.047,0,54.323-7.582,76.87-20.818L416.253,455.624z"></path>
+                  <path style={{ fill: "#F14336" }} d="M419.404,58.936l-82.933,67.896c-23.335-14.586-50.919-23.012-80.471-23.012c-66.729,0-123.429,42.957-143.965,102.724l-83.397-68.276h-0.014C71.23,56.123,157.06,0,256,0C318.115,0,375.068,22.126,419.404,58.936z"></path>
+                </svg>
+                Google 
+              </button>
+              <button type="button" onClick={() => toast.info("Apple sign-in is disabled")} className="btn apple flex-1 border-0">
+                <svg version="1.1" height="16" width="16" id="Capa_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22.773 22.773" className="size-4 fill-zinc-900 dark:fill-zinc-100">
+                  <g>
+                    <g>
+                      <path d="M15.769,0c0.053,0,0.106,0,0.162,0c0.13,1.606-0.483,2.806-1.228,3.675c-0.731,0.863-1.732,1.7-3.351,1.573 c-0.108-1.583,0.506-2.694,1.25-3.561C13.292,0.879,14.557,0.16,15.769,0z"></path>
+                      <path d="M20.67,16.716c0,0.016,0,0.03,0,0.045c-0.455,1.378-1.104,2.559-1.896,3.655c-0.723,0.995-1.609,2.334-3.191,2.334 c-1.367,0-2.275-0.879-3.676-0.903c-1.482-0.024-2.297,0.735-3.652,0.926c-0.155,0-0.31,0-0.462,0 c-0.995-0.144-1.798-0.932-2.383-1.642c-1.725-2.098-3.058-4.808-3.306-8.276c0-0.34,0-0.679,0-1.019 c0.105-2.482,1.311-4.5,2.914-5.478c0.846-0.52,2.009-0.963,3.304-0.765c0.555,0.086,1.122,0.276,1.619,0.464 c0.471,0.181,1.06,0.502,1.618,0.485c0.378-0.011,0.754-0.208,1.135-0.347c1.116-0.403,2.21-0.865,3.652-0.648 c1.733,0.262,2.963,1.032,3.723,2.22c-1.466,0.933-2.625,2.339-2.427,4.74C17.818,14.688,19.086,15.964,20.67,16.716z"></path>
+                    </g>
+                  </g>
+                </svg>
+                Apple 
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Footer info (Mobile visible, desktop bottom right) */}
+        <div className="text-center text-[10px] text-zinc-400 py-2">
+          HakimEzy Inventory Management System. All rights reserved.
+        </div>
+      </div>
     </div>
   );
 }

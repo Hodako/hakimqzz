@@ -53,6 +53,9 @@ export default function MorePage() {
     textColor: "",
     density: "standard",
     isMaterialUI: false,
+    uiStyle: "default",
+    bevelStrength: "medium",
+    glowEnabled: false,
   });
 
   // KPI config state
@@ -173,6 +176,9 @@ export default function MorePage() {
       textColor: "",
       density: "standard",
       isMaterialUI: false,
+      uiStyle: "default",
+      bevelStrength: "medium",
+      glowEnabled: false,
     });
     window.dispatchEvent(new Event("hz-theme-updated"));
     toast.success(lang === "bn" ? "থিম রিসেট সফল হয়েছে" : "Theme settings reset successfully");
@@ -225,8 +231,10 @@ export default function MorePage() {
   // Preloaded Gradient Presets
   const bgPresets = [
     { name: "None", url: "" },
-    { name: "Abstract Gradient", url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop" },
+    { name: "Flowerism Pattern", url: "/flowerism_preset.png" },
+    { name: "Glass Gradient", url: "/glassmorphism_preset.png" },
     { name: "Silk Mesh", url: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=600&auto=format&fit=crop" },
+    { name: "Abstract Gradient", url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop" },
     { name: "Dark Texture", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600&auto=format&fit=crop" },
   ];
 
@@ -351,27 +359,104 @@ export default function MorePage() {
           <div className="space-y-3 pb-3 border-b border-border/50">
             <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
               <Sparkles className="size-4 text-primary" />
-              <span>{lang === "bn" ? "ডিজাইন স্টাইল" : "User Interface Style"}</span>
+              <span>{lang === "bn" ? "ইউজার ইন্টারফেস ডিজাইন স্টাইল" : "User Interface Design Style"}</span>
             </div>
-            <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
-              <button
-                type="button"
-                onClick={() => updateThemeField("isMaterialUI", false)}
-                className={`flex-1 py-1.5 rounded-md text-center font-medium transition-all ${
-                  !theme.isMaterialUI ? "bg-background text-foreground shadow font-semibold" : "text-muted-foreground"
-                }`}
-              >
-                {lang === "bn" ? "গ্লাস ও বেভেল (ডিফল্ট)" : "Glass & Bevel (Default)"}
-              </button>
-              <button
-                type="button"
-                onClick={() => updateThemeField("isMaterialUI", true)}
-                className={`flex-1 py-1.5 rounded-md text-center font-medium transition-all ${
-                  theme.isMaterialUI ? "bg-background text-primary shadow font-bold" : "text-muted-foreground"
-                }`}
-              >
-                ⚡ Material UI (Classic Flat)
-              </button>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: "default", label: lang === "bn" ? "ডিফল্ট গ্লাস" : "Default Glass", icon: Layout, desc: lang === "bn" ? "আধুনিক কাঁচ ও বেভেল" : "Standard glass & bevel", setup: { uiStyle: "default", isMaterialUI: false, bgImage: "" } },
+                { id: "morphism", label: lang === "bn" ? "নিউমর্ফিজম" : "Neumorphism", icon: Palette, desc: lang === "bn" ? "নরম ত্রিমাত্রিক ছায়া" : "Soft 3D extruded shadows", setup: { uiStyle: "morphism", isMaterialUI: false, fontFamily: "Nunito, sans-serif", bgImage: "" } },
+                { id: "brutalism", label: lang === "bn" ? "ব্রুটালিজম" : "Brutalism", icon: LayoutGrid, desc: lang === "bn" ? "কঠোর কালো বর্ডার" : "Thick borders & monospace", setup: { uiStyle: "brutalism", isMaterialUI: false, fontFamily: "'Fira Code', monospace", bgImage: "" } },
+                { id: "new-brutalism", label: lang === "bn" ? "নিও-ব্রুটালিজম" : "Neo-Brutalism", icon: Sparkles, desc: lang === "bn" ? "উজ্জ্বল কার্টুনিশ" : "High contrast colorful", setup: { uiStyle: "new-brutalism", isMaterialUI: false, fontFamily: "Poppins, sans-serif", bgImage: "" } },
+                { id: "glassmorphic", label: lang === "bn" ? "গ্লাসমর্ফিজম" : "Glassmorphism", icon: ImageIcon, desc: lang === "bn" ? "স্বচ্ছ ফ্রস্টেড গ্লাস" : "Frosted glass on gradient", setup: { uiStyle: "glassmorphism", isMaterialUI: false, bgImage: "/glassmorphism_preset.png", bgImageOpacity: 0.22 } },
+                { id: "flowerism", label: lang === "bn" ? "ফ্লাওয়ারিজম" : "Flowerism", icon: Sparkles, desc: lang === "bn" ? "ফ্লোরাল নরম পেস্টেল" : "Organic pastel floral theme", setup: { uiStyle: "flowerism", isMaterialUI: false, bgImage: "/flowerism_preset.png", bgImageOpacity: 0.15, primaryColor: "#f43f5e" } },
+                { id: "material", label: lang === "bn" ? "মেটেরিয়াল ইউআই" : "Material UI", icon: Settings, desc: lang === "bn" ? "ফ্ল্যাট এলিভেশন ছায়া" : "Standard flat elevation", setup: { uiStyle: "default", isMaterialUI: true, fontFamily: "Roboto, sans-serif", bgImage: "" } }
+              ].map(s => {
+                const isActive = s.id === "material" ? theme.isMaterialUI : (theme.uiStyle === s.id && !theme.isMaterialUI);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      const next = { ...theme, ...s.setup, uiStyle: s.setup.uiStyle as any };
+                      setTheme(next);
+                      localStorage.setItem("hz_custom_theme", JSON.stringify(next));
+                      window.dispatchEvent(new Event("hz-theme-updated"));
+                      toast.success(lang === "bn" ? `${s.label} স্টাইল লোড হয়েছে` : `Loaded ${s.label} style`);
+                    }}
+                    className={`p-2 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all duration-200 active:scale-95 cursor-pointer hover:bg-muted/10 ${
+                      isActive 
+                        ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30" 
+                        : "border-border bg-card/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div className={`size-5 rounded-lg grid place-items-center ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <s.icon className="size-3" />
+                      </div>
+                      <span className="font-semibold text-xs text-foreground truncate">{s.label}</span>
+                    </div>
+                    <span className="text-[9px] text-muted-foreground leading-normal">{s.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section: Bevels & Glows */}
+          <div className="space-y-3 pb-3 border-b border-border/50">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <Sparkles className="size-4 text-indigo-500" />
+              <span>{lang === "bn" ? "বর্ডার বেভেল এবং নিয়ন গ্লো ইফেক্টস" : "Bevels & Glow Effects"}</span>
+            </div>
+
+            <div className="space-y-2">
+              {/* Bevel selector */}
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "বেভেল স্টাইল (Bevel Strength)" : "Bevel Style & Highlight"}</Label>
+                <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full">
+                  {[
+                    { id: "none", label: lang === "bn" ? "কিছু না" : "None" },
+                    { id: "light", label: lang === "bn" ? "হালকা" : "Light" },
+                    { id: "medium", label: lang === "bn" ? "মাঝারি" : "Medium" },
+                    { id: "heavy", label: lang === "bn" ? "গাঢ়" : "Heavy" }
+                  ].map(b => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => updateThemeField("bevelStrength", b.id)}
+                      className={`flex-1 py-1 rounded-md text-center font-medium transition-all ${
+                        theme.bevelStrength === b.id
+                          ? "bg-background text-foreground shadow font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Glow toggle */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-semibold text-foreground">{lang === "bn" ? "নিওন গ্লো ইফেক্ট সক্রিয় করুন" : "Enable Neon Glow Effects"}</Label>
+                  <p className="text-[9px] text-muted-foreground">{lang === "bn" ? "কার্ড এবং সক্রিয় বাটনে সুন্দর ব্যাকলাইট গ্লো ছায়ো" : "Adds backlighting glows matching the brand accent"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateThemeField("glowEnabled", !theme.glowEnabled)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    theme.glowEnabled ? "bg-primary" : "bg-zinc-200 dark:bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      theme.glowEnabled ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 

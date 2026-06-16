@@ -13,6 +13,9 @@ export type ThemeConfig = {
   density?: "compact" | "standard" | "cozy";
   widgetOrder?: string[];
   isMaterialUI?: boolean;
+  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism";
+  bevelStrength?: "none" | "light" | "medium" | "heavy";
+  glowEnabled?: boolean;
 };
 
 export function CustomThemeManager() {
@@ -60,7 +63,375 @@ export function CustomThemeManager() {
 
     let css = "";
 
-    // 0. Material UI overrides
+    // 0. Preset Style overrides
+    if (config.uiStyle === "brutalism") {
+      css += `
+        /* Brutalism Overrides */
+        :root, .dark {
+          --radius: 0px !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          background: var(--card) !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          border: 3.5px solid #000000 !important;
+          border-radius: 0px !important;
+          box-shadow: 6px 6px 0px #000000 !important;
+          transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card, .dark [class*="glass-card"], .dark [class*="beveled-card"] {
+          border: 3.5px solid #ffffff !important;
+          box-shadow: 6px 6px 0px #ffffff !important;
+        }
+        .card:hover, .beveled-card:hover, .glass-card:hover {
+          box-shadow: 8px 8px 0px #000000 !important;
+          transform: translate(-2px, -2px) !important;
+        }
+        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+          box-shadow: 8px 8px 0px #ffffff !important;
+        }
+        .card:active, .beveled-card:active, .glass-card:active {
+          box-shadow: 2px 2px 0px #000000 !important;
+          transform: translate(4px, 4px) !important;
+        }
+        .dark .card:active, .dark .beveled-card:active, .dark .glass-card:active {
+          box-shadow: 2px 2px 0px #ffffff !important;
+        }
+        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+          border-radius: 0px !important;
+          border: 3px solid #000000 !important;
+          box-shadow: 4px 4px 0px #000000 !important;
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+        }
+        .dark button, .dark .button, .dark .beveled-button, .dark button[class*="beveled-button"], .dark [role="button"] {
+          border: 3px solid #ffffff !important;
+          box-shadow: 4px 4px 0px #ffffff !important;
+        }
+        button:hover, .button:hover, .beveled-button:hover {
+          box-shadow: 6px 6px 0px #000000 !important;
+          transform: translate(-2px, -2px) !important;
+        }
+        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+          box-shadow: 6px 6px 0px #ffffff !important;
+        }
+        button:active, .button:active, .beveled-button:active {
+          box-shadow: 1px 1px 0px #000000 !important;
+          transform: translate(3px, 3px) !important;
+        }
+        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+          box-shadow: 1px 1px 0px #ffffff !important;
+        }
+        input, select, textarea {
+          border-radius: 0px !important;
+          border: 3px solid #000000 !important;
+          background-color: var(--background) !important;
+          box-shadow: 3px 3px 0px #000000 !important;
+        }
+        .dark input, .dark select, .dark textarea {
+          border: 3px solid #ffffff !important;
+          box-shadow: 3px 3px 0px #ffffff !important;
+        }
+        input:focus, select:focus, textarea:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 4px 4px 0px var(--primary) !important;
+          outline: none !important;
+        }
+      `;
+    } else if (config.uiStyle === "new-brutalism") {
+      css += `
+        /* New Brutalism (Neo-Brutalism) Overrides */
+        :root, .dark {
+          --radius: 12px !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          background: var(--card) !important;
+          border: 2px solid #18181b !important;
+          border-radius: 12px !important;
+          box-shadow: 4px 4px 0px #18181b !important;
+          transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card {
+          border: 2px solid #ffffff !important;
+          box-shadow: 4px 4px 0px #ffffff !important;
+        }
+        .card:hover, .beveled-card:hover, .glass-card:hover {
+          box-shadow: 6px 6px 0px #18181b !important;
+          transform: translate(-2px, -2px) !important;
+        }
+        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+          box-shadow: 6px 6px 0px #ffffff !important;
+        }
+        .card:active, .beveled-card:active, .glass-card:active {
+          box-shadow: 1px 1px 0px #18181b !important;
+          transform: translate(3px, 3px) !important;
+        }
+        .dark .card:active, .dark .beveled-card:active, .dark .glass-card:active {
+          box-shadow: 1px 1px 0px #ffffff !important;
+        }
+        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+          border-radius: 10px !important;
+          border: 2px solid #18181b !important;
+          box-shadow: 3px 3px 0px #18181b !important;
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          font-weight: 600 !important;
+          transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+        }
+        .dark button, .dark .button, .dark .beveled-button {
+          border: 2px solid #ffffff !important;
+          box-shadow: 3px 3px 0px #ffffff !important;
+        }
+        button:hover, .button:hover, .beveled-button:hover {
+          box-shadow: 5px 5px 0px #18181b !important;
+          transform: translate(-2px, -2px) !important;
+        }
+        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+          box-shadow: 5px 5px 0px #ffffff !important;
+        }
+        button:active, .button:active, .beveled-button:active {
+          box-shadow: 1px 1px 0px #18181b !important;
+          transform: translate(2px, 2px) !important;
+        }
+        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+          box-shadow: 1px 1px 0px #ffffff !important;
+        }
+        input, select, textarea {
+          border-radius: 10px !important;
+          border: 2px solid #18181b !important;
+          box-shadow: 2px 2px 0px #18181b !important;
+        }
+        .dark input, .dark select, .dark textarea {
+          border: 2px solid #ffffff !important;
+          box-shadow: 2px 2px 0px #ffffff !important;
+        }
+        input:focus, select:focus, textarea:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 3px 3px 0px var(--primary) !important;
+          outline: none !important;
+        }
+      `;
+    } else if (config.uiStyle === "morphism") {
+      css += `
+        /* Neumorphism (Morphism) Overrides */
+        :root {
+          --background: #e0e0e0 !important;
+          --card: #e0e0e0 !important;
+          --radius: 20px !important;
+        }
+        .dark {
+          --background: #1e1e1e !important;
+          --card: #1e1e1e !important;
+          --radius: 20px !important;
+        }
+        body {
+          background-color: var(--background) !important;
+          background-image: none !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+          background: var(--background) !important;
+          border: none !important;
+          border-radius: 20px !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          box-shadow: 7px 7px 14px rgba(0, 0, 0, 0.08), -7px -7px 14px rgba(255, 255, 255, 0.7) !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card {
+          box-shadow: 7px 7px 14px rgba(0, 0, 0, 0.45), -7px -7px 14px rgba(255, 255, 255, 0.04) !important;
+        }
+        .card:hover, .beveled-card:hover, .glass-card:hover {
+          box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.1), -10px -10px 20px rgba(255, 255, 255, 0.8) !important;
+        }
+        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+          box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.55), -10px -10px 20px rgba(255, 255, 255, 0.06) !important;
+        }
+        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+          border-radius: 12px !important;
+          border: none !important;
+          background: var(--background) !important;
+          color: var(--foreground) !important;
+          box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.08), -4px -4px 8px rgba(255, 255, 255, 0.7) !important;
+          transition: box-shadow 0.15s ease !important;
+        }
+        .dark button, .dark .button, .dark .beveled-button {
+          box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4), -4px -4px 8px rgba(255, 255, 255, 0.04) !important;
+          color: var(--foreground) !important;
+        }
+        button:hover, .button:hover, .beveled-button:hover {
+          box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.1), -5px -5px 10px rgba(255, 255, 255, 0.8) !important;
+        }
+        button:active, .button:active, .beveled-button:active {
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.08), inset -3px -3px 6px rgba(255, 255, 255, 0.6) !important;
+        }
+        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.4), inset -3px -3px 6px rgba(255, 255, 255, 0.03) !important;
+        }
+        input, select, textarea {
+          border-radius: 12px !important;
+          border: none !important;
+          background: var(--background) !important;
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.06), inset -3px -3px 6px rgba(255, 255, 255, 0.6) !important;
+        }
+        .dark input, .dark select, .dark textarea {
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.35), inset -3px -3px 6px rgba(255, 255, 255, 0.03) !important;
+        }
+      `;
+    } else if (config.uiStyle === "glassmorphism") {
+      css += `
+        /* Glassmorphism Overrides */
+        :root, .dark {
+          --radius: 16px !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+          background: rgba(255, 255, 255, 0.38) !important;
+          backdrop-filter: blur(20px) saturate(160%) !important;
+          -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.22) !important;
+          border-radius: 16px !important;
+          box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.06) !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card {
+          background: rgba(20, 20, 20, 0.45) !important;
+          border: 1px solid rgba(255, 255, 255, 0.08) !important;
+          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25) !important;
+        }
+        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+          background: rgba(255, 255, 255, 0.3) !important;
+          border: 1px solid rgba(255, 255, 255, 0.2) !important;
+          border-radius: 12px !important;
+          backdrop-filter: blur(10px) !important;
+          -webkit-backdrop-filter: blur(10px) !important;
+          color: var(--foreground) !important;
+          box-shadow: 0 4px 12px 0 rgba(31, 38, 135, 0.04) !important;
+        }
+        .dark button, .dark .button, .dark .beveled-button {
+          background: rgba(255, 255, 255, 0.08) !important;
+          border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        }
+        button:hover, .button:hover, .beveled-button:hover {
+          background: rgba(255, 255, 255, 0.45) !important;
+          box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.08) !important;
+        }
+        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+          background: rgba(255, 255, 255, 0.15) !important;
+        }
+        input, select, textarea {
+          background: rgba(255, 255, 255, 0.2) !important;
+          border: 1px solid rgba(255, 255, 255, 0.15) !important;
+          border-radius: 12px !important;
+          backdrop-filter: blur(5px) !important;
+          -webkit-backdrop-filter: blur(5px) !important;
+        }
+        .dark input, .dark select, .dark textarea {
+          background: rgba(0, 0, 0, 0.25) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        }
+      `;
+    } else if (config.uiStyle === "flowerism") {
+      css += `
+        /* Flowerism Overrides */
+        :root {
+          --radius: 24px !important;
+          --font-serif: 'Playfair Display', Lora, Georgia, serif !important;
+          --primary: #f43f5e !important; /* Rose accent */
+          --ring: #f43f5e !important;
+        }
+        .dark {
+          --radius: 24px !important;
+          --font-serif: 'Playfair Display', Lora, Georgia, serif !important;
+          --primary: #fda4af !important;
+          --ring: #fda4af !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+          background: rgba(253, 244, 245, 0.82) !important; /* Pastel Blossom */
+          border: 1.5px solid rgba(244, 63, 94, 0.16) !important;
+          border-radius: 24px !important;
+          box-shadow: 0 10px 24px rgba(244, 63, 94, 0.06) !important;
+          backdrop-filter: blur(6px) !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card {
+          background: rgba(32, 22, 25, 0.85) !important;
+          border: 1.5px solid rgba(244, 63, 94, 0.08) !important;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2) !important;
+        }
+        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+          border-radius: 16px !important;
+          background: linear-gradient(135deg, #f43f5e, #ec4899) !important;
+          color: #ffffff !important;
+          border: none !important;
+          box-shadow: 0 4px 12px rgba(244, 63, 94, 0.25) !important;
+        }
+        .dark button, .dark .button, .dark .beveled-button {
+          background: linear-gradient(135deg, #fda4af, #f472b6) !important;
+          color: #1e1b1c !important;
+          box-shadow: 0 4px 12px rgba(244, 63, 94, 0.1) !important;
+        }
+        button:hover, .button:hover, .beveled-button:hover {
+          box-shadow: 0 6px 16px rgba(244, 63, 94, 0.35) !important;
+          transform: translateY(-1px) !important;
+        }
+        input, select, textarea {
+          border-radius: 16px !important;
+          border: 1.5px solid rgba(244, 63, 94, 0.15) !important;
+          background-color: rgba(255, 255, 255, 0.9) !important;
+        }
+        .dark input, .dark select, .dark textarea {
+          border: 1.5px solid rgba(244, 63, 94, 0.08) !important;
+          background-color: rgba(25, 20, 22, 0.9) !important;
+        }
+      `;
+    }
+
+    // Bevel Strength overrides
+    if (config.bevelStrength && config.bevelStrength !== "none") {
+      let bevelCss = "";
+      if (config.bevelStrength === "light") {
+        bevelCss = `
+          box-shadow: inset 0 0.5px 0px 0px rgba(255,255,255,0.15), inset 0 -0.5px 0px 0px rgba(0,0,0,0.15) !important;
+        `;
+      } else if (config.bevelStrength === "medium") {
+        bevelCss = `
+          box-shadow: inset 0 1.5px 0px 0px rgba(255,255,255,0.2), inset 0 -1.5px 0px 0px rgba(0,0,0,0.2) !important;
+          border-top: 1px solid rgba(255,255,255,0.15) !important;
+          border-bottom: 1.5px solid rgba(0,0,0,0.2) !important;
+        `;
+      } else if (config.bevelStrength === "heavy") {
+        bevelCss = `
+          box-shadow: inset 0 3px 0px 0px rgba(255,255,255,0.35), inset 0 -3px 0px 0px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.1) !important;
+          border-top: 2px solid rgba(255,255,255,0.25) !important;
+          border-bottom: 3px solid rgba(0,0,0,0.4) !important;
+        `;
+      }
+      
+      css += `
+        .beveled-button, .beveled-card, button[class*="beveled-button"], [class*="beveled-card"] {
+          ${bevelCss}
+        }
+      `;
+    }
+
+    // Glow Effect overrides
+    if (config.glowEnabled) {
+      css += `
+        /* Glow Effect Overrides */
+        button[class*="bg-primary"], .bg-primary, .beveled-button, button[class*="bg-indigo"] {
+          box-shadow: 0 0 10px var(--primary) !important;
+        }
+        .card, .beveled-card, .glass-card {
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 0 15px rgba(99, 102, 241, 0.1) !important;
+        }
+        .dark .card, .dark .beveled-card, .dark .glass-card {
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 15px rgba(99, 102, 241, 0.15) !important;
+        }
+      `;
+    }
+
+    // 1. Material UI overrides
     if (config.isMaterialUI) {
       css += `
         /* Material UI Mode Overrides */

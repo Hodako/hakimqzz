@@ -257,7 +257,7 @@ export default function ProfitPage() {
       </div>
 
       {/* Financial KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="p-3.5 bg-card border-border beveled-card shadow-sm flex flex-col justify-between h-24">
           <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{lang === "bn" ? "মোট বিক্রি" : "Total Revenue"}</div>
           <div className="mt-2">
@@ -271,6 +271,14 @@ export default function ProfitPage() {
           <div className="mt-2">
             <div className="text-lg font-bold font-serif text-zinc-950 dark:text-zinc-50">{fmtMoney(totalCostOfGoods)}</div>
             <span className="text-[9px] text-muted-foreground block">{lang === "bn" ? "পণ্য কেনা খরচ (COGS)" : "Product Buy Cost"}</span>
+          </div>
+        </Card>
+
+        <Card className="p-3.5 bg-card border-border beveled-card shadow-sm flex flex-col justify-between h-24">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{lang === "bn" ? "পণ্যের মুনাফা" : "Products Profit"}</div>
+          <div className="mt-2">
+            <div className="text-lg font-bold font-serif text-emerald-600 dark:text-emerald-400">{fmtMoney(totalSalesProfit)}</div>
+            <span className="text-[9px] text-muted-foreground block">{lang === "bn" ? "বিক্রি হতে লাভ (কর্তন ছাড়া)" : "Sales profit, no deductions"}</span>
           </div>
         </Card>
 
