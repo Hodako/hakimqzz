@@ -32,6 +32,7 @@ import {
   bulkExportToGoogleSheetsFn,
   resetSomitiFn,
   resetExpensesFn,
+  changeMyPasswordFn,
 } from "@/lib/rpc";
 import { useTheme, type ThemeMode, type AccentColor, type BgStyle } from "@/hooks/use-theme";
 import { SpeedLoader } from "@/components/speed-loader";
@@ -73,6 +74,36 @@ export default function SettingsPage() {
   const [resetType, setResetType] = useState<"cashbox" | "products" | "sales" | "purchases" | "somiti" | "expenses" | "all" | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+
+  const [pwBusy, setPwBusy] = useState(false);
+
+  async function handleUpdateMyPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const currentPassword = String(fd.get("currentPassword") || "").trim();
+    const newPassword = String(fd.get("newPassword") || "").trim();
+    const confirmPassword = String(fd.get("confirmPassword") || "").trim();
+
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+
+    setPwBusy(true);
+    try {
+      await changeMyPasswordFn({ data: { currentPassword, newPassword } });
+      toast.success("Password updated successfully!");
+      e.currentTarget.reset();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPwBusy(false);
+    }
+  }
 
   const biz = settings.data?.business;
   const isOwner = settings.data?.role === "owner";
@@ -639,6 +670,34 @@ export default function SettingsPage() {
           Employee account — contact your business owner for settings changes.
         </Card>
       )}
+
+      {/* Change Password Card for all users */}
+      <Card className="glass-card p-5 space-y-4 max-w-md">
+        <div className="flex items-center gap-2.5 text-primary">
+          <Key className="size-5" />
+          <h2 className="font-semibold text-base">Change Account Password</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Update your login password. Your new password must be at least 6 characters long.
+        </p>
+        <form onSubmit={handleUpdateMyPassword} className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold">Current Password</Label>
+            <Input name="currentPassword" type="password" required placeholder="••••••••" className="h-9 text-xs" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold">New Password</Label>
+            <Input name="newPassword" type="password" required placeholder="New password" className="h-9 text-xs" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold">Confirm New Password</Label>
+            <Input name="confirmPassword" type="password" required placeholder="Confirm new password" className="h-9 text-xs" />
+          </div>
+          <Button type="submit" disabled={pwBusy} className="w-full mt-2 h-9 text-xs beveled-button">
+            {pwBusy ? "Updating..." : "Update Password"}
+          </Button>
+        </form>
+      </Card>
 
       {/* Password Verification Dialog */}
       <Dialog open={isUnlockDialogOpen} onOpenChange={setIsUnlockDialogOpen}>

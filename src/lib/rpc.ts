@@ -1111,3 +1111,28 @@ export async function bulkExportToGoogleSheetsFn() {
   await bulkExportToGoogleSheets(session.ownerId);
   return { success: true };
 }
+
+export async function changeMyPasswordFn(input: { data: { currentPassword?: string; newPassword: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  if (!data.newPassword || data.newPassword.trim().length < 6) {
+    throw new Error("New password must be at least 6 characters long");
+  }
+  const db = await getDb();
+  const user = await db.collection("users").findOne({ _id: session.userId as any });
+  if (!user) throw new Error("User not found");
+
+  if (data.currentPassword) {
+    const ok = await comparePassword(data.currentPassword, user.password as string);
+    if (!ok) throw new Error("Current password is incorrect");
+  }
+
+  const hashedPassword = await hashPassword(data.newPassword.trim());
+  await db.collection("users").updateOne(
+    { _id: session.userId as any },
+    { $set: { password: hashedPassword } }
+  );
+
+  return { success: true };
+}
+

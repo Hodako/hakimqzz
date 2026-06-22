@@ -47,6 +47,7 @@ import {
   LogOut,
   Copy,
   LogIn,
+  Lock,
 } from "lucide-react";
 import { SpeedLoader } from "@/components/speed-loader";
 import { fmtDateTime } from "@/lib/format";
@@ -910,11 +911,21 @@ export default function SuperAdminPage() {
 
         {/* 4. SUPERADMIN PASSWORD SETTINGS */}
         {activeTab === "settings" && (
-          <Card className="glass-card p-6 border-border/40 max-w-md mx-auto space-y-4 bg-card">
-            <div className="flex items-center gap-2">
-              <Shield className="size-5 text-primary animate-pulse" />
-              <h3 className="font-bold text-lg text-foreground">Superadmin Settings</h3>
+          <Card className="glass-card p-6 border-border/40 max-w-md mx-auto space-y-4 bg-card relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex items-center gap-3 border-b border-border/40 pb-4">
+              <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20 shadow-inner">
+                <Shield className="size-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base tracking-tight text-foreground bg-gradient-to-r from-primary to-emerald-600 bg-clip-text text-transparent">
+                  Superadmin Settings
+                </h3>
+                <p className="text-[10px] text-muted-foreground">Manage your credentials safely</p>
+              </div>
             </div>
+
             <p className="text-xs text-muted-foreground leading-relaxed">
               Use this form to change your superadmin account password. Make sure to keep it secure as this account can manage all store registers and licenses on this server.
             </p>
@@ -950,45 +961,63 @@ export default function SuperAdminPage() {
               }}
               className="space-y-4 pt-2 text-xs"
             >
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Current Password (optional, for validation)</Label>
-                <Input
-                  name="currentPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  className="beveled-card bg-muted/20"
-                />
-              </div>
+              <div className="space-y-3.5 pt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current Password</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground"><Key className="size-3.5" /></span>
+                    <Input
+                      name="currentPassword"
+                      type="password"
+                      placeholder="••••••••"
+                      className="pl-9 h-9 beveled-card bg-muted/20 border-border/60 text-xs focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                    />
+                  </div>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">New Password (min 6 characters)</Label>
-                <Input
-                  name="newPassword"
-                  type="password"
-                  required
-                  placeholder="New Password"
-                  className="beveled-card bg-muted/20"
-                />
-              </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">New Password (min 6 chars)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground"><Lock className="size-3.5" /></span>
+                    <Input
+                      name="newPassword"
+                      type="password"
+                      required
+                      placeholder="Enter new password"
+                      className="pl-9 h-9 beveled-card bg-muted/20 border-border/60 text-xs focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                    />
+                  </div>
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Confirm New Password</Label>
-                <Input
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  placeholder="Confirm New Password"
-                  className="beveled-card bg-muted/20"
-                />
-              </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Confirm Password</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-muted-foreground"><Lock className="size-3.5" /></span>
+                    <Input
+                      name="confirmPassword"
+                      type="password"
+                      required
+                      placeholder="Confirm new password"
+                      className="pl-9 h-9 beveled-card bg-muted/20 border-border/60 text-xs focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+                    />
+                  </div>
+                </div>
 
-              <Button
-                type="submit"
-                disabled={busy}
-                className="w-full h-10 font-bold beveled-button mt-2"
-              >
-                {busy ? "Updating..." : "Change Admin Password"}
-              </Button>
+                <Button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full h-10 font-bold beveled-button mt-4 bg-gradient-to-r from-primary to-emerald-600 hover:from-primary/95 hover:to-emerald-600/95 text-white shadow-lg active:scale-[0.99] transition-transform"
+                >
+                  {busy ? (
+                    <span className="flex items-center justify-center gap-1.5">
+                      <RefreshCw className="size-3.5 animate-spin" />
+                      Updating Password...
+                    </span>
+                  ) : (
+                    "Save New Password"
+                  )}
+                </Button>
+              </div>
             </form>
           </Card>
         )}

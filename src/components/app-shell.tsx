@@ -183,7 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen min-h-dvh bg-background flex w-full app-shell">
       {!isMobile && (
-        <Sidebar collapsible="icon">
+        <Sidebar collapsible="icon" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <SidebarHeader className="border-b border-sidebar-border px-2 py-3">
             <div className="flex items-center gap-2 overflow-hidden">
               <AppLogo size="sm" />
@@ -250,7 +250,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="sticky top-0 z-30 bg-card/85 backdrop-blur-lg border-b border-border/50 shrink-0">
+        <header className="sticky top-0 z-30 bg-card/85 backdrop-blur-lg border-b border-border/50 shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           {isUploading && (
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-zinc-200 dark:bg-zinc-800 z-50">
               <div

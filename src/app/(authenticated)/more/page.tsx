@@ -2,12 +2,13 @@
 
 import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ShoppingCart, Receipt, PiggyBank, DollarSign,
   Banknote, BarChart3, Settings, FileText,
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
-  Bot, Send, Loader2, HelpCircle
+  Bot, Send, Loader2, HelpCircle, RefreshCw
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,6 +47,24 @@ export default function MorePage() {
   const perms = resolvePermissions(user?.role ?? "employee", user?.permissions);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
+  const qc = useQueryClient();
+
+  const handleRefresh = async () => {
+    try {
+      qc.clear();
+      if (typeof window !== "undefined") {
+        if ("caches" in window) {
+          const keys = await window.caches.keys();
+          for (const key of keys) {
+            await window.caches.delete(key);
+          }
+        }
+        window.location.reload();
+      }
+    } catch (e) {
+      window.location.reload();
+    }
+  };
 
   interface Message {
     role: "system" | "user" | "assistant";
@@ -787,7 +806,17 @@ export default function MorePage() {
   );
 
   const renderSignOut = () => (
-    <div className="pt-2">
+    <div className="pt-2 space-y-2">
+      {isMobile && (
+        <Button
+          onClick={handleRefresh}
+          variant="outline"
+          className="w-full h-10 border-primary/20 text-primary hover:bg-primary/5 beveled-button rounded-xl text-xs font-semibold"
+        >
+          <RefreshCw className="size-4 mr-2" />
+          {lang === "bn" ? "রিফ্রেশ" : "Refresh"}
+        </Button>
+      )}
       <Button
         onClick={() => {
           if (confirm(lang === "bn" ? "আপনি কি লগআউট করতে চান?" : "Are you sure you want to sign out?")) {

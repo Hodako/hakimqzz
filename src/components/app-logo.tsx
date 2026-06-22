@@ -11,7 +11,7 @@ interface AppLogoProps {
   alt?: string;
 }
 
-const sizes = { sm: "h-7", md: "h-9", lg: "h-12" };
+const sizes = { sm: "h-8 max-w-[100px]", md: "h-10 max-w-[130px]", lg: "h-14 max-w-[160px]" };
 
 /** Business logo from settings or default. Can toggle fullscreen on triple click. */
 export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
