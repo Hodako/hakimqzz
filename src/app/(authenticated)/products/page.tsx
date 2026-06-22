@@ -56,6 +56,7 @@ export default function ProductsPage() {
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
+  const [searchVisible, setSearchVisible] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -301,6 +302,15 @@ export default function ProductsPage() {
         <div className="flex gap-1.5 items-center">
           <Button
             size="sm"
+            variant={searchVisible ? "default" : "outline"}
+            className="h-8 w-8 p-0 shrink-0"
+            title={t("search_products")}
+            onClick={() => setSearchVisible(prev => !prev)}
+          >
+            <Search className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
             variant={showCartPanel ? "default" : "outline"}
             className="h-8 text-[10px] sm:text-xs relative"
             onClick={() => setShowCartPanel(prev => !prev)}
@@ -333,10 +343,12 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground z-10 pointer-events-none" />
-        <Input style={{ paddingLeft: "2.5rem" }} className="pl-10 h-9 text-sm" placeholder={t("search_products")} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
-      </div>
+      {searchVisible && (
+        <div className="relative animate-in fade-in slide-in-from-top-2 duration-150">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground z-10 pointer-events-none" />
+          <Input autoFocus style={{ paddingLeft: "2.5rem" }} className="pl-10 h-9 text-sm" placeholder={t("search_products")} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        </div>
+      )}
 
       {/* Category Pills Slider */}
       {categories.length > 0 && (
@@ -694,15 +706,19 @@ function ProductCard({
   onTogglePin: () => void;
 }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [longPressProgress, setLongPressProgress] = useState(false);
 
   const handleStart = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    setLongPressProgress(true);
     timerRef.current = setTimeout(() => {
-      onLongPress();
+      setLongPressProgress(false);
+      setContextMenuOpen(true);
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
-    }, 600);
+    }, 5000);
   };
 
   const handleEnd = () => {
@@ -710,172 +726,191 @@ function ProductCard({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    setLongPressProgress(false);
   };
+
+  // Shared context menu rendered as a fixed overlay (bottom sheet on mobile, centered on desktop)
+  const contextMenu = contextMenuOpen ? (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center sm:justify-center"
+      onClick={() => setContextMenuOpen(false)}
+    >
+      <div
+        className="w-full sm:w-80 bg-card rounded-t-2xl sm:rounded-2xl border-t sm:border border-border p-4 pb-8 sm:pb-4 space-y-0.5 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-8 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3 sm:hidden" />
+        <p className="text-xs font-bold text-foreground mb-2 truncate px-1 py-1 border-b border-border/40 pb-2">📦 {p.name}</p>
+        {!p.archived ? (
+          <>
+            <button onClick={() => { setContextMenuOpen(false); onTogglePin(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
+              📌 {isPinned ? "Unpin" : "Pin to Top"}
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onDirectSell(); }} disabled={p.stock <= 0} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors disabled:opacity-50">
+              💰 {t("sell")} (Direct)
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onEdit(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
+              ✏️ {t("edit")}
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onLongPress(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-amber-500/10 flex items-center gap-3 font-medium text-amber-600 dark:text-amber-400 transition-colors">
+              ↩️ Return Product
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onArchive(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
+              🗄️ {t("archive")}
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onDelete(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-destructive/10 flex items-center gap-3 font-medium text-destructive transition-colors">
+              🗑️ {t("delete")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setContextMenuOpen(false); onRestore(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
+              ♻️ {t("restore")}
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onDelete(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-destructive/10 flex items-center gap-3 font-medium text-destructive transition-colors">
+              🗑️ {t("delete")}
+            </button>
+          </>
+        )}
+        <button onClick={() => setContextMenuOpen(false)} className="w-full text-center text-xs px-3 py-2.5 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground font-medium mt-2 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   if (isMobile) {
     return (
+      <>
+        <Card
+          className={`flex flex-col overflow-hidden border-border/60 select-none transition-all active:scale-[0.98] beveled-card ${
+            p.archived ? "opacity-60" : "hover:border-primary/40"
+          } ${longPressProgress ? "ring-2 ring-primary/40" : ""}`}
+          onMouseDown={handleStart}
+          onMouseUp={handleEnd}
+          onMouseLeave={handleEnd}
+          onTouchStart={handleStart}
+          onTouchEnd={handleEnd}
+          onTouchMove={handleEnd}
+          onClick={() => {
+            if (p.archived) return;
+            if (p.stock > 0) onSell();
+          }}
+        >
+          {/* Image section — aspect-square */}
+          <div className="relative aspect-square w-full overflow-hidden">
+            <ProductImage path={p.image_url} className="w-full h-full object-cover" />
+
+            {/* Stock badge */}
+            <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5 z-10">
+              <span className={isLowStock ? "text-rose-400" : "text-emerald-400"}>●</span>
+              <span>{p.stock}</span>
+            </div>
+
+            {/* Pin indicator */}
+            {isPinned && (
+              <div className="absolute top-1 right-1 bg-primary/95 text-white size-4 rounded-full flex items-center justify-center shadow-sm z-10">
+                <span className="text-[9px]">📌</span>
+              </div>
+            )}
+
+            {/* Low stock indicator */}
+            {!p.archived && isLowStock && (
+              <div className="absolute bottom-1 right-1 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow z-10">
+                <AlertCircle className="size-2.5" />
+              </div>
+            )}
+
+            {/* Long press visual feedback */}
+            {longPressProgress && (
+              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center z-20">
+                <div className="bg-black/60 rounded-full px-2 py-1 text-white text-[9px] font-semibold animate-pulse">Hold...</div>
+              </div>
+            )}
+          </div>
+
+          {/* Title + Price below the image */}
+          <div className="px-1.5 py-1 bg-card">
+            <div className="font-semibold text-[10px] leading-tight truncate text-foreground" title={p.name}>
+              {p.name}
+            </div>
+            <div className="flex justify-between items-baseline mt-0.5">
+              <span className="font-bold text-[10px] text-emerald-600 dark:text-emerald-400 font-serif">
+                {p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}
+              </span>
+              {p.category && (
+                <span className="text-[7px] text-muted-foreground truncate ml-1 max-w-[40px]">{p.category}</span>
+              )}
+            </div>
+          </div>
+        </Card>
+        {contextMenu}
+      </>
+    );
+  }
+
+  return (
+    <>
       <Card
-        className={`aspect-square relative overflow-hidden border-border/60 select-none transition-all active:scale-[0.98] beveled-card ${
+        className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] beveled-card ${
           p.archived ? "opacity-60" : "hover:border-primary/40"
-        }`}
+        } ${longPressProgress ? "ring-2 ring-primary/40" : ""}`}
         onMouseDown={handleStart}
         onMouseUp={handleEnd}
         onMouseLeave={handleEnd}
         onTouchStart={handleStart}
         onTouchEnd={handleEnd}
         onTouchMove={handleEnd}
-        onClick={(e) => {
-          if (p.archived) return;
-          if (p.stock > 0) onSell();
-        }}
       >
-        <div className="absolute inset-0 w-full h-full">
-          <ProductImage path={p.image_url} className="w-full h-full object-cover" />
-        </div>
-
-        <div className="absolute top-1 left-1 right-1 flex justify-between items-start pointer-events-none z-10">
-          <div className="flex gap-1 items-center">
-            <div className="bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5 pointer-events-auto">
-              <span className={isLowStock ? "text-rose-400" : "text-emerald-400"}>●</span>
-              <span>{p.stock}</span>
-            </div>
-            {isPinned && (
-              <div className="bg-primary/95 backdrop-blur-md text-white size-4 rounded-full flex items-center justify-center pointer-events-auto shadow-sm">
-                <span className="text-[9px]">📌</span>
+        <div>
+          <div className="relative rounded overflow-hidden">
+            <ProductImage path={p.image_url} className="w-full aspect-square object-cover" />
+            {!p.archived && isLowStock && (
+              <div className="absolute top-1 right-1 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow" title={t("critical_stock")}>
+                <AlertCircle className="size-3" />
+              </div>
+            )}
+            {p.category && (
+              <span className="absolute bottom-1 left-1 bg-black/60 text-[7px] sm:text-[8px] text-white px-1 py-0.2 rounded font-medium truncate max-w-[80px]">
+                {p.category}
+              </span>
+            )}
+            {longPressProgress && (
+              <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                <div className="bg-black/50 rounded-full px-2 py-1 text-white text-[9px] font-semibold animate-pulse">Hold 5s...</div>
               </div>
             )}
           </div>
-
-          <div className="pointer-events-auto flex items-center gap-1" onClick={e => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-6 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 border border-white/10">
-                  <MoreVertical className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-32">
-                {!p.archived ? (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() => onTogglePin()}
-                      className="text-xs font-semibold cursor-pointer flex items-center gap-1"
-                    >
-                      📌 {isPinned ? (t("unpin" as any) || "Unpin") : (t("pin" as any) || "Pin to Top")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onDirectSell()}
-                      className="text-xs font-semibold cursor-pointer"
-                      disabled={p.stock <= 0}
-                    >
-                      {t("sell")} (Direct)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onEdit()} className="text-xs font-semibold cursor-pointer">
-                      <Pencil className="size-3 mr-1.5" /> {t("edit")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onArchive()} className="text-xs font-semibold cursor-pointer">
-                      <Archive className="size-3 mr-1.5" /> {t("archive")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
-                      <Trash2 className="size-3 mr-1.5" /> {t("delete")}
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => onRestore()} className="text-xs font-semibold cursor-pointer">
-                      {t("restore")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
-                      <Trash2 className="size-3 mr-1.5" /> {t("delete")}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent p-1.5 pt-6 text-white flex flex-col justify-end z-0">
-          <div className="font-bold text-[10px] leading-tight truncate drop-shadow-md" title={p.name}>
-            {p.name}
-          </div>
-          {p.category && (
-            <div className="text-[7px] text-zinc-300 truncate leading-none mt-0.5">
-              {p.category}
+          <div className="p-1 space-y-0.5">
+            <div className="font-semibold text-[10px] sm:text-xs truncate leading-tight text-foreground flex items-center gap-1" title={p.name}>
+              {isPinned && <span className="shrink-0 text-[10px]" title="Pinned">📌</span>}
+              <span className="truncate">{p.name}</span>
             </div>
-          )}
-          <div className="flex justify-between items-baseline mt-1">
-            <span className="font-extrabold text-[10px] text-emerald-400 font-serif">
-              {p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}
-            </span>
-          </div>
-        </div>
 
-        {!p.archived && isLowStock && (
-          <div className="absolute top-1 right-8 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow z-10" title={t("critical_stock")}>
-            <AlertCircle className="size-2.5" />
-          </div>
-        )}
-      </Card>
-    );
-  }
+            {/* Custom Attributes Badges */}
+            {p.attributes && Object.keys(p.attributes).length > 0 && (
+              <div className="flex flex-wrap gap-0.5 pt-0.5">
+                {Object.entries(p.attributes).map(([key, val]) => (
+                  <span key={key} className="bg-secondary/70 text-[8px] px-1 py-0.2 rounded text-secondary-foreground truncate max-w-[80px]" title={`${key}: ${val}`}>
+                    {val}
+                  </span>
+                ))}
+              </div>
+            )}
 
-  return (
-    <Card
-      className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] beveled-card ${
-        p.archived ? "opacity-60" : "hover:border-primary/40"
-      }`}
-      onMouseDown={handleStart}
-      onMouseUp={handleEnd}
-      onMouseLeave={handleEnd}
-      onTouchStart={handleStart}
-      onTouchEnd={handleEnd}
-      onTouchMove={handleEnd}
-    >
-      <div>
-        <div className="relative rounded overflow-hidden">
-          <ProductImage path={p.image_url} className="w-full aspect-square object-cover" />
-          {!p.archived && isLowStock && (
-            <div className="absolute top-1 right-1 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow" title={t("critical_stock")}>
-              <AlertCircle className="size-3" />
+            <div className="flex justify-between text-[9px] sm:text-[10px] pt-1">
+              <span className="text-muted-foreground">{t("sell_price")}</span>
+              <span className="font-bold text-indigo-600 dark:text-indigo-400 font-serif">{p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}</span>
             </div>
-          )}
-          {p.category && (
-            <span className="absolute bottom-1 left-1 bg-black/60 text-[7px] sm:text-[8px] text-white px-1 py-0.2 rounded font-medium truncate max-w-[80px]">
-              {p.category}
-            </span>
-          )}
-        </div>
-        <div className="p-1 space-y-0.5">
-          <div className="font-semibold text-[10px] sm:text-xs truncate leading-tight text-foreground flex items-center gap-1" title={p.name}>
-            {isPinned && <span className="shrink-0 text-[10px]" title="Pinned">📌</span>}
-            <span className="truncate">{p.name}</span>
-          </div>
-          
-          {/* Custom Attributes Badges */}
-          {p.attributes && Object.keys(p.attributes).length > 0 && (
-            <div className="flex flex-wrap gap-0.5 pt-0.5">
-              {Object.entries(p.attributes).map(([key, val]) => (
-                <span key={key} className="bg-secondary/70 text-[8px] px-1 py-0.2 rounded text-secondary-foreground truncate max-w-[80px]" title={`${key}: ${val}`}>
-                  {val}
-                </span>
-              ))}
+            <div className="flex justify-between text-[9px] sm:text-[10px]">
+              <span className="text-muted-foreground">{t("stock")}</span>
+              <span className={isLowStock ? "text-rose-600 dark:text-rose-400 font-bold" : "text-emerald-600 dark:text-emerald-400 font-bold"}>{p.stock}</span>
             </div>
-          )}
-
-          <div className="flex justify-between text-[9px] sm:text-[10px] pt-1">
-            <span className="text-muted-foreground">{t("sell_price")}</span>
-            <span className="font-bold text-indigo-600 dark:text-indigo-400 font-serif">{p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}</span>
-          </div>
-          <div className="flex justify-between text-[9px] sm:text-[10px]">
-            <span className="text-muted-foreground">{t("stock")}</span>
-            <span className={isLowStock ? "text-rose-600 dark:text-rose-400 font-bold" : "text-emerald-600 dark:text-emerald-400 font-bold"}>{p.stock}</span>
           </div>
         </div>
-      </div>
-      
-      <div className="pt-0.5 flex gap-1" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
-        {!p.archived ? (
-          <>
+
+        <div className="pt-0.5 flex gap-1" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+          {!p.archived ? (
             <Button
               size="sm"
               className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg"
@@ -885,50 +920,20 @@ function ProductCard({
                 onSell();
               }}
             >
-              + {t("sell")}
+              {t("sell")}
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-6 shrink-0 text-muted-foreground hover:bg-muted rounded-lg">
-                  <MoreVertical className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-32">
-                <DropdownMenuItem
-                  onClick={() => onTogglePin()}
-                  className="text-xs font-semibold cursor-pointer flex items-center gap-1"
-                >
-                  📌 {isPinned ? (t("unpin" as any) || "Unpin") : (t("pin" as any) || "Pin to Top")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onDirectSell()}
-                  className="text-xs font-semibold cursor-pointer"
-                  disabled={p.stock <= 0}
-                >
-                  {t("sell")} (Direct)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit()} className="text-xs font-semibold cursor-pointer">
-                  <Pencil className="size-3 mr-1.5" /> {t("edit")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onArchive()} className="text-xs font-semibold cursor-pointer">
-                  <Archive className="size-3 mr-1.5" /> {t("archive")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
-                  <Trash2 className="size-3 mr-1.5" /> {t("delete")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold rounded-lg" onClick={() => onRestore()}>{t("restore")}</Button>
-            <Button size="sm" variant="ghost" className="size-6 text-destructive shrink-0 rounded-lg" onClick={() => onDelete()}>
-              <Trash2 className="size-3" />
-            </Button>
-          </>
-        )}
-      </div>
-    </Card>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold rounded-lg" onClick={() => onRestore()}>{t("restore")}</Button>
+              <Button size="sm" variant="ghost" className="size-6 text-destructive shrink-0 rounded-lg" onClick={() => onDelete()}>
+                <Trash2 className="size-3" />
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+      {contextMenu}
+    </>
   );
 }
 
