@@ -531,6 +531,11 @@ export default function MorePage() {
     glowEnabled: false,
     borderRadius: "",
     productBoxSize: "standard",
+    borderWidth: "thin",
+    shadowStyle: "soft",
+    cardOpacity: 1,
+    cardBlur: 0,
+    animationSpeed: "normal",
   });
 
   // KPI config state
@@ -656,6 +661,11 @@ export default function MorePage() {
       glowEnabled: false,
       borderRadius: "",
       productBoxSize: "standard",
+      borderWidth: "thin",
+      shadowStyle: "soft",
+      cardOpacity: 1,
+      cardBlur: 0,
+      animationSpeed: "normal",
     });
     window.dispatchEvent(new Event("hz-theme-updated"));
     toast.success(lang === "bn" ? "থিম রিসেট সফল হয়েছে" : "Theme settings reset successfully");
@@ -885,6 +895,10 @@ export default function MorePage() {
                 { id: "new-brutalism", label: lang === "bn" ? "নিও-ব্রুটালিজম" : "Neo-Brutalism", icon: Sparkles, desc: lang === "bn" ? "উজ্জ্বল কার্টুনিশ" : "High contrast colorful", setup: { uiStyle: "new-brutalism", isMaterialUI: false, fontFamily: "Poppins, sans-serif", bgImage: "" } },
                 { id: "glassmorphic", label: lang === "bn" ? "গ্লাসমর্ফিজম" : "Glassmorphism", icon: ImageIcon, desc: lang === "bn" ? "স্বচ্ছ ফ্রস্টেড গ্লাস" : "Frosted glass on gradient", setup: { uiStyle: "glassmorphism", isMaterialUI: false, bgImage: "/glassmorphism_preset.png", bgImageOpacity: 0.22 } },
                 { id: "flowerism", label: lang === "bn" ? "ফ্লাওয়ারিজম" : "Flowerism", icon: Sparkles, desc: lang === "bn" ? "ফ্লোরাল নরম পেস্টেল" : "Organic pastel floral theme", setup: { uiStyle: "flowerism", isMaterialUI: false, bgImage: "/flowerism_preset.png", bgImageOpacity: 0.15, primaryColor: "#f43f5e" } },
+                { id: "cyberpunk", label: lang === "bn" ? "সাইবারপাংক" : "Cyberpunk 👾", icon: Bot, desc: lang === "bn" ? "নিয়ন গ্লো ও হ্যাকার ভাইব" : "Neon pink/cyan console vibe", setup: { uiStyle: "cyberpunk", isMaterialUI: false, primaryColor: "#ff007f", fontFamily: "'Fira Code', monospace" } },
+                { id: "minimalist", label: lang === "bn" ? "মিনিমালিস্ট" : "Minimalist Clean 🕊️", icon: AlignLeft, desc: lang === "bn" ? "অত্যন্ত পরিষ্কার ও সাধারণ" : "Ultra clean flat design", setup: { uiStyle: "minimalist", isMaterialUI: false, shadowStyle: "none", borderWidth: "thin", borderRadius: "small", primaryColor: "#18181b", fontFamily: "'Playfair Display', serif" } },
+                { id: "forest", label: lang === "bn" ? "অরণ্য (নেচার)" : "Nature Forest 🌿", icon: Palette, desc: lang === "bn" ? "ভেষজ সবুজ ও শান্ত ভাব" : "Sage & deep forest green theme", setup: { uiStyle: "forest", isMaterialUI: false, primaryColor: "#2d5a27", borderRadius: "large" } },
+                { id: "luxury", label: lang === "bn" ? "লাক্সারি গোল্ড" : "Luxury Gold 👑", icon: Sparkles, desc: lang === "bn" ? "অভিজাত অবসিডিয়ান ও সোনা" : "Obsidian dark & gold foiled", setup: { uiStyle: "luxury", isMaterialUI: false, primaryColor: "#d4af37", fontFamily: "'Playfair Display', serif", borderRadius: "medium" } },
                 { id: "material", label: lang === "bn" ? "মেটেরিয়াল ইউআই" : "Material UI", icon: Settings, desc: lang === "bn" ? "ফ্ল্যাট এলিভেশন ছায়া" : "Standard flat elevation", setup: { uiStyle: "default", isMaterialUI: true, fontFamily: "Roboto, sans-serif", bgImage: "" } }
               ].map(s => {
                 const isActive = s.id === "material" ? theme.isMaterialUI : (theme.uiStyle === s.id && !theme.isMaterialUI);
@@ -995,6 +1009,120 @@ export default function MorePage() {
                       }`}
                     >
                       {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Card Opacity Slider */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                  <Label>{lang === "bn" ? "কার্ডের অস্বচ্ছতা (Opacity)" : "Card Opacity"}</Label>
+                  <span className="font-mono text-[9px]">{Math.round((theme.cardOpacity ?? 1) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.2"
+                  max="1.0"
+                  step="0.05"
+                  value={theme.cardOpacity ?? 1}
+                  onChange={e => updateThemeField("cardOpacity", parseFloat(e.target.value))}
+                  className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Card Blur Slider */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                  <Label>{lang === "bn" ? "কার্ডের ব্যাকগ্রাউন্ড ব্লার (Blur)" : "Card Backdrop Blur"}</Label>
+                  <span className="font-mono text-[9px]">{theme.cardBlur ?? 0}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={theme.cardBlur ?? 0}
+                  onChange={e => updateThemeField("cardBlur", parseInt(e.target.value))}
+                  className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Card Border Width */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ডের বর্ডারের পুরুত্ব" : "Card Border Width"}</Label>
+                <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
+                  {[
+                    { id: "none", label: lang === "bn" ? "কিছু না" : "None" },
+                    { id: "thin", label: lang === "bn" ? "চিকন" : "Thin" },
+                    { id: "medium", label: lang === "bn" ? "মাঝারি" : "Medium" },
+                    { id: "thick", label: lang === "bn" ? "মোটা" : "Thick" },
+                    { id: "heavy", label: lang === "bn" ? "গাঢ়" : "Heavy" }
+                  ].map(w => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => updateThemeField("borderWidth", w.id)}
+                      className={`flex-1 py-1 rounded-md text-[9px] text-center font-medium transition-all ${
+                        theme.borderWidth === w.id
+                          ? "bg-background text-foreground shadow font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Box Shadow Selector */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ড শ্যাডো (ছায়া)" : "Box Shadow Intensity"}</Label>
+                <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
+                  {[
+                    { id: "none", label: lang === "bn" ? "ফ্ল্যাট" : "None" },
+                    { id: "soft", label: lang === "bn" ? "হালকা" : "Soft" },
+                    { id: "medium", label: lang === "bn" ? "মাঝারি" : "Medium" },
+                    { id: "deep", label: lang === "bn" ? "গভীর" : "Deep" },
+                    { id: "brutal", label: lang === "bn" ? "ত্রিমাত্রিক" : "Brutal" }
+                  ].map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => updateThemeField("shadowStyle", s.id)}
+                      className={`flex-1 py-1 rounded-md text-[9px] text-center font-medium transition-all ${
+                        theme.shadowStyle === s.id
+                          ? "bg-background text-foreground shadow font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Animation Speed Selector */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "অ্যানিমেশন ট্রানজিশন গতি" : "Transition Animation Speed"}</Label>
+                <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
+                  {[
+                    { id: "none", label: lang === "bn" ? "বন্ধ" : "None" },
+                    { id: "fast", label: lang === "bn" ? "দ্রুত" : "Fast" },
+                    { id: "normal", label: lang === "bn" ? "স্বাভাবিক" : "Normal" },
+                    { id: "slow", label: lang === "bn" ? "ধীর" : "Slow" }
+                  ].map(a => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => updateThemeField("animationSpeed", a.id)}
+                      className={`flex-1 py-1 rounded-md text-[9px] text-center font-medium transition-all ${
+                        theme.animationSpeed === a.id
+                          ? "bg-background text-foreground shadow font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {a.label}
                     </button>
                   ))}
                 </div>

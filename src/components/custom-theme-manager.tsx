@@ -13,10 +13,15 @@ export type ThemeConfig = {
   density?: "compact" | "standard" | "cozy";
   widgetOrder?: string[];
   isMaterialUI?: boolean;
-  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism";
+  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism" | "cyberpunk" | "minimalist" | "forest" | "luxury";
   bevelStrength?: "none" | "light" | "medium" | "heavy";
   glowEnabled?: boolean;
   borderRadius?: "none" | "small" | "medium" | "large" | "full";
+  borderWidth?: "none" | "thin" | "medium" | "thick" | "heavy";
+  shadowStyle?: "none" | "soft" | "medium" | "deep" | "brutal";
+  cardOpacity?: number;
+  cardBlur?: number;
+  animationSpeed?: "none" | "fast" | "normal" | "slow";
 };
 
 export function CustomThemeManager() {
@@ -581,6 +586,289 @@ export function CustomThemeManager() {
           background-color: rgba(25, 20, 22, 0.9) !important;
         }
       `;
+    } else if (config.uiStyle === "cyberpunk") {
+      css += `
+        /* Cyberpunk Presets */
+        :root {
+          --radius: 0px !important;
+          --background: #0b0615 !important;
+          --card: #150c25 !important;
+          --muted: #22143b !important;
+          --muted-foreground: #a88bf5 !important;
+          --popover: #150c25 !important;
+          --primary: #ff007f !important;
+          --primary-foreground: #ffffff !important;
+        }
+        .dark {
+          --radius: 0px !important;
+          --background: #0b0615 !important;
+          --card: #150c25 !important;
+          --muted: #22143b !important;
+          --muted-foreground: #a88bf5 !important;
+          --popover: #150c25 !important;
+          --primary: #ff007f !important;
+          --primary-foreground: #ffffff !important;
+        }
+        body {
+          background-color: var(--background) !important;
+          color: #00f0ff !important;
+          font-family: 'Fira Code', monospace !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          border: 2px solid #00f0ff !important;
+          border-radius: 0px !important;
+          box-shadow: 0px 0px 10px rgba(0, 240, 255, 0.25), 4px 4px 0px #ff007f !important;
+        }
+        .beveled-card:hover {
+          box-shadow: 0px 0px 15px rgba(0, 240, 255, 0.4), 6px 6px 0px #ff007f !important;
+          transform: translate(-2px, -2px) !important;
+        }
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
+          border-radius: 0px !important;
+          border: 2px solid #ff007f !important;
+          box-shadow: 3px 3px 0px #00f0ff !important;
+          background-color: #ff007f !important;
+          color: #ffffff !important;
+          font-family: 'Fira Code', monospace !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          transition: all 0.1s ease !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
+          box-shadow: 4px 4px 0px #00f0ff !important;
+          background-color: #00f0ff !important;
+          color: #000000 !important;
+          border-color: #00f0ff !important;
+        }
+
+        /* Cyberpunk tabs */
+        [role="tablist"] {
+          border: 2px solid #ff007f !important;
+          border-radius: 0px !important;
+          background-color: #0b0615 !important;
+        }
+        [role="tab"] {
+          border-radius: 0px !important;
+          font-family: 'Fira Code', monospace !important;
+          color: #a88bf5 !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: #ff007f !important;
+          color: #ffffff !important;
+          box-shadow: 2px 2px 0px #00f0ff !important;
+        }
+      `;
+    } else if (config.uiStyle === "minimalist") {
+      css += `
+        /* Minimalist Clean Overrides */
+        :root {
+          --radius: 4px !important;
+          --background: #fbfbfb !important;
+          --card: #ffffff !important;
+          --muted: #f4f4f5 !important;
+          --muted-foreground: #71717a !important;
+          --popover: #ffffff !important;
+          --primary: #18181b !important;
+          --primary-foreground: #ffffff !important;
+        }
+        .dark {
+          --radius: 4px !important;
+          --background: #09090b !important;
+          --card: #121214 !important;
+          --muted: #1e1e21 !important;
+          --muted-foreground: #a1a1aa !important;
+          --popover: #121214 !important;
+          --primary: #ffffff !important;
+          --primary-foreground: #09090b !important;
+        }
+        body {
+          background-color: var(--background) !important;
+          color: var(--foreground) !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          border: 1px solid #e4e4e7 !important;
+          border-radius: 4px !important;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+        }
+        .dark .beveled-card, .dark [class*="beveled-card"] {
+          border: 1px solid #27272a !important;
+        }
+        .beveled-card:hover {
+          border-color: var(--primary) !important;
+        }
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
+          border-radius: 4px !important;
+          border: 1px solid var(--primary) !important;
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          font-weight: 500 !important;
+          box-shadow: none !important;
+          transition: all 0.2s ease !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
+          background-color: transparent !important;
+          color: var(--primary) !important;
+        }
+
+        /* Minimalist tabs */
+        [role="tablist"] {
+          background-color: var(--muted) !important;
+          border-radius: 6px !important;
+        }
+        [role="tab"] {
+          border-radius: 4px !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: var(--card) !important;
+          color: var(--foreground) !important;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+          font-weight: 500 !important;
+        }
+      `;
+    } else if (config.uiStyle === "forest") {
+      css += `
+        /* Nature Forest Overrides */
+        :root {
+          --radius: 16px !important;
+          --background: #f4f6f4 !important;
+          --card: #ffffff !important;
+          --muted: #e2e8e2 !important;
+          --muted-foreground: #5e6e5f !important;
+          --popover: #ffffff !important;
+          --primary: #2d5a27 !important;
+          --primary-foreground: #ffffff !important;
+        }
+        .dark {
+          --radius: 16px !important;
+          --background: #121812 !important;
+          --card: #1a221a !important;
+          --muted: #243024 !important;
+          --muted-foreground: #8a9c8b !important;
+          --popover: #1a221a !important;
+          --primary: #8bc34a !important;
+          --primary-foreground: #121812 !important;
+        }
+        body {
+          background-color: var(--background) !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          border: 1px solid #d0dad0 !important;
+          border-radius: 16px !important;
+          box-shadow: 0 4px 12px rgba(45, 90, 39, 0.05) !important;
+        }
+        .dark .beveled-card, .dark [class*="beveled-card"] {
+          border: 1px solid #2d3d2d !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        }
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
+          border-radius: 12px !important;
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          font-weight: 600 !important;
+          box-shadow: 0 2px 6px rgba(45, 90, 39, 0.15) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .dark .beveled-button {
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+        }
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
+          opacity: 0.9 !important;
+          transform: translateY(-1px) !important;
+        }
+
+        /* Nature Forest Tabs */
+        [role="tablist"] {
+          background-color: var(--muted) !important;
+          border-radius: 14px !important;
+        }
+        [role="tab"] {
+          border-radius: 12px !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          font-weight: 600 !important;
+        }
+      `;
+    } else if (config.uiStyle === "luxury") {
+      css += `
+        /* Luxury Gold Overrides */
+        :root {
+          --radius: 10px !important;
+          --background: #09090b !important;
+          --card: #121215 !important;
+          --muted: #1c1c22 !important;
+          --muted-foreground: #9a9a8d !important;
+          --popover: #121215 !important;
+          --primary: #d4af37 !important; /* Gold */
+          --primary-foreground: #09090b !important;
+        }
+        .dark {
+          --radius: 10px !important;
+          --background: #09090b !important;
+          --card: #121215 !important;
+          --muted: #1c1c22 !important;
+          --muted-foreground: #9a9a8d !important;
+          --popover: #121215 !important;
+          --primary: #d4af37 !important;
+          --primary-foreground: #09090b !important;
+        }
+        body {
+          background-color: var(--background) !important;
+          color: #e5e5e0 !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
+          background-color: var(--card) !important;
+          border: 1px solid rgba(212, 175, 55, 0.2) !important;
+          border-radius: 10px !important;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0px rgba(255, 255, 255, 0.05) !important;
+        }
+        .beveled-card:hover {
+          border-color: rgba(212, 175, 55, 0.45) !important;
+          box-shadow: 0 8px 32px rgba(212, 175, 55, 0.08), 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+        }
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
+          border-radius: 8px !important;
+          border: 1px solid #d4af37 !important;
+          background: linear-gradient(135deg, #d4af37, #aa8010) !important;
+          color: #09090b !important;
+          font-weight: 600 !important;
+          box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
+          box-shadow: 0 6px 18px rgba(212, 175, 55, 0.3) !important;
+          transform: translateY(-1px) !important;
+        }
+
+        /* Luxury tabs */
+        [role="tablist"] {
+          background-color: var(--muted) !important;
+          border-radius: 10px !important;
+        }
+        [role="tab"] {
+          border-radius: 8px !important;
+          color: var(--muted-foreground) !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: #d4af37 !important;
+          color: #09090b !important;
+          font-weight: 600 !important;
+        }
+      `;
     }
 
     // Bevel Strength overrides
@@ -868,6 +1156,73 @@ export function CustomThemeManager() {
           background-repeat: no-repeat;
           opacity: ${opacity};
           pointer-events: none;
+        }
+      `;
+    }
+
+    // 8. Custom Card Opacity (using color-mix)
+    if (config.cardOpacity !== undefined && config.cardOpacity !== 1) {
+      css += `
+        .beveled-card, [class*="beveled-card"], .card {
+          background-color: color-mix(in srgb, var(--card) ${config.cardOpacity * 100}%, transparent) !important;
+          background: color-mix(in srgb, var(--card) ${config.cardOpacity * 100}%, transparent) !important;
+        }
+      `;
+    }
+
+    // 9. Custom Card Blur
+    if (config.cardBlur !== undefined) {
+      css += `
+        .beveled-card, [class*="beveled-card"], .card {
+          backdrop-filter: blur(${config.cardBlur}px) !important;
+          -webkit-backdrop-filter: blur(${config.cardBlur}px) !important;
+        }
+      `;
+    }
+
+    // 10. Custom Border Width
+    if (config.borderWidth) {
+      let borderW = "1px";
+      if (config.borderWidth === "none") borderW = "0px";
+      else if (config.borderWidth === "thin") borderW = "1px";
+      else if (config.borderWidth === "medium") borderW = "2px";
+      else if (config.borderWidth === "thick") borderW = "3.5px";
+      else if (config.borderWidth === "heavy") borderW = "5px";
+
+      css += `
+        .beveled-card, [class*="beveled-card"], .card {
+          border-width: ${borderW} !important;
+        }
+      `;
+    }
+
+    // 11. Custom Box Shadow Style
+    if (config.shadowStyle) {
+      let shadowVal = "none";
+      if (config.shadowStyle === "none") shadowVal = "none";
+      else if (config.shadowStyle === "soft") shadowVal = "0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)";
+      else if (config.shadowStyle === "medium") shadowVal = "0 8px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.02)";
+      else if (config.shadowStyle === "deep") shadowVal = "0 20px 40px rgba(0, 0, 0, 0.12), 0 4px 10px rgba(0, 0, 0, 0.04)";
+      else if (config.shadowStyle === "brutal") shadowVal = "6px 6px 0px var(--primary, #000000)";
+
+      css += `
+        .beveled-card, [class*="beveled-card"], .card {
+          box-shadow: ${shadowVal} !important;
+        }
+      `;
+    }
+
+    // 12. Custom Animation/Transition Speed
+    if (config.animationSpeed) {
+      let speedVal = "0.2s";
+      if (config.animationSpeed === "none") speedVal = "0s";
+      else if (config.animationSpeed === "fast") speedVal = "0.12s";
+      else if (config.animationSpeed === "normal") speedVal = "0.25s";
+      else if (config.animationSpeed === "slow") speedVal = "0.5s";
+
+      css += `
+        *, *::before, *::after {
+          transition-duration: ${speedVal} !important;
         }
       `;
     }
