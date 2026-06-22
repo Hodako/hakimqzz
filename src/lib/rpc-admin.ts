@@ -593,3 +593,27 @@ export async function changeUserPasswordFn(input: { data: { userId: string; newP
 
   return { success: true };
 }
+
+export async function changeSuperAdminPasswordFn(input: { data: { currentPassword?: string; newPassword: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  if (!data.newPassword || data.newPassword.trim().length < 6) {
+    throw new Error("New password must be at least 6 characters long");
+  }
+  const db = await getDb();
+  const admin = await db.collection("super_admins").findOne({ username: "superadmin" });
+  if (!admin) throw new Error("Super admin account not found");
+
+  if (data.currentPassword) {
+    const ok = await comparePassword(data.currentPassword, admin.password as string);
+    if (!ok) throw new Error("Current password is incorrect");
+  }
+
+  const hashedPassword = await hashPassword(data.newPassword.trim());
+  await db.collection("super_admins").updateOne(
+    { username: "superadmin" },
+    { $set: { password: hashedPassword } }
+  );
+
+  return { success: true };
+}

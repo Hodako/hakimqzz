@@ -89,10 +89,67 @@ export default function AiAuditsPage() {
     }
   };
 
-  // Helper to parse **bold** tags
+  // Helper to parse both markdown **bold** and standard HTML tags in AI responses
   const parseBold = (text: string) => {
-    const parts = text.split(/\*\*([\s\S]*?)\*\*/g);
-    return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-zinc-950 dark:text-white">{part}</strong> : part));
+    const converted = text.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
+    const tagRegex = /(<[^>]+>)/g;
+    const parts = converted.split(tagRegex);
+    
+    let elements: React.ReactNode[] = [];
+    let isBold = false;
+    let isItalic = false;
+    let isUnderline = false;
+    let textColor = "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) continue;
+      
+      if (part.startsWith("<") && part.endsWith(">")) {
+        const lowercaseTag = part.toLowerCase();
+        if (lowercaseTag.startsWith("<span")) {
+          const colorMatch = part.match(/style=["'][^"']*color:\s*([^;'"\s]+)/i);
+          if (colorMatch) {
+            textColor = colorMatch[1];
+          }
+          const classMatch = part.match(/class=["'][^"']*text-([a-z0-9-]+)/i);
+          if (classMatch) {
+            const colorClass = classMatch[1];
+            if (colorClass === "primary") textColor = "var(--primary)";
+            else if (colorClass === "rose-500") textColor = "#f43f5e";
+            else if (colorClass === "emerald-500") textColor = "#10b981";
+            else if (colorClass === "amber-500") textColor = "#f59e0b";
+          }
+        } else if (lowercaseTag === "</span>") {
+          textColor = "";
+        } else if (lowercaseTag === "<b>" || lowercaseTag === "<strong>") {
+          isBold = true;
+        } else if (lowercaseTag === "</b>" || lowercaseTag === "</strong>") {
+          isBold = false;
+        } else if (lowercaseTag === "<i>" || lowercaseTag === "<em>") {
+          isItalic = true;
+        } else if (lowercaseTag === "</i>" || lowercaseTag === "</em>") {
+          isItalic = false;
+        } else if (lowercaseTag === "<u>") {
+          isUnderline = true;
+        } else if (lowercaseTag === "</u>") {
+          isUnderline = false;
+        }
+      } else {
+        let style: React.CSSProperties = {};
+        if (textColor) style.color = textColor;
+        
+        let el: React.ReactNode = part;
+        if (isBold) el = <strong key={i} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
+        if (isItalic) el = <em key={i} className="italic">{el}</em>;
+        if (isUnderline) el = <u key={i}>{el}</u>;
+        if (textColor) el = <span key={i} style={style}>{el}</span>;
+        
+        elements.push(el);
+      }
+    }
+    
+    return elements.length > 0 ? elements : text;
   };
 
   // Structured renderer helper for formatting the AI's response

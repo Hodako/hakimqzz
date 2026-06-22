@@ -16,6 +16,7 @@ export type ThemeConfig = {
   uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism";
   bevelStrength?: "none" | "light" | "medium" | "heavy";
   glowEnabled?: boolean;
+  borderRadius?: "none" | "small" | "medium" | "large" | "full";
 };
 
 export function CustomThemeManager() {
@@ -429,6 +430,25 @@ export function CustomThemeManager() {
       css += `
         .beveled-button, .beveled-card, button[class*="beveled-button"], [class*="beveled-card"] {
           ${bevelCss}
+        }
+      `;
+    }
+
+    // Border Radius overrides
+    if (config.borderRadius) {
+      let radiusVal = "12px";
+      if (config.borderRadius === "none") radiusVal = "0px";
+      else if (config.borderRadius === "small") radiusVal = "6px";
+      else if (config.borderRadius === "medium") radiusVal = "12px";
+      else if (config.borderRadius === "large") radiusVal = "20px";
+      else if (config.borderRadius === "full") radiusVal = "9999px";
+
+      css += `
+        :root, .dark {
+          --radius: ${radiusVal} !important;
+        }
+        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"], .kpi-card {
+          border-radius: ${radiusVal} !important;
         }
       `;
     }

@@ -23,6 +23,7 @@ import {
   impersonateUserFn,
   deleteUserFn,
   changeUserPasswordFn,
+  changeSuperAdminPasswordFn,
 } from "@/lib/rpc-admin";
 import {
   Trash2,
@@ -55,7 +56,7 @@ export default function SuperAdminPage() {
   const [limit, setLimit] = useState("5");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<"feed" | "businesses" | "users" | "licenses">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "businesses" | "users" | "licenses" | "settings">("feed");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Safe cascade delete modal state — Business
@@ -340,10 +341,21 @@ export default function SuperAdminPage() {
             <Key className="size-4" />
             Platform Licenses ({licenses.data?.length ?? 0})
           </button>
+          <button
+            onClick={() => { setActiveTab("settings"); setSearchQuery(""); }}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg flex items-center gap-2 transition-all ${
+              activeTab === "settings"
+                ? "bg-primary/10 text-primary border border-primary/25"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+            }`}
+          >
+            <Shield className="size-4" />
+            Admin Settings
+          </button>
         </div>
 
         {/* SEARCH BOX FOR FILTERABLE TABS */}
-        {activeTab !== "feed" && (
+        {activeTab !== "feed" && activeTab !== "settings" && (
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -871,6 +883,91 @@ export default function SuperAdminPage() {
               )}
             </Card>
           </div>
+        )}
+
+        {/* 4. SUPERADMIN PASSWORD SETTINGS */}
+        {activeTab === "settings" && (
+          <Card className="glass-card p-6 border-border/40 max-w-md mx-auto space-y-4 bg-card">
+            <div className="flex items-center gap-2">
+              <Shield className="size-5 text-primary animate-pulse" />
+              <h3 className="font-bold text-lg text-foreground">Superadmin Settings</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Use this form to change your superadmin account password. Make sure to keep it secure as this account can manage all store registers and licenses on this server.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const currentPw = (e.currentTarget.elements.namedItem("currentPassword") as HTMLInputElement).value;
+                const newPw = (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value;
+                const confirmPw = (e.currentTarget.elements.namedItem("confirmPassword") as HTMLInputElement).value;
+
+                if (newPw.trim().length < 6) {
+                  toast.error("New password must be at least 6 characters long");
+                  return;
+                }
+                if (newPw !== confirmPw) {
+                  toast.error("Passwords do not match");
+                  return;
+                }
+
+                setBusy(true);
+                try {
+                  await changeSuperAdminPasswordFn({
+                    data: { currentPassword: currentPw || undefined, newPassword: newPw }
+                  });
+                  toast.success("Superadmin password updated successfully!");
+                  (e.target as HTMLFormElement).reset();
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to update superadmin password");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="space-y-4 pt-2 text-xs"
+            >
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Current Password (optional, for validation)</Label>
+                <Input
+                  name="currentPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  className="beveled-card bg-muted/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">New Password (min 6 characters)</Label>
+                <Input
+                  name="newPassword"
+                  type="password"
+                  required
+                  placeholder="New Password"
+                  className="beveled-card bg-muted/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Confirm New Password</Label>
+                <Input
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  placeholder="Confirm New Password"
+                  className="beveled-card bg-muted/20"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={busy}
+                className="w-full h-10 font-bold beveled-button mt-2"
+              >
+                {busy ? "Updating..." : "Change Admin Password"}
+              </Button>
+            </form>
+          </Card>
         )}
       </div>
 

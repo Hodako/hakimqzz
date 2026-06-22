@@ -120,10 +120,67 @@ export default function MorePage() {
     }
   };
 
-  // Helper to parse **bold** tags
+  // Helper to parse both markdown **bold** and standard HTML tags in AI responses
   const parseBold = (text: string) => {
-    const parts = text.split(/\*\*([\s\S]*?)\*\*/g);
-    return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-zinc-950 dark:text-white">{part}</strong> : part));
+    const converted = text.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
+    const tagRegex = /(<[^>]+>)/g;
+    const parts = converted.split(tagRegex);
+    
+    let elements: React.ReactNode[] = [];
+    let isBold = false;
+    let isItalic = false;
+    let isUnderline = false;
+    let textColor = "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) continue;
+      
+      if (part.startsWith("<") && part.endsWith(">")) {
+        const lowercaseTag = part.toLowerCase();
+        if (lowercaseTag.startsWith("<span")) {
+          const colorMatch = part.match(/style=["'][^"']*color:\s*([^;'"\s]+)/i);
+          if (colorMatch) {
+            textColor = colorMatch[1];
+          }
+          const classMatch = part.match(/class=["'][^"']*text-([a-z0-9-]+)/i);
+          if (classMatch) {
+            const colorClass = classMatch[1];
+            if (colorClass === "primary") textColor = "var(--primary)";
+            else if (colorClass === "rose-500") textColor = "#f43f5e";
+            else if (colorClass === "emerald-500") textColor = "#10b981";
+            else if (colorClass === "amber-500") textColor = "#f59e0b";
+          }
+        } else if (lowercaseTag === "</span>") {
+          textColor = "";
+        } else if (lowercaseTag === "<b>" || lowercaseTag === "<strong>") {
+          isBold = true;
+        } else if (lowercaseTag === "</b>" || lowercaseTag === "</strong>") {
+          isBold = false;
+        } else if (lowercaseTag === "<i>" || lowercaseTag === "<em>") {
+          isItalic = true;
+        } else if (lowercaseTag === "</i>" || lowercaseTag === "</em>") {
+          isItalic = false;
+        } else if (lowercaseTag === "<u>") {
+          isUnderline = true;
+        } else if (lowercaseTag === "</u>") {
+          isUnderline = false;
+        }
+      } else {
+        let style: React.CSSProperties = {};
+        if (textColor) style.color = textColor;
+        
+        let el: React.ReactNode = part;
+        if (isBold) el = <strong key={i} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
+        if (isItalic) el = <em key={i} className="italic">{el}</em>;
+        if (isUnderline) el = <u key={i}>{el}</u>;
+        if (textColor) el = <span key={i} style={style}>{el}</span>;
+        
+        elements.push(el);
+      }
+    }
+    
+    return elements.length > 0 ? elements : text;
   };
 
   const renderStructuredContent = (content: string) => {
@@ -427,6 +484,7 @@ export default function MorePage() {
     uiStyle: "default",
     bevelStrength: "medium",
     glowEnabled: false,
+    borderRadius: "",
   });
 
   // KPI config state
@@ -550,6 +608,7 @@ export default function MorePage() {
       uiStyle: "default",
       bevelStrength: "medium",
       glowEnabled: false,
+      borderRadius: "",
     });
     window.dispatchEvent(new Event("hz-theme-updated"));
     toast.success(lang === "bn" ? "থিম রিসেট সফল হয়েছে" : "Theme settings reset successfully");
@@ -855,6 +914,33 @@ export default function MorePage() {
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Card Roundness & Sharpness selector */}
+              <div className="space-y-1 pt-2 border-t border-border/20">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ড ও মেট্রিক্স কোণার রাউন্ডনেস (শার্পনেস)" : "Card Roundness & Sharpness"}</Label>
+                <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
+                  {[
+                    { id: "none", label: lang === "bn" ? "তীক্ষ্ণ" : "Sharp" },
+                    { id: "small", label: lang === "bn" ? "সামান্য" : "Small" },
+                    { id: "medium", label: lang === "bn" ? "মাঝারি" : "Medium" },
+                    { id: "large", label: lang === "bn" ? "গোল" : "Rounded" },
+                    { id: "full", label: lang === "bn" ? "বৃত্তাকার" : "Pill" }
+                  ].map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => updateThemeField("borderRadius", r.id)}
+                      className={`flex-1 py-1 rounded-md text-[9px] text-center font-medium transition-all ${
+                        theme.borderRadius === r.id
+                          ? "bg-background text-foreground shadow font-semibold"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1265,12 +1351,9 @@ export default function MorePage() {
 
       {isMobile ? (
         <Tabs defaultValue="menu" className="space-y-4">
-          <TabsList className={`grid ${user?.role === "owner" ? "grid-cols-3" : "grid-cols-2"} w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40`}>
+          <TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
             <TabsTrigger value="menu" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "মেনু ও লিংক" : "Menu & Operations"}</TabsTrigger>
             <TabsTrigger value="ui" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "ইউআই সেটিংস" : "UI Customization"}</TabsTrigger>
-            {user?.role === "owner" && (
-              <TabsTrigger value="ai" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "এআই অডিট" : "AI Audits"}</TabsTrigger>
-            )}
           </TabsList>
 
           <TabsContent value="menu" className="space-y-5 outline-none mt-0">
@@ -1281,12 +1364,6 @@ export default function MorePage() {
           <TabsContent value="ui" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
             {renderThemeCustomization()}
           </TabsContent>
-
-          {user?.role === "owner" && (
-            <TabsContent value="ai" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
-              {renderMobileAiAssistant()}
-            </TabsContent>
-          )}
         </Tabs>
       ) : (
         <div className="space-y-5">
