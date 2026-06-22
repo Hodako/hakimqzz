@@ -103,6 +103,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     cacheUser(newUser);
     writeBrand({ name: newUser.business_name, logo_url: newUser.logo_url });
     setLoading(false);
+
+    // Clear browser Cache Storage on login
+    if (typeof window !== "undefined" && "caches" in window) {
+      window.caches.keys().then((keys) => {
+        return Promise.all(keys.map((key) => window.caches.delete(key)));
+      }).catch((err) => {
+        console.error("Failed to clear caches on login:", err);
+      });
+    }
   };
 
   const logout = async () => {

@@ -54,6 +54,46 @@ export default function ProductsPage() {
   const [returnProduct, setReturnProduct] = useState<Product | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [statsExpanded, setStatsExpanded] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hz_pinned_products");
+      if (saved) {
+        try {
+          setPinnedIds(JSON.parse(saved));
+        } catch (e) {}
+      }
+
+      const loadTheme = () => {
+        const themeSaved = localStorage.getItem("hz_custom_theme");
+        if (themeSaved) {
+          try {
+            const parsed = JSON.parse(themeSaved);
+            if (parsed.productBoxSize) {
+              setProductBoxSize(parsed.productBoxSize);
+            }
+          } catch (e) {}
+        }
+      };
+      loadTheme();
+      window.addEventListener("hz-theme-updated", loadTheme);
+      return () => window.removeEventListener("hz-theme-updated", loadTheme);
+    }
+  }, []);
+
+  const togglePin = (id: string) => {
+    const next = pinnedIds.includes(id)
+      ? pinnedIds.filter(x => x !== id)
+      : [...pinnedIds, id];
+    setPinnedIds(next);
+    localStorage.setItem("hz_pinned_products", JSON.stringify(next));
+    toast.success(pinnedIds.includes(id) 
+      ? (lang === "bn" ? "পণ্যটি আনপিন করা হয়েছে" : "Product unpinned")
+      : (lang === "bn" ? "পণ্যটি পিন করা হয়েছে" : "Product pinned to top")
+    );
+  };
 
   const [sellType, setSellType] = useState<"cash" | "credit" | "online">("cash");
   const [sellPartyId, setSellPartyId] = useState("");
@@ -154,14 +194,19 @@ export default function ProductsPage() {
     return matchesTab && matchesCategory && matchesLowStock;
   });
 
-  // Sort by popularity (descending)
+  // Sort by popularity (descending) and pinned items first
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
+      const aPinned = pinnedIds.includes(a.id);
+      const bPinned = pinnedIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+
       const popA = popularityMap[a.id] ?? 0;
       const popB = popularityMap[b.id] ?? 0;
       return popB - popA;
     });
-  }, [filteredProducts, popularityMap]);
+  }, [filteredProducts, popularityMap, pinnedIds]);
 
   const { items: productsToShow, totalPages, safePage } = paginate(sortedProducts, page, pageSize);
 
@@ -334,7 +379,7 @@ export default function ProductsPage() {
       {/* Sell Basket Panel */}
       {showCartPanel && (
         sellCart.length > 0 ? (
-          <Card className="p-3 border-emerald-500/30 bg-emerald-500/5 space-y-2.5">
+          <Card className="p-4 border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/20 dark:via-emerald-950/10 dark:to-transparent backdrop-blur-md space-y-3.5 beveled-card shadow-lg rounded-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <ShoppingCart className="size-4 text-emerald-600 dark:text-emerald-400" />
@@ -345,7 +390,7 @@ export default function ProductsPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-6 text-muted-foreground hover:text-destructive"
+                className="size-6 text-muted-foreground hover:text-destructive rounded-lg"
                 onClick={() => {
                   setSellCart([]);
                   setShowCartPanel(false);
@@ -355,132 +400,149 @@ export default function ProductsPage() {
               </Button>
             </div>
 
-          <div className="max-h-[220px] overflow-y-auto divide-y divide-border/60 pr-1 space-y-2">
-            {sellCart.map((item, index) => (
-              <div key={item.product.id} className="flex flex-col gap-1.5 py-2 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate flex-1 font-medium text-emerald-950 dark:text-emerald-50">{item.product.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-5 text-destructive hover:bg-destructive/10 shrink-0"
-                    onClick={() => setSellCart(prev => prev.filter((_, i) => i !== index))}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 flex-1">
-                    <span className="text-[10px] text-muted-foreground shrink-0">{t("qty")}:</span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max={item.product.stock}
-                      value={item.qty}
-                      onChange={(e) => {
-                        const val = Math.max(1, Math.min(item.product.stock, Number(e.target.value) || 1));
-                        setSellCart(prev => prev.map((x, i) => i === index ? { ...x, qty: val } : x));
-                      }}
-                      className="h-7 text-xs bg-background text-center p-1 w-16"
-                    />
-                    <span className="text-[9px] text-muted-foreground">/ {item.product.stock}</span>
+            <div className="max-h-[260px] overflow-y-auto pr-1 space-y-2 no-scrollbar">
+              {sellCart.map((item, index) => (
+                <div key={item.product.id} className="flex flex-col gap-2 p-2.5 rounded-xl bg-white/60 dark:bg-zinc-950/40 border border-emerald-500/10 shadow-sm text-xs transition-all">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-50 truncate">{item.product.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-5.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
+                      onClick={() => setSellCart(prev => prev.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-1 flex-1 justify-end">
-                    <span className="text-[10px] text-muted-foreground shrink-0">{t("sell_price")}:</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={item.sellPrice}
-                      onChange={(e) => {
-                        const val = Math.max(0, Number(e.target.value) || 0);
-                        setSellCart(prev => prev.map((x, i) => i === index ? { ...x, sellPrice: val } : x));
-                      }}
-                      className="h-7 text-xs bg-background text-center p-1 w-24"
-                    />
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <span className="text-[10px] text-muted-foreground shrink-0">{t("qty")}:</span>
+                      <div className="flex items-center border border-input rounded-lg bg-background overflow-hidden h-7 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 rounded-none border-r"
+                          onClick={() => {
+                            const val = Math.max(1, item.qty - 1);
+                            setSellCart(prev => prev.map((x, i) => i === index ? { ...x, qty: val } : x));
+                          }}
+                        >
+                          <Minus className="size-2.5" />
+                        </Button>
+                        <span className="w-8 text-center text-xs font-semibold">{item.qty}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 rounded-none border-l"
+                          onClick={() => {
+                            const val = Math.min(item.product.stock, item.qty + 1);
+                            setSellCart(prev => prev.map((x, i) => i === index ? { ...x, qty: val } : x));
+                          }}
+                        >
+                          <Plus className="size-2.5" />
+                        </Button>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground shrink-0">/ {item.product.stock}</span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-1 justify-end">
+                      <span className="text-[10px] text-muted-foreground shrink-0">{t("sell_price")}:</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={item.sellPrice}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setSellCart(prev => prev.map((x, i) => i === index ? { ...x, sellPrice: val } : x));
+                        }}
+                        className="h-7 text-xs bg-background text-right px-1.5 w-20 font-semibold rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] pt-1.5 border-t border-dashed border-emerald-500/10 font-mono text-muted-foreground">
+                    <span>Profit: {fmtMoney((item.sellPrice - item.product.buy_price) * item.qty)}</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">Subtotal: {fmtMoney(item.qty * item.sellPrice)}</span>
                   </div>
                 </div>
-                <div className="flex justify-end text-[10px] font-mono text-muted-foreground">
-                  Subtotal: {fmtMoney(item.qty * item.sellPrice)}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-emerald-500/20 pt-2.5 space-y-2.5">
-            <div className="flex gap-1">
-              {(["cash", "credit", "online"] as const).map((mode) => (
-                <Button
-                  key={mode}
-                  type="button"
-                  variant={sellType === mode ? "default" : "outline"}
-                  className="h-7 text-[10px] flex-1 px-1"
-                  onClick={() => setSellType(mode)}
-                >
-                  {mode === "cash" ? t("cash_sale") : mode === "credit" ? t("credit_sale") : t("online_sell")}
-                </Button>
               ))}
             </div>
 
-            {sellType === "credit" && (
-              <div className="space-y-1.5 p-2 bg-background/50 rounded border border-emerald-500/10">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground w-12 shrink-0">{t("party")}:</span>
-                  <select
-                    value={sellPartyId}
-                    onChange={e => setSellPartyId(e.target.value)}
-                    className="h-7 rounded border border-input bg-background px-2 text-xs flex-1"
+            <div className="border-t border-emerald-500/20 pt-3 space-y-3">
+              <div className="flex gap-1 bg-muted/65 p-0.5 rounded-lg border border-border/20">
+                {(["cash", "credit", "online"] as const).map((mode) => (
+                  <Button
+                    key={mode}
+                    type="button"
+                    variant={sellType === mode ? "default" : "outline"}
+                    className="h-7 text-[10px] flex-1 px-1 rounded-md"
+                    onClick={() => setSellType(mode)}
                   >
-                    <option value="">— Select Party —</option>
-                    {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                    {mode === "cash" ? t("cash_sale") : mode === "credit" ? t("credit_sale") : t("online_sell")}
+                  </Button>
+                ))}
+              </div>
+
+              {sellType === "credit" && (
+                <div className="space-y-1.5 p-2.5 bg-background/50 rounded-xl border border-emerald-500/15 shadow-inner">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{t("party")}:</span>
+                    <select
+                      value={sellPartyId}
+                      onChange={e => setSellPartyId(e.target.value)}
+                      className="h-7 rounded border border-input bg-background px-2 text-xs flex-1"
+                    >
+                      <option value="">— Select Party —</option>
+                      {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{t("paid_amount")}:</span>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={sellPaidAmount}
+                      onChange={e => setSellPaidAmount(e.target.value)}
+                      className="h-7 text-xs bg-background"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] pt-1">
+                    <span className="text-muted-foreground">{t("due_amount")}:</span>
+                    <span className="font-semibold text-warning">
+                      {fmtMoney(Math.max(0, sellCart.reduce((sum, item) => sum + item.qty * item.sellPrice, 0) - (Number(sellPaidAmount) || 0)))}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground w-12 shrink-0">{t("paid_amount")}:</span>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={sellPaidAmount}
-                    onChange={e => setSellPaidAmount(e.target.value)}
-                    className="h-7 text-xs bg-background"
-                  />
+              )}
+
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <div>
+                  <span className="text-muted-foreground">{t("total")}: </span>
+                  <span className="font-bold text-sm text-emerald-950 dark:text-emerald-50">
+                    {fmtMoney(sellCart.reduce((sum, item) => sum + item.qty * item.sellPrice, 0))}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-[10px] pt-1">
-                  <span className="text-muted-foreground">{t("due_amount")}:</span>
-                  <span className="font-semibold text-warning">
-                    {fmtMoney(Math.max(0, sellCart.reduce((sum, item) => sum + item.qty * item.sellPrice, 0) - (Number(sellPaidAmount) || 0)))}
+                <div className="text-right">
+                  <span className="text-muted-foreground">{t("profit")}: </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                    {fmtMoney(sellCart.reduce((sum, item) => sum + (item.sellPrice - item.product.buy_price) * item.qty, 0))}
                   </span>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-center justify-between text-xs font-medium">
-              <div>
-                <span className="text-muted-foreground">{t("total")}: </span>
-                <span className="font-bold text-sm text-emerald-950 dark:text-emerald-50">
-                  {fmtMoney(sellCart.reduce((sum, item) => sum + item.qty * item.sellPrice, 0))}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-muted-foreground">{t("profit")}: </span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                  {fmtMoney(sellCart.reduce((sum, item) => sum + (item.sellPrice - item.product.buy_price) * item.qty, 0))}
-                </span>
-              </div>
+              <Button
+                size="sm"
+                disabled={sellBusy}
+                className="w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl"
+                onClick={handleCompleteDirectSell}
+              >
+                {sellBusy ? "..." : t("record_sale")}
+              </Button>
             </div>
-
-            <Button
-              size="sm"
-              disabled={sellBusy}
-              className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-              onClick={handleCompleteDirectSell}
-            >
-              {sellBusy ? "..." : t("record_sale")}
-            </Button>
-          </div>
-        </Card>
+          </Card>
         ) : (
-          <Card className="p-3 border border-dashed border-border/80 bg-muted/5 space-y-2.5">
+          <Card className="p-4 border border-dashed border-border/80 bg-muted/5 space-y-2.5 rounded-2xl beveled-card">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <ShoppingCart className="size-4 text-muted-foreground/60" />
@@ -496,7 +558,7 @@ export default function ProductsPage() {
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground text-center py-2">
-              {lang === "bn" ? "পণ্য যোগ করতে কার্ডের '+ বিক্রি' বোতামে চাপুন" : "Click '+ Sell' on any product card to add it to cart"}
+              {lang === "bn" ? "পণ্য যোগ করতে পণ্যের কার্ডে ট্যাপ করুন" : "Tap on any product card to add it to the cart"}
             </p>
           </Card>
         )
@@ -507,7 +569,13 @@ export default function ProductsPage() {
         <Card className="p-6 text-center text-xs text-muted-foreground">{t("no_products")}</Card>
       )}
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5 pt-1">
+      <div className={`grid gap-1.5 pt-1 ${
+        productBoxSize === "small" 
+          ? "grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8" 
+          : productBoxSize === "large" 
+            ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5" 
+            : "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6"
+      }`}>
         {productsToShow.map(p => {
           const isLowStock = p.stock <= (p.min_stock ?? 5);
           return (
@@ -517,6 +585,8 @@ export default function ProductsPage() {
               isLowStock={isLowStock}
               t={t}
               isMobile={isMobile}
+              isPinned={pinnedIds.includes(p.id)}
+              onTogglePin={() => togglePin(p.id)}
               onSell={() => {
                 setSellCart(prev => {
                   const existing = prev.find(x => x.product.id === p.id);
@@ -606,6 +676,8 @@ function ProductCard({
   onLongPress,
   t,
   isMobile,
+  isPinned,
+  onTogglePin,
 }: {
   p: Product;
   isLowStock: boolean;
@@ -618,6 +690,8 @@ function ProductCard({
   onLongPress: () => void;
   t: (k: any) => string;
   isMobile: boolean;
+  isPinned: boolean;
+  onTogglePin: () => void;
 }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -641,7 +715,7 @@ function ProductCard({
   if (isMobile) {
     return (
       <Card
-        className={`aspect-square relative overflow-hidden border-border/60 select-none transition-all active:scale-[0.98] ${
+        className={`aspect-square relative overflow-hidden border-border/60 select-none transition-all active:scale-[0.98] beveled-card ${
           p.archived ? "opacity-60" : "hover:border-primary/40"
         }`}
         onMouseDown={handleStart}
@@ -649,6 +723,7 @@ function ProductCard({
         onMouseLeave={handleEnd}
         onTouchStart={handleStart}
         onTouchEnd={handleEnd}
+        onTouchMove={handleEnd}
         onClick={(e) => {
           if (p.archived) return;
           if (p.stock > 0) onSell();
@@ -659,9 +734,16 @@ function ProductCard({
         </div>
 
         <div className="absolute top-1 left-1 right-1 flex justify-between items-start pointer-events-none z-10">
-          <div className="bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5 pointer-events-auto">
-            <span className={isLowStock ? "text-rose-400" : "text-emerald-400"}>●</span>
-            <span>{p.stock}</span>
+          <div className="flex gap-1 items-center">
+            <div className="bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5 pointer-events-auto">
+              <span className={isLowStock ? "text-rose-400" : "text-emerald-400"}>●</span>
+              <span>{p.stock}</span>
+            </div>
+            {isPinned && (
+              <div className="bg-primary/95 backdrop-blur-md text-white size-4 rounded-full flex items-center justify-center pointer-events-auto shadow-sm">
+                <span className="text-[9px]">📌</span>
+              </div>
+            )}
           </div>
 
           <div className="pointer-events-auto flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -674,6 +756,12 @@ function ProductCard({
               <DropdownMenuContent align="end" className="w-32">
                 {!p.archived ? (
                   <>
+                    <DropdownMenuItem
+                      onClick={() => onTogglePin()}
+                      className="text-xs font-semibold cursor-pointer flex items-center gap-1"
+                    >
+                      📌 {isPinned ? (t("unpin" as any) || "Unpin") : (t("pin" as any) || "Pin to Top")}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => onDirectSell()}
                       className="text-xs font-semibold cursor-pointer"
@@ -719,11 +807,6 @@ function ProductCard({
             <span className="font-extrabold text-[10px] text-emerald-400 font-serif">
               {p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}
             </span>
-            {!p.archived && p.stock > 0 && (
-              <span className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full size-4 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer border border-emerald-400/20 active:scale-90 transition-transform">
-                +
-              </span>
-            )}
           </div>
         </div>
 
@@ -738,7 +821,7 @@ function ProductCard({
 
   return (
     <Card
-      className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] ${
+      className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] beveled-card ${
         p.archived ? "opacity-60" : "hover:border-primary/40"
       }`}
       onMouseDown={handleStart}
@@ -746,6 +829,7 @@ function ProductCard({
       onMouseLeave={handleEnd}
       onTouchStart={handleStart}
       onTouchEnd={handleEnd}
+      onTouchMove={handleEnd}
     >
       <div>
         <div className="relative rounded overflow-hidden">
@@ -762,7 +846,10 @@ function ProductCard({
           )}
         </div>
         <div className="p-1 space-y-0.5">
-          <div className="font-semibold text-[10px] sm:text-xs truncate leading-tight text-foreground" title={p.name}>{p.name}</div>
+          <div className="font-semibold text-[10px] sm:text-xs truncate leading-tight text-foreground flex items-center gap-1" title={p.name}>
+            {isPinned && <span className="shrink-0 text-[10px]" title="Pinned">📌</span>}
+            <span className="truncate">{p.name}</span>
+          </div>
           
           {/* Custom Attributes Badges */}
           {p.attributes && Object.keys(p.attributes).length > 0 && (
@@ -791,7 +878,7 @@ function ProductCard({
           <>
             <Button
               size="sm"
-              className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg"
               disabled={p.stock <= 0}
               onClick={(e) => {
                 e.stopPropagation();
@@ -802,11 +889,17 @@ function ProductCard({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-6 shrink-0 text-muted-foreground hover:bg-muted">
+                <Button variant="ghost" size="icon" className="size-6 shrink-0 text-muted-foreground hover:bg-muted rounded-lg">
                   <MoreVertical className="size-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-32">
+                <DropdownMenuItem
+                  onClick={() => onTogglePin()}
+                  className="text-xs font-semibold cursor-pointer flex items-center gap-1"
+                >
+                  📌 {isPinned ? (t("unpin" as any) || "Unpin") : (t("pin" as any) || "Pin to Top")}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onDirectSell()}
                   className="text-xs font-semibold cursor-pointer"
@@ -828,8 +921,8 @@ function ProductCard({
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold" onClick={() => onRestore()}>{t("restore")}</Button>
-            <Button size="sm" variant="ghost" className="size-6 text-destructive shrink-0" onClick={() => onDelete()}>
+            <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold rounded-lg" onClick={() => onRestore()}>{t("restore")}</Button>
+            <Button size="sm" variant="ghost" className="size-6 text-destructive shrink-0 rounded-lg" onClick={() => onDelete()}>
               <Trash2 className="size-3" />
             </Button>
           </>

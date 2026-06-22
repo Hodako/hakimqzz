@@ -225,8 +225,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton size="lg" tooltip={user.email ?? "Account"}>
                       <Avatar className="size-6 shrink-0">
-                        <AvatarImage src={user?.avatar_url || "https://png.pngtree.com/png-vector/20231019/ourmid/pngtree-user-profile-avatar-png-image_10211467.png"} alt="Profile" />
-                        <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
+                        {user?.avatar_url ? (
+                          <img src={user.avatar_url} className="aspect-square h-full w-full object-cover rounded-full" alt="Profile" />
+                        ) : (
+                          <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
+                        )}
                       </Avatar>
                       <span className="truncate text-sm">{user.email}</span>
                     </SidebarMenuButton>
@@ -299,8 +302,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8">
                     <Avatar className="size-5">
-                      <AvatarImage src={user?.avatar_url || "https://png.pngtree.com/png-vector/20231019/ourmid/pngtree-user-profile-avatar-png-image_10211467.png"} alt="Profile" />
-                      <AvatarFallback className="text-[9px] bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
+                      {user?.avatar_url ? (
+                        <img src={user.avatar_url} className="aspect-square h-full w-full object-cover rounded-full" alt="Profile" />
+                      ) : (
+                        <AvatarFallback className="text-[9px] bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
+                      )}
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>

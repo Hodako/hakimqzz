@@ -68,10 +68,21 @@ export function CustomThemeManager() {
     if (config.uiStyle === "brutalism") {
       css += `
         /* Brutalism Overrides */
-        :root, .dark {
+        :root {
           --radius: 0px !important;
+          --background: #ffffff !important;
+          --card: #ffffff !important;
+          --muted: #f4f4f5 !important;
+          --popover: #ffffff !important;
         }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+        .dark {
+          --radius: 0px !important;
+          --background: #09090b !important;
+          --card: #09090b !important;
+          --muted: #27272a !important;
+          --popover: #09090b !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
           background-color: var(--card) !important;
           background: var(--card) !important;
           backdrop-filter: none !important;
@@ -81,25 +92,25 @@ export function CustomThemeManager() {
           box-shadow: 6px 6px 0px #000000 !important;
           transition: transform 0.1s ease, box-shadow 0.1s ease !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card, .dark [class*="glass-card"], .dark [class*="beveled-card"] {
+        .dark .beveled-card, .dark [class*="beveled-card"] {
           border: 3.5px solid #ffffff !important;
           box-shadow: 6px 6px 0px #ffffff !important;
         }
-        .card:hover, .beveled-card:hover, .glass-card:hover {
+        .beveled-card:hover {
           box-shadow: 8px 8px 0px #000000 !important;
           transform: translate(-2px, -2px) !important;
         }
-        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+        .dark .beveled-card:hover {
           box-shadow: 8px 8px 0px #ffffff !important;
         }
-        .card:active, .beveled-card:active, .glass-card:active {
+        .beveled-card:active {
           box-shadow: 2px 2px 0px #000000 !important;
           transform: translate(4px, 4px) !important;
         }
-        .dark .card:active, .dark .beveled-card:active, .dark .glass-card:active {
+        .dark .beveled-card:active {
           box-shadow: 2px 2px 0px #ffffff !important;
         }
-        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
           border-radius: 0px !important;
           border: 3px solid #000000 !important;
           box-shadow: 4px 4px 0px #000000 !important;
@@ -108,25 +119,56 @@ export function CustomThemeManager() {
           font-weight: 700 !important;
           text-transform: uppercase !important;
           transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
-        .dark button, .dark .button, .dark .beveled-button, .dark button[class*="beveled-button"], .dark [role="button"] {
+        .dark .beveled-button, .dark button.beveled-button, .dark [class*="beveled-button"], .dark a.beveled-button {
           border: 3px solid #ffffff !important;
           box-shadow: 4px 4px 0px #ffffff !important;
         }
-        button:hover, .button:hover, .beveled-button:hover {
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
           box-shadow: 6px 6px 0px #000000 !important;
           transform: translate(-2px, -2px) !important;
         }
-        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+        .dark .beveled-button:hover, .dark button.beveled-button:hover, .dark [class*="beveled-button"]:hover, .dark a.beveled-button:hover {
           box-shadow: 6px 6px 0px #ffffff !important;
         }
-        button:active, .button:active, .beveled-button:active {
+        .beveled-button:active, button.beveled-button:active, [class*="beveled-button"]:active, a.beveled-button:active {
           box-shadow: 1px 1px 0px #000000 !important;
           transform: translate(3px, 3px) !important;
         }
-        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+        .dark .beveled-button:active, .dark button.beveled-button:active, .dark [class*="beveled-button"]:active, .dark a.beveled-button:active {
           box-shadow: 1px 1px 0px #ffffff !important;
         }
+        
+        /* Brutalist Tabs overrides */
+        [role="tablist"] {
+          border: 3px solid #000000 !important;
+          border-radius: 0px !important;
+          background-color: var(--muted) !important;
+        }
+        .dark [role="tablist"] {
+          border: 3px solid #ffffff !important;
+        }
+        [role="tab"] {
+          border-radius: 0px !important;
+          border: none !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          transition: background-color 0.1s ease !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          border: 3px solid #000000 !important;
+          box-shadow: 3px 3px 0px #000000 !important;
+        }
+        .dark [role="tab"][data-state="active"] {
+          border: 3px solid #ffffff !important;
+          box-shadow: 3px 3px 0px #ffffff !important;
+        }
+
         input, select, textarea {
           border-radius: 0px !important;
           border: 3px solid #000000 !important;
@@ -146,10 +188,21 @@ export function CustomThemeManager() {
     } else if (config.uiStyle === "new-brutalism") {
       css += `
         /* New Brutalism (Neo-Brutalism) Overrides */
-        :root, .dark {
+        :root {
           --radius: 12px !important;
+          --background: #ffffff !important;
+          --card: #ffffff !important;
+          --muted: #f4f4f5 !important;
+          --popover: #ffffff !important;
         }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+        .dark {
+          --radius: 12px !important;
+          --background: #09090b !important;
+          --card: #09090b !important;
+          --muted: #27272a !important;
+          --popover: #09090b !important;
+        }
+        .beveled-card, [class*="beveled-card"] {
           background-color: var(--card) !important;
           background: var(--card) !important;
           border: 2px solid #18181b !important;
@@ -157,25 +210,25 @@ export function CustomThemeManager() {
           box-shadow: 4px 4px 0px #18181b !important;
           transition: transform 0.1s ease, box-shadow 0.1s ease !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card {
+        .dark .beveled-card, .dark [class*="beveled-card"] {
           border: 2px solid #ffffff !important;
           box-shadow: 4px 4px 0px #ffffff !important;
         }
-        .card:hover, .beveled-card:hover, .glass-card:hover {
+        .beveled-card:hover {
           box-shadow: 6px 6px 0px #18181b !important;
           transform: translate(-2px, -2px) !important;
         }
-        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+        .dark .beveled-card:hover {
           box-shadow: 6px 6px 0px #ffffff !important;
         }
-        .card:active, .beveled-card:active, .glass-card:active {
+        .beveled-card:active {
           box-shadow: 1px 1px 0px #18181b !important;
           transform: translate(3px, 3px) !important;
         }
-        .dark .card:active, .dark .beveled-card:active, .dark .glass-card:active {
+        .dark .beveled-card:active {
           box-shadow: 1px 1px 0px #ffffff !important;
         }
-        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
           border-radius: 10px !important;
           border: 2px solid #18181b !important;
           box-shadow: 3px 3px 0px #18181b !important;
@@ -183,25 +236,55 @@ export function CustomThemeManager() {
           color: var(--primary-foreground) !important;
           font-weight: 600 !important;
           transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
-        .dark button, .dark .button, .dark .beveled-button {
+        .dark .beveled-button, .dark button.beveled-button, .dark [class*="beveled-button"], .dark a.beveled-button {
           border: 2px solid #ffffff !important;
           box-shadow: 3px 3px 0px #ffffff !important;
         }
-        button:hover, .button:hover, .beveled-button:hover {
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
           box-shadow: 5px 5px 0px #18181b !important;
           transform: translate(-2px, -2px) !important;
         }
-        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+        .dark .beveled-button:hover, .dark button.beveled-button:hover, .dark [class*="beveled-button"]:hover, .dark a.beveled-button:hover {
           box-shadow: 5px 5px 0px #ffffff !important;
         }
-        button:active, .button:active, .beveled-button:active {
+        .beveled-button:active, button.beveled-button:active, [class*="beveled-button"]:active, a.beveled-button:active {
           box-shadow: 1px 1px 0px #18181b !important;
           transform: translate(2px, 2px) !important;
         }
-        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+        .dark .beveled-button:active, .dark button.beveled-button:active, .dark [class*="beveled-button"]:active, .dark a.beveled-button:active {
           box-shadow: 1px 1px 0px #ffffff !important;
         }
+
+        /* Neo-brutalist tabs */
+        [role="tablist"] {
+          border: 2px solid #18181b !important;
+          border-radius: 12px !important;
+          background-color: var(--muted) !important;
+        }
+        .dark [role="tablist"] {
+          border: 2px solid #ffffff !important;
+        }
+        [role="tab"] {
+          border-radius: 8px !important;
+          border: none !important;
+          font-weight: 600 !important;
+          transition: background-color 0.1s ease !important;
+        }
+        [role="tab"][data-state="active"] {
+          background-color: var(--primary) !important;
+          color: var(--primary-foreground) !important;
+          border: 2px solid #18181b !important;
+          box-shadow: 2px 2px 0px #18181b !important;
+        }
+        .dark [role="tab"][data-state="active"] {
+          border: 2px solid #ffffff !important;
+          box-shadow: 2px 2px 0px #ffffff !important;
+        }
+
         input, select, textarea {
           border-radius: 10px !important;
           border: 2px solid #18181b !important;
@@ -223,18 +306,24 @@ export function CustomThemeManager() {
         :root {
           --background: #e5e7eb !important;
           --card: #e5e7eb !important;
+          --muted: #d1d5db !important;
+          --muted-foreground: #4b5563 !important;
+          --popover: #e5e7eb !important;
           --radius: 20px !important;
         }
         .dark {
           --background: #1e1e1e !important;
           --card: #1e1e1e !important;
+          --muted: #2d2d2d !important;
+          --muted-foreground: #a3a3a3 !important;
+          --popover: #1e1e1e !important;
           --radius: 20px !important;
         }
         body {
           background-color: var(--background) !important;
           background-image: none !important;
         }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+        .beveled-card, [class*="beveled-card"] {
           background: var(--background) !important;
           border: none !important;
           border-radius: 20px !important;
@@ -245,51 +334,75 @@ export function CustomThemeManager() {
             10px 10px 20px rgb(153, 161, 175),
             inset -10px -10px 20px rgb(209, 213, 220) !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card, .dark [class*="glass-card"], .dark [class*="beveled-card"] {
+        .dark .beveled-card, .dark [class*="beveled-card"] {
           box-shadow:
             -10px -10px 20px rgba(255, 255, 255, 0.03),
             10px 10px 20px rgba(0, 0, 0, 0.5),
             inset -10px -10px 20px rgba(255, 255, 255, 0.02) !important;
         }
-        .card:hover, .beveled-card:hover, .glass-card:hover {
+        .beveled-card:hover {
           box-shadow:
             -12px -12px 24px white,
             12px 12px 24px rgb(153, 161, 175),
             inset -6px -6px 12px rgb(209, 213, 220) !important;
         }
-        .dark .card:hover, .dark .beveled-card:hover, .dark .glass-card:hover {
+        .dark .beveled-card:hover {
           box-shadow:
             -12px -12px 24px rgba(255, 255, 255, 0.04),
             12px 12px 24px rgba(0, 0, 0, 0.6),
             inset -6px -6px 12px rgba(255, 255, 255, 0.03) !important;
         }
-        .card .size-6, .card .size-8, .beveled-card .size-9, .card .size-9, .card .size-7 {
-          box-shadow: -2px -2px 4px white, 2px 2px 4px rgb(153, 161, 175) !important;
-        }
-        .dark .card .size-6, .dark .card .size-8, .dark .beveled-card .size-9, .dark .card .size-9, .dark .card .size-7 {
-          box-shadow: -2px -2px 4px rgba(255, 255, 255, 0.03), 2px 2px 4px rgba(0, 0, 0, 0.5) !important;
-        }
-        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
           border-radius: 12px !important;
           border: none !important;
           background: var(--background) !important;
           color: var(--foreground) !important;
           box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.08), -4px -4px 8px rgba(255, 255, 255, 0.7) !important;
           transition: box-shadow 0.15s ease !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
-        .dark button, .dark .button, .dark .beveled-button {
+        .dark .beveled-button, .dark button.beveled-button, .dark [class*="beveled-button"], .dark a.beveled-button {
           box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4), -4px -4px 8px rgba(255, 255, 255, 0.04) !important;
           color: var(--foreground) !important;
         }
-        button:hover, .button:hover, .beveled-button:hover {
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
           box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.1), -5px -5px 10px rgba(255, 255, 255, 0.8) !important;
         }
-        button:active, .button:active, .beveled-button:active {
+        .beveled-button:active, button.beveled-button:active, [class*="beveled-button"]:active, a.beveled-button:active {
           box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.08), inset -3px -3px 6px rgba(255, 255, 255, 0.6) !important;
         }
-        .dark button:active, .dark .button:active, .dark .beveled-button:active {
+        .dark .beveled-button:active, .dark button.beveled-button:active, .dark [class*="beveled-button"]:active, .dark a.beveled-button:active {
           box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.4), inset -3px -3px 6px rgba(255, 255, 255, 0.03) !important;
         }
+
+        /* Neumorphic tabs */
+        [role="tablist"] {
+          border: none !important;
+          border-radius: 14px !important;
+          background: var(--background) !important;
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.06), inset -3px -3px 6px rgba(255, 255, 255, 0.6) !important;
+        }
+        .dark [role="tablist"] {
+          box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.35), inset -3px -3px 6px rgba(255, 255, 255, 0.03) !important;
+        }
+        [role="tab"] {
+          border-radius: 12px !important;
+          border: none !important;
+          transition: all 0.2s ease !important;
+          color: var(--muted-foreground) !important;
+        }
+        [role="tab"][data-state="active"] {
+          background: var(--background) !important;
+          color: var(--foreground) !important;
+          box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.08), -3px -3px 6px rgba(255, 255, 255, 0.7) !important;
+          font-weight: 600 !important;
+        }
+        .dark [role="tab"][data-state="active"] {
+          box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4), -3px -3px 6px rgba(255, 255, 255, 0.04) !important;
+        }
+
         input, select, textarea {
           border-radius: 12px !important;
           border: none !important;
@@ -306,7 +419,7 @@ export function CustomThemeManager() {
         :root, .dark {
           --radius: 16px !important;
         }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+        .beveled-card, [class*="beveled-card"] {
           background: rgba(255, 255, 255, 0.38) !important;
           backdrop-filter: blur(20px) saturate(160%) !important;
           -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
@@ -314,12 +427,12 @@ export function CustomThemeManager() {
           border-radius: 16px !important;
           box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.06) !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card {
+        .dark .beveled-card, .dark [class*="beveled-card"] {
           background: rgba(20, 20, 20, 0.45) !important;
           border: 1px solid rgba(255, 255, 255, 0.08) !important;
           box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25) !important;
         }
-        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
           background: rgba(255, 255, 255, 0.3) !important;
           border: 1px solid rgba(255, 255, 255, 0.2) !important;
           border-radius: 12px !important;
@@ -327,18 +440,51 @@ export function CustomThemeManager() {
           -webkit-backdrop-filter: blur(10px) !important;
           color: var(--foreground) !important;
           box-shadow: 0 4px 12px 0 rgba(31, 38, 135, 0.04) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
-        .dark button, .dark .button, .dark .beveled-button {
+        .dark .beveled-button, .dark button.beveled-button, .dark [class*="beveled-button"], .dark a.beveled-button {
           background: rgba(255, 255, 255, 0.08) !important;
           border: 1px solid rgba(255, 255, 255, 0.06) !important;
         }
-        button:hover, .button:hover, .beveled-button:hover {
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
           background: rgba(255, 255, 255, 0.45) !important;
           box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.08) !important;
         }
-        .dark button:hover, .dark .button:hover, .dark .beveled-button:hover {
+        .dark .beveled-button:hover, .dark button.beveled-button:hover, .dark [class*="beveled-button"]:hover, .dark a.beveled-button:hover {
           background: rgba(255, 255, 255, 0.15) !important;
         }
+
+        /* Glassmorphic Tabs triggers */
+        [role="tablist"] {
+          background: rgba(255, 255, 255, 0.15) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          backdrop-filter: blur(8px) !important;
+          border-radius: 12px !important;
+        }
+        .dark [role="tablist"] {
+          background: rgba(0, 0, 0, 0.2) !important;
+          border: 1px solid rgba(255, 255, 255, 0.03) !important;
+        }
+        [role="tab"] {
+          border-radius: 10px !important;
+          border: none !important;
+          color: var(--muted-foreground) !important;
+        }
+        [role="tab"][data-state="active"] {
+          background: rgba(255, 255, 255, 0.3) !important;
+          color: var(--foreground) !important;
+          backdrop-filter: blur(4px) !important;
+          border: 1px solid rgba(255, 255, 255, 0.2) !important;
+          box-shadow: 0 4px 12px rgba(31, 38, 135, 0.05) !important;
+          font-weight: 600 !important;
+        }
+        .dark [role="tab"][data-state="active"] {
+          background: rgba(255, 255, 255, 0.08) !important;
+          border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        }
+
         input, select, textarea {
           background: rgba(255, 255, 255, 0.2) !important;
           border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -366,34 +512,65 @@ export function CustomThemeManager() {
           --primary: #fda4af !important;
           --ring: #fda4af !important;
         }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"] {
+        .beveled-card, [class*="beveled-card"] {
           background: rgba(253, 244, 245, 0.82) !important; /* Pastel Blossom */
           border: 1.5px solid rgba(244, 63, 94, 0.16) !important;
           border-radius: 24px !important;
           box-shadow: 0 10px 24px rgba(244, 63, 94, 0.06) !important;
           backdrop-filter: blur(6px) !important;
         }
-        .dark .card, .dark .beveled-card, .dark .glass-card {
+        .dark .beveled-card, .dark [class*="beveled-card"] {
           background: rgba(32, 22, 25, 0.85) !important;
           border: 1.5px solid rgba(244, 63, 94, 0.08) !important;
           box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2) !important;
         }
-        button, .button, .beveled-button, button[class*="beveled-button"], [role="button"] {
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
           border-radius: 16px !important;
           background: linear-gradient(135deg, #f43f5e, #ec4899) !important;
           color: #ffffff !important;
           border: none !important;
           box-shadow: 0 4px 12px rgba(244, 63, 94, 0.25) !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
         }
-        .dark button, .dark .button, .dark .beveled-button {
+        .dark .beveled-button, .dark button.beveled-button, .dark [class*="beveled-button"], .dark a.beveled-button {
           background: linear-gradient(135deg, #fda4af, #f472b6) !important;
           color: #1e1b1c !important;
           box-shadow: 0 4px 12px rgba(244, 63, 94, 0.1) !important;
         }
-        button:hover, .button:hover, .beveled-button:hover {
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
           box-shadow: 0 6px 16px rgba(244, 63, 94, 0.35) !important;
           transform: translateY(-1px) !important;
         }
+
+        /* Flowerism Tabs triggers */
+        [role="tablist"] {
+          background: rgba(253, 244, 245, 0.5) !important;
+          border: 1px solid rgba(244, 63, 94, 0.08) !important;
+          border-radius: 16px !important;
+        }
+        .dark [role="tablist"] {
+          background: rgba(32, 22, 25, 0.5) !important;
+          border: 1px solid rgba(244, 63, 94, 0.05) !important;
+        }
+        [role="tab"] {
+          border-radius: 14px !important;
+          color: var(--muted-foreground) !important;
+        }
+        [role="tab"][data-state="active"] {
+          background: linear-gradient(135deg, #f43f5e, #ec4899) !important;
+          color: #ffffff !important;
+          box-shadow: 0 4px 10px rgba(244, 63, 94, 0.2) !important;
+          font-weight: 600 !important;
+        }
+        .dark [role="tab"][data-state="active"] {
+          background: linear-gradient(135deg, #fda4af, #f472b6) !important;
+          color: #1e1b1c !important;
+          box-shadow: 0 4px 10px rgba(244, 63, 94, 0.05) !important;
+          font-weight: 600 !important;
+        }
+
         input, select, textarea {
           border-radius: 16px !important;
           border: 1.5px solid rgba(244, 63, 94, 0.15) !important;

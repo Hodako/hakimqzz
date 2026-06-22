@@ -530,6 +530,7 @@ export default function MorePage() {
     bevelStrength: "medium",
     glowEnabled: false,
     borderRadius: "",
+    productBoxSize: "standard",
   });
 
   // KPI config state
@@ -654,6 +655,7 @@ export default function MorePage() {
       bevelStrength: "medium",
       glowEnabled: false,
       borderRadius: "",
+      productBoxSize: "standard",
     });
     window.dispatchEvent(new Event("hz-theme-updated"));
     toast.success(lang === "bn" ? "থিম রিসেট সফল হয়েছে" : "Theme settings reset successfully");
@@ -1149,6 +1151,35 @@ export default function MorePage() {
             </div>
           </div>
 
+          {/* Section C.5: Product Card Size */}
+          <div className="space-y-3 pt-3 border-t border-border/50">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <LayoutGrid className="size-4 text-muted-foreground" />
+              <span>{lang === "bn" ? "পণ্য বাক্সের সাইজ (মোবাইল ও ডেক্সটপ)" : "Product Card Size (Mobile & Desktop)"}</span>
+            </div>
+            
+            <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full justify-between">
+              {[
+                { id: "small", label: lang === "bn" ? "ছোট (৪ কলাম)" : "Small (4 Col)" },
+                { id: "standard", label: lang === "bn" ? "মাঝারি (৩ কলাম)" : "Standard (3 Col)" },
+                { id: "large", label: lang === "bn" ? "বড় (২ কলাম)" : "Large (2 Col)" }
+              ].map(sz => (
+                <button
+                  key={sz.id}
+                  type="button"
+                  onClick={() => updateThemeField("productBoxSize", sz.id)}
+                  className={`flex-1 py-1.5 rounded-md text-center font-medium transition-all ${
+                    theme.productBoxSize === sz.id
+                      ? "bg-background text-foreground shadow font-semibold"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {sz.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Section D: KPI Card Customization */}
           <div className="space-y-3 pt-3 border-t border-border/50">
             <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
@@ -1357,8 +1388,11 @@ export default function MorePage() {
               onClick={handleAvatarClick}
               className={`size-14 border-2 border-background shadow-md shrink-0 cursor-pointer transition-transform active:scale-95 group hover:brightness-90 ${isUploading ? 'pointer-events-none' : ''}`}
             >
-              <AvatarImage src={user?.avatar_url || "https://png.pngtree.com/png-vector/20231019/ourmid/pngtree-user-profile-avatar-png-image_10211467.png"} alt="Profile" />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-indigo-600 text-white font-bold text-lg">{initials}</AvatarFallback>
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} className="aspect-square h-full w-full object-cover rounded-full" alt="Profile" />
+              ) : (
+                <AvatarFallback className="bg-gradient-to-br from-primary to-indigo-600 text-white font-bold text-lg">{initials}</AvatarFallback>
+              )}
             </Avatar>
 
             {isUploading ? (

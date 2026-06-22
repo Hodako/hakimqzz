@@ -176,7 +176,7 @@ function KPICard({
   return (
     <Card
       onClick={onClick}
-      className={`flex flex-col transition-all duration-300 ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border rounded-[16px] ${
+      className={`flex flex-col transition-all duration-300 ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border rounded-[16px] beveled-card ${
         onClick
           ? "cursor-pointer hover:border-primary/45 active:scale-[0.985]"
           : ""
