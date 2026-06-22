@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { deleteProductFn, archiveProductFn, createDirectProductReturnFn, createSaleFn } from "@/lib/rpc";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
@@ -42,6 +43,8 @@ export default function ProductsPage() {
   const [saleProduct, setSaleProduct] = useState<string | undefined>();
   const [saleOpen, setSaleOpen] = useState(false);
   const [buyOpen, setBuyOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<"active" | "archived" | "low_stock">("active");
@@ -162,21 +165,23 @@ export default function ProductsPage() {
 
   const { items: productsToShow, totalPages, safePage } = paginate(sortedProducts, page, pageSize);
 
-  async function remove(p: Product) {
-    const input = prompt(`Are you sure you want to delete product "${p.name}"? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
+  async function performDeleteProduct() {
+    if (!productToDelete) return;
+    setIsDeletingProduct(true);
     try {
-      await deleteProductFn({ data: { id: p.id } });
+      await deleteProductFn({ data: { id: productToDelete.id } });
       toast.success(t("delete"));
       qc.invalidateQueries({ queryKey: ["products"] });
+      setProductToDelete(null);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeletingProduct(false);
     }
+  }
+
+  function remove(p: Product) {
+    setProductToDelete(p);
   }
 
   async function toggleArchive(p: Product) {
@@ -511,6 +516,7 @@ export default function ProductsPage() {
               p={p}
               isLowStock={isLowStock}
               t={t}
+              isMobile={isMobile}
               onSell={() => {
                 setSellCart(prev => {
                   const existing = prev.find(x => x.product.id === p.id);
@@ -575,6 +581,15 @@ export default function ProductsPage() {
           qc.invalidateQueries({ queryKey: ["products"] });
         }}
       />
+
+      <ConfirmDeleteDialog
+        open={productToDelete !== null}
+        onOpenChange={(v) => { if (!v) setProductToDelete(null); }}
+        title="Delete Product"
+        description={`Are you sure you want to delete "${productToDelete?.name}"? This action is permanent and cannot be undone.`}
+        onConfirm={performDeleteProduct}
+        busy={isDeletingProduct}
+      />
     </div>
   );
 }
@@ -590,6 +605,7 @@ function ProductCard({
   onDelete,
   onLongPress,
   t,
+  isMobile,
 }: {
   p: Product;
   isLowStock: boolean;
@@ -601,6 +617,7 @@ function ProductCard({
   onDelete: () => void;
   onLongPress: () => void;
   t: (k: any) => string;
+  isMobile: boolean;
 }) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -620,6 +637,104 @@ function ProductCard({
       timerRef.current = null;
     }
   };
+
+  if (isMobile) {
+    return (
+      <Card
+        className={`aspect-square relative overflow-hidden border-border/60 select-none transition-all active:scale-[0.98] ${
+          p.archived ? "opacity-60" : "hover:border-primary/40"
+        }`}
+        onMouseDown={handleStart}
+        onMouseUp={handleEnd}
+        onMouseLeave={handleEnd}
+        onTouchStart={handleStart}
+        onTouchEnd={handleEnd}
+        onClick={(e) => {
+          if (p.archived) return;
+          if (p.stock > 0) onSell();
+        }}
+      >
+        <div className="absolute inset-0 w-full h-full">
+          <ProductImage path={p.image_url} className="w-full h-full object-cover" />
+        </div>
+
+        <div className="absolute top-1 left-1 right-1 flex justify-between items-start pointer-events-none z-10">
+          <div className="bg-black/60 backdrop-blur-md text-white px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5 pointer-events-auto">
+            <span className={isLowStock ? "text-rose-400" : "text-emerald-400"}>●</span>
+            <span>{p.stock}</span>
+          </div>
+
+          <div className="pointer-events-auto flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-6 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 border border-white/10">
+                  <MoreVertical className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-32">
+                {!p.archived ? (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => onDirectSell()}
+                      className="text-xs font-semibold cursor-pointer"
+                      disabled={p.stock <= 0}
+                    >
+                      {t("sell")} (Direct)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onEdit()} className="text-xs font-semibold cursor-pointer">
+                      <Pencil className="size-3 mr-1.5" /> {t("edit")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onArchive()} className="text-xs font-semibold cursor-pointer">
+                      <Archive className="size-3 mr-1.5" /> {t("archive")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
+                      <Trash2 className="size-3 mr-1.5" /> {t("delete")}
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => onRestore()} className="text-xs font-semibold cursor-pointer">
+                      {t("restore")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
+                      <Trash2 className="size-3 mr-1.5" /> {t("delete")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent p-1.5 pt-6 text-white flex flex-col justify-end z-0">
+          <div className="font-bold text-[10px] leading-tight truncate drop-shadow-md" title={p.name}>
+            {p.name}
+          </div>
+          {p.category && (
+            <div className="text-[7px] text-zinc-300 truncate leading-none mt-0.5">
+              {p.category}
+            </div>
+          )}
+          <div className="flex justify-between items-baseline mt-1">
+            <span className="font-extrabold text-[10px] text-emerald-400 font-serif">
+              {p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}
+            </span>
+            {!p.archived && p.stock > 0 && (
+              <span className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full size-4 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer border border-emerald-400/20 active:scale-90 transition-transform">
+                +
+              </span>
+            )}
+          </div>
+        </div>
+
+        {!p.archived && isLowStock && (
+          <div className="absolute top-1 right-8 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow z-10" title={t("critical_stock")}>
+            <AlertCircle className="size-2.5" />
+          </div>
+        )}
+      </Card>
+    );
+  }
 
   return (
     <Card

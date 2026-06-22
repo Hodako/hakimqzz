@@ -1066,6 +1066,23 @@ export async function resetPurchasesFn() {
   return { success: true };
 }
 
+export async function resetSomitiFn() {
+  const session = await requireSession();
+  if (session.role !== "owner") throw new Error("Only owner can reset data");
+  const db = await getDb();
+  await db.collection("somiti_entries").deleteMany({ owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function resetExpensesFn() {
+  const session = await requireSession();
+  if (session.role !== "owner") throw new Error("Only owner can reset data");
+  const db = await getDb();
+  await db.collection("expenses").deleteMany({ owner_id: session.ownerId });
+  return { success: true };
+}
+
+
 export async function resetAllDataFn() {
   const session = await requireSession();
   if (session.role !== "owner") throw new Error("Only owner can reset data");

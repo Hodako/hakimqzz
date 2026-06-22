@@ -28,6 +28,7 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export default function PartyDetail() {
   const params = useParams();
@@ -46,6 +47,11 @@ export default function PartyDetail() {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addKind, setAddKind] = useState<"receivable" | "payable" | null>(null);
+
+  const [entryToDelete, setEntryToDelete] = useState<Entry | null>(null);
+  const [isDeletingEntry, setIsDeletingEntry] = useState(false);
+  const [partyToDelete, setPartyToDelete] = useState<Party | null>(null);
+  const [isDeletingParty, setIsDeletingParty] = useState(false);
 
   const party = partyQuery.data;
   const isLoading = partyQuery.isLoading && !party;
@@ -93,14 +99,9 @@ export default function PartyDetail() {
     })),
   ].sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
-  async function handleDelete(entry: Entry) {
-    const input = prompt(`Are you sure you want to delete this ${entry.kind}? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
+  async function performDeleteEntry() {
+    if (!entryToDelete) return;
+    setIsDeletingEntry(true);
     const prevPayments = qc.getQueryData<Payment[]>(["payments", id]);
     const prevSales = qc.getQueryData<Sale[]>(["party-detail", "sales", id]);
     const prevReceivables = qc.getQueryData<PartyLedger[]>(["party-receivables", id]);
@@ -108,44 +109,66 @@ export default function PartyDetail() {
     const prevSettlements = qc.getQueryData<PartyLedger[]>(["party-settlements", id]);
 
     try {
-      if (entry.kind === "payment") {
+      if (entryToDelete.kind === "payment") {
         setCachedData<Payment[]>(qc, ["payments", id], old =>
-          (old ?? []).filter(p => p.id !== entry.rawId),
+          (old ?? []).filter(p => p.id !== entryToDelete.rawId),
         );
-        await deletePaymentFn({ data: { id: entry.rawId } });
-      } else if (entry.kind === "sale") {
+        await deletePaymentFn({ data: { id: entryToDelete.rawId } });
+      } else if (entryToDelete.kind === "sale") {
         setCachedData<Sale[]>(qc, ["party-detail", "sales", id], old =>
-          (old ?? []).filter(s => s.id !== entry.rawId),
+          (old ?? []).filter(s => s.id !== entryToDelete.rawId),
         );
-        const res = await deleteSaleFn({ data: { id: entry.rawId } });
+        const res = await deleteSaleFn({ data: { id: entryToDelete.rawId } });
         if (res && !res.success && 'error' in res) {
           throw new Error(res.error as string);
         }
-      } else if (entry.kind === "receivable") {
+      } else if (entryToDelete.kind === "receivable") {
         setCachedData<PartyLedger[]>(qc, ["party-receivables", id], old =>
-          (old ?? []).filter(r => r.id !== entry.rawId),
+          (old ?? []).filter(r => r.id !== entryToDelete.rawId),
         );
-        await deletePartyReceivableFn({ data: { id: entry.rawId } });
-      } else if (entry.kind === "payable") {
+        await deletePartyReceivableFn({ data: { id: entryToDelete.rawId } });
+      } else if (entryToDelete.kind === "payable") {
         setCachedData<PartyLedger[]>(qc, ["party-payables", id], old =>
-          (old ?? []).filter(p => p.id !== entry.rawId),
+          (old ?? []).filter(p => p.id !== entryToDelete.rawId),
         );
-        await deletePartyPayableFn({ data: { id: entry.rawId } });
-      } else if (entry.kind === "settlement") {
+        await deletePartyPayableFn({ data: { id: entryToDelete.rawId } });
+      } else if (entryToDelete.kind === "settlement") {
         setCachedData<PartyLedger[]>(qc, ["party-settlements", id], old =>
-          (old ?? []).filter(s => s.id !== entry.rawId),
+          (old ?? []).filter(s => s.id !== entryToDelete.rawId),
         );
-        await deletePayableSettlementFn({ data: { id: entry.rawId } });
+        await deletePayableSettlementFn({ data: { id: entryToDelete.rawId } });
       }
       await refreshQueries(qc, ["all-payments"], ["sales"], ["all-party-receivables"], ["all-party-payables"], ["party-settlements", id], ["all-payable-settlements"]);
       toast.success(t("delete"));
+      setEntryToDelete(null);
     } catch (err: unknown) {
-      if (entry.kind === "payment" && prevPayments) setCachedData(qc, ["payments", id], prevPayments);
-      if (entry.kind === "sale" && prevSales) setCachedData(qc, ["party-detail", "sales", id], prevSales);
-      if (entry.kind === "receivable" && prevReceivables) setCachedData(qc, ["party-receivables", id], prevReceivables);
-      if (entry.kind === "payable" && prevPayables) setCachedData(qc, ["party-payables", id], prevPayables);
-      if (entry.kind === "settlement" && prevSettlements) setCachedData(qc, ["party-settlements", id], prevSettlements);
+      if (entryToDelete.kind === "payment" && prevPayments) setCachedData(qc, ["payments", id], prevPayments);
+      if (entryToDelete.kind === "sale" && prevSales) setCachedData(qc, ["party-detail", "sales", id], prevSales);
+      if (entryToDelete.kind === "receivable" && prevReceivables) setCachedData(qc, ["party-receivables", id], prevReceivables);
+      if (entryToDelete.kind === "payable" && prevPayables) setCachedData(qc, ["party-payables", id], prevPayables);
+      if (entryToDelete.kind === "settlement" && prevSettlements) setCachedData(qc, ["party-settlements", id], prevSettlements);
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeletingEntry(false);
+    }
+  }
+
+  async function performDeleteParty() {
+    if (!partyToDelete) return;
+    setIsDeletingParty(true);
+    const prevParties = qc.getQueryData<Party[]>(["parties"]);
+    try {
+      setCachedData<Party[]>(qc, ["parties"], old => (old ?? []).filter(p => p.id !== id));
+      await deletePartyFn({ data: { id } });
+      await refreshQueries(qc, ["parties"]);
+      toast.success(t("delete"));
+      setPartyToDelete(null);
+      router.push("/parties");
+    } catch (err: unknown) {
+      if (prevParties) setCachedData<Party[]>(qc, ["parties"], prevParties);
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeletingParty(false);
     }
   }
 
@@ -184,26 +207,7 @@ export default function PartyDetail() {
             size="sm"
             variant="outline"
             className="text-destructive border-destructive/30"
-            onClick={async () => {
-              const input = prompt(`Are you sure you want to delete party "${party.name || "Unnamed"}"? This is permanent. Please type "Delete" to confirm:`);
-              if (input !== "Delete") {
-                if (input !== null) {
-                  toast.error('You must type "Delete" to confirm deletion.');
-                }
-                return;
-              }
-              const prevParties = qc.getQueryData<Party[]>(["parties"]);
-              try {
-                setCachedData<Party[]>(qc, ["parties"], old => (old ?? []).filter(p => p.id !== id));
-                await deletePartyFn({ data: { id } });
-                await refreshQueries(qc, ["parties"]);
-                toast.success(t("delete"));
-                router.push("/parties");
-              } catch (err: unknown) {
-                if (prevParties) setCachedData<Party[]>(qc, ["parties"], prevParties);
-                toast.error(err instanceof Error ? err.message : String(err));
-              }
-            }}
+            onClick={() => setPartyToDelete(party)}
           >
             <Trash2 className="size-3.5" />
           </Button>
@@ -250,7 +254,7 @@ export default function PartyDetail() {
                 {e.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(e.amount))}
               </div>
               {e.deletable && (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" onClick={() => handleDelete(e)}>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" onClick={() => setEntryToDelete(e)}>
                   <Trash2 className="size-3.5" />
                 </Button>
               )}
@@ -264,6 +268,24 @@ export default function PartyDetail() {
       {addKind && (
         <AddLedgerDialog partyId={id} kind={addKind} open={!!addKind} onOpenChange={v => { if (!v) setAddKind(null); }} />
       )}
+
+      <ConfirmDeleteDialog
+        open={entryToDelete !== null}
+        onOpenChange={(v) => { if (!v) setEntryToDelete(null); }}
+        title="Delete Transaction"
+        description={`Are you sure you want to delete this ${entryToDelete?.kind || "transaction"}? This action is permanent and cannot be undone.`}
+        onConfirm={performDeleteEntry}
+        busy={isDeletingEntry}
+      />
+
+      <ConfirmDeleteDialog
+        open={partyToDelete !== null}
+        onOpenChange={(v) => { if (!v) setPartyToDelete(null); }}
+        title="Delete Party"
+        description={`Are you sure you want to delete party "${partyToDelete?.name || "Unnamed"}"? All associated transaction history will be permanently deleted.`}
+        onConfirm={performDeleteParty}
+        busy={isDeletingParty}
+      />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { EditSaleDialog } from "@/components/edit-sale-dialog";
 import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn } from "@/lib/rpc";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 interface GroupedSale {
   id: string;
@@ -205,16 +206,14 @@ function SalesTab({
     setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  async function handleDelete(id: string) {
-    const input = prompt(`Are you sure you want to delete this sale? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
+  const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function performDelete() {
+    if (!saleToDelete) return;
+    setIsDeleting(true);
     try {
-      const res = await deleteSaleFn({ data: { id } });
+      const res = await deleteSaleFn({ data: { id: saleToDelete } });
       if (res && !res.success && 'error' in res) {
         throw new Error(res.error as string);
       }
@@ -222,9 +221,16 @@ function SalesTab({
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
+      setSaleToDelete(null);
     } catch (err: any) {
       toast.error(err.message || String(err));
+    } finally {
+      setIsDeleting(false);
     }
+  }
+
+  function handleDeleteClick(id: string) {
+    setSaleToDelete(id);
   }
 
   if (items.length === 0) {
@@ -247,9 +253,8 @@ function SalesTab({
                       </span>
                     )}
                     <span className="text-foreground font-semibold">
-                      {s.isGroup ? `${s.items[0].product_name} (+${s.items.length - 1} ${lang === "bn" ? "টি পণ্য" : "items"})` : s.product_name}
+                      {s.product_name}
                     </span>
-                    {!s.isGroup && <span className="text-muted-foreground text-xs font-normal">×{s.qty}</span>}
                     {s.items.some(x => x.returned) && <span className="text-xs text-destructive">({t("returned")})</span>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
@@ -291,7 +296,7 @@ function SalesTab({
                     size="sm"
                     variant="ghost"
                     className="h-8 w-8 p-0 text-destructive cursor-pointer hover:bg-destructive/10 rounded-full"
-                    onClick={() => handleDelete(s.id)}
+                    onClick={() => handleDeleteClick(s.id)}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -314,6 +319,15 @@ function SalesTab({
         })}
       </Card>
       <PaginationBar page={safePage} totalPages={totalPages} total={items.length} pageSize={pageSize} onPageChange={onPageChange} />
+
+      <ConfirmDeleteDialog
+        open={saleToDelete !== null}
+        onOpenChange={(v) => { if (!v) setSaleToDelete(null); }}
+        title="Delete Sale"
+        description="Are you sure you want to delete this sale? This action is permanent and cannot be undone."
+        onConfirm={performDelete}
+        busy={isDeleting}
+      />
     </>
   );
 }

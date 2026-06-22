@@ -18,6 +18,7 @@ import { PurchaseDialog } from "@/components/purchase-dialog";
 import { deletePurchaseFn } from "@/lib/rpc";
 import { toast } from "sonner";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export default function PurchasesPage() {
   const { lang, t } = useT();
@@ -25,6 +26,8 @@ export default function PurchasesPage() {
   const { data } = useCachedQuery(["purchases"], getPurchases);
   const [open, setOpen] = useState(false);
   const [filterDate, setFilterDate] = useState("");
+  const [purchaseToDelete, setPurchaseToDelete] = useState<Purchase | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredPurchases = useMemo(() => {
     if (!data) return [];
@@ -36,23 +39,25 @@ export default function PurchasesPage() {
     return filteredPurchases.reduce((sum, p) => sum + p.total, 0);
   }, [filteredPurchases]);
 
-  async function handleDelete(purchase: Purchase) {
-    const input = prompt(`Are you sure you want to delete purchase "${purchase.product_name}"? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
-    setCachedData<Purchase[]>(qc, ["purchases"], old => (old ?? []).filter(p => p.id !== purchase.id));
+  async function performDelete() {
+    if (!purchaseToDelete) return;
+    setIsDeleting(true);
+    setCachedData<Purchase[]>(qc, ["purchases"], old => (old ?? []).filter(p => p.id !== purchaseToDelete.id));
     try {
-      await deletePurchaseFn({ data: { id: purchase.id } });
+      await deletePurchaseFn({ data: { id: purchaseToDelete.id } });
       await refreshQueries(qc, ["purchases"], ["products"]);
       toast.success(t("delete"));
+      setPurchaseToDelete(null);
     } catch (err: unknown) {
       await refreshQueries(qc, ["purchases"], ["products"]);
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsDeleting(false);
     }
+  }
+
+  function handleDelete(purchase: Purchase) {
+    setPurchaseToDelete(purchase);
   }
 
   return (
@@ -110,8 +115,17 @@ export default function PurchasesPage() {
           ))}
         </Card>
       )}
-      <FAB onClick={() => setOpen(true)} />
+       <FAB onClick={() => setOpen(true)} />
       <PurchaseDialog open={open} onOpenChange={setOpen} />
+
+      <ConfirmDeleteDialog
+        open={purchaseToDelete !== null}
+        onOpenChange={(v) => { if (!v) setPurchaseToDelete(null); }}
+        title="Delete Purchase"
+        description={`Are you sure you want to delete purchase "${purchaseToDelete?.product_name}"? This action is permanent and cannot be undone.`}
+        onConfirm={performDelete}
+        busy={isDeleting}
+      />
     </div>
   );
 }

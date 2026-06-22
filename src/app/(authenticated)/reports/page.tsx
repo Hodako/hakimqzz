@@ -535,14 +535,11 @@ export default function ReportsGeneratorPage() {
                         <td className="p-2.5 font-medium">
                           {s.isGroup ? (
                             <div className="space-y-0.5">
-                              <div className="font-semibold text-foreground flex items-center gap-1">
-                                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold px-1 rounded border border-emerald-500/20">
+                              <div className="font-semibold text-foreground flex items-center gap-1 flex-wrap">
+                                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold px-1 rounded border border-emerald-500/20 shrink-0">
                                   {lang === "bn" ? "কার্ট" : "Cart"}
                                 </span>
-                                <span>{s.items[0].product_name} (+{s.items.length - 1} {lang === "bn" ? "টি পণ্য" : "items"})</span>
-                              </div>
-                              <div className="text-[10px] text-muted-foreground font-mono leading-tight">
-                                {s.items.map(item => `${item.product_name} (×${item.qty})`).join(", ")}
+                                <span>{s.product_name}</span>
                               </div>
                             </div>
                           ) : (
@@ -948,11 +945,11 @@ export default function ReportsGeneratorPage() {
                       <td className="p-2 border-r border-zinc-200 font-medium">
                         {s.isGroup ? (
                           <div className="space-y-0.5">
-                            <div className="font-semibold text-zinc-900">
-                              [{lang === "bn" ? "কার্ট" : "Cart"}] {s.items[0].product_name} (+{s.items.length - 1} {lang === "bn" ? "টি পণ্য" : "items"})
-                            </div>
-                            <div className="text-[8px] text-zinc-500 font-mono leading-tight">
-                              {s.items.map(item => `${item.product_name} (×${item.qty})`).join(", ")}
+                            <div className="font-semibold text-zinc-900 flex items-center gap-1 flex-wrap">
+                              <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold px-1 rounded border border-emerald-500/20 shrink-0">
+                                {lang === "bn" ? "কার্ট" : "Cart"}
+                              </span>
+                              <span>{s.product_name}</span>
                             </div>
                           </div>
                         ) : (

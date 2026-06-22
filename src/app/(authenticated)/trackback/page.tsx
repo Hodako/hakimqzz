@@ -16,6 +16,7 @@ import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { deleteSaleFn, deletePurchaseFn, deleteExpenseFn, deleteReturnFn } from "@/lib/rpc";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,84 +51,65 @@ export default function TrackbackPage() {
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  async function handleDeleteSale(id: string) {
-    const input = prompt(`Are you sure you want to delete this sale? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    type: "sale" | "purchase" | "expense" | "return";
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function performDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      const res = await deleteSaleFn({ data: { id } });
-      if (res && !res.success && 'error' in res) throw new Error(res.error as string);
+      const { id, type } = deleteTarget;
+      if (type === "sale") {
+        const res = await deleteSaleFn({ data: { id } });
+        if (res && !res.success && 'error' in res) throw new Error(res.error as string);
+        qc.invalidateQueries({ queryKey: ["sales"] });
+        qc.invalidateQueries({ queryKey: ["products"] });
+        qc.invalidateQueries({ queryKey: ["cashbox"] });
+        qc.invalidateQueries({ queryKey: ["returns"] });
+      } else if (type === "purchase") {
+        const res = await deletePurchaseFn({ data: { id } });
+        if (res && !res.success && 'error' in res) throw new Error(res.error as string);
+        qc.invalidateQueries({ queryKey: ["purchases"] });
+        qc.invalidateQueries({ queryKey: ["products"] });
+      } else if (type === "expense") {
+        const res = await deleteExpenseFn({ data: { id } });
+        if (res && !res.success && 'error' in res) throw new Error(res.error as string);
+        qc.invalidateQueries({ queryKey: ["expenses"] });
+        qc.invalidateQueries({ queryKey: ["cashbox"] });
+      } else if (type === "return") {
+        const res = await deleteReturnFn({ data: { id } });
+        if (res && !res.success && 'error' in res) throw new Error(res.error as string);
+        qc.invalidateQueries({ queryKey: ["returns"] });
+        qc.invalidateQueries({ queryKey: ["sales"] });
+        qc.invalidateQueries({ queryKey: ["products"] });
+        qc.invalidateQueries({ queryKey: ["cashbox"] });
+      }
       toast.success(t("delete") || "Deleted successfully");
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["cashbox"] });
-      qc.invalidateQueries({ queryKey: ["returns"] });
+      setDeleteTarget(null);
     } catch (err: any) {
       toast.error(err.message || String(err));
+    } finally {
+      setIsDeleting(false);
     }
+  }
+
+  async function handleDeleteSale(id: string) {
+    setDeleteTarget({ id, type: "sale" });
   }
 
   async function handleDeletePurchase(id: string) {
-    const input = prompt(`Are you sure you want to delete this purchase? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
-    try {
-      const res = await deletePurchaseFn({ data: { id } });
-      if (res && !res.success && 'error' in res) throw new Error(res.error as string);
-      toast.success(t("delete") || "Deleted successfully");
-      qc.invalidateQueries({ queryKey: ["purchases"] });
-      qc.invalidateQueries({ queryKey: ["products"] });
-    } catch (err: any) {
-      toast.error(err.message || String(err));
-    }
+    setDeleteTarget({ id, type: "purchase" });
   }
 
   async function handleDeleteExpense(id: string) {
-    const input = prompt(`Are you sure you want to delete this expense? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
-    try {
-      const res = await deleteExpenseFn({ data: { id } });
-      if (res && !res.success && 'error' in res) throw new Error(res.error as string);
-      toast.success(t("delete") || "Deleted successfully");
-      qc.invalidateQueries({ queryKey: ["expenses"] });
-      qc.invalidateQueries({ queryKey: ["cashbox"] });
-    } catch (err: any) {
-      toast.error(err.message || String(err));
-    }
+    setDeleteTarget({ id, type: "expense" });
   }
 
   async function handleDeleteReturn(id: string) {
-    const input = prompt(`Are you sure you want to delete this return? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
-    try {
-      const res = await deleteReturnFn({ data: { id } });
-      if (res && !res.success && 'error' in res) throw new Error(res.error as string);
-      toast.success(t("delete") || "Deleted successfully");
-      qc.invalidateQueries({ queryKey: ["returns"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["cashbox"] });
-    } catch (err: any) {
-      toast.error(err.message || String(err));
-    }
+    setDeleteTarget({ id, type: "return" });
   }
 
   // Graph line toggle states
@@ -429,6 +411,15 @@ export default function TrackbackPage() {
       <p className="text-[10px] text-muted-foreground text-center">
         {parties.data?.length ?? 0} {t("parties")} · cached locally
       </p>
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title={`Delete ${deleteTarget?.type}`}
+        description={`Are you sure you want to delete this ${deleteTarget?.type}? This action is permanent and cannot be undone.`}
+        onConfirm={performDelete}
+        busy={isDeleting}
+      />
     </div>
   );
 }

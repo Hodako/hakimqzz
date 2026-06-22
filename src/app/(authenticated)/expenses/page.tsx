@@ -18,32 +18,31 @@ import { FAB } from "@/components/ui/fab";
 import { toast } from "sonner";
 import { createExpenseFn, deleteExpenseFn } from "@/lib/rpc";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
-
-
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export default function ExpensesPage() {
   const { t } = useT();
   const qc = useQueryClient();
   const { data } = useCachedQuery(["expenses"], getExpenses);
   const [open, setOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const total = (data ?? []).reduce((a, e) => a + Number(e.amount), 0);
 
-  async function handleDelete(expense: Expense) {
-    const input = prompt(`Are you sure you want to delete expense "${expense.title}"? This is permanent. Please type "Delete" to confirm:`);
-    if (input !== "Delete") {
-      if (input !== null) {
-        toast.error('You must type "Delete" to confirm deletion.');
-      }
-      return;
-    }
-    setCachedData<Expense[]>(qc, ["expenses"], old => (old ?? []).filter(e => e.id !== expense.id));
+  async function performDelete() {
+    if (!expenseToDelete) return;
+    setDeleteBusy(true);
+    setCachedData<Expense[]>(qc, ["expenses"], old => (old ?? []).filter(e => e.id !== expenseToDelete.id));
     try {
-      await deleteExpenseFn({ data: { id: expense.id } });
+      await deleteExpenseFn({ data: { id: expenseToDelete.id } });
       await refreshQueries(qc, ["expenses"], ["cashbox"]);
       toast.success(t("delete"));
+      setExpenseToDelete(null);
     } catch (err: unknown) {
       await refreshQueries(qc, ["expenses"], ["cashbox"]);
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -65,7 +64,7 @@ export default function ExpensesPage() {
               <div className="text-xs text-muted-foreground">{fmtDateTime(e.created_at)}{e.note ? ` · ${e.note}` : ""}</div>
             </div>
             <div className="font-semibold text-destructive shrink-0">−{fmtMoney(e.amount)}</div>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive shrink-0" onClick={() => handleDelete(e)}>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive shrink-0" onClick={() => setExpenseToDelete(e)}>
               <Trash2 className="size-3.5" />
             </Button>
           </div>
@@ -73,6 +72,14 @@ export default function ExpensesPage() {
       </Card>
       <FAB onClick={() => setOpen(true)} />
       <ExpenseDialog open={open} onOpenChange={setOpen} />
+      <ConfirmDeleteDialog
+        open={!!expenseToDelete}
+        onOpenChange={(v) => { if (!v) setExpenseToDelete(null); }}
+        title="Delete Expense"
+        description={`Are you sure you want to delete "${expenseToDelete?.title}"? This action cannot be undone.`}
+        onConfirm={performDelete}
+        busy={deleteBusy}
+      />
     </div>
   );
 }
