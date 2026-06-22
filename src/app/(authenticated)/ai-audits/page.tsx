@@ -264,8 +264,10 @@ export default function AiAuditsPage() {
         continue;
       }
       
-      if ((trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) && !trimmed.startsWith("**")) {
-        const itemText = trimmed.substring(1).trim();
+      if ((trimmed.startsWith("- ") || trimmed.startsWith("-\t") || trimmed === "-" ||
+           trimmed.startsWith("• ") || trimmed.startsWith("•\t") ||
+           trimmed.startsWith("* ")) && !trimmed.startsWith("**")) {
+        const itemText = trimmed.substring(trimmed.startsWith("* ") || trimmed.startsWith("- ") || trimmed.startsWith("• ") ? 2 : 1).trim();
         if (!currentList || currentList.type !== "bullet") {
           if (currentList) elements.push(flushList(i));
           currentList = { type: "bullet", items: [] };
