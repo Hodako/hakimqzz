@@ -101,6 +101,7 @@ export function SaleDialog({
       const duePerItem = type === "credit" ? due / cart.length : 0;
       const paidPerItem = type === "credit" ? paidNum / cart.length : 0;
 
+      const cartId = crypto.randomUUID();
       for (const line of cart) {
         const product = products.find(p => p.id === line.productId)!;
         const qtyNum = Number(line.qty) || 0;
@@ -120,6 +121,7 @@ export function SaleDialog({
             party_id: type === "credit" ? partyId : null,
             paid_amount: type === "credit" ? paidPerItem : lineSell,
             due_amount: type === "credit" ? duePerItem : 0,
+            cart_id: cartId,
           },
         });
       }

@@ -53,7 +53,7 @@ const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"]
 
 export default function SettingsPage() {
   const { t } = useT();
-  const { user, refresh } = useAuth();
+  const { user, refresh, updateUser } = useAuth();
   const { theme, setTheme, accentColor, setAccentColor, bgStyle, setBgStyle } = useTheme();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
@@ -233,6 +233,8 @@ export default function SettingsPage() {
       try {
         const base64 = (reader.result as string).split(",")[1];
         const { url } = await uploadImageFn({ data: { base64, fileName: file.name } });
+        // Immediately update the logo in auth context so AppLogo re-renders right away
+        updateUser({ logo_url: url });
         await updateBusinessSettingsFn({ data: { logo_url: url } });
         await refresh();
         qc.invalidateQueries({ queryKey: ["business-settings"] });

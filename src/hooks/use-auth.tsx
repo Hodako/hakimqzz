@@ -26,6 +26,7 @@ type AuthCtx = {
   login: (user: AuthUser) => void;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  updateUser: (patch: Partial<AuthUser>) => void;
   uploadProfilePic: (file: File) => Promise<void>;
 };
 
@@ -37,6 +38,7 @@ const Ctx = createContext<AuthCtx>({
   login: () => {},
   logout: async () => {},
   refresh: async () => {},
+  updateUser: () => {},
   uploadProfilePic: async () => {},
 });
 
@@ -180,8 +182,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = (patch: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      cacheUser(next);
+      if (patch.logo_url || patch.business_name) {
+        writeBrand({ name: next.business_name, logo_url: next.logo_url });
+      }
+      return next;
+    });
+  };
+
   return (
-    <Ctx.Provider value={{ user, loading, isUploading, uploadProgress, login, logout, refresh: checkUser, uploadProfilePic }}>
+    <Ctx.Provider value={{ user, loading, isUploading, uploadProgress, login, logout, refresh: checkUser, updateUser, uploadProfilePic }}>
       {children}
     </Ctx.Provider>
   );
