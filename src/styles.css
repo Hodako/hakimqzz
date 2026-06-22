@@ -86,7 +86,7 @@
   --sidebar-accent-foreground: oklch(0.28 0.06 155);
   --sidebar-border: oklch(0.38 0.12 155 / 0.15);
   --sidebar-ring: oklch(0.45 0.12 155);
-  --font-sans: Poppins, "Hind Siliguri", sans-serif;
+  --font-sans: Roboto, "Hind Siliguri", sans-serif;
   --font-serif: Lora, serif;
   --font-mono: "Fira Code", monospace;
   --radius: 0.75rem;
@@ -589,3 +589,113 @@
     box-shadow: none !important;
   }
 }
+
+/* From Uiverse.io by Yaya12085 */ 
+.card {
+  padding: 1rem;
+  background-color: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
+  border-radius: 20px;
+  border: 1.5px solid #ecedec;
+  transition: all 0.2s ease-in-out;
+  max-width: 100% !important;
+}
+
+.dark .card {
+  background-color: #18181b;
+  border: 1.5px solid #27272a;
+}
+
+.card:hover {
+  border-color: #2d79f3 !important;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+}
+
+.title span {
+  position: relative;
+  padding: 0.5rem;
+  background-color: #10B981;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title span svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ffffff;
+  height: 1rem;
+  width: 1rem;
+}
+
+.title-text {
+  margin-left: 0.5rem;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dark .title-text {
+  color: #e4e4e7;
+}
+
+.percent {
+  margin-left: auto;
+  color: #02972f;
+  font-weight: 600;
+  display: flex;
+  font-size: 11px;
+}
+
+.data {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.data p {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  color: #1F2937;
+  font-size: 1.75rem;
+  line-height: 2rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.dark .data p {
+  color: #fafafa;
+}
+
+.data .range {
+  position: relative;
+  background-color: #E5E7EB;
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.dark .data .range {
+  background-color: #27272a;
+}
+
+.data .range .fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: #10B981;
+  width: 76%;
+  height: 100%;
+  border-radius: 0.25rem;
+}
+

@@ -96,68 +96,79 @@ function KPICard({
   align?: "left" | "center" | "right";
   size?: "small" | "standard" | "large";
 }) {
-  const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
-  
-  // Padding & Text Size depending on size setting
-  let sizePadding = "p-3 sm:p-4 gap-1.5 sm:gap-2";
-  let labelSize = "text-[10px] sm:text-xs";
-  let valSize = "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg md:text-xl truncate w-full";
-  let subSize = "text-[9px] sm:text-[10px]";
-  
-  if (size === "small") {
-    sizePadding = "p-2 sm:p-2.5 gap-1";
-    labelSize = "text-[9px] sm:text-[10px]";
-    valSize = "text-[11px] min-[360px]:text-xs min-[400px]:text-sm sm:text-base truncate w-full";
-    subSize = "text-[8px] sm:text-[9px]";
-  } else if (size === "large") {
-    sizePadding = "p-4 sm:p-5 gap-2.5 sm:gap-3";
-    labelSize = "text-xs sm:text-sm";
-    valSize = "text-sm min-[360px]:text-base min-[400px]:text-lg sm:text-xl md:text-2xl truncate w-full";
-    subSize = "text-[10px] sm:text-xs";
-  }
-
-  // Dynamic Theme Mapping for soft light gradients and shadows
-  const getCardTheme = () => {
-    return {
-      gradient: "bg-white dark:bg-zinc-900",
-      shadow: "shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.2)]",
-      border: "border-[1.5px] border-[#ecedec] dark:border-[#27272a] hover:border-[#2d79f3] dark:hover:border-[#2d79f3] rounded-[20px] transition-all duration-200"
-    };
+  const getFillColor = () => {
+    if (color.includes("rose") || color.includes("red")) return "#ef4444"; // Expense, loss
+    if (color.includes("amber")) return "#f59e0b"; // Credit, due
+    if (color.includes("sky")) return "#0ea5e9"; // Online sell
+    return "#10B981"; // Profit, cash sale, default
   };
 
-  const themeStyle = getCardTheme();
+  const getFillWidth = () => {
+    // Dynamic mock progression width based on value length or digits
+    const digitsOnly = value.replace(/\D/g, "");
+    if (!digitsOnly || digitsOnly === "0") return "12%";
+    const lastDigit = parseInt(digitsOnly.slice(-1)) || 5;
+    return `${35 + lastDigit * 6}%`;
+  };
 
   return (
     <Card
       onClick={onClick}
-      className={`flex flex-col hover:shadow-md transition-all ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border ${
+      className={`card flex flex-col justify-between transition-all duration-300 w-full hover:-translate-y-1 ${
         onClick
-          ? "cursor-pointer hover:border-primary/45 active:scale-[0.97] active:bg-accent/40 active:shadow-inner"
+          ? "cursor-pointer active:scale-[0.985]"
           : ""
-      }`}
+      } ${className || ""}`}
     >
-      <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
-        <span className={`${labelSize} font-medium text-muted-foreground`}>{label}</span>
-        {imageUrl ? (
-          <div className="size-6 sm:size-8 flex items-center justify-center shrink-0">
-            <img src={imageUrl} className={`size-6 sm:size-8 object-contain ${imageClassName || ""}`} alt={label} />
-          </div>
-        ) : Icon ? (
-          <div className={`size-6 sm:size-8 rounded-lg ${color} flex items-center justify-center shrink-0`}>
-            <Icon className="size-3.5 sm:size-4 text-white" />
-          </div>
-        ) : null}
-      </div>
-      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"}`}>
-        <div className={`${valSize} font-bold tracking-tight text-foreground`} title={value}>{value}</div>
-        {sub && <div className={`${subSize} text-muted-foreground mt-0.5`}>{sub}</div>}
-      </div>
-      {trend && (
-        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600" : "text-red-500"}`}>
-          {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-          {trend}
+      <div className="title flex items-center justify-between w-full">
+        <div className="flex items-center min-w-0">
+          <span 
+            className="flex items-center justify-center shrink-0" 
+            style={{ backgroundColor: getFillColor() }}
+          >
+            {imageUrl ? (
+              <img src={imageUrl} className={`size-3.5 object-contain ${imageClassName || ""}`} alt={label} />
+            ) : Icon ? (
+              <Icon className="size-3.5 text-white" />
+            ) : (
+              <svg className="size-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            )}
+          </span>
+          <span className="title-text font-serif font-bold text-xs truncate max-w-[150px]">
+            {label}
+          </span>
         </div>
-      )}
+        {trend && (
+          <span 
+            className="percent text-[10px] font-bold shrink-0"
+            style={{ color: trendUp ? "#02972f" : "#ef4444" }}
+          >
+            {trend}
+          </span>
+        )}
+      </div>
+
+      <div className="data flex flex-col justify-start w-full mt-3">
+        <p className="font-bold tracking-tight text-foreground truncate w-full" title={value}>
+          {value}
+        </p>
+        {sub && (
+          <span className="text-[10px] text-muted-foreground mb-2 mt-0.5">
+            {sub}
+          </span>
+        )}
+        <div className="range">
+          <div 
+            className="fill" 
+            style={{ 
+              width: getFillWidth(), 
+              backgroundColor: getFillColor() 
+            }} 
+          />
+        </div>
+      </div>
     </Card>
   );
 }
