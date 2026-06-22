@@ -96,79 +96,114 @@ function KPICard({
   align?: "left" | "center" | "right";
   size?: "small" | "standard" | "large";
 }) {
-  const getFillColor = () => {
-    if (color.includes("rose") || color.includes("red")) return "#ef4444"; // Expense, loss
-    if (color.includes("amber")) return "#f59e0b"; // Credit, due
-    if (color.includes("sky")) return "#0ea5e9"; // Online sell
-    return "#10B981"; // Profit, cash sale, default
+  const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
+  
+  // Reduced Padding & Text Sizes to make it compact
+  const sizePadding = "p-2.5 sm:p-3 gap-1 sm:gap-1.5";
+  const labelSize = "text-[10px] sm:text-[11px]";
+  const valSize = "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg md:text-xl font-bold truncate w-full";
+  const subSize = "text-[8px] sm:text-[9px]";
+
+  // Dynamic Theme Mapping for soft light gradients and beautiful shadows
+  const getCardTheme = () => {
+    switch (color) {
+      case "bg-emerald-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-emerald-50/20 to-emerald-500/5 dark:from-zinc-900 dark:via-emerald-950/10 dark:to-emerald-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(16,185,129,0.06)] dark:shadow-[0_6px_20px_rgba(16,185,129,0.03)] hover:shadow-[0_10px_25px_rgba(16,185,129,0.15)]",
+          border: "border-emerald-500/20 hover:border-emerald-500/40"
+        };
+      case "bg-rose-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-rose-50/20 to-rose-500/5 dark:from-zinc-900 dark:via-rose-950/10 dark:to-rose-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(244,63,94,0.06)] dark:shadow-[0_6px_20px_rgba(244,63,94,0.03)] hover:shadow-[0_10px_25px_rgba(244,63,94,0.15)]",
+          border: "border-rose-500/20 hover:border-rose-500/40"
+        };
+      case "bg-indigo-500":
+      case "bg-indigo-600":
+        return {
+          gradient: "bg-gradient-to-br from-white via-indigo-50/20 to-indigo-500/5 dark:from-zinc-900 dark:via-indigo-950/10 dark:to-indigo-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(99,102,241,0.06)] dark:shadow-[0_6px_20px_rgba(99,102,241,0.03)] hover:shadow-[0_10px_25px_rgba(99,102,241,0.15)]",
+          border: "border-indigo-500/20 hover:border-indigo-500/40"
+        };
+      case "bg-amber-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-amber-50/20 to-amber-500/5 dark:from-zinc-900 dark:via-amber-950/10 dark:to-amber-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(245,158,11,0.06)] dark:shadow-[0_6px_20px_rgba(245,158,11,0.03)] hover:shadow-[0_10px_25px_rgba(245,158,11,0.15)]",
+          border: "border-amber-500/20 hover:border-amber-500/40"
+        };
+      case "bg-amber-600":
+        return {
+          gradient: "bg-gradient-to-br from-white via-amber-50/25 to-amber-600/5 dark:from-zinc-900 dark:via-amber-950/15 dark:to-amber-600/5",
+          shadow: "shadow-[0_6px_20px_rgba(217,119,6,0.06)] dark:shadow-[0_6px_20px_rgba(217,119,6,0.03)] hover:shadow-[0_10px_25px_rgba(217,119,6,0.15)]",
+          border: "border-amber-600/20 hover:border-amber-600/40"
+        };
+      case "bg-sky-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-sky-50/20 to-sky-500/5 dark:from-zinc-900 dark:via-sky-950/10 dark:to-sky-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(14,165,233,0.06)] dark:shadow-[0_6px_20px_rgba(14,165,233,0.03)] hover:shadow-[0_10px_25px_rgba(14,165,233,0.15)]",
+          border: "border-sky-500/20 hover:border-sky-500/40"
+        };
+      case "bg-teal-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(20,184,166,0.06)] dark:shadow-[0_6px_20px_rgba(20,184,166,0.03)] hover:shadow-[0_10px_25px_rgba(20,184,166,0.15)]",
+          border: "border-teal-500/20 hover:border-teal-500/40"
+        };
+      case "bg-pink-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-pink-50/20 to-pink-500/5 dark:from-zinc-900 dark:via-pink-950/10 dark:to-pink-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(236,72,153,0.06)] dark:shadow-[0_6px_20px_rgba(236,72,153,0.03)] hover:shadow-[0_10px_25px_rgba(236,72,153,0.15)]",
+          border: "border-pink-500/20 hover:border-pink-500/40"
+        };
+      case "bg-orange-500":
+        return {
+          gradient: "bg-gradient-to-br from-white via-orange-50/20 to-orange-500/5 dark:from-zinc-900 dark:via-orange-950/10 dark:to-orange-500/5",
+          shadow: "shadow-[0_6px_20px_rgba(249,115,22,0.06)] dark:shadow-[0_6px_20px_rgba(249,115,22,0.03)] hover:shadow-[0_10px_25px_rgba(249,115,22,0.15)]",
+          border: "border-orange-500/20 hover:border-orange-500/40"
+        };
+      default:
+        return {
+          gradient: "bg-gradient-to-br from-white to-zinc-50/50 dark:from-zinc-900 dark:to-zinc-950/50",
+          shadow: "shadow-[0_6px_20px_rgba(0,0,0,0.04)]",
+          border: "border-border/80 hover:border-primary/20"
+        };
+    }
   };
 
-  const getFillWidth = () => {
-    // Dynamic mock progression width based on value length or digits
-    const digitsOnly = value.replace(/\D/g, "");
-    if (!digitsOnly || digitsOnly === "0") return "12%";
-    const lastDigit = parseInt(digitsOnly.slice(-1)) || 5;
-    return `${35 + lastDigit * 6}%`;
-  };
+  const themeStyle = getCardTheme();
 
   return (
     <Card
       onClick={onClick}
-      className={`card flex flex-col justify-between transition-all duration-300 w-full hover:-translate-y-1 ${
+      className={`flex flex-col transition-all duration-300 ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border rounded-[16px] ${
         onClick
-          ? "cursor-pointer active:scale-[0.985]"
+          ? "cursor-pointer hover:border-primary/45 active:scale-[0.985]"
           : ""
-      } ${className || ""}`}
+      }`}
     >
-      <div className="title flex items-center justify-between w-full">
-        <div className="flex items-center min-w-0">
-          <span 
-            className="flex items-center justify-center shrink-0" 
-            style={{ backgroundColor: getFillColor() }}
-          >
-            {imageUrl ? (
-              <img src={imageUrl} className={`size-3.5 object-contain ${imageClassName || ""}`} alt={label} />
-            ) : Icon ? (
-              <Icon className="size-3.5 text-white" />
-            ) : (
-              <svg className="size-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            )}
-          </span>
-          <span className="title-text font-serif font-bold text-xs truncate max-w-[150px]">
-            {label}
-          </span>
-        </div>
-        {trend && (
-          <span 
-            className="percent text-[10px] font-bold shrink-0"
-            style={{ color: trendUp ? "#02972f" : "#ef4444" }}
-          >
-            {trend}
-          </span>
-        )}
+      <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
+        <span className={`${labelSize} font-medium text-muted-foreground`}>{label}</span>
+        {imageUrl ? (
+          <div className="size-6 sm:size-7 flex items-center justify-center shrink-0">
+            <img src={imageUrl} className={`size-5 sm:size-6 object-contain ${imageClassName || ""}`} alt={label} />
+          </div>
+        ) : Icon ? (
+          <div className={`size-6 sm:size-7 rounded-lg ${color} flex items-center justify-center shrink-0`}>
+            <Icon className="size-3.5 sm:size-4 text-white" />
+          </div>
+        ) : null}
       </div>
-
-      <div className="data flex flex-col justify-start w-full mt-3">
-        <p className="font-bold tracking-tight text-foreground truncate w-full" title={value}>
-          {value}
-        </p>
-        {sub && (
-          <span className="text-[10px] text-muted-foreground mb-2 mt-0.5">
-            {sub}
-          </span>
-        )}
-        <div className="range">
-          <div 
-            className="fill" 
-            style={{ 
-              width: getFillWidth(), 
-              backgroundColor: getFillColor() 
-            }} 
-          />
-        </div>
+      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"} mt-1`}>
+        <div className={`${valSize} font-bold tracking-tight text-foreground`} title={value}>{value}</div>
+        {sub && <div className={`${subSize} text-muted-foreground mt-0.5`}>{sub}</div>}
       </div>
+      {trend && (
+        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600" : "text-red-500"} mt-0.5`}>
+          {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+          {trend}
+        </div>
+      )}
     </Card>
   );
 }
