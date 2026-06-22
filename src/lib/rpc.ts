@@ -93,22 +93,50 @@ export async function loginFn(input: { data: { email: string; password: string }
   return { user: mapped };
 }
 
+function sanitizeInput(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "")
+    .replace(/on\w+="[^"]*"/g, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<[^>]*>/g, "")
+    .trim();
+}
+
+function validateEmail(email: string) {
+  const trimmed = email.trim();
+  if (!trimmed) {
+    throw new Error("Email address cannot be blank");
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmed)) {
+    throw new Error("Please enter a valid email address");
+  }
+  
+  const fakeDomains = ["tempmail.com", "yopmail.com", "mailinator.com", "dispostable.com", "sharklasers.com", "guerrillamail.com", "10minutemail.com", "getairmail.com", "throwawaymail.com", "temp-mail.org", "fake.com", "fake.org", "test.com"];
+  const domain = trimmed.split("@")[1]?.toLowerCase();
+  if (fakeDomains.includes(domain)) {
+    throw new Error("Disposable or fake email addresses are not allowed. Please register with a real email address.");
+  }
+}
+
 export async function registerFn(input: { data: { email: string; password: string; fullName?: string } }) {
   const { data } = input;
+  validateEmail(data.email);
   const db = await getDb();
-  const existing = await db.collection("users").findOne({ email: data.email.toLowerCase() });
+  const existing = await db.collection("users").findOne({ email: data.email.toLowerCase().trim() });
   if (existing) throw new Error("User already exists");
   const userId = crypto.randomUUID();
   await db.collection("users").insertOne({
     _id: userId as any,
-    email: data.email.toLowerCase(),
+    email: data.email.toLowerCase().trim(),
     password: await hashPassword(data.password),
-    full_name: data.fullName || "",
+    full_name: sanitizeInput(data.fullName || ""),
     role: "owner",
     activated: false,
     created_at: new Date().toISOString(),
   });
-  const token = await signToken({ userId, email: data.email.toLowerCase() });
+  const token = await signToken({ userId, email: data.email.toLowerCase().trim() });
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, userId);
@@ -135,13 +163,15 @@ export async function createProductFn(input: { data: { name: string; image_url?:
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, name: data.name, image_url: data.image_url || null, buy_price: data.buy_price || 0, sell_price: data.sell_price || 0, stock: data.stock || 0, attributes: data.attributes || {}, min_stock: data.min_stock ?? 5, category: data.category || "", archived: false, created_at: new Date().toISOString() };
+  const name = sanitizeInput(data.name);
+  if (!name) throw new Error("Product name cannot be blank");
+  const doc = { _id: id, owner_id: session.ownerId, name, image_url: data.image_url ? sanitizeInput(data.image_url) : null, buy_price: data.buy_price || 0, sell_price: data.sell_price || 0, stock: data.stock || 0, attributes: data.attributes || {}, min_stock: data.min_stock ?? 5, category: data.category ? sanitizeInput(data.category) : "", archived: false, created_at: new Date().toISOString() };
   await db.collection("products").insertOne(doc as any);
 
   // Sheets Sync
   appendRowToGoogleSheet(session.ownerId, "Products",
     ["ID", "Name", "Buy Price", "Sell Price", "Stock", "Min Stock", "Category", "Created At"],
-    [id, data.name, data.buy_price || 0, data.sell_price || 0, data.stock || 0, data.min_stock ?? 5, data.category || "", doc.created_at]
+    [id, name, data.buy_price || 0, data.sell_price || 0, data.stock || 0, data.min_stock ?? 5, data.category || "", doc.created_at]
   );
 
   return { ...doc, id };
@@ -151,8 +181,14 @@ export async function updateProductFn(input: { data: { id: string; name?: string
   const { data } = input;
   const session = await requireSession();
   const { id, ...updates } = data;
+  
+  const sanitizedUpdates: any = { ...updates };
+  if (sanitizedUpdates.name !== undefined) sanitizedUpdates.name = sanitizeInput(sanitizedUpdates.name);
+  if (sanitizedUpdates.image_url !== undefined && sanitizedUpdates.image_url !== null) sanitizedUpdates.image_url = sanitizeInput(sanitizedUpdates.image_url);
+  if (sanitizedUpdates.category !== undefined) sanitizedUpdates.category = sanitizeInput(sanitizedUpdates.category);
+  
   const db = await getDb();
-  await db.collection("products").updateOne({ _id: id as any, owner_id: session.ownerId }, { $set: updates });
+  await db.collection("products").updateOne({ _id: id as any, owner_id: session.ownerId }, { $set: sanitizedUpdates });
   const updated = await db.collection("products").findOne({ _id: id as any });
   return { ...updated, id };
 }

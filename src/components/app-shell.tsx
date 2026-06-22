@@ -323,11 +323,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </PermissionGuard>
           </div>
-          {isMobile && <div className="mobile-bottom-spacer" aria-hidden />}
+          {isMobile && pathname !== "/ai-audits" && <div className="mobile-bottom-spacer" aria-hidden />}
         </main>
       </div>
 
-      {isMobile && bottomNav.length > 0 && (
+      {isMobile && bottomNav.length > 0 && pathname !== "/ai-audits" && (
         <nav className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border/50 safe-area-pb mobile-tab-bar" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}>
           <div
             className="grid h-14 max-w-lg mx-auto min-h-[3.5rem]"

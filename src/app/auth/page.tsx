@@ -243,10 +243,10 @@ export default function AuthPage() {
         }
       ` }} />
 
-      {/* Left panel: Modern inventory dashboard split-screen illustration */}
+      {/* Left panel: Minimalist natural fashion illustration with soft linen backdrop */}
       <div 
         className="hidden md:flex md:col-span-6 lg:col-span-7 relative flex-col justify-between p-12 text-white select-none overflow-hidden bg-cover bg-center"
-        style={{ backgroundImage: `linear-gradient(rgba(9, 9, 11, 0.82), rgba(9, 9, 11, 0.85)), url('/login_illustration.png')` }}
+        style={{ backgroundImage: `linear-gradient(rgba(9, 9, 11, 0.7), rgba(9, 9, 11, 0.75)), url('https://images.unsplash.com/photo-1459244852163-43b23b16cbd5?q=80&w=1200&auto=format&fit=crop')` }}
       >
         <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
@@ -257,55 +257,25 @@ export default function AuthPage() {
           <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">HakimEzy</span>
         </div>
 
-        {/* Middle graphics and selling description */}
+        {/* Middle minimalist description */}
         <div className="space-y-6 relative z-10 max-w-lg my-auto">
           <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">
             {lang === "bn" ? "পোশাক ব্যবসায়ীদের আস্থার প্রতীক" : "Designed for Fashion Retailers"}
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold font-serif leading-tight">
-            {lang === "bn" ? "আপনার পোশাক ব্যবসা পরিচালনা এখন আরও সহজ" : "Next-Gen Inventory Control for Clothing Stores"}
-          </h2>
-          <p className="text-sm text-zinc-300 leading-relaxed">
             {lang === "bn" 
-              ? "স্টক মূল্যায়ন, ক্যাশ ফ্লো, পার্টি লেজার, মুনাফা ট্র্যাকিং এবং কাস্টমাইজড থিম সব মিলবে এক প্ল্যাটফর্মে।" 
-              : "Track live stock valuation, overhead expenses, sales margins, and print professional invoices with custom styled branding templates."}
+              ? `"HakimEZY" ইনভেন্টরি ম্যানেজমেন্ট এবং প্রোডাক্টস সলিউশন`
+              : `"HakimEZY" inventory management and products solutions`}
+          </h2>
+          <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
+            {lang === "bn" 
+              ? "স্টক মূল্যায়ন, ক্যাশ ফ্লো, কাস্টম ইনভয়েস এবং বিক্রয় ট্র্যাকিং সহজতর করার এক নির্ভরযোগ্য মাধ্যম।" 
+              : "Modern stock valuation, cashbox ledger, custom invoices, and sales profit margin tracking in one simple workspace."}
           </p>
-
-          {/* Bullet points with icons */}
-          <div className="grid grid-cols-2 gap-4 pt-4 text-xs text-zinc-200">
-            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
-              <span className="text-lg">📦</span>
-              <div>
-                <div className="font-semibold text-white">Live Stock Valuation</div>
-                <div className="text-[10px] text-zinc-400">Detailed buy cost vs sales value</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
-              <span className="text-lg">💰</span>
-              <div>
-                <div className="font-semibold text-white">Products Net Profit</div>
-                <div className="text-[10px] text-zinc-400">Direct sales margins calculations</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
-              <span className="text-lg">🎨</span>
-              <div>
-                <div className="font-semibold text-white">Beautiful UI Styles</div>
-                <div className="text-[10px] text-zinc-400">Brutalism, Morphism & Flowerism</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
-              <span className="text-lg">🧾</span>
-              <div>
-                <div className="font-semibold text-white">Quick Invoicing</div>
-                <div className="text-[10px] text-zinc-400">SMS & PDF bill prints</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Bottom copyright placeholder */}
-        <div className="text-xs text-zinc-500 relative z-10">
+        <div className="text-xs text-zinc-400 relative z-10">
           © {new Date().getFullYear()} HakimEzy. Powered by Dream Fashion.
         </div>
       </div>

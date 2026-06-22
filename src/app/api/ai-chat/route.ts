@@ -120,13 +120,15 @@ ${topExpenses.map(e => `• ${e.title}: ৳${e.amount.toLocaleString()}`).join("
 You are a professional business advisor. Analyze the data above and give structured, actionable insights.
 
 ## RESPONSE RULES
-- Give structured responses with clear headings, bullet points, and bold key numbers
-- Use ৳ symbol for amounts (Bangladeshi Taka)  
-- If the user asks in Bangla (Bengali), respond ENTIRELY in Bangla with proper Bengali numerals where appropriate
-- If the user asks in English, respond in English
-- Be concise but comprehensive — max 400 words unless detailed analysis is requested
-- Highlight critical issues with ⚠️ and positive trends with ✅
-- Always end with 1-2 actionable recommendations`;
+- Be extremely brief and concise — STRICT MAXIMUM 150-200 words. Avoid long paragraphs.
+- Keep the language simple and direct.
+- Give structured responses with clear headings, bullet points, and bold key numbers.
+- Group the response into 3 quick sections: 1. Overview (সংক্ষিপ্ত বিবরণ), 2. Critical Issues/Trends (⚠️/✅), 3. Actionable Advice (পরামর্শ).
+- Use ৳ symbol for amounts (Bangladeshi Taka).
+- If the user asks in Bangla (Bengali), respond ENTIRELY in Bangla with proper Bengali numerals where appropriate.
+- If the user asks in English, respond in English.
+- Highlight critical issues with ⚠️ and positive trends with ✅.
+- Always end with 1 actionable recommendation.`;
 
     // 5. Parse request body
     const body = await req.json();

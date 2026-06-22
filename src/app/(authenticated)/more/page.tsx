@@ -6,7 +6,8 @@ import {
   ShoppingCart, Receipt, PiggyBank, DollarSign,
   Banknote, BarChart3, Settings, FileText,
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
-  Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight
+  Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
+  Bot, Send, Loader2, HelpCircle
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -45,6 +46,372 @@ export default function MorePage() {
   const perms = resolvePermissions(user?.role ?? "employee", user?.permissions);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
+
+  interface Message {
+    role: "system" | "user" | "assistant";
+    content: string;
+  }
+
+  // AI Assistant Tab states
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  const aiSuggestions = lang === "bn"
+    ? [
+        { label: "লাভ বা মুনাফা কত?", text: "লাভ বা মুনাফা কত?" },
+        { label: "ব্যবসায়ের সমস্যা কোথায়?", text: "ব্যবসায়ের সমস্যা কোথায়?" },
+        { label: "সংকটজনক স্টক কোনগুলো?", text: "সংকটজনক স্টক কোনগুলো এবং কোন পণ্যের স্টক কম?" },
+        { label: "কোথায় আপডেট করতে হবে?", text: "ব্যবসায়ের উন্নতির জন্য কোথায় আপডেট বা পরিবর্তন করতে হবে?" },
+        { label: "সার্বিক বিশ্লেষণ দিন", text: "দয়া করে আমার ব্যবসার একটি সার্বিক বিশ্লেষণ ও পরামর্শ দিন।" },
+      ]
+    : [
+        { label: "What is the profits?", text: "What is the profits?" },
+        { label: "Where is the business problems?", text: "Where is the business problems?" },
+        { label: "What is the critical stocks?", text: "What is the critical stocks and which products have less number in stocks?" },
+        { label: "Where have to update?", text: "Where do we have to update or make changes for the business?" },
+        { label: "Total analyzation of the business", text: "Provide a total analyzation and health check of the business." },
+      ];
+
+  const handleAiSend = async (textToSend: string) => {
+    if (!textToSend.trim() || aiLoading) return;
+
+    const userMessage: Message = { role: "user", content: textToSend };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setAiInput("");
+    setAiLoading(true);
+
+    try {
+      const res = await fetch("/api/ai-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          lang,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI");
+      }
+
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+      // Remove last user message on failure
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Helper to parse **bold** tags
+  const parseBold = (text: string) => {
+    const parts = text.split(/\*\*([\s\S]*?)\*\*/g);
+    return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-zinc-950 dark:text-white">{part}</strong> : part));
+  };
+
+  const renderStructuredContent = (content: string) => {
+    const lines = content.split("\n");
+    let elements: React.ReactNode[] = [];
+    
+    let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
+    
+    const flushList = (key: string | number) => {
+      if (!currentList) return null;
+      const list = currentList;
+      currentList = null;
+      
+      if (list.type === "bullet") {
+        return (
+          <div key={`list-${key}`} className="space-y-1.5 my-2">
+            {list.items.map((item, i) => {
+              const colonIndex = item.indexOf(":");
+              if (colonIndex > 0 && colonIndex < 35) {
+                const keyText = item.substring(0, colonIndex).trim();
+                const valText = item.substring(colonIndex + 1).trim();
+                return (
+                  <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                    <span className="text-muted-foreground font-medium">{parseBold(keyText)}</span>
+                    <span className="font-semibold text-foreground">{parseBold(valText)}</span>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
+                  <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary/80 shrink-0 shadow-sm" />
+                  <span className="text-foreground/90">{parseBold(item)}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      } else {
+        return (
+          <ol key={`list-${key}`} className="space-y-1.5 my-2 list-decimal pl-5">
+            {list.items.map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
+                {parseBold(item)}
+              </li>
+            ))}
+          </ol>
+        );
+      }
+    };
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      if (!trimmed) {
+        if (currentList) {
+          elements.push(flushList(i));
+        }
+        continue;
+      }
+      
+      if (trimmed.startsWith("#")) {
+        if (currentList) elements.push(flushList(i));
+        const level = trimmed.match(/^#+/)?.[0].length || 1;
+        const text = trimmed.replace(/^#+\s*/, "");
+        if (level === 1) {
+          elements.push(
+            <h2 key={i} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
+              {parseBold(text)}
+            </h2>
+          );
+        } else if (level === 2) {
+          elements.push(
+            <h3 key={i} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
+              {parseBold(text)}
+            </h3>
+          );
+        } else {
+          elements.push(
+            <h4 key={i} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
+              {parseBold(text)}
+            </h4>
+          );
+        }
+        continue;
+      }
+      
+      if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) {
+        const itemText = trimmed.substring(1).trim();
+        if (!currentList || currentList.type !== "bullet") {
+          if (currentList) elements.push(flushList(i));
+          currentList = { type: "bullet", items: [] };
+        }
+        currentList.items.push(itemText);
+        continue;
+      }
+      
+      const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+      if (numMatch) {
+        const itemText = numMatch[2].trim();
+        if (!currentList || currentList.type !== "number") {
+          if (currentList) elements.push(flushList(i));
+          currentList = { type: "number", items: [] };
+        }
+        currentList.items.push(itemText);
+        continue;
+      }
+      
+      if (currentList) {
+        elements.push(flushList(i));
+      }
+      
+      if (trimmed.includes("⚠️")) {
+        const text = trimmed.replace("⚠️", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border-l-4 border-amber-500 text-amber-800 dark:text-amber-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">⚠️</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      if (trimmed.includes("✅")) {
+        const text = trimmed.replace("✅", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border-l-4 border-emerald-500 text-emerald-800 dark:text-emerald-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">✅</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      if (trimmed.includes("💡") || trimmed.toLowerCase().includes("recommendation")) {
+        const text = trimmed.replace("💡", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-950/20 border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">💡</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      elements.push(
+        <p key={i} className="text-xs leading-relaxed my-2 text-foreground/80">
+          {parseBold(trimmed)}
+        </p>
+      );
+    }
+    
+    if (currentList) {
+      elements.push(flushList(lines.length));
+    }
+    
+    return <div className="space-y-1">{elements}</div>;
+  };
+
+  const renderMobileAiAssistant = () => {
+    return (
+      <Card className="flex flex-col h-[520px] bg-white/10 dark:bg-black/30 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-lg rounded-2xl overflow-hidden">
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3.5 no-scrollbar">
+          {messages.length === 0 ? (
+            <div className="space-y-4 my-auto h-full flex flex-col justify-center text-center px-2">
+              <div className="size-11 rounded-full bg-gradient-to-br from-primary/20 to-indigo-600/10 text-primary flex items-center justify-center mx-auto border border-primary/10 shadow-sm animate-pulse">
+                <Sparkles className="size-5 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-xs text-foreground">
+                  {lang === "bn" ? "হাকিমইজি অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with HakimEzy Audit Agent"}
+                </h4>
+                <p className="text-[10px] text-muted-foreground leading-normal max-w-[240px] mx-auto">
+                  {lang === "bn"
+                    ? "আমি আপনার রিয়েল-টাইম স্টক, লাভ-ক্ষতি ও ব্যবসা বিশ্লেষণ করতে পারি। নিচের একটি প্রশ্ন নির্বাচন করুন বা সরাসরি লিখুন।"
+                    : "I can analyze your real-time stocks, profits, expenses, and business metrics. Choose a prompt or type below."}
+                </p>
+              </div>
+
+              {/* Suggestions Grid */}
+              <div className="grid grid-cols-1 gap-2 pt-1 text-left">
+                {aiSuggestions.map((s, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleAiSend(s.text)}
+                    className="p-2.5 text-[10px] font-semibold bg-white/20 dark:bg-zinc-950/20 hover:bg-primary/10 border border-white/20 dark:border-white/5 rounded-xl text-foreground text-left transition-all active:scale-[0.98] flex items-center gap-2 cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.02)] backdrop-blur-sm"
+                  >
+                    <HelpCircle className="size-3.5 text-primary shrink-0" />
+                    <span className="truncate">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {messages.map((m, idx) => {
+                const isUser = m.role === "user";
+                return (
+                  <div key={idx} className={`flex items-start gap-2 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+                    {/* Avatar */}
+                    <div className={`size-7 rounded-xl flex items-center justify-center border shrink-0 shadow-sm ${
+                      isUser 
+                        ? "bg-primary text-white border-primary/10" 
+                        : "bg-white/30 dark:bg-zinc-950/30 text-foreground border-white/20 dark:border-white/5"
+                    }`}>
+                      {isUser ? <HelpCircle className="size-3.5" /> : <Bot className="size-3.5" />}
+                    </div>
+
+                    {/* Bubble */}
+                    <Card className={`p-3 max-w-[85%] rounded-2xl text-[11px] shadow-sm ${
+                      isUser 
+                        ? "bg-primary text-primary-foreground rounded-tr-none border-0" 
+                        : "bg-white/40 dark:bg-zinc-950/40 text-foreground rounded-tl-none border-white/20 dark:border-white/5 backdrop-blur-sm"
+                    }`}>
+                      {isUser ? <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p> : renderStructuredContent(m.content)}
+                    </Card>
+                  </div>
+                );
+              })}
+
+              {/* Loading indicator */}
+              {aiLoading && (
+                <div className="flex items-start gap-2">
+                  <div className="size-7 rounded-xl bg-white/30 dark:bg-zinc-950/30 text-foreground border border-white/20 dark:border-white/5 flex items-center justify-center shrink-0">
+                    <Bot className="size-3.5" />
+                  </div>
+                  <Card className="p-3 rounded-2xl rounded-tl-none bg-white/40 dark:bg-zinc-950/40 border border-white/20 dark:border-white/5 backdrop-blur-sm flex items-center gap-1.5 shrink-0">
+                    <span className="size-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                    <span className="size-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                    <span className="size-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                  </Card>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
+
+        {/* Quick pills above input */}
+        {messages.length > 0 && (
+          <div className="px-3 py-1.5 border-t border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/10 flex gap-1.5 overflow-x-auto shrink-0 select-none no-scrollbar">
+            {aiSuggestions.slice(0, 3).map((s, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleAiSend(s.text)}
+                className="px-2.5 py-1 text-[9px] font-semibold bg-white/20 dark:bg-zinc-950/20 hover:bg-primary/10 border border-white/20 dark:border-white/5 rounded-full text-foreground whitespace-nowrap transition-all active:scale-95 cursor-pointer shrink-0 shadow-sm backdrop-blur-sm"
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input Panel */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAiSend(aiInput);
+          }}
+          className="p-2 border-t border-white/10 dark:border-white/5 bg-white/10 dark:bg-black/20 flex gap-2 shrink-0 items-center"
+        >
+          <input
+            type="text"
+            value={aiInput}
+            onChange={(e) => setAiInput(e.target.value)}
+            disabled={aiLoading}
+            placeholder={lang === "bn" ? "আপনার প্রশ্ন লিখুন..." : "Ask your question..."}
+            className="flex-1 h-9 rounded-xl border border-white/20 dark:border-white/5 bg-white/20 dark:bg-zinc-950/20 px-3 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50 text-foreground placeholder:text-muted-foreground"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={aiLoading || !aiInput.trim()}
+            className="size-9 rounded-xl shrink-0 cursor-pointer shadow-md"
+          >
+            <Send className="size-3.5" />
+          </Button>
+        </form>
+      </Card>
+    );
+  };
 
   // Theme states
   const [theme, setTheme] = useState({
@@ -293,6 +660,68 @@ export default function MorePage() {
               </Link>
             ))}
           </div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderMobileOperations = () => (
+    <>
+      {/* Group 1: Business Operations */}
+      {visibleBiz.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-1.5">
+            {lang === "bn" ? "ব্যবসা পরিচালনা" : "Business Operations"}
+          </h3>
+          <Card className="overflow-hidden border border-white/20 dark:border-white/5 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
+            <div className="divide-y divide-zinc-200/50 dark:divide-zinc-800/40">
+              {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => (
+                <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8.5 rounded-xl bg-primary/10 text-primary grid place-items-center border border-primary/15 shadow-sm">
+                      <Icon className="size-4" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{t(labelKey as any)}</div>
+                      <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{desc}</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-400 text-xs font-semibold select-none pr-1">→</span>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Group 2: Accounting & Finance */}
+      {visibleFin.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-1.5">
+            {lang === "bn" ? "হিসাব ও বিশ্লেষণ" : "Accounting & Financials"}
+          </h3>
+          <Card className="overflow-hidden border border-white/20 dark:border-white/5 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
+            <div className="divide-y divide-zinc-200/50 dark:divide-zinc-800/40">
+              {visibleFin.map(({ to, labelKey, desc, icon: Icon, imageUrl }: any) => (
+                <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 grid place-items-center border border-indigo-500/15 shadow-sm overflow-hidden">
+                      {imageUrl ? (
+                        <img src={imageUrl} className="size-4.5 object-contain" alt={t(labelKey as any)} />
+                      ) : (
+                        <Icon className="size-4" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{t(labelKey as any)}</div>
+                      <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{desc}</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-400 text-xs font-semibold select-none pr-1">→</span>
+                </Link>
+              ))}
+            </div>
+          </Card>
         </div>
       )}
     </>
@@ -836,19 +1265,28 @@ export default function MorePage() {
 
       {isMobile ? (
         <Tabs defaultValue="menu" className="space-y-4">
-          <TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
+          <TabsList className={`grid ${user?.role === "owner" ? "grid-cols-3" : "grid-cols-2"} w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40`}>
             <TabsTrigger value="menu" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "মেনু ও লিংক" : "Menu & Operations"}</TabsTrigger>
             <TabsTrigger value="ui" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "ইউআই সেটিংস" : "UI Customization"}</TabsTrigger>
+            {user?.role === "owner" && (
+              <TabsTrigger value="ai" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "এআই অডিট" : "AI Audits"}</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="menu" className="space-y-5 outline-none mt-0">
-            {renderOperations()}
+            {renderMobileOperations()}
             {renderSignOut()}
           </TabsContent>
 
           <TabsContent value="ui" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
             {renderThemeCustomization()}
           </TabsContent>
+
+          {user?.role === "owner" && (
+            <TabsContent value="ai" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
+              {renderMobileAiAssistant()}
+            </TabsContent>
+          )}
         </Tabs>
       ) : (
         <div className="space-y-5">

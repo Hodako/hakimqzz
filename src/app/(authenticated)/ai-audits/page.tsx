@@ -89,57 +89,174 @@ export default function AiAuditsPage() {
     }
   };
 
-  // Structured renderer helper for formatting the AI's response
-  const renderMessageContent = (content: string) => {
-    return content.split("\n").map((line, idx) => {
-      let trimmed = line.trim();
-      
-      // Headers
-      if (trimmed.startsWith("###")) {
-        return <h4 key={idx} className="font-bold text-xs mt-3 mb-1 text-primary">{trimmed.replace(/###/g, "").trim()}</h4>;
-      }
-      if (trimmed.startsWith("##")) {
-        return <h3 key={idx} className="font-bold text-sm mt-4 mb-1.5 text-primary border-b pb-1">{trimmed.replace(/##/g, "").trim()}</h3>;
-      }
-      if (trimmed.startsWith("#")) {
-        return <h2 key={idx} className="font-bold text-base mt-5 mb-2 text-primary">{trimmed.replace(/#/g, "").trim()}</h2>;
-      }
-
-      // Bullet points
-      if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) {
-        const text = trimmed.substring(1).trim();
-        return (
-          <div key={idx} className="flex items-start gap-1.5 text-xs leading-relaxed my-1 pl-2">
-            <span className="text-primary mt-0.5">•</span>
-            <span>{parseBold(text)}</span>
-          </div>
-        );
-      }
-
-      // Numeric lists
-      const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
-      if (numMatch) {
-        return (
-          <div key={idx} className="flex items-start gap-2 text-xs leading-relaxed my-1 pl-2">
-            <span className="font-bold text-primary">{numMatch[1]}.</span>
-            <span>{parseBold(numMatch[2])}</span>
-          </div>
-        );
-      }
-
-      // Normal text
-      return (
-        <p key={idx} className="text-xs leading-relaxed my-1.5">
-          {parseBold(trimmed)}
-        </p>
-      );
-    });
-  };
-
   // Helper to parse **bold** tags
   const parseBold = (text: string) => {
     const parts = text.split(/\*\*([\s\S]*?)\*\*/g);
-    return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-semibold text-zinc-950 dark:text-white">{part}</strong> : part));
+    return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-zinc-950 dark:text-white">{part}</strong> : part));
+  };
+
+  // Structured renderer helper for formatting the AI's response
+  const renderMessageContent = (content: string) => {
+    const lines = content.split("\n");
+    let elements: React.ReactNode[] = [];
+    
+    let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
+    
+    const flushList = (key: string | number) => {
+      if (!currentList) return null;
+      const list = currentList;
+      currentList = null;
+      
+      if (list.type === "bullet") {
+        return (
+          <div key={`list-${key}`} className="space-y-1.5 my-2">
+            {list.items.map((item, i) => {
+              const colonIndex = item.indexOf(":");
+              if (colonIndex > 0 && colonIndex < 35) {
+                const keyText = item.substring(0, colonIndex).trim();
+                const valText = item.substring(colonIndex + 1).trim();
+                return (
+                  <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                    <span className="text-muted-foreground font-medium">{parseBold(keyText)}</span>
+                    <span className="font-semibold text-foreground">{parseBold(valText)}</span>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
+                  <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary/80 shrink-0 shadow-sm" />
+                  <span className="text-foreground/90">{parseBold(item)}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      } else {
+        return (
+          <ol key={`list-${key}`} className="space-y-1.5 my-2 list-decimal pl-5">
+            {list.items.map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
+                {parseBold(item)}
+              </li>
+            ))}
+          </ol>
+        );
+      }
+    };
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      if (!trimmed) {
+        if (currentList) {
+          elements.push(flushList(i));
+        }
+        continue;
+      }
+      
+      if (trimmed.startsWith("#")) {
+        if (currentList) elements.push(flushList(i));
+        const level = trimmed.match(/^#+/)?.[0].length || 1;
+        const text = trimmed.replace(/^#+\s*/, "");
+        if (level === 1) {
+          elements.push(
+            <h2 key={i} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
+              {parseBold(text)}
+            </h2>
+          );
+        } else if (level === 2) {
+          elements.push(
+            <h3 key={i} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
+              {parseBold(text)}
+            </h3>
+          );
+        } else {
+          elements.push(
+            <h4 key={i} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
+              {parseBold(text)}
+            </h4>
+          );
+        }
+        continue;
+      }
+      
+      if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) {
+        const itemText = trimmed.substring(1).trim();
+        if (!currentList || currentList.type !== "bullet") {
+          if (currentList) elements.push(flushList(i));
+          currentList = { type: "bullet", items: [] };
+        }
+        currentList.items.push(itemText);
+        continue;
+      }
+      
+      const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+      if (numMatch) {
+        const itemText = numMatch[2].trim();
+        if (!currentList || currentList.type !== "number") {
+          if (currentList) elements.push(flushList(i));
+          currentList = { type: "number", items: [] };
+        }
+        currentList.items.push(itemText);
+        continue;
+      }
+      
+      if (currentList) {
+        elements.push(flushList(i));
+      }
+      
+      if (trimmed.includes("⚠️")) {
+        const text = trimmed.replace("⚠️", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border-l-4 border-amber-500 text-amber-800 dark:text-amber-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">⚠️</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      if (trimmed.includes("✅")) {
+        const text = trimmed.replace("✅", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border-l-4 border-emerald-500 text-emerald-800 dark:text-emerald-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">✅</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      if (trimmed.includes("💡") || trimmed.toLowerCase().includes("recommendation")) {
+        const text = trimmed.replace("💡", "").trim();
+        elements.push(
+          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-950/20 border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+            <span className="text-base mt-0.5 shrink-0">💡</span>
+            <div className="text-xs leading-relaxed font-medium">
+              {parseBold(text)}
+            </div>
+          </div>
+        );
+        continue;
+      }
+      
+      elements.push(
+        <p key={i} className="text-xs leading-relaxed my-2 text-foreground/80">
+          {parseBold(trimmed)}
+        </p>
+      );
+    }
+    
+    if (currentList) {
+      elements.push(flushList(lines.length));
+    }
+    
+    return <div className="space-y-1">{elements}</div>;
   };
 
   if (!user) return null;

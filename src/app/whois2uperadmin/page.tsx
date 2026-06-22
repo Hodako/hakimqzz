@@ -22,6 +22,7 @@ import {
   deleteBusinessFn,
   impersonateUserFn,
   deleteUserFn,
+  changeUserPasswordFn,
 } from "@/lib/rpc-admin";
 import {
   Trash2,
@@ -64,6 +65,11 @@ export default function SuperAdminPage() {
   // Safe delete modal state — User
   const [userToDelete, setUserToDelete] = useState<{ id: string; full_name: string; email: string } | null>(null);
   const [userDeleteConfirmText, setUserDeleteConfirmText] = useState("");
+
+  // User Password Change modal state
+  const [userForPasswordChange, setUserForPasswordChange] = useState<{ id: string; email: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   const stats = useQuery({
     queryKey: ["platform-stats"],
@@ -694,6 +700,19 @@ export default function SuperAdminPage() {
                               </Button>
                               <Button
                                 size="sm"
+                                variant="outline"
+                                className="h-8 beveled-button text-xs font-semibold cursor-pointer"
+                                onClick={() => {
+                                  setUserForPasswordChange({ id: u.id, email: u.email });
+                                  setNewPassword("");
+                                }}
+                                title="Reset user password"
+                              >
+                                <Key className="size-3.5 mr-1" />
+                                Reset PW
+                              </Button>
+                              <Button
+                                size="sm"
                                 variant="destructive"
                                 className="h-8 text-xs font-semibold cursor-pointer bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive hover:text-white"
                                 onClick={() => {
@@ -999,6 +1018,70 @@ export default function SuperAdminPage() {
                 className="h-9 font-semibold shadow-inner"
               >
                 Confirm Delete User
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+      {/* ═══════════ USER PASSWORD RESET MODAL ═══════════ */}
+      {userForPasswordChange && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setUserForPasswordChange(null); setNewPassword(""); }} />
+          <Card className="relative z-10 glass-card w-full max-w-sm p-6 space-y-4 border-primary/20 shadow-2xl bg-card">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-primary">
+                <Key className="size-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg text-foreground">Reset User Password</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Set a new password for this user account.</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Email:</span> {userForPasswordChange.email}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <label className="text-xs text-foreground font-semibold">New Password (min 6 characters):</label>
+              <Input
+                type="password"
+                className="beveled-card bg-muted/20"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2.5 justify-end pt-1 text-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUserForPasswordChange(null); setNewPassword(""); }}
+                className="beveled-button h-9"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={resetBusy || newPassword.trim().length < 6}
+                onClick={async () => {
+                  setResetBusy(true);
+                  try {
+                    await changeUserPasswordFn({ data: { userId: userForPasswordChange.id, newPassword } });
+                    toast.success(`Password for ${userForPasswordChange.email} has been updated.`);
+                    setUserForPasswordChange(null);
+                    setNewPassword("");
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to update password");
+                  } finally {
+                    setResetBusy(false);
+                  }
+                }}
+                className="h-9 font-semibold shadow-inner hover:bg-primary/95"
+              >
+                Update Password
               </Button>
             </div>
           </Card>

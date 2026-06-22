@@ -574,3 +574,22 @@ export async function deleteUserFn(input: { data: { userId: string } }) {
 
   return { success: true };
 }
+
+export async function changeUserPasswordFn(input: { data: { userId: string; newPassword: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  if (!data.newPassword || data.newPassword.trim().length < 6) {
+    throw new Error("Password must be at least 6 characters long");
+  }
+  const db = await getDb();
+  const user = await db.collection("users").findOne({ _id: data.userId as any });
+  if (!user) throw new Error("User not found");
+
+  const hashedPassword = await hashPassword(data.newPassword.trim());
+  await db.collection("users").updateOne(
+    { _id: data.userId as any },
+    { $set: { password: hashedPassword } }
+  );
+
+  return { success: true };
+}
