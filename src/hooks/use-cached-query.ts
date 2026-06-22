@@ -15,9 +15,18 @@ export function useCachedQuery<T>(
   return useQuery({
     queryKey,
     queryFn: async () => {
-      const data = await queryFn();
-      writeQueryCache(queryKey as readonly unknown[], data);
-      return data;
+      try {
+        const data = await queryFn();
+        writeQueryCache(queryKey as readonly unknown[], data);
+        return data;
+      } catch (err) {
+        const cachedData = readQueryCache<T>(queryKey as readonly unknown[]);
+        if (cachedData !== undefined) {
+          console.warn("Network query failed, using offline cache fallback:", queryKey, err);
+          return cachedData;
+        }
+        throw err;
+      }
     },
     initialData: cached,
     initialDataUpdatedAt: cached ? Date.now() - 1000 : undefined,

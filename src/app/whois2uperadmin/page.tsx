@@ -482,160 +482,304 @@ export default function SuperAdminPage() {
                 No matching businesses found.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border/60 bg-muted/35 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      <th className="p-4">Business Detail</th>
-                      <th className="p-4">Owner & Email</th>
-                      <th className="p-4 text-center">Resources Logged</th>
-                      <th className="p-4">Registered On</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredBiz.map(b => {
-                      const isSuspended = b.status === "suspended";
-                      return (
-                        <tr key={b.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="p-4">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-foreground text-sm">{b.name}</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  ID: {b.id.slice(0, 8)}…
-                                </span>
-                                {isSuspended ? (
-                                  <span className="text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.2 rounded">
-                                    SUSPENDED
+              <>
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 bg-muted/35 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        <th className="p-4">Business Detail</th>
+                        <th className="p-4">Owner & Email</th>
+                        <th className="p-4 text-center">Resources Logged</th>
+                        <th className="p-4">Registered On</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {filteredBiz.map(b => {
+                        const isSuspended = b.status === "suspended";
+                        return (
+                          <tr key={b.id} className="hover:bg-muted/10 transition-colors">
+                            <td className="p-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-foreground text-sm">{b.name}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    ID: {b.id.slice(0, 8)}…
                                   </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
-                                    ACTIVE
-                                  </span>
+                                  {isSuspended ? (
+                                    <span className="text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.2 rounded">
+                                      SUSPENDED
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
+                                      ACTIVE
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-muted-foreground">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold text-foreground">{b.owner_email}</span>
+                                <span className="text-xs font-mono">Limit: {b.employee_limit} Staff</span>
+                                {b.owner_id && (
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span
+                                      className="text-[10px] text-muted-foreground hover:text-primary transition-all font-mono flex items-center gap-1 cursor-pointer"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(b.owner_id);
+                                        toast.success(`Owner ID copied: ${b.owner_id}`);
+                                      }}
+                                      title="Click to copy Owner User ID"
+                                    >
+                                      <Copy className="size-2.5" />
+                                      Owner ID: {b.owner_id.slice(0, 8)}…
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="text-[10px] text-primary hover:text-primary-foreground font-semibold flex items-center gap-0.5 bg-primary/15 hover:bg-primary px-1.5 py-0.5 rounded transition-all cursor-pointer"
+                                      onClick={async () => {
+                                        try {
+                                          await impersonateUserFn({ data: { userId: b.owner_id } });
+                                          toast.success(`Logging in as ${b.owner_email}...`);
+                                          window.location.href = "/dashboard";
+                                        } catch (err: any) {
+                                          toast.error(err.message || "Failed to login as owner");
+                                        }
+                                      }}
+                                      title="Login to this Owner's dashboard"
+                                    >
+                                      <LogIn className="size-2.5" />
+                                      Login As Owner
+                                    </button>
+                                  </div>
                                 )}
                               </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted-foreground">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold text-foreground">{b.owner_email}</span>
-                              <span className="text-xs font-mono">Limit: {b.employee_limit} Staff</span>
-                              {b.owner_id && (
-                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <span
-                                    className="text-[10px] text-muted-foreground hover:text-primary transition-all font-mono flex items-center gap-1 cursor-pointer"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(b.owner_id);
-                                      toast.success(`Owner ID copied: ${b.owner_id}`);
-                                    }}
-                                    title="Click to copy Owner User ID"
-                                  >
-                                    <Copy className="size-2.5" />
-                                    Owner ID: {b.owner_id.slice(0, 8)}…
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="text-[10px] text-primary hover:text-primary-foreground font-semibold flex items-center gap-0.5 bg-primary/15 hover:bg-primary px-1.5 py-0.5 rounded transition-all cursor-pointer"
-                                    onClick={async () => {
-                                      try {
-                                        await impersonateUserFn({ data: { userId: b.owner_id } });
-                                        toast.success(`Logging in as ${b.owner_email}...`);
-                                        window.location.href = "/dashboard";
-                                      } catch (err: any) {
-                                        toast.error(err.message || "Failed to login as owner");
-                                      }
-                                    }}
-                                    title="Login to this Owner's dashboard"
-                                  >
-                                    <LogIn className="size-2.5" />
-                                    Login As Owner
-                                  </button>
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex items-center justify-center gap-4 text-xs font-medium text-muted-foreground">
+                                <div className="flex flex-col">
+                                  <span className="text-foreground font-bold font-mono">{b.product_count ?? 0}</span>
+                                  <span>Products</span>
                                 </div>
+                                <div className="flex flex-col">
+                                  <span className="text-foreground font-bold font-mono">{b.sale_count ?? 0}</span>
+                                  <span>Sales</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-muted-foreground text-xs font-mono">
+                              {fmtDateTime(b.created_at)}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant={isSuspended ? "default" : "outline"}
+                                  className={`h-8 font-semibold beveled-button ${
+                                    isSuspended 
+                                      ? "bg-emerald-500 hover:bg-emerald-600 text-white" 
+                                      : "text-amber-500 hover:text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                                  }`}
+                                  onClick={async () => {
+                                    try {
+                                      await suspendBusinessFn({ data: { businessId: b.id, suspend: !isSuspended } });
+                                      toast.success(isSuspended ? `Reactivated "${b.name}"` : `Suspended "${b.name}"`);
+                                      qc.invalidateQueries({ queryKey: ["businesses-admin"] });
+                                    } catch (err: any) {
+                                      toast.error(err.message || "Operation failed");
+                                    }
+                                  }}
+                                >
+                                  {isSuspended ? (
+                                    <>
+                                      <CheckCircle className="size-3.5 mr-1" />
+                                      Activate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Ban className="size-3.5 mr-1" />
+                                      Suspend
+                                    </>
+                                  )}
+                                </Button>
+                                
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8 text-amber-500 hover:bg-amber-500/10"
+                                  onClick={() => {
+                                    setBizForReset({ id: b.id, name: b.name });
+                                    setResetType(null);
+                                    setConfirmResetText("");
+                                  }}
+                                  title="Reset sells, samity, or expenses"
+                                >
+                                  <RotateCcw className="size-3.5" />
+                                </Button>
+
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8 text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    setBizToDelete(b.id);
+                                    setDeleteConfirmText("");
+                                  }}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card List View */}
+                <div className="block md:hidden divide-y divide-border/40">
+                  {filteredBiz.map(b => {
+                    const isSuspended = b.status === "suspended";
+                    return (
+                      <div key={b.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <span className="font-bold text-foreground text-sm">{b.name}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                ID: {b.id.slice(0, 8)}…
+                              </span>
+                              {isSuspended ? (
+                                <span className="text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20 px-1.5 py-0.2 rounded">
+                                  SUSPENDED
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
+                                  ACTIVE
+                                </span>
                               )}
                             </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-4 text-xs font-medium text-muted-foreground">
-                              <div className="flex flex-col">
-                                <span className="text-foreground font-bold font-mono">{b.product_count ?? 0}</span>
-                                <span>Products</span>
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-foreground font-bold font-mono">{b.sale_count ?? 0}</span>
-                                <span>Sales</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted-foreground text-xs font-mono">
-                            {fmtDateTime(b.created_at)}
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex justify-end gap-1.5">
-                              <Button
-                                size="sm"
-                                variant={isSuspended ? "default" : "outline"}
-                                className={`h-8 font-semibold beveled-button ${
-                                  isSuspended 
-                                    ? "bg-emerald-500 hover:bg-emerald-600 text-white" 
-                                    : "text-amber-500 hover:text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                                }`}
-                                onClick={async () => {
-                                  try {
-                                    await suspendBusinessFn({ data: { businessId: b.id, suspend: !isSuspended } });
-                                    toast.success(isSuspended ? `Reactivated "${b.name}"` : `Suspended "${b.name}"`);
-                                    qc.invalidateQueries({ queryKey: ["businesses-admin"] });
-                                  } catch (err: any) {
-                                    toast.error(err.message || "Operation failed");
-                                  }
-                                }}
-                              >
-                                {isSuspended ? (
-                                  <>
-                                    <CheckCircle className="size-3.5 mr-1" />
-                                    Activate
-                                  </>
-                                ) : (
-                                  <>
-                                    <Ban className="size-3.5 mr-1" />
-                                    Suspend
-                                  </>
-                                )}
-                              </Button>
-                              
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 text-amber-500 hover:bg-amber-500/10"
-                                onClick={() => {
-                                  setBizForReset({ id: b.id, name: b.name });
-                                  setResetType(null);
-                                  setConfirmResetText("");
-                                }}
-                                title="Reset sells, samity, or expenses"
-                              >
-                                <RotateCcw className="size-3.5" />
-                              </Button>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                            {fmtDateTime(b.created_at).split(" ")[0]}
+                          </span>
+                        </div>
 
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 text-destructive hover:bg-destructive/10"
-                                onClick={() => {
-                                  setBizToDelete(b.id);
-                                  setDeleteConfirmText("");
-                                }}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <div className="flex justify-between items-center">
+                            <span>Owner:</span>
+                            <span className="font-semibold text-foreground text-right truncate max-w-[200px]">
+                              {b.owner_email}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Staff Limit:</span>
+                            <span className="font-mono text-foreground">{b.employee_limit} Staff</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Resources:</span>
+                            <span className="text-foreground">
+                              <strong className="font-mono">{b.product_count ?? 0}</strong> products · <strong className="font-mono">{b.sale_count ?? 0}</strong> sales
+                            </span>
+                          </div>
+                        </div>
+
+                        {b.owner_id && (
+                          <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                            <span
+                              className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded border border-border/80 hover:text-primary transition-all font-mono flex items-center gap-1 cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(b.owner_id);
+                                toast.success(`Owner ID copied: ${b.owner_id}`);
+                              }}
+                            >
+                              <Copy className="size-2.5" />
+                              Copy Owner ID
+                            </span>
+                            <button
+                              type="button"
+                              className="text-[10px] text-primary bg-primary/15 hover:bg-primary hover:text-primary-foreground font-semibold flex items-center gap-1 px-2 py-0.5 rounded transition-all cursor-pointer"
+                              onClick={async () => {
+                                try {
+                                  await impersonateUserFn({ data: { userId: b.owner_id } });
+                                  toast.success(`Logging in as ${b.owner_email}...`);
+                                  window.location.href = "/dashboard";
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to login as owner");
+                                }
+                              }}
+                            >
+                              <LogIn className="size-2.5" />
+                              Login As Owner
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-1.5 pt-2 border-t border-border/20">
+                          <Button
+                            size="sm"
+                            variant={isSuspended ? "default" : "outline"}
+                            className={`h-8 text-xs font-semibold beveled-button ${
+                              isSuspended 
+                                ? "bg-emerald-500 hover:bg-emerald-600 text-white" 
+                                : "text-amber-500 hover:text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                            }`}
+                            onClick={async () => {
+                              try {
+                                await suspendBusinessFn({ data: { businessId: b.id, suspend: !isSuspended } });
+                                toast.success(isSuspended ? `Reactivated "${b.name}"` : `Suspended "${b.name}"`);
+                                qc.invalidateQueries({ queryKey: ["businesses-admin"] });
+                              } catch (err: any) {
+                                toast.error(err.message || "Operation failed");
+                              }
+                            }}
+                          >
+                            {isSuspended ? (
+                              <>
+                                <CheckCircle className="size-3.5 mr-1" />
+                                Activate
+                              </>
+                            ) : (
+                              <>
+                                <Ban className="size-3.5 mr-1" />
+                                Suspend
+                              </>
+                            )}
+                          </Button>
+                          
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-amber-500 hover:bg-amber-500/10 border border-border/40"
+                            onClick={() => {
+                              setBizForReset({ id: b.id, name: b.name });
+                              setResetType(null);
+                              setConfirmResetText("");
+                            }}
+                          >
+                            <RotateCcw className="size-3.5" />
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-destructive hover:bg-destructive/10 border border-border/40"
+                            onClick={() => {
+                              setBizToDelete(b.id);
+                              setDeleteConfirmText("");
+                            }}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </Card>
         )}
@@ -653,121 +797,235 @@ export default function SuperAdminPage() {
                 No matching users found.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border/60 bg-muted/35 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      <th className="p-4">User Detail</th>
-                      <th className="p-4">Role & Business</th>
-                      <th className="p-4">Registered On</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredUsers.map(u => {
-                      const isOwner = u.role === "owner";
-                      const isActivated = u.activated;
-                      return (
-                        <tr key={u.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="p-4">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-foreground text-sm">
-                                {u.full_name || "Unnamed User"}
-                              </span>
-                              <span className="text-xs text-muted-foreground">{u.email}</span>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex flex-col gap-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                                  isOwner 
-                                    ? "bg-purple-500/10 text-purple-500 border-purple-500/20" 
-                                    : "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                                }`}>
-                                  {isOwner ? "Owner" : "Employee"}
+              <>
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 bg-muted/35 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        <th className="p-4">User Detail</th>
+                        <th className="p-4">Role & Business</th>
+                        <th className="p-4">Registered On</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {filteredUsers.map(u => {
+                        const isOwner = u.role === "owner";
+                        const isActivated = u.activated;
+                        return (
+                          <tr key={u.id} className="hover:bg-muted/10 transition-colors">
+                            <td className="p-4">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-foreground text-sm">
+                                  {u.full_name || "Unnamed User"}
                                 </span>
-                                {isActivated ? (
-                                  <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
-                                    Activated
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.2 rounded">
-                                    Pending License
-                                  </span>
-                                )}
+                                <span className="text-xs text-muted-foreground">{u.email}</span>
                               </div>
-                              <span className="text-xs text-muted-foreground">{u.business_name}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted-foreground text-xs font-mono">
-                            {u.created_at ? fmtDateTime(u.created_at) : "N/A"}
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <span
-                                className="inline-flex items-center gap-1.5 text-xs font-mono bg-muted/65 text-foreground hover:text-primary border border-border/80 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-muted/80 transition-all font-semibold"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(u.id);
-                                  toast.success(`User ID copied: ${u.id}`);
-                                }}
-                                title="Click to copy User ID"
-                              >
-                                <Copy className="size-3.5 text-muted-foreground/80" />
-                                <span className="select-all">{u.id.slice(0, 8)}…</span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                                    isOwner 
+                                      ? "bg-purple-500/10 text-purple-500 border-purple-500/20" 
+                                      : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                  }`}>
+                                    {isOwner ? "Owner" : "Employee"}
+                                  </span>
+                                  {isActivated ? (
+                                    <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
+                                      Activated
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.2 rounded">
+                                      Pending License
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">{u.business_name}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-muted-foreground text-xs font-mono">
+                              {u.created_at ? fmtDateTime(u.created_at) : "N/A"}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-xs font-mono bg-muted/65 text-foreground hover:text-primary border border-border/80 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-muted/80 transition-all font-semibold"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(u.id);
+                                    toast.success(`User ID copied: ${u.id}`);
+                                  }}
+                                  title="Click to copy User ID"
+                                >
+                                  <Copy className="size-3.5 text-muted-foreground/80" />
+                                  <span className="select-all">{u.id.slice(0, 8)}…</span>
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 beveled-button text-xs font-semibold cursor-pointer"
+                                  onClick={async () => {
+                                    try {
+                                      await impersonateUserFn({ data: { userId: u.id } });
+                                      toast.success(`Logging in as ${u.email}...`);
+                                      window.location.href = "/dashboard";
+                                    } catch (err: any) {
+                                      toast.error(err.message || "Failed to log in");
+                                    }
+                                  }}
+                                  title="Log in as this user"
+                                >
+                                  <LogIn className="size-3.5 mr-1" />
+                                  Login As
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 beveled-button text-xs font-semibold cursor-pointer"
+                                  onClick={() => {
+                                    setUserForPasswordChange({ id: u.id, email: u.email });
+                                    setNewPassword("");
+                                  }}
+                                  title="Reset user password"
+                                >
+                                  <Key className="size-3.5 mr-1" />
+                                  Reset PW
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-8 text-xs font-semibold cursor-pointer bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive hover:text-white"
+                                  onClick={() => {
+                                    setUserToDelete({ id: u.id, full_name: u.full_name || u.email, email: u.email });
+                                    setUserDeleteConfirmText("");
+                                  }}
+                                  title="Delete this user"
+                                >
+                                  <Trash2 className="size-3.5 mr-1" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card List View */}
+                <div className="block md:hidden divide-y divide-border/40">
+                  {filteredUsers.map(u => {
+                    const isOwner = u.role === "owner";
+                    const isActivated = u.activated;
+                    return (
+                      <div key={u.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-foreground text-sm">
+                              {u.full_name || "Unnamed User"}
+                            </span>
+                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                            {u.created_at ? fmtDateTime(u.created_at).split(" ")[0] : "N/A"}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <div className="flex justify-between items-center">
+                            <span>Role:</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                              isOwner 
+                                ? "bg-purple-500/10 text-purple-500 border-purple-500/20" 
+                                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                            }`}>
+                              {isOwner ? "Owner" : "Employee"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Status:</span>
+                            {isActivated ? (
+                              <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.2 rounded">
+                                Activated
                               </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 beveled-button text-xs font-semibold cursor-pointer"
-                                onClick={async () => {
-                                  try {
-                                    await impersonateUserFn({ data: { userId: u.id } });
-                                    toast.success(`Logging in as ${u.email}...`);
-                                    window.location.href = "/dashboard";
-                                  } catch (err: any) {
-                                    toast.error(err.message || "Failed to log in");
-                                  }
-                                }}
-                                title="Log in as this user"
-                              >
-                                <LogIn className="size-3.5 mr-1" />
-                                Login As
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 beveled-button text-xs font-semibold cursor-pointer"
-                                onClick={() => {
-                                  setUserForPasswordChange({ id: u.id, email: u.email });
-                                  setNewPassword("");
-                                }}
-                                title="Reset user password"
-                              >
-                                <Key className="size-3.5 mr-1" />
-                                Reset PW
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="h-8 text-xs font-semibold cursor-pointer bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive hover:text-white"
-                                onClick={() => {
-                                  setUserToDelete({ id: u.id, full_name: u.full_name || u.email, email: u.email });
-                                  setUserDeleteConfirmText("");
-                                }}
-                                title="Delete this user"
-                              >
-                                <Trash2 className="size-3.5 mr-1" />
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            ) : (
+                              <span className="text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.2 rounded">
+                                Pending License
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Business:</span>
+                            <span className="font-semibold text-foreground truncate max-w-[200px]">{u.business_name}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                          <span
+                            className="text-[10px] text-muted-foreground bg-muted/40 px-2 py-0.5 rounded border border-border/80 hover:text-primary transition-all font-mono flex items-center gap-1 cursor-pointer font-semibold"
+                            onClick={() => {
+                              navigator.clipboard.writeText(u.id);
+                              toast.success(`User ID copied: ${u.id}`);
+                            }}
+                          >
+                            <Copy className="size-2.5" />
+                            ID: {u.id.slice(0, 8)}…
+                          </span>
+                        </div>
+
+                        <div className="flex justify-end gap-1.5 pt-2 border-t border-border/20 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-semibold beveled-button cursor-pointer flex-1 sm:flex-initial justify-center"
+                            onClick={async () => {
+                              try {
+                                await impersonateUserFn({ data: { userId: u.id } });
+                                toast.success(`Logging in as ${u.email}...`);
+                                window.location.href = "/dashboard";
+                              } catch (err: any) {
+                                toast.error(err.message || "Failed to log in");
+                              }
+                            }}
+                          >
+                            <LogIn className="size-3.5 mr-1" />
+                            Login
+                          </Button>
+                          
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-semibold beveled-button cursor-pointer flex-1 sm:flex-initial justify-center"
+                            onClick={() => {
+                              setUserForPasswordChange({ id: u.id, email: u.email });
+                              setNewPassword("");
+                            }}
+                          >
+                            <Key className="size-3.5 mr-1" />
+                            Reset PW
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 text-xs font-semibold beveled-button cursor-pointer flex-1 sm:flex-initial justify-center bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive hover:text-white"
+                            onClick={() => {
+                              setUserToDelete({ id: u.id, full_name: u.full_name || u.email, email: u.email });
+                              setUserDeleteConfirmText("");
+                            }}
+                          >
+                            <Trash2 className="size-3.5 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </Card>
         )}

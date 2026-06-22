@@ -250,7 +250,7 @@ export default function AuthPage() {
       {/* Left panel: Minimalist natural fashion illustration with soft linen backdrop */}
       <div 
         className="hidden md:flex md:col-span-6 lg:col-span-7 relative flex-col justify-between p-12 text-white select-none overflow-hidden bg-cover bg-center"
-        style={{ backgroundImage: `linear-gradient(rgba(9, 9, 11, 0.7), rgba(9, 9, 11, 0.75)), url('https://images.unsplash.com/photo-1459244852163-43b23b16cbd5?q=80&w=1200&auto=format&fit=crop')` }}
+        style={{ backgroundImage: `linear-gradient(rgba(9, 9, 11, 0.7), rgba(9, 9, 11, 0.75)), url('/login_illustration.jpg')` }}
       >
         <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
