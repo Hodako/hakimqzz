@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v1";
+const CACHE_NAME = "dreamfashion-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/manifest.json",
@@ -45,9 +45,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
+  const isHashedAsset = url.pathname.includes("/_next/static/");
+
+  if (isHashedAsset) {
+    // Cache-First strategy for Next.js hashed static assets (JS, CSS, fonts)
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+  } else {
+    // Network-First strategy for pages, images, logo, manifest
+    event.respondWith(
+      fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseToCache = networkResponse.clone();
@@ -58,14 +77,12 @@ self.addEventListener("fetch", (event) => {
           return networkResponse;
         })
         .catch((err) => {
-          // If offline and request fails, serve cache
-          if (cachedResponse) return cachedResponse;
-          throw err;
-          return new Response("Offline", { status: 503, statusText: "Offline" });
-        });
-
-      // Serve cached immediately if available, otherwise fetch
-      return cachedResponse || fetchPromise;
-    })
-  );
+          // If offline and network request fails, fall back to cached version
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            throw err;
+          });
+        })
+    );
+  }
 });
