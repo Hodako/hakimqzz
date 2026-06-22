@@ -718,7 +718,7 @@ function ProductCard({
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
-    }, 3000);
+    }, 1500);
   };
 
   const handleEnd = () => {
@@ -877,7 +877,7 @@ function ProductCard({
             )}
             {longPressProgress && (
               <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                <div className="bg-black/50 rounded-full px-2 py-1 text-white text-[9px] font-semibold animate-pulse">Hold 3s...</div>
+                <div className="bg-black/50 rounded-full px-2 py-1 text-white text-[9px] font-semibold animate-pulse">Hold...</div>
               </div>
             )}
           </div>
