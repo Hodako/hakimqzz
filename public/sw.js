@@ -1,9 +1,10 @@
-const CACHE_NAME = "dreamfashion-v2";
+const CACHE_NAME = "dreamfashion-v3";
 const ASSETS_TO_CACHE = [
   "/",
   "/manifest.json",
   "/logo.png",
   "/apple-touch-icon.png",
+  "/icon-512.png",
   "/login_illustration.jpg"
 ];
 
