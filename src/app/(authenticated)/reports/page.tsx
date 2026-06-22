@@ -28,6 +28,84 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { playTapSound } from "@/lib/audio";
 
+interface GroupedSale {
+  id: string;
+  isGroup: boolean;
+  cart_id?: string | null;
+  product_name: string;
+  qty: number;
+  sell_price: number;
+  profit: number;
+  due_amount: number;
+  paid_amount: number;
+  type: "cash" | "credit" | "online";
+  created_at: string;
+  parties?: { name: string } | null;
+  items: any[];
+}
+
+function groupSales(sales: any[]): GroupedSale[] {
+  const grouped: GroupedSale[] = [];
+  const cartGroups: Record<string, any[]> = {};
+
+  sales.forEach(s => {
+    if (s.cart_id) {
+      if (!cartGroups[s.cart_id]) {
+        cartGroups[s.cart_id] = [];
+      }
+      cartGroups[s.cart_id].push(s);
+    } else {
+      grouped.push({
+        id: s.id,
+        isGroup: false,
+        cart_id: null,
+        product_name: s.product_name,
+        qty: s.qty,
+        sell_price: Number(s.sell_price) * s.qty,
+        profit: s.profit,
+        due_amount: s.due_amount,
+        paid_amount: s.paid_amount,
+        type: s.type,
+        created_at: s.created_at,
+        parties: s.parties,
+        items: [s]
+      });
+    }
+  });
+
+  Object.entries(cartGroups).forEach(([cartId, items]) => {
+    items.sort((a, b) => a.product_name.localeCompare(b.product_name));
+    
+    const firstItem = items[0];
+    const totalQty = items.reduce((sum, x) => sum + x.qty, 0);
+    const totalSellPrice = items.reduce((sum, x) => sum + Number(x.sell_price) * x.qty, 0);
+    const totalProfit = items.reduce((sum, x) => sum + x.profit, 0);
+    const totalDue = items.reduce((sum, x) => sum + x.due_amount, 0);
+    const totalPaid = items.reduce((sum, x) => sum + x.paid_amount, 0);
+    
+    const names = items.map(x => `${x.product_name} (×${x.qty})`).join(", ");
+
+    grouped.push({
+      id: firstItem.id,
+      isGroup: true,
+      cart_id: cartId,
+      product_name: names,
+      qty: totalQty,
+      sell_price: totalSellPrice,
+      profit: totalProfit,
+      due_amount: totalDue,
+      paid_amount: totalPaid,
+      type: firstItem.type,
+      created_at: firstItem.created_at,
+      parties: firstItem.parties,
+      items: items
+    });
+  });
+
+  grouped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return grouped;
+}
+
 export default function ReportsGeneratorPage() {
   const { lang, t } = useT();
   const isMobile = useIsMobile();
@@ -85,6 +163,9 @@ export default function ReportsGeneratorPage() {
 
   // Filtered datasets
   const filteredSales = useMemo(() => (salesQuery.data ?? []).filter(s => !s.returned && inDateRange(s.created_at)), [salesQuery.data, from, to]);
+  const groupedSalesList = useMemo(() => {
+    return groupSales(filteredSales);
+  }, [filteredSales]);
   const filteredPurchases = useMemo(() => (purchasesQuery.data ?? []).filter(p => inDateRange(p.created_at)), [purchasesQuery.data, from, to]);
   const filteredExpenses = useMemo(() => (expensesQuery.data ?? []).filter(e => inDateRange(e.created_at)), [expensesQuery.data, from, to]);
   const filteredCashbox = useMemo(() => (cashboxQuery.data ?? []).filter(c => inDateRange(c.created_at)), [cashboxQuery.data, from, to]);
@@ -448,12 +529,28 @@ export default function ReportsGeneratorPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {filteredSales.map(s => (
+                    {groupedSalesList.map(s => (
                       <tr key={s.id}>
                         <td className="p-2.5 whitespace-nowrap">{fmtDateTime(s.created_at)}</td>
-                        <td className="p-2.5 font-medium">{s.product_name}</td>
+                        <td className="p-2.5 font-medium">
+                          {s.isGroup ? (
+                            <div className="space-y-0.5">
+                              <div className="font-semibold text-foreground flex items-center gap-1">
+                                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold px-1 rounded border border-emerald-500/20">
+                                  {lang === "bn" ? "কার্ট" : "Cart"}
+                                </span>
+                                <span>{s.items[0].product_name} (+{s.items.length - 1} {lang === "bn" ? "টি পণ্য" : "items"})</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground font-mono leading-tight">
+                                {s.items.map(item => `${item.product_name} (×${item.qty})`).join(", ")}
+                              </div>
+                            </div>
+                          ) : (
+                            s.product_name
+                          )}
+                        </td>
                         <td className="p-2.5 text-center">{s.qty}</td>
-                        <td className="p-2.5 text-right font-serif">{fmtMoney(Number(s.sell_price) * s.qty)}</td>
+                        <td className="p-2.5 text-right font-serif">{fmtMoney(s.sell_price)}</td>
                         <td className="p-2.5 text-center capitalize">{s.type}</td>
                         <td className="p-2.5 text-right text-rose-600 font-bold font-serif">{s.due_amount > 0 ? fmtMoney(s.due_amount) : "—"}</td>
                         <td className="p-2.5 text-right text-emerald-600 font-bold font-serif">{fmtMoney(s.profit)}</td>
@@ -845,12 +942,25 @@ export default function ReportsGeneratorPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {filteredSales.map(s => (
+                  {groupedSalesList.map(s => (
                     <tr key={s.id} className="print-avoid-break">
                       <td className="p-2 border-r border-zinc-200 whitespace-nowrap">{fmtDateTime(s.created_at)}</td>
-                      <td className="p-2 border-r border-zinc-200 font-medium">{s.product_name}</td>
+                      <td className="p-2 border-r border-zinc-200 font-medium">
+                        {s.isGroup ? (
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-zinc-900">
+                              [{lang === "bn" ? "কার্ট" : "Cart"}] {s.items[0].product_name} (+{s.items.length - 1} {lang === "bn" ? "টি পণ্য" : "items"})
+                            </div>
+                            <div className="text-[8px] text-zinc-500 font-mono leading-tight">
+                              {s.items.map(item => `${item.product_name} (×${item.qty})`).join(", ")}
+                            </div>
+                          </div>
+                        ) : (
+                          s.product_name
+                        )}
+                      </td>
                       <td className="p-2 border-r border-zinc-200 text-center">{s.qty}</td>
-                      <td className="p-2 border-r border-zinc-200 text-right font-serif">{fmtMoney(Number(s.sell_price) * s.qty)}</td>
+                      <td className="p-2 border-r border-zinc-200 text-right font-serif">{fmtMoney(s.sell_price)}</td>
                       <td className="p-2 border-r border-zinc-200 text-center capitalize">{s.type}</td>
                       <td className="p-2 border-r border-zinc-200 text-right text-rose-600 font-bold font-serif">{s.due_amount > 0 ? fmtMoney(s.due_amount) : "—"}</td>
                       <td className="p-2 text-right text-emerald-600 font-bold font-serif">{fmtMoney(s.profit)}</td>

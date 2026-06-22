@@ -617,3 +617,45 @@ export async function changeSuperAdminPasswordFn(input: { data: { currentPasswor
 
   return { success: true };
 }
+
+export async function resetSalesFn(input: { data: { businessId: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  const db = await getDb();
+  const biz = await db.collection("businesses").findOne({ _id: data.businessId as any });
+  if (!biz) throw new Error("Business not found");
+  const ownerId = biz.owner_id;
+
+  await db.collection("sales").deleteMany({ owner_id: ownerId });
+  await db.collection("returns").deleteMany({ owner_id: ownerId });
+  await db.collection("cashbox_entries").deleteMany({ owner_id: ownerId, kind: "sale" });
+
+  return { success: true };
+}
+
+export async function resetSomitiFn(input: { data: { businessId: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  const db = await getDb();
+  const biz = await db.collection("businesses").findOne({ _id: data.businessId as any });
+  if (!biz) throw new Error("Business not found");
+  const ownerId = biz.owner_id;
+
+  await db.collection("somiti_entries").deleteMany({ owner_id: ownerId });
+
+  return { success: true };
+}
+
+export async function resetExpensesFn(input: { data: { businessId: string } }) {
+  const { data } = input;
+  await requireSuperAdminSession();
+  const db = await getDb();
+  const biz = await db.collection("businesses").findOne({ _id: data.businessId as any });
+  if (!biz) throw new Error("Business not found");
+  const ownerId = biz.owner_id;
+
+  await db.collection("expenses").deleteMany({ owner_id: ownerId });
+  await db.collection("cashbox_entries").deleteMany({ owner_id: ownerId, kind: "expense" });
+
+  return { success: true };
+}

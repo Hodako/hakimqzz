@@ -24,9 +24,13 @@ import {
   deleteUserFn,
   changeUserPasswordFn,
   changeSuperAdminPasswordFn,
+  resetSalesFn,
+  resetSomitiFn,
+  resetExpensesFn,
 } from "@/lib/rpc-admin";
 import {
   Trash2,
+  RotateCcw,
   Activity,
   Users,
   Store,
@@ -71,6 +75,11 @@ export default function SuperAdminPage() {
   const [userForPasswordChange, setUserForPasswordChange] = useState<{ id: string; email: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+
+  // Reset Business data modal state
+  const [bizForReset, setBizForReset] = useState<{ id: string; name: string } | null>(null);
+  const [resetType, setResetType] = useState<"sales" | "somiti" | "expenses" | null>(null);
+  const [confirmResetText, setConfirmResetText] = useState("");
 
   const stats = useQuery({
     queryKey: ["platform-stats"],
@@ -593,6 +602,20 @@ export default function SuperAdminPage() {
                                 )}
                               </Button>
                               
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 text-amber-500 hover:bg-amber-500/10"
+                                onClick={() => {
+                                  setBizForReset({ id: b.id, name: b.name });
+                                  setResetType(null);
+                                  setConfirmResetText("");
+                                }}
+                                title="Reset sells, samity, or expenses"
+                              >
+                                <RotateCcw className="size-3.5" />
+                              </Button>
+
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -1179,6 +1202,125 @@ export default function SuperAdminPage() {
                 className="h-9 font-semibold shadow-inner hover:bg-primary/95"
               >
                 Update Password
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════ BUSINESS DATA RESET MODAL ═══════════ */}
+      {bizForReset && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setBizForReset(null)} />
+          <Card className="relative z-10 glass-card w-full max-w-md p-6 space-y-4 border-amber-500/20 shadow-2xl bg-card animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-500">
+                <RotateCcw className="size-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg text-foreground tracking-tight">Reset Business Data</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Clear records for <strong className="text-foreground font-bold">"{bizForReset.name}"</strong>.</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1 text-xs">
+              <Label className="font-semibold text-foreground">Select Data Type to Reset:</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setResetType("sales"); setConfirmResetText(""); }}
+                  className={`p-3 rounded-xl border text-center font-bold transition-all text-xs cursor-pointer ${
+                    resetType === "sales"
+                      ? "bg-amber-500/10 border-amber-500 text-amber-500 shadow-sm"
+                      : "bg-muted/10 border-border/40 hover:bg-muted/30 text-muted-foreground"
+                  }`}
+                >
+                  Sells (সিলস)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setResetType("somiti"); setConfirmResetText(""); }}
+                  className={`p-3 rounded-xl border text-center font-bold transition-all text-xs cursor-pointer ${
+                    resetType === "somiti"
+                      ? "bg-amber-500/10 border-amber-500 text-amber-500 shadow-sm"
+                      : "bg-muted/10 border-border/40 hover:bg-muted/30 text-muted-foreground"
+                  }`}
+                >
+                  Samity (সমিতি)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setResetType("expenses"); setConfirmResetText(""); }}
+                  className={`p-3 rounded-xl border text-center font-bold transition-all text-xs cursor-pointer ${
+                    resetType === "expenses"
+                      ? "bg-amber-500/10 border-amber-500 text-amber-500 shadow-sm"
+                      : "bg-muted/10 border-border/40 hover:bg-muted/30 text-muted-foreground"
+                  }`}
+                >
+                  Expenses (খরচ)
+                </button>
+              </div>
+            </div>
+
+            {resetType && (
+              <div className="space-y-3 pt-2 text-xs border-t border-border/40 animate-in fade-in duration-200">
+                <div className="p-3 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg text-xs leading-relaxed">
+                  <strong>WARNING:</strong> This action is completely permanent and cannot be undone. All database records of this type will be deleted instantly.
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-foreground">
+                    Type <code className="font-mono font-bold text-destructive select-all bg-muted px-1 py-0.5 rounded border border-border/80 text-xs">RESET</code> to confirm:
+                  </Label>
+                  <Input
+                    type="text"
+                    className="beveled-card bg-muted/20"
+                    placeholder="Type RESET"
+                    value={confirmResetText}
+                    onChange={e => setConfirmResetText(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2.5 justify-end pt-2 text-xs border-t border-border/40">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBizForReset(null)}
+                className="beveled-button h-9"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy || !resetType || confirmResetText !== "RESET"}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    if (resetType === "sales") {
+                      await resetSalesFn({ data: { businessId: bizForReset.id } });
+                      toast.success(`Sells data for "${bizForReset.name}" reset successfully.`);
+                    } else if (resetType === "somiti") {
+                      await resetSomitiFn({ data: { businessId: bizForReset.id } });
+                      toast.success(`Samity data for "${bizForReset.name}" reset successfully.`);
+                    } else if (resetType === "expenses") {
+                      await resetExpensesFn({ data: { businessId: bizForReset.id } });
+                      toast.success(`Expenses data for "${bizForReset.name}" reset successfully.`);
+                    }
+                    qc.invalidateQueries({ queryKey: ["businesses-admin"] });
+                    qc.invalidateQueries({ queryKey: ["platform-stats"] });
+                    setBizForReset(null);
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to reset data");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                className="h-9 font-semibold shadow-inner"
+              >
+                Execute Reset
               </Button>
             </div>
           </Card>

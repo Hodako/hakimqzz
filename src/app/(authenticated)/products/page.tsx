@@ -73,6 +73,7 @@ export default function ProductsPage() {
       const due = Math.max(total - paidNum, 0);
       const duePerItem = sellType === "credit" ? due / sellCart.length : 0;
       const paidPerItem = sellType === "credit" ? paidNum / sellCart.length : 0;
+      const cartId = crypto.randomUUID();
       for (const item of sellCart) {
         const qtyNum = item.qty;
         const sellPrice = item.sellPrice;
@@ -90,6 +91,7 @@ export default function ProductsPage() {
             party_id: sellType === "credit" ? sellPartyId : null,
             paid_amount: sellType === "credit" ? paidPerItem : lineSell,
             due_amount: sellType === "credit" ? duePerItem : 0,
+            cart_id: cartId,
           }
         });
       }
@@ -500,7 +502,7 @@ export default function ProductsPage() {
         <Card className="p-6 text-center text-xs text-muted-foreground">{t("no_products")}</Card>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5 pt-1">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5 pt-1">
         {productsToShow.map(p => {
           const isLowStock = p.stock <= (p.min_stock ?? 5);
           return (
@@ -632,37 +634,37 @@ function ProductCard({
     >
       <div>
         <div className="relative rounded overflow-hidden">
-          <ProductImage path={p.image_url} className="w-full aspect-[4/3] sm:aspect-square object-cover max-h-24 sm:max-h-none" />
+          <ProductImage path={p.image_url} className="w-full aspect-square object-cover" />
           {!p.archived && isLowStock && (
             <div className="absolute top-1 right-1 bg-destructive text-destructive-foreground p-0.5 rounded-full shadow" title={t("critical_stock")}>
               <AlertCircle className="size-3" />
             </div>
           )}
           {p.category && (
-            <span className="absolute bottom-1 left-1 bg-black/60 text-[7px] text-white px-1 py-0.2 rounded font-medium truncate max-w-[80px]">
+            <span className="absolute bottom-1 left-1 bg-black/60 text-[7px] sm:text-[8px] text-white px-1 py-0.2 rounded font-medium truncate max-w-[80px]">
               {p.category}
             </span>
           )}
         </div>
         <div className="p-1 space-y-0.5">
-          <div className="font-semibold text-[9px] sm:text-xs truncate leading-tight" title={p.name}>{p.name}</div>
+          <div className="font-semibold text-[10px] sm:text-xs truncate leading-tight text-foreground" title={p.name}>{p.name}</div>
           
           {/* Custom Attributes Badges */}
           {p.attributes && Object.keys(p.attributes).length > 0 && (
             <div className="flex flex-wrap gap-0.5 pt-0.5">
               {Object.entries(p.attributes).map(([key, val]) => (
-                <span key={key} className="bg-secondary/70 text-[7px] px-1 py-0.2 rounded text-secondary-foreground truncate max-w-[80px]" title={`${key}: ${val}`}>
+                <span key={key} className="bg-secondary/70 text-[8px] px-1 py-0.2 rounded text-secondary-foreground truncate max-w-[80px]" title={`${key}: ${val}`}>
                   {val}
                 </span>
               ))}
             </div>
           )}
 
-          <div className="flex justify-between text-[8px] sm:text-[10px] pt-1">
+          <div className="flex justify-between text-[9px] sm:text-[10px] pt-1">
             <span className="text-muted-foreground">{t("sell_price")}</span>
             <span className="font-bold text-indigo-600 dark:text-indigo-400 font-serif">{p.sell_price > 0 ? fmtMoney(p.sell_price) : "—"}</span>
           </div>
-          <div className="flex justify-between text-[8px] sm:text-[10px]">
+          <div className="flex justify-between text-[9px] sm:text-[10px]">
             <span className="text-muted-foreground">{t("stock")}</span>
             <span className={isLowStock ? "text-rose-600 dark:text-rose-400 font-bold" : "text-emerald-600 dark:text-emerald-400 font-bold"}>{p.stock}</span>
           </div>
@@ -674,7 +676,7 @@ function ProductCard({
           <>
             <Button
               size="sm"
-              className="h-6 text-[8px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+              className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
               disabled={p.stock <= 0}
               onClick={(e) => {
                 e.stopPropagation();
@@ -692,18 +694,18 @@ function ProductCard({
               <DropdownMenuContent align="end" className="w-32">
                 <DropdownMenuItem
                   onClick={() => onDirectSell()}
-                  className="text-xs"
+                  className="text-xs font-semibold cursor-pointer"
                   disabled={p.stock <= 0}
                 >
                   {t("sell")} (Direct)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit()} className="text-xs">
+                <DropdownMenuItem onClick={() => onEdit()} className="text-xs font-semibold cursor-pointer">
                   <Pencil className="size-3 mr-1.5" /> {t("edit")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onArchive()} className="text-xs">
+                <DropdownMenuItem onClick={() => onArchive()} className="text-xs font-semibold cursor-pointer">
                   <Archive className="size-3 mr-1.5" /> {t("archive")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive">
+                <DropdownMenuItem onClick={() => onDelete()} className="text-xs text-destructive font-semibold cursor-pointer">
                   <Trash2 className="size-3 mr-1.5" /> {t("delete")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -711,7 +713,7 @@ function ProductCard({
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" className="h-6 text-[8px] flex-1" onClick={() => onRestore()}>{t("restore")}</Button>
+            <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold" onClick={() => onRestore()}>{t("restore")}</Button>
             <Button size="sm" variant="ghost" className="size-6 text-destructive shrink-0" onClick={() => onDelete()}>
               <Trash2 className="size-3" />
             </Button>

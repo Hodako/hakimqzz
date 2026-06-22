@@ -1,8 +1,7 @@
 "use client";
 
-
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,14 +17,90 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
-import { RotateCcw, Search, Trash2, Pencil } from "lucide-react";
+import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn } from "@/lib/rpc";
 
+interface GroupedSale {
+  id: string;
+  isGroup: boolean;
+  cart_id?: string | null;
+  product_name: string;
+  qty: number;
+  sell_price: number;
+  profit: number;
+  due_amount: number;
+  paid_amount: number;
+  type: "cash" | "credit" | "online";
+  created_at: string;
+  parties?: { name: string } | null;
+  items: Sale[];
+}
 
+function groupSales(sales: Sale[]): GroupedSale[] {
+  const grouped: GroupedSale[] = [];
+  const cartGroups: Record<string, Sale[]> = {};
+
+  sales.forEach(s => {
+    if (s.cart_id) {
+      if (!cartGroups[s.cart_id]) {
+        cartGroups[s.cart_id] = [];
+      }
+      cartGroups[s.cart_id].push(s);
+    } else {
+      grouped.push({
+        id: s.id,
+        isGroup: false,
+        cart_id: null,
+        product_name: s.product_name,
+        qty: s.qty,
+        sell_price: Number(s.sell_price) * s.qty,
+        profit: s.profit,
+        due_amount: s.due_amount,
+        paid_amount: s.paid_amount,
+        type: s.type,
+        created_at: s.created_at,
+        parties: s.parties,
+        items: [s]
+      });
+    }
+  });
+
+  Object.entries(cartGroups).forEach(([cartId, items]) => {
+    items.sort((a, b) => a.product_name.localeCompare(b.product_name));
+    
+    const firstItem = items[0];
+    const totalQty = items.reduce((sum, x) => sum + x.qty, 0);
+    const totalSellPrice = items.reduce((sum, x) => sum + Number(x.sell_price) * x.qty, 0);
+    const totalProfit = items.reduce((sum, x) => sum + x.profit, 0);
+    const totalDue = items.reduce((sum, x) => sum + x.due_amount, 0);
+    const totalPaid = items.reduce((sum, x) => sum + x.paid_amount, 0);
+    
+    const names = items.map(x => `${x.product_name} (×${x.qty})`).join(", ");
+
+    grouped.push({
+      id: firstItem.id,
+      isGroup: true,
+      cart_id: cartId,
+      product_name: names,
+      qty: totalQty,
+      sell_price: totalSellPrice,
+      profit: totalProfit,
+      due_amount: totalDue,
+      paid_amount: totalPaid,
+      type: firstItem.type,
+      created_at: firstItem.created_at,
+      parties: firstItem.parties,
+      items: items
+    });
+  });
+
+  grouped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return grouped;
+}
 
 export default function SalesPage() {
-  const { t } = useT();
+  const { lang, t } = useT();
   const isMobile = useIsMobile();
   const { data } = useCachedQuery(["sales"], getSales);
   const [open, setOpen] = useState(false);
@@ -36,17 +111,21 @@ export default function SalesPage() {
   const [page, setPage] = useState(1);
   const pageSize = isMobile ? 12 : 20;
 
+  const allSalesGrouped = useMemo(() => {
+    return groupSales(data ?? []);
+  }, [data]);
+
   const q = search.trim().toLowerCase();
-  const filter = (items: Sale[]) =>
+  const filter = (items: GroupedSale[]) =>
     items.filter(s =>
       !q ||
       s.product_name.toLowerCase().includes(q) ||
       (s.parties?.name ?? "").toLowerCase().includes(q),
     );
 
-  const cash = filter((data ?? []).filter(s => s.type === "cash"));
-  const credit = filter((data ?? []).filter(s => s.type === "credit"));
-  const online = filter((data ?? []).filter(s => s.type === "online"));
+  const cash = filter(allSalesGrouped.filter(s => s.type === "cash"));
+  const credit = filter(allSalesGrouped.filter(s => s.type === "credit"));
+  const online = filter(allSalesGrouped.filter(s => s.type === "online"));
 
   return (
     <div className="space-y-3">
@@ -110,16 +189,21 @@ export default function SalesPage() {
 function SalesTab({
   items, page, pageSize, onPageChange, credit, onEdit,
 }: {
-  items: Sale[];
+  items: GroupedSale[];
   page: number;
   pageSize: number;
   onPageChange: (p: number) => void;
   credit?: boolean;
   onEdit: (sale: Sale) => void;
 }) {
-  const { t } = useT();
+  const { lang, t } = useT();
   const qc = useQueryClient();
   const { items: paged, totalPages, safePage } = paginate(items, page, pageSize);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   async function handleDelete(id: string) {
     const input = prompt(`Are you sure you want to delete this sale? This is permanent. Please type "Delete" to confirm:`);
@@ -150,45 +234,84 @@ function SalesTab({
   return (
     <>
       <Card className="divide-y divide-border overflow-hidden">
-        {paged.map(s => (
-          <div key={s.id} className="p-3 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="font-medium truncate text-sm">
-                {s.product_name} <span className="text-muted-foreground text-xs">×{s.qty}</span>
-                {s.returned && <span className="ml-1 text-xs text-destructive">({t("returned")})</span>}
+        {paged.map(s => {
+          const isExpanded = !!expandedGroups[s.id];
+          return (
+            <div key={s.id} className="p-3 flex flex-col gap-2 hover:bg-muted/5 transition-colors">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate text-sm flex items-center gap-1.5 flex-wrap">
+                    {s.isGroup && (
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        {lang === "bn" ? "কার্ট" : "Cart"}
+                      </span>
+                    )}
+                    <span className="text-foreground font-semibold">
+                      {s.isGroup ? `${s.items[0].product_name} (+${s.items.length - 1} ${lang === "bn" ? "টি পণ্য" : "items"})` : s.product_name}
+                    </span>
+                    {!s.isGroup && <span className="text-muted-foreground text-xs font-normal">×{s.qty}</span>}
+                    {s.items.some(x => x.returned) && <span className="text-xs text-destructive">({t("returned")})</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {credit && s.parties?.name ? `${s.parties.name} · ` : ""}{fmtDateTime(s.created_at)}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-sm text-foreground">{fmtMoney(s.sell_price)}</div>
+                  {credit
+                    ? <div className="text-xs text-warning font-semibold">{t("due")}: {fmtMoney(s.due_amount)}</div>
+                    : <div className="text-xs text-success font-semibold">+{fmtMoney(s.profit)}</div>}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {s.isGroup && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 cursor-pointer"
+                      onClick={() => toggleGroup(s.id)}
+                      title="Toggle Cart Details"
+                    >
+                      {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                    </Button>
+                  )}
+                  {!s.isGroup && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 cursor-pointer"
+                      onClick={() => onEdit(s.items[0])}
+                      title="Edit Sale"
+                    >
+                      <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 text-destructive cursor-pointer hover:bg-destructive/10 rounded-full"
+                    onClick={() => handleDelete(s.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {credit && s.parties?.name ? `${s.parties.name} · ` : ""}{fmtDateTime(s.created_at)}
-              </div>
+
+              {s.isGroup && isExpanded && (
+                <div className="pl-3 py-2 border-l-2 border-emerald-500/30 space-y-1 bg-emerald-500/5 rounded-r-lg text-xs animate-in slide-in-from-top-1 duration-150">
+                  <div className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-300 tracking-wider">Cart Items:</div>
+                  {s.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center pr-2 font-mono text-[11px] text-muted-foreground py-0.5 border-b border-border/10 last:border-b-0">
+                      <span>{item.product_name} <span className="font-semibold text-foreground/90">×{item.qty}</span></span>
+                      <span>{fmtMoney(Number(item.sell_price) * item.qty)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="text-right shrink-0">
-              <div className="font-semibold text-sm">{fmtMoney(Number(s.sell_price) * s.qty)}</div>
-              {credit
-                ? <div className="text-xs text-warning">{t("due")}: {fmtMoney(s.due_amount)}</div>
-                : <div className="text-xs text-success">+{fmtMoney(s.profit)}</div>}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0 cursor-pointer"
-                onClick={() => onEdit(s)}
-                title="Edit Sale"
-              >
-                <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0 text-destructive"
-                onClick={() => handleDelete(s.id)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </Card>
       <PaginationBar page={safePage} totalPages={totalPages} total={items.length} pageSize={pageSize} onPageChange={onPageChange} />
     </>

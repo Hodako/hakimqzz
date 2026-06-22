@@ -382,7 +382,7 @@ export async function getSalesForPartyFn(input: { data: { partyId: string } }) {
   return items.map((s) => ({ ...s, id: s._id as any as string }));
 }
 
-export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null } }) {
+export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null; cart_id?: string | null } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -420,23 +420,33 @@ export async function deleteSaleFn(input: { data: { id: string } }) {
     const sale = await db.collection("sales").findOne({ _id: data.id as any, owner_id: session.ownerId });
     if (!sale) throw new Error("Sale not found");
  
-    if (sale.product_id) {
-      const qtyToRestore = sale.returned ? 0 : (Number(sale.qty) || 0);
-      if (qtyToRestore > 0) {
-        await db.collection("products").updateOne(
-          { _id: sale.product_id as any, owner_id: session.ownerId },
-          { $inc: { stock: qtyToRestore } }
-        );
-      }
+    // If this sale belongs to a grouped cart, delete all items in the cart
+    const cartId = sale.cart_id;
+    let salesToDelete = [sale];
+    if (cartId) {
+      salesToDelete = await db.collection("sales").find({ cart_id: cartId, owner_id: session.ownerId }).toArray();
     }
+
+    for (const s of salesToDelete) {
+      if (s.product_id) {
+        const qtyToRestore = s.returned ? 0 : (Number(s.qty) || 0);
+        if (qtyToRestore > 0) {
+          await db.collection("products").updateOne(
+            { _id: s.product_id as any, owner_id: session.ownerId },
+            { $inc: { stock: qtyToRestore } }
+          );
+        }
+      }
  
-    // Clean up associated returns for this sale
-    await db.collection("returns").deleteMany({ sale_id: data.id, owner_id: session.ownerId });
+      // Clean up associated returns for this sale
+      await db.collection("returns").deleteMany({ sale_id: s._id as any, owner_id: session.ownerId });
  
-    // Clean up cashbox entries for this sale and its returns
-    await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
-    
-    await db.collection("sales").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+      // Clean up cashbox entries for this sale and its returns
+      await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: s._id as any });
+      
+      await db.collection("sales").deleteOne({ _id: s._id as any, owner_id: session.ownerId });
+    }
+
     return { success: true };
   } catch (err: any) {
     console.error("Error in deleteSaleFn:", err);

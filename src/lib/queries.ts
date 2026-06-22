@@ -39,6 +39,7 @@ export type Sale = {
   returned?: boolean; return_qty?: number;
   parties?: { name: string } | null;
   note?: string | null;
+  cart_id?: string | null;
 };
 export type Payment = { id: string; party_id: string; amount: number; note: string | null; created_at: string };
 export type PartyLedger = { id: string; party_id: string; amount: number; note: string | null; created_at: string };
