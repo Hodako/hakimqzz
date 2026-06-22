@@ -141,7 +141,8 @@ export default function MorePage() {
 
   // Helper to parse both markdown **bold** and standard HTML tags in AI responses
   const parseBold = (text: string) => {
-    const converted = text.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
+    let converted = text.replace(/\*\*(?!\s)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>");
+    converted = converted.replace(/\*(?!\s)([\s\S]*?\S)\*/g, "<em>$1</em>");
     const tagRegex = /(<[^>]+>)/g;
     const parts = converted.split(tagRegex);
     
@@ -191,7 +192,7 @@ export default function MorePage() {
         
         let el: React.ReactNode = part;
         if (isBold) el = <strong key={i} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
-        if (isItalic) el = <em key={i} className="italic">{el}</em>;
+        if (isItalic) el = <em key={i} className="italic text-zinc-800 dark:text-zinc-200">{el}</em>;
         if (isUnderline) el = <u key={i}>{el}</u>;
         if (textColor) el = <span key={i} style={style}>{el}</span>;
         
@@ -203,8 +204,33 @@ export default function MorePage() {
   };
 
   const renderStructuredContent = (content: string) => {
-    const lines = content.split("\n");
+    // Extract think tags and contents
+    const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/i;
+    const thinkMatch = content.match(thinkRegex);
+    let thought: string | null = null;
+    let cleanContent = content;
+
+    if (thinkMatch) {
+      thought = thinkMatch[1].trim();
+      cleanContent = content.replace(thinkRegex, "").trim();
+    }
+
+    const lines = cleanContent.split("\n");
     let elements: React.ReactNode[] = [];
+    
+    // Add collapsible reasoning block at the top if present
+    if (thought) {
+      elements.push(
+        <details key="thought-block" className="my-2 border border-muted-foreground/20 rounded-xl bg-muted/30 overflow-hidden text-[11px] text-muted-foreground transition-all duration-200">
+          <summary className="cursor-pointer p-2.5 font-semibold bg-muted/50 hover:bg-muted/75 select-none flex items-center gap-1.5">
+            <span>💭</span> {lang === "bn" ? "চিন্তা ধারা..." : "Thinking Process..."}
+          </summary>
+          <div className="p-2.5 leading-relaxed italic border-t border-muted-foreground/10 bg-muted/10 whitespace-pre-wrap">
+            {parseBold(thought)}
+          </div>
+        </details>
+      );
+    }
     
     let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
     
@@ -287,7 +313,7 @@ export default function MorePage() {
         continue;
       }
       
-      if (trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) {
+      if ((trimmed.startsWith("-") || trimmed.startsWith("•") || trimmed.startsWith("*")) && !trimmed.startsWith("**")) {
         const itemText = trimmed.substring(1).trim();
         if (!currentList || currentList.type !== "bullet") {
           if (currentList) elements.push(flushList(i));
