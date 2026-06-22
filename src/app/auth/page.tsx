@@ -81,23 +81,30 @@ export default function AuthPage() {
         .auth-page .form {
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
           background-color: #ffffff;
           padding: 30px;
           width: 100%;
-          max-width: 440px;
+          max-width: 450px;
           border-radius: 20px;
-          box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         }
         .dark .auth-page .form {
           background-color: #18181b;
           border: 1px solid #27272a;
         }
 
+        .auth-page ::placeholder {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        .auth-page .form button {
+          align-self: flex-end;
+        }
+
         .auth-page .flex-column > label {
-          color: #374151;
+          color: #151717;
           font-weight: 600;
-          font-size: 13px;
         }
         .dark .auth-page .flex-column > label {
           color: #e4e4e7;
@@ -106,13 +113,12 @@ export default function AuthPage() {
         .auth-page .inputForm {
           border: 1.5px solid #ecedec;
           border-radius: 10px;
-          height: 48px;
+          height: 50px;
           display: flex;
           align-items: center;
-          padding-left: 12px;
-          padding-right: 12px;
+          padding-left: 10px;
           transition: 0.2s ease-in-out;
-          background-color: #fcfcfc;
+          background-color: #ffffff;
         }
         .dark .auth-page .inputForm {
           border: 1.5px solid #27272a;
@@ -125,9 +131,8 @@ export default function AuthPage() {
           border: none;
           width: 85%;
           height: 100%;
-          font-size: 14px;
           background-color: transparent !important;
-          color: #09090b !important;
+          color: #151717 !important;
         }
         .dark .auth-page .input {
           color: #fafafa !important;
@@ -139,7 +144,6 @@ export default function AuthPage() {
 
         .auth-page .inputForm:focus-within {
           border: 1.5px solid #2d79f3;
-          box-shadow: 0 0 0 2px rgba(45, 121, 243, 0.15);
         }
 
         .auth-page .flex-row {
@@ -151,8 +155,8 @@ export default function AuthPage() {
         }
 
         .auth-page .flex-row > div > label {
-          font-size: 13px;
-          color: #4b5563;
+          font-size: 14px;
+          color: black;
           font-weight: 400;
         }
         .dark .auth-page .flex-row > div > label {
@@ -160,7 +164,8 @@ export default function AuthPage() {
         }
 
         .auth-page .span {
-          font-size: 13px;
+          font-size: 14px;
+          margin-left: 5px;
           color: #2d79f3;
           font-weight: 500;
           cursor: pointer;
@@ -169,10 +174,34 @@ export default function AuthPage() {
           text-decoration: underline;
         }
 
+        .auth-page .button-submit {
+          margin: 20px 0 10px 0;
+          background-color: #151717;
+          border: none;
+          color: white;
+          font-size: 15px;
+          font-weight: 500;
+          border-radius: 10px;
+          height: 50px;
+          width: 100%;
+          cursor: pointer;
+          transition: background-color 0.2s ease-in-out;
+        }
+        .auth-page .button-submit:hover {
+          background-color: #252727;
+        }
+        .dark .auth-page .button-submit {
+          background-color: #fafafa;
+          color: #18181b;
+        }
+        .dark .auth-page .button-submit:hover {
+          background-color: #e4e4e7;
+        }
+
         .auth-page .p {
           text-align: center;
-          color: #4b5563;
-          font-size: 13px;
+          color: black;
+          font-size: 14px;
           margin: 5px 0;
         }
         .dark .auth-page .p {
@@ -180,14 +209,14 @@ export default function AuthPage() {
         }
 
         .auth-page .btn {
+          margin-top: 10px;
           width: 100%;
-          height: 45px;
+          height: 50px;
           border-radius: 10px;
           display: flex;
           justify-content: center;
           align-items: center;
           font-weight: 500;
-          font-size: 14px;
           gap: 10px;
           border: 1px solid #ededef;
           background-color: white;
@@ -391,20 +420,9 @@ export default function AuthPage() {
               <span className="span">Forgot password?</span>
             </div>
 
-            {/* Premium Button with Nested Gradient Bevel Effect (Get Started Style) */}
-            <div className="w-full mt-2 bg-gradient-to-b from-stone-300/40 to-transparent p-[3px] rounded-[16px] select-none">
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full group p-[3px] rounded-[12px] bg-gradient-to-b from-white to-stone-200/40 shadow-[0_1px_3px_rgba(0,0,0,0.5)] active:shadow-[0_0px_1px_rgba(0,0,0,0.5)] active:scale-[0.995] cursor-pointer border-0"
-              >
-                <div className="bg-gradient-to-b from-stone-200/40 to-white/80 rounded-[8px] py-2.5 text-center flex justify-center items-center">
-                  <span className="font-bold text-zinc-800 text-sm">
-                    {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
-                  </span>
-                </div>
-              </button>
-            </div>
+            <button type="submit" disabled={busy} className="button-submit">
+              {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
+            </button>
 
             {/* Info Message */}
             {activeTab === "signup" && (

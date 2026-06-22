@@ -118,69 +118,11 @@ function KPICard({
 
   // Dynamic Theme Mapping for soft light gradients and shadows
   const getCardTheme = () => {
-    switch (color) {
-      case "bg-emerald-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-emerald-50/20 to-emerald-500/5 dark:from-zinc-900 dark:via-emerald-950/10 dark:to-emerald-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(16,185,129,0.06)] dark:shadow-[0_4px_16px_rgba(16,185,129,0.03)]",
-          border: "border-emerald-500/20 hover:border-emerald-500/40"
-        };
-      case "bg-rose-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-rose-50/20 to-rose-500/5 dark:from-zinc-900 dark:via-rose-950/10 dark:to-rose-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(244,63,94,0.06)] dark:shadow-[0_4px_16px_rgba(244,63,94,0.03)]",
-          border: "border-rose-500/20 hover:border-rose-500/40"
-        };
-      case "bg-indigo-500":
-      case "bg-indigo-600":
-        return {
-          gradient: "bg-gradient-to-br from-white via-indigo-50/20 to-indigo-500/5 dark:from-zinc-900 dark:via-indigo-950/10 dark:to-indigo-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(99,102,241,0.06)] dark:shadow-[0_4px_16px_rgba(99,102,241,0.03)]",
-          border: "border-indigo-500/20 hover:border-indigo-500/40"
-        };
-      case "bg-amber-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-amber-50/20 to-amber-500/5 dark:from-zinc-900 dark:via-amber-950/10 dark:to-amber-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(245,158,11,0.06)] dark:shadow-[0_4px_16px_rgba(245,158,11,0.03)]",
-          border: "border-amber-500/20 hover:border-amber-500/40"
-        };
-      case "bg-amber-600":
-        return {
-          gradient: "bg-gradient-to-br from-white via-amber-50/25 to-amber-600/5 dark:from-zinc-900 dark:via-amber-950/15 dark:to-amber-600/5",
-          shadow: "shadow-[0_4px_16px_rgba(217,119,6,0.06)] dark:shadow-[0_4px_16px_rgba(217,119,6,0.03)]",
-          border: "border-amber-600/20 hover:border-amber-600/40"
-        };
-      case "bg-sky-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-sky-50/20 to-sky-500/5 dark:from-zinc-900 dark:via-sky-950/10 dark:to-sky-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(14,165,233,0.06)] dark:shadow-[0_4px_16px_rgba(14,165,233,0.03)]",
-          border: "border-sky-500/20 hover:border-sky-500/40"
-        };
-      case "bg-teal-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(20,184,166,0.06)] dark:shadow-[0_4px_16px_rgba(20,184,166,0.03)]",
-          border: "border-teal-500/20 hover:border-teal-500/40"
-        };
-      case "bg-pink-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-pink-50/20 to-pink-500/5 dark:from-zinc-900 dark:via-pink-950/10 dark:to-pink-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(236,72,153,0.06)] dark:shadow-[0_4px_16px_rgba(236,72,153,0.03)]",
-          border: "border-pink-500/20 hover:border-pink-500/40"
-        };
-      case "bg-orange-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-orange-50/20 to-orange-500/5 dark:from-zinc-900 dark:via-orange-950/10 dark:to-orange-500/5",
-          shadow: "shadow-[0_4px_16px_rgba(249,115,22,0.06)] dark:shadow-[0_4px_16px_rgba(249,115,22,0.03)]",
-          border: "border-orange-500/20 hover:border-orange-500/40"
-        };
-      default:
-        return {
-          gradient: "bg-gradient-to-br from-white to-zinc-50/50 dark:from-zinc-900 dark:to-zinc-950/50",
-          shadow: "shadow-[0_4px_12px_rgba(0,0,0,0.04)]",
-          border: "border-border/80 hover:border-primary/20"
-        };
-    }
+    return {
+      gradient: "bg-white dark:bg-zinc-900",
+      shadow: "shadow-[0_4px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.2)]",
+      border: "border-[1.5px] border-[#ecedec] dark:border-[#27272a] hover:border-[#2d79f3] dark:hover:border-[#2d79f3] rounded-[20px] transition-all duration-200"
+    };
   };
 
   const themeStyle = getCardTheme();

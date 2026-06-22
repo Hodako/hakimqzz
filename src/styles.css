@@ -236,11 +236,24 @@
 }
 
 .beveled-card {
-  box-shadow: 
-    inset 0 1px 0 0 oklch(1 0 0 / 0.05),
-    0 10px 15px -3px oklch(0 0 0 / 0.08),
-    0 4px 6px -4px oklch(0 0 0 / 0.08) !important;
-  border: 1px solid oklch(0.38 0.12 155 / 0.15) !important;
+  border: 1.5px solid #ecedec !important;
+  border-radius: 20px !important;
+  background-color: #ffffff !important;
+  transition: 0.2s ease-in-out !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+}
+
+.beveled-card:hover, .beveled-card:focus-within {
+  border: 1.5px solid #2d79f3 !important;
+}
+
+.dark .beveled-card {
+  border: 1.5px solid #27272a !important;
+  background-color: #18181b !important;
+}
+
+.dark .beveled-card:hover, .dark .beveled-card:focus-within {
+  border: 1.5px solid #2d79f3 !important;
 }
 
 .safe-area-pb {

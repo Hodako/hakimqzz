@@ -71,6 +71,21 @@ export default function ActivatePage() {
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "…" : "Activate Account"}
           </Button>
+
+          <div className="text-center text-xs text-muted-foreground pt-2">
+            <span className="opacity-80">Don't have a license key? </span>
+            <a
+              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20HakimEzy."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-semibold inline-flex items-center gap-1 hover:underline"
+            >
+              <svg className="size-3.5 fill-current inline-block" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.739-1.45L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.528 2.028 14.07 1.001 11.45 1c-5.448 0-9.873 4.372-9.877 9.802-.001 1.77.474 3.498 1.38 5.048L1.93 20.89l5.097-1.343zM18.17 14.85c-.34-.17-2.01-1-2.32-1.115-.31-.115-.53-.17-.75.17-.22.34-.85 1.115-1.04 1.343-.19.227-.38.257-.72.086-2.11-.99-3.48-1.99-4.75-4.17-.34-.585.34-.543.98-1.817.11-.227.056-.427-.028-.597-.084-.17-.75-1.81-1.03-2.48-.276-.665-.553-.574-.75-.585-.19-.01-.41-.01-.63-.01-.22 0-.58.08-.88.41-.3.33-1.15 1.12-1.15 2.73s1.17 3.16 1.33 3.38c.16.22 2.3 3.52 5.58 4.94.78.34 1.39.54 1.86.69.78.25 1.49.21 2.05.13.62-.09 2.01-.82 2.3-1.57.29-.75.29-1.39.2-1.52-.09-.13-.34-.23-.68-.4z"/>
+              </svg>
+              Contact Admin
+            </a>
+          </div>
         </form>
       </Card>
     </div>

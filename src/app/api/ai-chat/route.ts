@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     // Top parties by due
     const partyDueMap: Record<string, { name: string; due: number }> = {};
     for (const p of parties) {
-      partyDueMap[p._id as string] = { name: p.name, due: 0 };
+      partyDueMap[String(p._id)] = { name: p.name, due: 0 };
     }
     for (const s of sales.filter(x => x.type === "credit" && x.party_id)) {
       if (partyDueMap[s.party_id]) partyDueMap[s.party_id].due += (s.due_amount || 0);
