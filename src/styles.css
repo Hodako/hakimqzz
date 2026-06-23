@@ -86,7 +86,7 @@
   --sidebar-accent-foreground: oklch(0.28 0.06 155);
   --sidebar-border: oklch(0.38 0.12 155 / 0.15);
   --sidebar-ring: oklch(0.45 0.12 155);
-  --font-sans: Roboto, "Hind Siliguri", sans-serif;
+  --font-sans: 'Siyam Rupali', Roboto, "Hind Siliguri", sans-serif;
   --font-serif: Lora, serif;
   --font-mono: "Fira Code", monospace;
   --radius: 0.75rem;
@@ -200,7 +200,9 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-sans);
+    font-family: 'Siyam Rupali', sans-serif;
+    font-weight: 400;
+    font-style: normal;
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.65 0.14 155 / 0.15), transparent),
       radial-gradient(ellipse 60% 40% at 100% 100%, oklch(0.45 0.12 155 / 0.08), transparent);
@@ -213,7 +215,7 @@
   }
 
   html[lang="bn"] body {
-    font-family: "Hind Siliguri", Poppins, sans-serif;
+    font-family: 'Siyam Rupali', sans-serif;
   }
 
   h1, h2, h3 {
