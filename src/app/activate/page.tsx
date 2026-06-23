@@ -55,7 +55,7 @@ export default function ActivatePage() {
           <AppLogo size="lg" />
           <h1 className="text-xl font-serif font-bold">Activate License</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your business or employee license key to activate HakimEzy.
+            Enter your business or employee license key to activate HakimQzz.
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3">
@@ -74,7 +74,7 @@ export default function ActivatePage() {
 
           <div className="pt-2 text-center">
             <a
-              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20HakimEzy."
+              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20HakimQzz."
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontFamily: "'Roboto', sans-serif" }}
@@ -85,6 +85,9 @@ export default function ActivatePage() {
               </svg>
               Contact Admin
             </a>
+          </div>
+          <div className="pt-3 text-center text-[10px] text-muted-foreground border-t border-border/50">
+            Powered by Dream Fashion
           </div>
         </form>
       </Card>

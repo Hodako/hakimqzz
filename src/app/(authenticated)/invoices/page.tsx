@@ -406,7 +406,7 @@ export default function InvoicePage() {
         {/* Header section */}
         <div className={`flex justify-between items-start border-b-2 pb-6 ${colorClasses.border}`}>
           <div className="space-y-1.5">
-            <h1 className={`text-2xl font-bold uppercase tracking-wide ${colorClasses.accentText}`}>{user?.business_name || "HakimEzy"}</h1>
+            <h1 className={`text-2xl font-bold uppercase tracking-wide ${colorClasses.accentText}`}>{user?.business_name || "HakimQzz"}</h1>
             <p className="text-xs text-zinc-500">{t("tagline")}</p>
             <p className="text-xs text-zinc-500">{user?.email}</p>
           </div>
@@ -503,7 +503,7 @@ export default function InvoicePage() {
           ) : (
             <p>Thank you for your business!</p>
           )}
-          <p className="text-[9px] text-zinc-400 pt-2">Generated via {user?.business_name || "HakimEzy"} Invoice Manager.</p>
+          <p className="text-[9px] text-zinc-400 pt-2">Generated via {user?.business_name || "HakimQzz"} Invoice Manager.</p>
         </div>
       </div>
     </div>

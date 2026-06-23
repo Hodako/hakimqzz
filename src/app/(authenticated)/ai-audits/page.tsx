@@ -399,7 +399,7 @@ export default function AiAuditsPage() {
               </div>
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-foreground">
-                  {lang === "bn" ? "হাকিমইজি অডিট এজেন্টের চ্যাটবক্সে আপনাকে স্বাগতম!" : "Welcome to the HakimEzy Audit Agent Chatbox!"}
+                  {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের চ্যাটবক্সে আপনাকে স্বাগতম!" : "Welcome to the HakimQzz Audit Agent Chatbox!"}
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {lang === "bn"

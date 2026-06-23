@@ -311,7 +311,7 @@ export default function SettingsPage() {
     try {
       await updateBusinessSettingsFn({
         data: {
-          name: String(fd.get("name") || "HakimEzy"),
+          name: String(fd.get("name") || "HakimQzz"),
           logo_url: logoUrl || "/logo.png",
           business_type: String(fd.get("business_type") || "retail"),
           theme: "green",
@@ -421,7 +421,7 @@ export default function SettingsPage() {
           <form onSubmit={saveBusiness} className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs">Company Name</Label>
-              <Input name="name" defaultValue={biz.name} placeholder="HakimEzy" />
+              <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Logo URL</Label>

@@ -3,9 +3,9 @@ import { Providers } from "./providers";
 import "../styles.css";
 
 export const metadata: Metadata = {
-  title: "HakimEzy — Inventory & Sales",
-  description: "Inventory and sales management for HakimEzy.",
-  authors: [{ name: "HakimEzy" }],
+  title: "HakimQzz — Inventory & Sales",
+  description: "Inventory and sales management for HakimQzz.",
+  authors: [{ name: "HakimQzz" }],
   icons: {
     icon: "/logo.png",
     apple: "/apple-touch-icon.png",

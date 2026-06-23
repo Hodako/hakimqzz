@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       .map(([title, amount]) => ({ title, amount }));
 
     // 4. Build system prompt with real business data
-    const systemPrompt = `You are an expert AI business analyst for a retail fashion business management app called HakimEzy (also called DreamFashion). You have access to the business's real-time data and you are a trusted advisor.
+    const systemPrompt = `You are an expert AI business analyst for a retail fashion business management app called HakimQzz (also called DreamFashion). You have access to the business's real-time data and you are a trusted advisor.
 
 ## REAL BUSINESS DATA (Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })})
 

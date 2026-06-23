@@ -257,8 +257,8 @@ export default function AuthPage() {
 
         {/* Top brand header */}
         <div className="flex items-center gap-3 relative z-10">
-          <AppLogo size="md" alt="HakimEzy" />
-          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">HakimEzy</span>
+          <AppLogo size="md" alt="HakimQzz" />
+          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">HakimQzz</span>
         </div>
 
         {/* Middle minimalist description */}
@@ -268,8 +268,8 @@ export default function AuthPage() {
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold font-serif leading-tight">
             {lang === "bn" 
-              ? `"HakimEZY" ইনভেন্টরি ম্যানেজমেন্ট এবং প্রোডাক্টস সলিউশন`
-              : `"HakimEZY" inventory management and products solutions`}
+              ? `"HakimQzz" ইনভেন্টরি ম্যানেজমেন্ট এবং প্রোডাক্টস সলিউশন`
+              : `"HakimQzz" inventory management and products solutions`}
           </h2>
           <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
             {lang === "bn" 
@@ -280,7 +280,7 @@ export default function AuthPage() {
 
         {/* Bottom copyright placeholder */}
         <div className="text-xs text-zinc-400 relative z-10">
-          © {new Date().getFullYear()} HakimEzy. Powered by Dream Fashion.
+          © {new Date().getFullYear()} HakimQzz. Powered by Dream Fashion.
         </div>
       </div>
 
@@ -290,8 +290,8 @@ export default function AuthPage() {
         {/* Top Row: Language switcher */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 md:hidden">
-            <AppLogo size="sm" alt="HakimEzy" />
-            <span className="font-serif text-lg font-bold">HakimEzy</span>
+            <AppLogo size="sm" alt="HakimQzz" />
+            <span className="font-serif text-lg font-bold">HakimQzz</span>
           </div>
           <div className="flex gap-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 p-0.5 text-[10px] ml-auto">
             <button 
@@ -446,8 +446,9 @@ export default function AuthPage() {
         </div>
 
         {/* Footer info (Mobile visible, desktop bottom right) */}
-        <div className="text-center text-[10px] text-zinc-400 py-2">
-          HakimEzy Inventory Management System. All rights reserved.
+        <div className="text-center text-[10px] text-zinc-400 py-2 space-y-1">
+          <p>HakimQzz Inventory Management System. All rights reserved.</p>
+          <p className="text-[9px] text-zinc-500">Powered by Dream Fashion</p>
         </div>
       </div>
     </div>

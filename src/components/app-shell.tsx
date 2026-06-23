@@ -168,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     items: group.items.filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues")))
   })).filter(group => group.items.length > 0);
   const bottomNav = filterNav(mobileNav, perms).filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues")));
-  const brandName = user.business_name || "HakimEzy";
+  const brandName = user.business_name || "HakimQzz";
   const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "HZ";
 
   async function handleSignOut() {
@@ -190,6 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="min-w-0 group-data-[collapsible=icon]:hidden">
                 <p className="font-serif font-semibold text-sm truncate leading-tight">{brandName}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{t("tagline")}</p>
+                <p className="text-[8px] text-muted-foreground/80 truncate mt-0.5 font-medium">Powered by Dream Fashion</p>
               </div>
             </div>
           </SidebarHeader>
@@ -248,6 +249,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>
+            <div className="text-[9px] text-center text-muted-foreground pb-2 pt-1 group-data-[collapsible=icon]:hidden border-t border-sidebar-border/30">
+              Powered by Dream Fashion
+            </div>
           </SidebarFooter>
         </Sidebar>
       )}
@@ -267,12 +271,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {isMobile ? (
                 <>
                   <AppLogo size="sm" />
-                  <h1 className="font-serif font-semibold text-sm truncate leading-tight">{brandName}</h1>
+                  <div className="min-w-0 flex flex-col justify-center">
+                    <h1 className="font-serif font-semibold text-sm truncate leading-none">{brandName}</h1>
+                    <span className="text-[8px] text-muted-foreground mt-0.5 leading-none">Powered by Dream Fashion</span>
+                  </div>
                 </>
               ) : (
                 <>
                   <SidebarTrigger className="size-7 shrink-0" />
-                  <h1 className="font-serif font-semibold text-base truncate leading-tight hidden sm:block">{brandName}</h1>
+                  <div className="min-w-0 flex flex-col justify-center">
+                    <h1 className="font-serif font-semibold text-base truncate leading-none hidden sm:block">{brandName}</h1>
+                    <span className="text-[8px] text-muted-foreground mt-0.5 leading-none hidden sm:block">Powered by Dream Fashion</span>
+                  </div>
                 </>
               )}
             </div>
