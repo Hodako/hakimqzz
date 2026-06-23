@@ -51,7 +51,7 @@ self.addEventListener("fetch", (event) => {
   if (isHashedAsset) {
     // Cache-First strategy for Next.js hashed static assets (JS, CSS, fonts)
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
+      caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
         return fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
@@ -79,7 +79,7 @@ self.addEventListener("fetch", (event) => {
         })
         .catch((err) => {
           // If offline and network request fails, fall back to cached version
-          return caches.match(event.request).then((cachedResponse) => {
+          return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
             if (cachedResponse) return cachedResponse;
             throw err;
           });

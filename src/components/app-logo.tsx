@@ -58,18 +58,7 @@ export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
     }
   };
 
-  const [timestamp, setTimestamp] = useState<string>("");
-
-  useEffect(() => {
-    setTimestamp(String(Date.now()));
-  }, [user?.logo_url]);
-
   let logoSrc = src ?? user?.logo_url ?? "/logo.png";
-  if (logoSrc && !logoSrc.startsWith("data:") && timestamp) {
-    logoSrc = logoSrc.includes("?") 
-      ? `${logoSrc}&t=${timestamp}` 
-      : `${logoSrc}?t=${timestamp}`;
-  }
 
   const logoAlt = alt ?? user?.business_name ?? "HakimEzy";
 

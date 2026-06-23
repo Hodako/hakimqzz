@@ -2,7 +2,7 @@
 
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,6 +77,114 @@ export default function SettingsPage() {
 
   const [pwBusy, setPwBusy] = useState(false);
 
+  const biz = settings.data?.business;
+  const isOwner = settings.data?.role === "owner";
+
+  const [logoUrl, setLogoUrl] = useState("");
+
+  useEffect(() => {
+    if (biz?.logo_url) {
+      setLogoUrl(biz.logo_url);
+    }
+  }, [biz?.logo_url]);
+
+  // Cropper states
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropImageName, setCropImageName] = useState<string>("");
+  const [cropImageType, setCropImageType] = useState<string>("image/png");
+
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [imgSize, setImgSize] = useState({ width: 256, height: 256 });
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
+  const [touchDragStart, setTouchDragStart] = useState({ x: 0, y: 0 });
+  const [touchPanStart, setTouchPanStart] = useState({ x: 0, y: 0 });
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+
+    let w = 256;
+    let h = 256;
+    if (natW > natH) {
+      w = (natW / natH) * 256;
+    } else {
+      h = (natH / natW) * 256;
+    }
+
+    setImgSize({ width: w, height: h });
+    setPan({ x: (256 - w) / 2, y: (256 - h) / 2 });
+    setZoom(1);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setPanStart({ x: pan.x, y: pan.y });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    setIsTouchDragging(true);
+    setTouchDragStart({ x: touch.clientX, y: touch.clientY });
+    setTouchPanStart({ x: pan.x, y: pan.y });
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      setPan({
+        x: panStart.x + dx,
+        y: panStart.y + dy,
+      });
+    };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, dragStart, panStart]);
+
+  useEffect(() => {
+    if (!isTouchDragging) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - touchDragStart.x;
+      const dy = touch.clientY - touchDragStart.y;
+      setPan({
+        x: touchPanStart.x + dx,
+        y: touchPanStart.y + dy,
+      });
+    };
+    const handleTouchEnd = () => {
+      setIsTouchDragging(false);
+    };
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [isTouchDragging, touchDragStart, touchPanStart]);
+
   async function handleUpdateMyPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -104,9 +212,6 @@ export default function SettingsPage() {
       setPwBusy(false);
     }
   }
-
-  const biz = settings.data?.business;
-  const isOwner = settings.data?.role === "owner";
 
   async function handleVerifyPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -207,7 +312,7 @@ export default function SettingsPage() {
       await updateBusinessSettingsFn({
         data: {
           name: String(fd.get("name") || "HakimEzy"),
-          logo_url: String(fd.get("logo_url") || "/logo.png"),
+          logo_url: logoUrl || "/logo.png",
           business_type: String(fd.get("business_type") || "retail"),
           theme: "green",
           employee_limit: Number(fd.get("employee_limit")) || 5,
@@ -235,6 +340,7 @@ export default function SettingsPage() {
         const { url } = await uploadImageFn({ data: { base64, fileName: file.name } });
         // Immediately update the logo in auth context so AppLogo re-renders right away
         updateUser({ logo_url: url });
+        setLogoUrl(url);
         await updateBusinessSettingsFn({ data: { logo_url: url } });
         await refresh();
         qc.invalidateQueries({ queryKey: ["business-settings"] });
@@ -245,6 +351,59 @@ export default function SettingsPage() {
     };
     reader.readAsDataURL(file);
   }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Please upload a valid image file (PNG, JPG, WEBP, GIF, SVG).");
+      return;
+    }
+
+    setCropImageName(file.name);
+    setCropImageType(file.type);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropSave = () => {
+    const img = imageRef.current;
+    const viewport = viewportRef.current;
+    if (!img || !viewport) return;
+
+    const imgRect = img.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 512, 512);
+
+    const S = 512 / viewportRect.width;
+    const dx = (imgRect.left - viewportRect.left) * S;
+    const dy = (imgRect.top - viewportRect.top) * S;
+    const dw = imgRect.width * S;
+    const dh = imgRect.height * S;
+
+    ctx.drawImage(img, dx, dy, dw, dh);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], cropImageName, { type: cropImageType });
+      setCropImageSrc(null);
+      void uploadLogo(file);
+    }, cropImageType);
+  };
 
   if (settings.isLoading && !settings.data) return <SpeedLoader fullScreen={false} />;
 
@@ -266,11 +425,11 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Logo URL</Label>
-              <Input name="logo_url" defaultValue={biz.logo_url} placeholder="/logo.png" />
+              <Input name="logo_url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="/logo.png" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Upload Logo</Label>
-              <Input type="file" accept="image/*" onChange={e => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
+              <Input type="file" accept="image/*" onChange={handleFileChange} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Business Type</Label>
@@ -791,6 +950,65 @@ export default function SettingsPage() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Crop Business Logo Dialog */}
+      <Dialog open={cropImageSrc !== null} onOpenChange={open => !open && setCropImageSrc(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crop Business Logo</DialogTitle>
+            <DialogDescription className="text-xs">
+              Drag the logo to pan and use the slider to zoom so it fits inside the square.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 flex flex-col items-center">
+            <div
+              ref={viewportRef}
+              className="w-64 h-64 relative overflow-hidden bg-muted border rounded-lg cursor-move select-none shadow-inner"
+              onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
+            >
+              {cropImageSrc && (
+                <img
+                  ref={imageRef}
+                  src={cropImageSrc}
+                  alt="Crop preview"
+                  className="absolute max-w-none pointer-events-none origin-center"
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    width: `${imgSize.width}px`,
+                    height: `${imgSize.height}px`,
+                  }}
+                  onLoad={handleImageLoad}
+                />
+              )}
+            </div>
+            
+            <div className="w-full max-w-xs mt-6 space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                <span>Zoom</span>
+                <span>{Math.round(zoom * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="4"
+                step="0.05"
+                value={zoom}
+                onChange={e => setZoom(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setCropImageSrc(null)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleCropSave}>
+              Crop & Upload
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
