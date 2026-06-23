@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v3";
+const CACHE_NAME = "dreamfashion-v4";
 const ASSETS_TO_CACHE = [
   "/",
   "/manifest.json",
@@ -11,7 +11,8 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      const requests = ASSETS_TO_CACHE.map(url => new Request(url, { cache: "reload" }));
+      return cache.addAll(requests);
     })
   );
   self.skipWaiting();
