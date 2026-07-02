@@ -1201,7 +1201,7 @@ export async function switchProfileFn(input: { data: { profileId: string } }) {
   return { user: mapped };
 }
 
-export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" } }) {
+export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" | "sales" | "purchases" | "expenses" | "cashbox" } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -1243,6 +1243,70 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
         created_at: new Date().toISOString()
       };
       await db.collection("somiti_entries").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "sales") {
+    const srcSales = await db.collection("sales").find({ owner_id: sourceOwnerId }).toArray();
+    for (const s of srcSales) {
+      const { _id, ...rest } = s;
+      const doc = {
+        ...rest,
+        _id: crypto.randomUUID(),
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("sales").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "purchases") {
+    const srcPurchases = await db.collection("purchases").find({ owner_id: sourceOwnerId }).toArray();
+    for (const p of srcPurchases) {
+      const { _id, ...rest } = p;
+      const doc = {
+        ...rest,
+        _id: crypto.randomUUID(),
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("purchases").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "expenses") {
+    const srcExpenses = await db.collection("expenses").find({ owner_id: sourceOwnerId }).toArray();
+    for (const e of srcExpenses) {
+      const { _id, ...rest } = e;
+      const doc = {
+        ...rest,
+        _id: crypto.randomUUID(),
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("expenses").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "cashbox") {
+    const srcCashbox = await db.collection("cashbox_entries").find({ owner_id: sourceOwnerId }).toArray();
+    for (const c of srcCashbox) {
+      const { _id, ...rest } = c;
+      const doc = {
+        ...rest,
+        _id: crypto.randomUUID(),
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("cashbox_entries").insertOne(doc as any);
+      importedCount++;
+    }
+    const srcWithdrawals = await db.collection("owner_withdrawals").find({ owner_id: sourceOwnerId }).toArray();
+    for (const w of srcWithdrawals) {
+      const { _id, ...rest } = w;
+      const doc = {
+        ...rest,
+        _id: crypto.randomUUID(),
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("owner_withdrawals").insertOne(doc as any);
       importedCount++;
     }
   } else if (data.module === "party") {

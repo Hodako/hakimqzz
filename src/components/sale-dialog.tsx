@@ -125,7 +125,7 @@ export function SaleDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!user || cart.length === 0) return toast.error(t("select_product"));
-    if (type === "credit" && !partyId) return toast.error(t("party") + " " + t("required"));
+    if (type === "credit" && !partyId) return toast.error((lang === "bn" ? "কাস্টমার" : "Customer") + " " + t("required"));
     setBusy(true);
     try {
       const duePerItem = type === "credit" ? due / cart.length : 0;
@@ -251,7 +251,7 @@ export function SaleDialog({
               {type === "credit" && (
                 <>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">{t("party")}</Label>
+                    <Label className="text-xs text-muted-foreground">{lang === "bn" ? "কাস্টমার (গ্রাহক)" : "Customer"}</Label>
                     <div className="flex items-center gap-1.5">
                       <div className="flex-1">
                         <Select value={partyId} onValueChange={setPartyId}>

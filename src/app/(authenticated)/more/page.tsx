@@ -1518,7 +1518,7 @@ export default function MorePage() {
   const [newProfileName, setNewProfileName] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importSourceProfileId, setImportSourceProfileId] = useState("");
-  const [importModule, setImportModule] = useState<"products" | "somiti" | "party" | "">("");
+  const [importModule, setImportModule] = useState<"products" | "somiti" | "party" | "sales" | "purchases" | "expenses" | "cashbox" | "">("");
   const [isProcessingProfile, setIsProcessingProfile] = useState(false);
 
   const handleCreateProfile = async (e: React.FormEvent) => {
@@ -1815,6 +1815,10 @@ export default function MorePage() {
                   <SelectItem value="products">{lang === "bn" ? "পণ্য মডিউল (Products)" : "Products Module"}</SelectItem>
                   <SelectItem value="somiti">{lang === "bn" ? "সমিতি মডিউল (Samity)" : "Samity Module"}</SelectItem>
                   <SelectItem value="party">{lang === "bn" ? "গ্রাহক ও বাকী মডিউল (Customer & Debts)" : "Customer & Debts Module"}</SelectItem>
+                  <SelectItem value="sales">{lang === "bn" ? "বিক্রয় ও লাভ মডিউল (Sales & Profits)" : "Sales & Profits Module"}</SelectItem>
+                  <SelectItem value="purchases">{lang === "bn" ? "ক্রয় মডিউল (Purchases)" : "Purchases Module"}</SelectItem>
+                  <SelectItem value="expenses">{lang === "bn" ? "খরচ মডিউল (Expenses)" : "Expenses Module"}</SelectItem>
+                  <SelectItem value="cashbox">{lang === "bn" ? "ক্যাশ হিসাব মডিউল (Cashbox Ledger)" : "Cashbox Ledger Module"}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

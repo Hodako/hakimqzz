@@ -65,6 +65,7 @@ export default function DuesPage() {
   const [newCustPhone, setNewCustPhone] = useState("");
   const [newCustAddress, setNewCustAddress] = useState("");
   const [addingCust, setAddingCust] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,12 +273,21 @@ export default function DuesPage() {
     <div className="space-y-4 pb-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "বাকী খাতা ও আদায়" : "Customer's Debt & Collections"}</h1>
+          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "বাকী" : "Dues"}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {lang === "bn" ? `${totalDebtors} জন কাস্টমারের কাছে মোট বকেয়া জমা` : `${totalDebtors} customers with outstanding balances`}
           </p>
         </div>
         <div className="flex gap-1.5 items-center">
+          <Button
+            size="sm"
+            variant={searchOpen ? "default" : "outline"}
+            className="h-8 text-xs beveled-button"
+            onClick={() => setSearchOpen(!searchOpen)}
+          >
+            <Search className="size-3.5 mr-1" />
+            {lang === "bn" ? "খুঁজুন" : "Search"}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 text-xs beveled-button">
@@ -302,7 +312,7 @@ export default function DuesPage() {
       </div>
 
       {/* Main KPI Summary Card */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
         <Card className="p-4 bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-background border-amber-500/25 beveled-card shadow-sm flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0 border border-amber-400/20 shadow-md">
@@ -318,52 +328,40 @@ export default function DuesPage() {
             <div className="text-lg font-bold font-serif text-zinc-950 dark:text-zinc-50">{totalDebtors}</div>
           </div>
         </Card>
-
-        <Card className="p-4 bg-card/60 backdrop-blur-sm border-border beveled-card shadow-sm flex items-center gap-3">
-          <div className="size-10 rounded-xl bg-indigo-500 flex items-center justify-center shrink-0 border border-indigo-400/20 shadow-md">
-            <Users className="size-5 text-white" />
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{lang === "bn" ? "কাস্টমার খাতা লিঙ্ক" : "Customers Ledger Link"}</div>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-              {lang === "bn" 
-                ? "কাস্টমারের নামের উপর ক্লিক করে সরাসরি তার সম্পূর্ণ কেনা-বেচা ও জমার লেজার খতিয়ান দেখতে পারবেন।" 
-                : "Click on any customer name to inspect their full detailed ledger history of sales and collections."}
-            </p>
-          </div>
-        </Card>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-1 border-t">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground z-10 pointer-events-none" />
-          <Input
-            style={{ paddingLeft: "2.5rem" }}
-            className="pl-10 h-9"
-            placeholder={t("search_parties")}
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-          />
-        </div>
+      {searchOpen && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-1 border-t animate-in fade-in duration-200">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground z-10 pointer-events-none" />
+            <Input
+              style={{ paddingLeft: "2.5rem" }}
+              className="pl-10 h-9"
+              placeholder={t("search_parties")}
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <div className="flex bg-muted/60 rounded p-0.5 text-xs">
-            <button
-              onClick={() => { setSortOrder("highest"); setPage(1); }}
-              className={`px-2 py-1 rounded transition-colors ${sortOrder === "highest" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}
-            >
-              {lang === "bn" ? "সর্বোচ্চ বকেয়া" : "Highest due"}
-            </button>
-            <button
-              onClick={() => { setSortOrder("lowest"); setPage(1); }}
-              className={`px-2 py-1 rounded transition-colors ${sortOrder === "lowest" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}
-            >
-              {lang === "bn" ? "সর্বনিম্ন বকেয়া" : "Lowest due"}
-            </button>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex bg-muted/60 rounded p-0.5 text-xs">
+              <button
+                onClick={() => { setSortOrder("highest"); setPage(1); }}
+                className={`px-2 py-1 rounded transition-colors ${sortOrder === "highest" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}
+              >
+                {lang === "bn" ? "সর্বোচ্চ বকেয়া" : "Highest due"}
+              </button>
+              <button
+                onClick={() => { setSortOrder("lowest"); setPage(1); }}
+                className={`px-2 py-1 rounded transition-colors ${sortOrder === "lowest" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}
+              >
+                {lang === "bn" ? "সর্বনিম্ন বকেয়া" : "Lowest due"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs list */}
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as any); setPage(1); }}>
