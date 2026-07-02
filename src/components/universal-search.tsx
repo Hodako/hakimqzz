@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Search, Package, Users, ShoppingBag, Receipt, Settings, BarChart3, Home, ArrowLeft } from "lucide-react";
+import { Search, Package, Users, ShoppingBag, Receipt, Settings, BarChart3, Home, ArrowLeft, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
