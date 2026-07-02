@@ -216,7 +216,7 @@ export default function CustomerDetail() {
         </Card>
 
         <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
-          <Plus className="size-3.5 mr-1" /> {t("add_money_owed")} (জমা/বাকী যোগ করুন)
+          <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকী যোগ করুন" : "Add money owned"}
         </Button>
       </div>
 
@@ -390,7 +390,7 @@ function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: strin
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t("add_money_owed")}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{lang === "bn" ? "বাকী যোগ করুন" : "Add money owned"}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>

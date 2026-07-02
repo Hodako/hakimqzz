@@ -725,10 +725,36 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
     }
   }
 
-  // Sheets Sync
+  // Add product purchase to expenses collection
+  const expenseId = crypto.randomUUID();
+  const expenseDoc = {
+    _id: expenseId,
+    owner_id: session.ownerId,
+    title: `Product Purchase: ${data.product_name}`,
+    amount: data.total,
+    note: `Purchased ${data.qty} units of ${data.product_name} at unit cost ${data.unit_cost}. Purchase ID: ${id}`,
+    created_at: doc.created_at,
+  };
+  await db.collection("expenses").insertOne(expenseDoc as any);
+
+  // Deduct from cashbox using expense entry
+  await insertCashboxEntry(db, session.ownerId, {
+    kind: "expense",
+    amount: data.total,
+    note: `Product Purchase: ${data.product_name}`,
+    ref_id: expenseId,
+  });
+
+  // Sheets Sync for Purchase
   appendRowToGoogleSheet(session.ownerId, "Purchases",
     ["ID", "Product Name", "Qty", "Unit Cost", "Total", "Note", "Created At"],
     [id, data.product_name, data.qty, data.unit_cost, data.total, data.note || "", doc.created_at]
+  );
+
+  // Sheets Sync for Expense
+  appendRowToGoogleSheet(session.ownerId, "Expenses",
+    ["ID", "Title", "Amount", "Note", "Created At"],
+    [expenseId, expenseDoc.title, expenseDoc.amount, expenseDoc.note, expenseDoc.created_at]
   );
 
   return { ...doc, id };
@@ -750,6 +776,15 @@ export async function deletePurchaseFn(input: { data: { id: string } }) {
     }
   }
   await db.collection("purchases").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+
+  // Delete associated expense and cashbox entry
+  const expenseTitle = `Product Purchase: ${purchase.product_name}`;
+  const expense = await db.collection("expenses").findOne({ owner_id: session.ownerId, title: expenseTitle, amount: purchase.total });
+  if (expense) {
+    await db.collection("expenses").deleteOne({ _id: expense._id });
+    await db.collection("cashbox_entries").deleteOne({ ref_id: expense._id });
+  }
+
   return { success: true };
 }
 

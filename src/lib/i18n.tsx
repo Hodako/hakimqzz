@@ -111,7 +111,7 @@ const dict = {
   party_name: { bn: "নাম", en: "Name" },
   phone: { bn: "ফোন", en: "Phone" },
   collect_payment: { bn: "টাকা আদায়", en: "Collect payment" },
-  add_money_owed: { bn: "জমা টাকা যোগ করুন", en: "Add money owed" },
+  add_money_owed: { bn: "বাকী যোগ করুন", en: "owned" },
   outstanding: { bn: "বাকী টাকা", en: "Outstanding" },
   no_parties: { bn: "কোনো পার্টি যোগ করা হয়নি", en: "No parties added" },
   total_owed: { bn: "মোট প্রাপ্য", en: "Total owed to you" },
