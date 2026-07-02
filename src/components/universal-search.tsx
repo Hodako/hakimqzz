@@ -22,6 +22,8 @@ const PAGES: { to: string; labelKey: DictKey; icon: React.ElementType; perm?: ke
   { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
   { to: "/products", labelKey: "products", icon: Package, perm: "products" },
   { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
+  { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },
+  { to: "/dues", labelKey: "due", icon: Banknote, perm: "parties" },
   { to: "/parties", labelKey: "parties", icon: Users, perm: "parties" },
   { to: "/purchases", labelKey: "new_purchase", icon: Package, perm: "purchases" },
   { to: "/expenses", labelKey: "expenses", icon: Receipt, perm: "expenses" },

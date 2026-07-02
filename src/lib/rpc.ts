@@ -29,6 +29,8 @@ export const getMeFn = actions.getMeFn;
 export const getProductsFn = actions.getProductsFn;
 export const getPartiesFn = actions.getPartiesFn;
 export const getPartyFn = actions.getPartyFn;
+export const getCustomersFn = actions.getCustomersFn;
+export const getCustomerFn = actions.getCustomerFn;
 export const getAllPartyReceivablesFn = actions.getAllPartyReceivablesFn;
 export const getAllPartyPayablesFn = actions.getAllPartyPayablesFn;
 export const getAllPayableSettlementsFn = actions.getAllPayableSettlementsFn;
@@ -69,6 +71,11 @@ export const createPartyFn = (args: any) => runWriteAction("createPartyFn", acti
 export const updatePartyFn = (args: any) => runWriteAction("updatePartyFn", actions.updatePartyFn, args);
 export const deletePartyFn = (args: any) => runWriteAction("deletePartyFn", actions.deletePartyFn, args);
 export const archivePartyFn = (args: any) => runWriteAction("archivePartyFn", actions.archivePartyFn, args);
+
+export const createCustomerFn = (args: any) => runWriteAction("createCustomerFn", actions.createCustomerFn, args);
+export const updateCustomerFn = (args: any) => runWriteAction("updateCustomerFn", actions.updateCustomerFn, args);
+export const deleteCustomerFn = (args: any) => runWriteAction("deleteCustomerFn", actions.deleteCustomerFn, args);
+export const archiveCustomerFn = (args: any) => runWriteAction("archiveCustomerFn", actions.archiveCustomerFn, args);
 
 export const createPartyReceivableFn = (args: any) => runWriteAction("createPartyReceivableFn", actions.createPartyReceivableFn, args);
 export const createPartyPayableFn = (args: any) => runWriteAction("createPartyPayableFn", actions.createPartyPayableFn, args);

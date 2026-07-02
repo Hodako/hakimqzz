@@ -45,6 +45,8 @@ export function canAccess(permissions: PermissionSet | undefined, module: keyof 
 /** Route prefix → required permission (employees without access are redirected). */
 export const ROUTE_PERMISSIONS: { prefix: string; perm: keyof PermissionSet }[] = [
   { prefix: "/parties", perm: "parties" },
+  { prefix: "/customers", perm: "parties" },
+  { prefix: "/dues", perm: "parties" },
   { prefix: "/expenses", perm: "expenses" },
   { prefix: "/trackback", perm: "reports" },
   { prefix: "/cash-management", perm: "expenses" },

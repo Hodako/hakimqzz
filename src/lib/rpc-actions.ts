@@ -1098,6 +1098,7 @@ export async function resetPartiesFn() {
   if (session.role !== "owner") throw new Error("Only owner can reset data");
   const db = await getDb();
   const ownerId = session.ownerId;
+  await db.collection("customers").deleteMany({ owner_id: ownerId });
   await db.collection("parties").deleteMany({ owner_id: ownerId });
   await db.collection("payments").deleteMany({ owner_id: ownerId });
   await db.collection("party_receivables").deleteMany({ owner_id: ownerId });
@@ -1120,6 +1121,7 @@ export async function resetAllDataFn() {
   await db.collection("expenses").deleteMany({ owner_id: ownerId });
   await db.collection("somiti_entries").deleteMany({ owner_id: ownerId });
   await db.collection("owner_withdrawals").deleteMany({ owner_id: ownerId });
+  await db.collection("customers").deleteMany({ owner_id: ownerId });
   await db.collection("parties").deleteMany({ owner_id: ownerId });
   await db.collection("payments").deleteMany({ owner_id: ownerId });
   await db.collection("party_receivables").deleteMany({ owner_id: ownerId });
@@ -1214,7 +1216,7 @@ export async function switchProfileFn(input: { data: { profileId: string } }) {
   return { user: mapped };
 }
 
-export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" | "sales" | "purchases" | "expenses" | "cashbox" } }) {
+export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" | "customer" | "sales" | "purchases" | "expenses" | "cashbox" } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -1262,9 +1264,10 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
     const srcSales = await db.collection("sales").find({ owner_id: sourceOwnerId }).toArray();
     for (const s of srcSales) {
       const { _id, ...rest } = s;
+      const newId = crypto.randomUUID();
       const doc = {
         ...rest,
-        _id: crypto.randomUUID(),
+        _id: newId,
         owner_id: destOwnerId,
         created_at: new Date().toISOString()
       };
@@ -1275,9 +1278,10 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
     const srcPurchases = await db.collection("purchases").find({ owner_id: sourceOwnerId }).toArray();
     for (const p of srcPurchases) {
       const { _id, ...rest } = p;
+      const newId = crypto.randomUUID();
       const doc = {
         ...rest,
-        _id: crypto.randomUUID(),
+        _id: newId,
         owner_id: destOwnerId,
         created_at: new Date().toISOString()
       };
@@ -1288,9 +1292,10 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
     const srcExpenses = await db.collection("expenses").find({ owner_id: sourceOwnerId }).toArray();
     for (const e of srcExpenses) {
       const { _id, ...rest } = e;
+      const newId = crypto.randomUUID();
       const doc = {
         ...rest,
-        _id: crypto.randomUUID(),
+        _id: newId,
         owner_id: destOwnerId,
         created_at: new Date().toISOString()
       };
@@ -1322,6 +1327,46 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
       await db.collection("owner_withdrawals").insertOne(doc as any);
       importedCount++;
     }
+  } else if (data.module === "customer") {
+    const srcCustomers = await db.collection("customers").find({ owner_id: sourceOwnerId }).toArray();
+    for (const c of srcCustomers) {
+      const newCustomerId = crypto.randomUUID();
+      const oldCustomerId = c._id as any as string;
+      const { _id, ...rest } = c;
+
+      const docCustomer = {
+        ...rest,
+        _id: newCustomerId,
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("customers").insertOne(docCustomer as any);
+      importedCount++;
+
+      const srcReceivables = await db.collection("party_receivables").find({ owner_id: sourceOwnerId, party_id: oldCustomerId }).toArray();
+      for (const r of srcReceivables) {
+        const { _id: rId, ...rRest } = r;
+        await db.collection("party_receivables").insertOne({
+          ...rRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newCustomerId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+
+      const srcPayments = await db.collection("payments").find({ owner_id: sourceOwnerId, party_id: oldCustomerId }).toArray();
+      for (const pay of srcPayments) {
+        const { _id: payId, ...payRest } = pay;
+        await db.collection("payments").insertOne({
+          ...payRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newCustomerId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+    }
   } else if (data.module === "party") {
     const srcParties = await db.collection("parties").find({ owner_id: sourceOwnerId }).toArray();
     for (const p of srcParties) {
@@ -1337,18 +1382,6 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
       };
       await db.collection("parties").insertOne(docParty as any);
       importedCount++;
-
-      const srcReceivables = await db.collection("party_receivables").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
-      for (const r of srcReceivables) {
-        const { _id: rId, ...rRest } = r;
-        await db.collection("party_receivables").insertOne({
-          ...rRest,
-          _id: crypto.randomUUID(),
-          owner_id: destOwnerId,
-          party_id: newPartyId,
-          created_at: new Date().toISOString()
-        } as any);
-      }
 
       const srcPayables = await db.collection("party_payables").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
       for (const pb of srcPayables) {
@@ -1389,5 +1422,82 @@ export async function importProfileModuleFn(input: { data: { fromProfileId: stri
   }
 
   return { success: true, importedCount };
+}
+
+export async function getCustomersFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  
+  // Automatically migrate existing parties to customers if customers collection is empty
+  const count = await db.collection("customers").countDocuments({ owner_id: session.ownerId });
+  if (count === 0) {
+    const allParties = await db.collection("parties").find({ owner_id: session.ownerId }).toArray();
+    if (allParties.length > 0) {
+      await db.collection("customers").insertMany(allParties.map(p => ({
+        ...p,
+        _id: p._id,
+      })) as any[]);
+    }
+  }
+
+  const items = await db.collection("customers").find({ owner_id: session.ownerId }).sort({ name: 1 }).toArray();
+  return items.map((c) => ({ ...c, id: c._id as any as string }));
+}
+
+export async function getCustomerFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const doc = await db.collection("customers").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!doc) return null;
+  return { ...doc, id: doc._id as any as string };
+}
+
+export async function createCustomerFn(input: { data: { name: string; phone?: string | null; address?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const doc = {
+    _id: id as any,
+    owner_id: session.ownerId,
+    name: data.name,
+    phone: data.phone || null,
+    address: data.address || null,
+    archived: false,
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("customers").insertOne(doc as any);
+  return { success: true, id };
+}
+
+export async function updateCustomerFn(input: { data: { id: string; name: string; phone?: string | null; address?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const updates = {
+    name: data.name,
+    phone: data.phone || null,
+    address: data.address || null,
+  };
+  await db.collection("customers").updateOne({ _id: data.id as any, owner_id: session.ownerId }, { $set: updates });
+  const updated = await db.collection("customers").findOne({ _id: data.id as any });
+  return { success: true, customer: updated ? { ...updated, id: updated._id as any as string } : null };
+}
+
+export async function deleteCustomerFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("customers").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function archiveCustomerFn(input: { data: { id: string; archived: boolean } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("customers").updateOne({ _id: data.id as any, owner_id: session.ownerId }, { $set: { archived: data.archived } });
+  return { success: true };
 }
 

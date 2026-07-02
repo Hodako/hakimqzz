@@ -19,6 +19,8 @@ import {
   getPartyFn,
   getCashboxFn,
   getRemindersFn,
+  getCustomersFn,
+  getCustomerFn,
 } from "@/lib/rpc";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -31,6 +33,7 @@ export type Product = {
   category?: string;
 };
 export type Party = { id: string; name: string; phone: string | null; address?: string | null; created_at: string; archived?: boolean };
+export type Customer = { id: string; name: string; phone: string | null; address?: string | null; created_at: string; archived?: boolean };
 export type Sale = {
   id: string; product_id: string | null; product_name: string;
   qty: number; buy_price: number; sell_price: number; profit: number;
@@ -76,6 +79,8 @@ export type Reminder = {
 export const getProducts = () => getProductsFn() as unknown as Promise<Product[]>;
 export const getParties = () => getPartiesFn() as unknown as Promise<Party[]>;
 export const getParty = (id: string) => getPartyFn({ data: { id } }) as unknown as Promise<Party | null>;
+export const getCustomers = () => getCustomersFn() as unknown as Promise<Customer[]>;
+export const getCustomer = (id: string) => getCustomerFn({ data: { id } }) as unknown as Promise<Customer | null>;
 export const getSales = () => getSalesFn() as unknown as Promise<Sale[]>;
 export const getPurchases = () => getPurchasesFn() as unknown as Promise<Purchase[]>;
 export const getExpenses = () => getExpensesFn() as unknown as Promise<Expense[]>;

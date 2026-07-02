@@ -50,8 +50,9 @@ const desktopNavGroups: NavGroup[] = [
       { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
       { to: "/products", labelKey: "products", icon: Package, perm: "products" },
       { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
-      { to: "/parties", labelKey: "parties", icon: Users, perm: "parties" },
+      { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },
       { to: "/dues", labelKey: "due", icon: Banknote, perm: "parties" },
+      { to: "/parties", labelKey: "parties", icon: Users, perm: "parties" },
     ],
   },
   {
@@ -83,7 +84,7 @@ const mobileNav: NavItem[] = [
   { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
   { to: "/products", labelKey: "products", icon: Package, perm: "products" },
   { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
-  { to: "/parties", labelKey: "parties", icon: Users, perm: "parties" },
+  { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },
   { to: "/more", labelKey: "more", icon: MoreHorizontal },
 ];
 
@@ -165,9 +166,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isEmployee = user.role === "employee";
   const sidebarGroups = filterGroups(desktopNavGroups, perms).map(group => ({
     ...group,
-    items: group.items.filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues")))
+    items: group.items.filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues" || item.to === "/customers")))
   })).filter(group => group.items.length > 0);
-  const bottomNav = filterNav(mobileNav, perms).filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues")));
+  const bottomNav = filterNav(mobileNav, perms).filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues" || item.to === "/customers")));
   const brandName = user.business_name || "HakimQzz";
   const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "HZ";
 

@@ -30,7 +30,8 @@ const businessLinks = [
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
   { to: "/purchases",      labelKey: "new_purchase",    desc: "Log product inventory buys", icon: ShoppingCart, perm: "purchases"  as const },
   { to: "/online-sells",   labelKey: "online_sell",     desc: "Track web and online sales", icon: DollarSign,   perm: "sales"      as const },
-  { to: "/dues",           labelKey: "due",             desc: "Customer's debt (Owned/Lending/Owe)", icon: Banknote, perm: "parties"    as const },
+  { to: "/customers",      labelKey: "customers",       desc: "Customer profiles & transaction statistics", icon: Users, perm: "parties" as const },
+  { to: "/dues",           labelKey: "due",             desc: "Customer dues & collections history", icon: Banknote, perm: "parties"    as const },
   { to: "/parties",        labelKey: "parties",         desc: "Suppliers, vendors, and partner logs", icon: Users, perm: "parties"    as const },
   { to: "/settings",       labelKey: "settings",        desc: "Business profile & settings", icon: Settings,     perm: "settings"   as const },
 ] as const;
@@ -1519,7 +1520,7 @@ export default function MorePage() {
   const [newProfileName, setNewProfileName] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importSourceProfileId, setImportSourceProfileId] = useState("");
-  const [importModule, setImportModule] = useState<"products" | "somiti" | "party" | "sales" | "purchases" | "expenses" | "cashbox" | "">("");
+  const [importModule, setImportModule] = useState<"products" | "somiti" | "party" | "customer" | "sales" | "purchases" | "expenses" | "cashbox" | "">("");
   const [isProcessingProfile, setIsProcessingProfile] = useState(false);
 
   const handleCreateProfile = async (e: React.FormEvent) => {
@@ -1815,7 +1816,8 @@ export default function MorePage() {
                 <SelectContent>
                   <SelectItem value="products">{lang === "bn" ? "পণ্য মডিউল (Products)" : "Products Module"}</SelectItem>
                   <SelectItem value="somiti">{lang === "bn" ? "সমিতি মডিউল (Samity)" : "Samity Module"}</SelectItem>
-                  <SelectItem value="party">{lang === "bn" ? "গ্রাহক ও বাকী মডিউল (Customer & Debts)" : "Customer & Debts Module"}</SelectItem>
+                  <SelectItem value="customer">{lang === "bn" ? "কাস্টমার ও বাকী মডিউল (Customers & Receivables)" : "Customers & Receivables Module"}</SelectItem>
+                  <SelectItem value="party">{lang === "bn" ? "সাপ্লায়ার ও পার্টনার মডিউল (Suppliers & Payables)" : "Suppliers & Payables Module"}</SelectItem>
                   <SelectItem value="sales">{lang === "bn" ? "বিক্রয় ও লাভ মডিউল (Sales & Profits)" : "Sales & Profits Module"}</SelectItem>
                   <SelectItem value="purchases">{lang === "bn" ? "ক্রয় মডিউল (Purchases)" : "Purchases Module"}</SelectItem>
                   <SelectItem value="expenses">{lang === "bn" ? "খরচ মডিউল (Expenses)" : "Expenses Module"}</SelectItem>

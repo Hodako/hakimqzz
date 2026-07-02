@@ -3,9 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
-  getParties, getSales, getAllPayments, getAllPartyReceivables,
+  getCustomers, getSales, getAllPayments, getAllPartyReceivables,
   getAllPartyPayables, getAllPayableSettlements,
-  type Party, type Sale, type Payment, type PartyLedger
+  type Customer as Party, type Sale, type Payment, type PartyLedger
 } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useT } from "@/lib/i18n";
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createPaymentFn, createPartyReceivableFn, createPartyFn } from "@/lib/rpc";
+import { createPaymentFn, createPartyReceivableFn, createCustomerFn as createPartyFn } from "@/lib/rpc";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import Link from "next/link";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
@@ -36,7 +36,7 @@ export default function DuesPage() {
   const { lang, t } = useT();
   const qc = useQueryClient();
 
-  const parties = useCachedQuery(["parties"], getParties);
+  const parties = useCachedQuery(["customers"], getCustomers);
   const sales = useCachedQuery(["sales"], getSales);
   const allPayments = useCachedQuery(["all-payments"], getAllPayments);
   const allReceivables = useCachedQuery(["all-party-receivables"], getAllPartyReceivables);
@@ -76,7 +76,7 @@ export default function DuesPage() {
     setAddingCust(true);
     try {
       await createPartyFn({ data: { name, phone, address } });
-      await refreshQueries(qc, ["parties"]);
+      await refreshQueries(qc, ["customers"]);
       setNewCustName("");
       setNewCustPhone("");
       setNewCustAddress("");
@@ -400,7 +400,7 @@ export default function DuesPage() {
               <Card key={p.id} className={`p-4 flex flex-col justify-between gap-3 bg-card/75 backdrop-blur-sm hover:shadow-md transition-shadow beveled-card ${cardBorder}`}>
                 <div className="space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/parties/${p.id}`} className="font-semibold text-sm hover:text-primary transition-colors hover:underline flex items-center gap-1 group">
+                    <Link href={`/customers/${p.id}`} className="font-semibold text-sm hover:text-primary transition-colors hover:underline flex items-center gap-1 group">
                       {p.name}
                       <ArrowRight className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </Link>

@@ -13,9 +13,9 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
-import { getParties, getProducts, type Product } from "@/lib/queries";
+import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
-import { createSaleFn, createPartyFn } from "@/lib/rpc";
+import { createSaleFn, createCustomerFn } from "@/lib/rpc";
 import { Plus, Trash2 } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
 
@@ -32,7 +32,7 @@ export function SaleDialog({
   const { user } = useAuth();
   const qc = useQueryClient();
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
-  const { data: parties = [] } = useCachedQuery(["parties"], getParties);
+  const { data: customers = [] } = useCachedQuery(["customers"], getCustomers);
 
   const [type, setType] = useState<"cash" | "credit" | "online">(presetType ?? "cash");
   const [partyId, setPartyId] = useState("");
@@ -56,8 +56,8 @@ export function SaleDialog({
     const address = newCustAddress.trim() || null;
     setAddingCust(true);
     try {
-      const saved = await createPartyFn({ data: { name, phone, address } });
-      qc.invalidateQueries({ queryKey: ["parties"] });
+      const saved = await createCustomerFn({ data: { name, phone, address } });
+      qc.invalidateQueries({ queryKey: ["customers"] });
       setPartyId(saved.id);
       setNewCustName("");
       setNewCustPhone("");
@@ -258,7 +258,7 @@ export function SaleDialog({
                         <Select value={partyId} onValueChange={setPartyId}>
                           <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
-                            {parties.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            {customers.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
