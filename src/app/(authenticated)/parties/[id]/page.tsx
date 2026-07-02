@@ -44,10 +44,17 @@ export default function PartyDetail() {
   const payables = useCachedQuery(["party-payables", id], () => getPartyPayables(id));
   const settlements = useCachedQuery(["party-settlements", id], () => getPayableSettlements(id));
 
-  const [payOpen, setPayOpen] = useState(false);
-  const [collectOpen, setCollectOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const [addKind, setAddKind] = useState<"receivable" | "payable" | null>(null);
+
+  const [backPath, setBackPath] = useState("/parties");
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const ref = document.referrer;
+      if (ref.includes("/dues")) {
+        setBackPath("/dues");
+      }
+    }
+  }, []);
 
   const [entryToDelete, setEntryToDelete] = useState<Entry | null>(null);
   const [isDeletingEntry, setIsDeletingEntry] = useState(false);
@@ -72,32 +79,38 @@ export default function PartyDetail() {
     deletable: boolean; rawId: string;
   };
 
+  const hasReceivableHistory = outstanding > 0 || saleDue > 0 || extraReceivable > 0 || paidTotal > 0;
+  const hasPayableHistory = payableOutstanding > 0 || payableTotal > 0 || settledTotal > 0;
+
+  const showReceivable = hasReceivableHistory || (!hasReceivableHistory && !hasPayableHistory);
+  const showPayable = hasPayableHistory || (!hasReceivableHistory && !hasPayableHistory);
+
   const entries: Entry[] = [
-    ...(sales.data ?? []).filter(s => Number(s.due_amount) > 0 && !s.returned).map(s => ({
+    ...(showReceivable ? (sales.data ?? []).filter(s => Number(s.due_amount) > 0 && !s.returned).map(s => ({
       id: "s" + s.id, rawId: s.id, date: s.created_at,
       label: s.product_id ? `${s.product_name} ×${s.qty}` : s.product_name,
       amount: Number(s.due_amount), kind: "sale" as const, deletable: !s.product_id,
-    })),
-    ...(receivables.data ?? []).map(r => ({
+    })) : []),
+    ...(showReceivable ? (receivables.data ?? []).map(r => ({
       id: "r" + r.id, rawId: r.id, date: r.created_at,
       label: r.note || t("money_owed"), amount: Number(r.amount),
       kind: "receivable" as const, deletable: true,
-    })),
-    ...(payments.data ?? []).map(p => ({
+    })) : []),
+    ...(showReceivable ? (payments.data ?? []).map(p => ({
       id: "p" + p.id, rawId: p.id, date: p.created_at,
       label: p.note || t("collect_payment"), amount: -Number(p.amount),
       kind: "payment" as const, deletable: true,
-    })),
-    ...(payables.data ?? []).map(p => ({
+    })) : []),
+    ...(showPayable ? (payables.data ?? []).map(p => ({
       id: "pb" + p.id, rawId: p.id, date: p.created_at,
       label: p.note || t("money_payable"), amount: Number(p.amount),
       kind: "payable" as const, deletable: true,
-    })),
-    ...(settlements.data ?? []).map(s => ({
+    })) : []),
+    ...(showPayable ? (settlements.data ?? []).map(s => ({
       id: "st" + s.id, rawId: s.id, date: s.created_at,
       label: s.note || t("pay_party"), amount: -Number(s.amount),
       kind: "settlement" as const, deletable: true,
-    })),
+    })) : []),
   ].sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
   async function performDeleteEntry() {
@@ -190,9 +203,10 @@ export default function PartyDetail() {
 
   return (
     <div className="space-y-4 pb-4">
-      <Link href="/parties">
+      <Link href={backPath}>
         <Button variant="ghost" size="sm">
-          <ArrowLeft className="size-4 mr-1" />{t("parties")}
+          <ArrowLeft className="size-4 mr-1" />
+          {backPath === "/dues" ? (lang === "bn" ? "বাকী" : "Dues") : t("parties")}
         </Button>
       </Link>
       <div className="flex items-start justify-between gap-2">
@@ -228,38 +242,46 @@ export default function PartyDetail() {
 
       <div className="max-w-md mx-auto w-full space-y-4">
         {/* Receivable (They owe me) */}
-        <Card className="p-5 glass-card border-amber-500/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">{t("borrowed_from_me")} (জমা / তারা দেবে)</div>
-          <div className="text-3xl font-extrabold text-amber-600 mt-2 font-serif">{fmtMoney(outstanding)}</div>
-          <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
-            হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
-          </p>
-          <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
-            <Plus className="size-3.5 mr-1.5" /> {t("collect_payment")} (টাকা আদায় করুন)
-          </Button>
-        </Card>
+        {showReceivable && (
+          <>
+            <Card className="p-5 glass-card border-amber-500/20 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">{t("borrowed_from_me")} (জমা / তারা দেবে)</div>
+              <div className="text-3xl font-extrabold text-amber-600 mt-2 font-serif">{fmtMoney(outstanding)}</div>
+              <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
+                হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
+              </p>
+              <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
+                <Plus className="size-3.5 mr-1.5" /> {t("collect_payment")} (টাকা আদায় করুন)
+              </Button>
+            </Card>
 
-        <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
-          <Plus className="size-3.5 mr-1" /> {t("add_money_owed")} (জমা/বাকী যোগ করুন)
-        </Button>
+            <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
+              <Plus className="size-3.5 mr-1" /> {t("add_money_owed")} (জমা/বাকী যোগ করুন)
+            </Button>
+          </>
+        )}
 
         {/* Payable (I owe them) */}
-        <Card className="p-5 glass-card border-rose-500/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">{t("borrowed_from_him")} (বকেয়া)</div>
-          <div className="text-3xl font-extrabold text-rose-600 mt-2 font-serif">{fmtMoney(payableOutstanding)}</div>
-          <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
-            হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
-          </p>
-          <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
-            <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {t("pay_party")} (জমা দিন)
-          </Button>
-        </Card>
+        {showPayable && (
+          <>
+            <Card className="p-5 glass-card border-rose-500/20 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">{t("borrowed_from_him")} (বকেয়া)</div>
+              <div className="text-3xl font-extrabold text-rose-600 mt-2 font-serif">{fmtMoney(payableOutstanding)}</div>
+              <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
+                হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
+              </p>
+              <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
+                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {t("pay_party")} (জমা দিন)
+              </Button>
+            </Card>
 
-        <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("payable")}>
-          <Plus className="size-3.5 mr-1" /> {t("add_payable")} (বকেয়া যোগ করুন)
-        </Button>
+            <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("payable")}>
+              <Plus className="size-3.5 mr-1" /> {t("add_payable")} (বকেয়া যোগ করুন)
+            </Button>
+          </>
+        )}
       </div>
 
       <div>
