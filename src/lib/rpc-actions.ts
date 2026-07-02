@@ -13,7 +13,7 @@ type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 async function insertCashboxEntry(
   db: Awaited<ReturnType<typeof getDb>>,
   ownerId: string,
-  entry: { kind: CashboxKind; amount: number; note?: string | null; ref_id?: string | null },
+  entry: { kind: CashboxKind; amount: number; note?: string | null; ref_id?: string | null; created_at?: string },
 ) {
   const id = crypto.randomUUID();
   const doc = {
@@ -23,7 +23,7 @@ async function insertCashboxEntry(
     amount: entry.amount,
     note: entry.note ?? null,
     ref_id: entry.ref_id ?? null,
-    created_at: new Date().toISOString(),
+    created_at: entry.created_at || new Date().toISOString(),
   };
   await db.collection("cashbox_entries").insertOne(doc as any);
 
@@ -393,12 +393,12 @@ export async function getSalesForPartyFn(input: { data: { partyId: string } }) {
   return items.map((s) => ({ ...s, id: s._id as any as string }));
 }
 
-export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null; cart_id?: string | null } }) {
+export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null; cart_id?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, party_id: data.type === "credit" ? data.party_id : null, created_at: new Date().toISOString() };
+  const doc = { _id: id, owner_id: session.ownerId, ...data, party_id: data.type === "credit" ? data.party_id : null, created_at: data.created_at || new Date().toISOString() };
   await db.collection("sales").insertOne(doc as any);
   if (data.product_id) {
     const product = await db.collection("products").findOne({ _id: data.product_id as any });
@@ -411,6 +411,7 @@ export async function createSaleFn(input: { data: { product_id?: string | null; 
       amount: cashAmt,
       note: `Sale: ${data.product_name}`,
       ref_id: id,
+      created_at: doc.created_at,
     });
   }
 
@@ -704,12 +705,12 @@ export async function getPurchasesFn() {
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
-export async function createPurchaseFn(input: { data: { product_id?: string | null; product_name: string; qty: number; unit_cost: number; sell_price?: number; total: number; note?: string | null } }) {
+export async function createPurchaseFn(input: { data: { product_id?: string | null; product_name: string; qty: number; unit_cost: number; sell_price?: number; total: number; note?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
+  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: data.created_at || new Date().toISOString() };
   await db.collection("purchases").insertOne(doc as any);
   if (data.product_id) {
     const product = await db.collection("products").findOne({ _id: data.product_id as any });
@@ -743,6 +744,7 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
     amount: data.total,
     note: `Product Purchase: ${data.product_name}`,
     ref_id: expenseId,
+    created_at: doc.created_at,
   });
 
   // Sheets Sync for Purchase
@@ -797,18 +799,19 @@ export async function getExpensesFn() {
   return items.map((e) => ({ ...e, id: e._id as any as string }));
 }
 
-export async function createExpenseFn(input: { data: { title: string; amount: number; note?: string | null } }) {
+export async function createExpenseFn(input: { data: { title: string; amount: number; note?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
+  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: data.created_at || new Date().toISOString() };
   await db.collection("expenses").insertOne(doc as any);
   await insertCashboxEntry(db, session.ownerId, {
     kind: "expense",
     amount: data.amount,
     note: data.title,
     ref_id: id,
+    created_at: doc.created_at,
   });
 
   // Sheets Sync
@@ -988,7 +991,7 @@ export async function getCashboxFn() {
   return items.map((e) => ({ ...e, id: e._id as any as string }));
 }
 
-export async function createCashboxFn(input: { data: { kind: "deposit" | "withdraw"; amount: number; note?: string | null } }) {
+export async function createCashboxFn(input: { data: { kind: "deposit" | "withdraw"; amount: number; note?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -996,6 +999,7 @@ export async function createCashboxFn(input: { data: { kind: "deposit" | "withdr
     kind: data.kind,
     amount: data.amount,
     note: data.note ?? null,
+    created_at: data.created_at,
   });
   return saved;
 }

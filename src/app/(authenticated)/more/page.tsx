@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { createProfileFn, switchProfileFn, importProfileModuleFn } from "@/lib/rpc";
+import { createProfileFn, switchProfileFn, importProfileModuleFn, createSaleFn, createExpenseFn, createPurchaseFn, createCashboxFn } from "@/lib/rpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
@@ -522,6 +522,121 @@ export default function MorePage() {
       </Card>
     );
   };
+
+  // Custom date mutation states
+  const [txnType, setTxnType] = useState<"sale" | "expense" | "purchase" | "withdraw">("sale");
+  const [customDate, setCustomDate] = useState("");
+  const [txnSubmitting, setTxnSubmitting] = useState(false);
+
+  // Sale fields
+  const [saleProdName, setSaleProdName] = useState("");
+  const [saleQty, setSaleQty] = useState("");
+  const [saleBuyPrice, setSaleBuyPrice] = useState("");
+  const [saleSellPrice, setSaleSellPrice] = useState("");
+  const [saleType, setSaleType] = useState<"cash" | "credit">("cash");
+  const [salePaidAmt, setSalePaidAmt] = useState("");
+  const [saleDueAmt, setSaleDueAmt] = useState("");
+
+  // Expense fields
+  const [expTitle, setExpTitle] = useState("");
+  const [expAmt, setExpAmt] = useState("");
+  const [expNote, setExpNote] = useState("");
+
+  // Purchase fields
+  const [purProdName, setPurProdName] = useState("");
+  const [purQty, setPurQty] = useState("");
+  const [purUnitCost, setPurUnitCost] = useState("");
+
+  // Withdrawal fields
+  const [withAmt, setWithAmt] = useState("");
+  const [withNote, setWithNote] = useState("");
+
+  async function handleAddCustomRecord(e: React.FormEvent) {
+    e.preventDefault();
+    if (txnSubmitting) return;
+
+    const isoDate = customDate ? new Date(customDate).toISOString() : new Date().toISOString();
+    setTxnSubmitting(true);
+    try {
+      if (txnType === "sale") {
+        const qtyVal = Number(saleQty) || 0;
+        const buyVal = Number(saleBuyPrice) || 0;
+        const sellVal = Number(saleSellPrice) || 0;
+        const paidVal = Number(salePaidAmt) || 0;
+        const dueVal = Number(saleDueAmt) || 0;
+        if (!saleProdName.trim() || qtyVal <= 0 || sellVal <= 0) {
+          throw new Error("Please fill in all required sale fields.");
+        }
+        await createSaleFn({
+          data: {
+            product_name: saleProdName.trim(),
+            qty: qtyVal,
+            buy_price: buyVal,
+            sell_price: sellVal,
+            profit: (sellVal - buyVal) * qtyVal,
+            type: saleType,
+            paid_amount: paidVal,
+            due_amount: dueVal,
+            created_at: isoDate,
+          }
+        });
+        toast.success(lang === "bn" ? "সরাসরি বিক্রি সফলভাবে যুক্ত হয়েছে!" : "Custom Sale record added successfully!");
+        setSaleProdName(""); setSaleQty(""); setSaleBuyPrice(""); setSaleSellPrice(""); setSalePaidAmt(""); setSaleDueAmt("");
+      } else if (txnType === "expense") {
+        const amtVal = Number(expAmt) || 0;
+        if (!expTitle.trim() || amtVal <= 0) {
+          throw new Error("Please fill in all required expense fields.");
+        }
+        await createExpenseFn({
+          data: {
+            title: expTitle.trim(),
+            amount: amtVal,
+            note: expNote.trim() || null,
+            created_at: isoDate,
+          }
+        });
+        toast.success(lang === "bn" ? "সরাসরি খরচ সফলভাবে যুক্ত হয়েছে!" : "Custom Expense record added successfully!");
+        setExpTitle(""); setExpAmt(""); setExpNote("");
+      } else if (txnType === "purchase") {
+        const qtyVal = Number(purQty) || 0;
+        const costVal = Number(purUnitCost) || 0;
+        if (!purProdName.trim() || qtyVal <= 0 || costVal <= 0) {
+          throw new Error("Please fill in all required purchase fields.");
+        }
+        await createPurchaseFn({
+          data: {
+            product_name: purProdName.trim(),
+            qty: qtyVal,
+            unit_cost: costVal,
+            total: qtyVal * costVal,
+            created_at: isoDate,
+          }
+        });
+        toast.success(lang === "bn" ? "সরাসরি ক্রয় সফলভাবে যুক্ত হয়েছে!" : "Custom Purchase record added successfully!");
+        setPurProdName(""); setPurQty(""); setPurUnitCost("");
+      } else if (txnType === "withdraw") {
+        const amtVal = Number(withAmt) || 0;
+        if (amtVal <= 0) {
+          throw new Error("Please enter a valid withdrawal amount.");
+        }
+        await createCashboxFn({
+          data: {
+            kind: "withdraw",
+            amount: amtVal,
+            note: withNote.trim() || "Manual Backdated Withdrawal",
+            created_at: isoDate,
+          }
+        });
+        toast.success(lang === "bn" ? "ক্যাশবক্স উত্তোলন সফলভাবে যুক্ত হয়েছে!" : "Custom Cashbox Withdrawal added successfully!");
+        setWithAmt(""); setWithNote("");
+      }
+      qc.invalidateQueries();
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setTxnSubmitting(false);
+    }
+  }
 
   // Theme states
   const [theme, setTheme] = useState({
@@ -1672,6 +1787,150 @@ export default function MorePage() {
     );
   };
 
+  const renderBackdateManager = () => {
+    return (
+      <Card className="p-4 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-background border-amber-500/25 beveled-card space-y-4">
+        <div>
+          <div className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold">
+            {lang === "bn" ? "কাস্টম ও ব্যাকডেট এন্ট্রি" : "Backdate Manager"}
+          </div>
+          <h2 className="text-sm font-bold text-zinc-950 dark:text-zinc-50 mt-0.5">
+            {lang === "bn" ? "তারিখ অনুযায়ী সরাসরি হিসাব যোগ করুন" : "Add Custom Records on Custom Dates"}
+          </h2>
+        </div>
+
+        <form onSubmit={handleAddCustomRecord} className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "লেনদেনের ধরন *" : "Record Type *"}</Label>
+              <Select value={txnType} onValueChange={(v: any) => setTxnType(v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sale">{lang === "bn" ? "বিক্রি (Sale)" : "Sale"}</SelectItem>
+                  <SelectItem value="expense">{lang === "bn" ? "খরচ (Expense)" : "Expense"}</SelectItem>
+                  <SelectItem value="purchase">{lang === "bn" ? "ক্রয় (Purchase/Buy)" : "Purchase"}</SelectItem>
+                  <SelectItem value="withdraw">{lang === "bn" ? "ক্যাশবক্স উত্তোলন (Withdrawal)" : "Cashbox Withdrawal"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "তারিখ ও সময় *" : "Custom Date & Time *"}</Label>
+              <Input
+                type="datetime-local"
+                value={customDate}
+                onChange={e => setCustomDate(e.target.value)}
+                required
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Conditional Forms */}
+          {txnType === "sale" && (
+            <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম *" : "Product Name *"}</Label>
+                <Input value={saleProdName} onChange={e => setSaleProdName(e.target.value)} required placeholder="E.g. Cotton Panjabi" className="h-8 text-xs" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ *" : "Quantity *"}</Label>
+                  <Input type="number" value={saleQty} onChange={e => setSaleQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "কেনা দাম (প্রতি পিস)" : "Buy Price (Unit)"}</Label>
+                  <Input type="number" value={saleBuyPrice} onChange={e => setSaleBuyPrice(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "বিক্রি দাম (প্রতি পিস) *" : "Sell Price (Unit) *"}</Label>
+                  <Input type="number" value={saleSellPrice} onChange={e => setSaleSellPrice(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "পেমেন্ট টাইপ" : "Payment Type"}</Label>
+                  <Select value={saleType} onValueChange={(v: any) => setSaleType(v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{lang === "bn" ? "নগদ (Cash)" : "Cash"}</SelectItem>
+                      <SelectItem value="credit">{lang === "bn" ? "বাকী (Credit)" : "Credit"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "আদায় (Paid)" : "Paid Amount"}</Label>
+                  <Input type="number" value={salePaidAmt} onChange={e => setSalePaidAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "বাকী (Due)" : "Due Amount"}</Label>
+                  <Input type="number" value={saleDueAmt} onChange={e => setSaleDueAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {txnType === "expense" && (
+            <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "খরচের শিরোনাম *" : "Expense Title *"}</Label>
+                  <Input value={expTitle} onChange={e => setExpTitle(e.target.value)} required placeholder="E.g. Tea & Snacks" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "টাকার পরিমাণ *" : "Amount *"}</Label>
+                  <Input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "নোট/মন্তব্য" : "Note/Details"}</Label>
+                <Input value={expNote} onChange={e => setExpNote(e.target.value)} placeholder="E.g. Shop visitors tea" className="h-8 text-xs" />
+              </div>
+            </div>
+          )}
+
+          {txnType === "purchase" && (
+            <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম *" : "Product Name *"}</Label>
+                <Input value={purProdName} onChange={e => setPurProdName(e.target.value)} required placeholder="E.g. Premium Silk Saree" className="h-8 text-xs" />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ *" : "Quantity *"}</Label>
+                  <Input type="number" value={purQty} onChange={e => setPurQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "কেনা দাম (ইউনিট) *" : "Unit Cost *"}</Label>
+                  <Input type="number" value={purUnitCost} onChange={e => setPurUnitCost(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {txnType === "withdraw" && (
+            <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "উত্তোলন পরিমাণ *" : "Withdrawal Amount *"}</Label>
+                  <Input type="number" value={withAmt} onChange={e => setWithAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "নোট/বিবরণ" : "Withdrawal Note"}</Label>
+                  <Input value={withNote} onChange={e => setWithNote(e.target.value)} placeholder="E.g. Owner emergency cash" className="h-8 text-xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Button type="submit" disabled={txnSubmitting} className="w-full h-8.5 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold beveled-button">
+            {txnSubmitting ? "Processing..." : (lang === "bn" ? "লেনদেন যুক্ত করুন" : "Add Record")}
+          </Button>
+        </form>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-6">
       {/* Profile Header */}
@@ -1737,9 +1996,10 @@ export default function MorePage() {
 
       {isMobile ? (
         <Tabs defaultValue="menu" className="space-y-4">
-          <TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
-            <TabsTrigger value="menu" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "মেনু ও লিংক" : "Menu & Operations"}</TabsTrigger>
-            <TabsTrigger value="ui" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "ইউআই সেটিংস" : "UI Customization"}</TabsTrigger>
+          <TabsList className="grid grid-cols-3 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
+            <TabsTrigger value="menu" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "মেনু ও লিংক" : "Operations"}</TabsTrigger>
+            <TabsTrigger value="ui" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "ইউআই সেটিংস" : "UI Style"}</TabsTrigger>
+            <TabsTrigger value="backdate" className="rounded-lg text-xs font-semibold">{lang === "bn" ? "কাস্টম এন্ট্রি" : "Backdate"}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="menu" className="space-y-5 outline-none mt-0">
@@ -1750,11 +2010,16 @@ export default function MorePage() {
           <TabsContent value="ui" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
             {renderThemeCustomization()}
           </TabsContent>
+
+          <TabsContent value="backdate" className="space-y-5 outline-none mt-0 animate-in fade-in duration-200">
+            {renderBackdateManager()}
+          </TabsContent>
         </Tabs>
       ) : (
         <div className="space-y-5">
           {renderOperations()}
           {renderThemeCustomization()}
+          {renderBackdateManager()}
           {renderSignOut()}
         </div>
       )}
