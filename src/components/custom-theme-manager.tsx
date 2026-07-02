@@ -1142,6 +1142,13 @@ export function CustomThemeManager() {
     if (config.bgImage) {
       const opacity = config.bgImageOpacity !== undefined ? config.bgImageOpacity : 0.1;
       css += `
+        html {
+          background-color: var(--background) !important;
+        }
+        body {
+          background-color: transparent !important;
+          background-image: none !important;
+        }
         body::before {
           content: "";
           position: fixed;
@@ -1149,8 +1156,8 @@ export function CustomThemeManager() {
           left: 0;
           width: 100vw;
           height: 100vh;
-          z-index: -10;
-          background-image: url('${config.bgImage}');
+          z-index: -1;
+          background-image: url('${config.bgImage}') !important;
           background-size: cover;
           background-position: center;
           background-repeat: no-repeat;
