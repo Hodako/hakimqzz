@@ -74,6 +74,8 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       toast.success(t("save"));
       qc.invalidateQueries({ queryKey: ["purchases"] });
       qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
       onOpenChange(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));

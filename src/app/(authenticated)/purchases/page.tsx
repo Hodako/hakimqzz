@@ -45,11 +45,11 @@ export default function PurchasesPage() {
     setCachedData<Purchase[]>(qc, ["purchases"], old => (old ?? []).filter(p => p.id !== purchaseToDelete.id));
     try {
       await deletePurchaseFn({ data: { id: purchaseToDelete.id } });
-      await refreshQueries(qc, ["purchases"], ["products"]);
+      await refreshQueries(qc, ["purchases"], ["products"], ["expenses"], ["cashbox"]);
       toast.success(t("delete"));
       setPurchaseToDelete(null);
     } catch (err: unknown) {
-      await refreshQueries(qc, ["purchases"], ["products"]);
+      await refreshQueries(qc, ["purchases"], ["products"], ["expenses"], ["cashbox"]);
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setIsDeleting(false);

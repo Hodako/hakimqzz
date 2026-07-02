@@ -350,7 +350,7 @@ function EditCustomerDialog({ customer, open, onOpenChange }: { customer: Custom
 }
 
 function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: string; kind: "receivable"; open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { t } = useT();
+  const { lang, t } = useT();
   const qc = useQueryClient();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");

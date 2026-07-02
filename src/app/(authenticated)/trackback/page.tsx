@@ -74,6 +74,8 @@ export default function TrackbackPage() {
         if (res && !res.success && 'error' in res) throw new Error(res.error as string);
         qc.invalidateQueries({ queryKey: ["purchases"] });
         qc.invalidateQueries({ queryKey: ["products"] });
+        qc.invalidateQueries({ queryKey: ["expenses"] });
+        qc.invalidateQueries({ queryKey: ["cashbox"] });
       } else if (type === "expense") {
         const res = await deleteExpenseFn({ data: { id } });
         if (res && !res.success && 'error' in res) throw new Error(res.error as string);
