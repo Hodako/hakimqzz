@@ -271,12 +271,12 @@ export default function DuesPage() {
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "বাকী" : "Dues"}</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {lang === "bn" ? `${totalDebtors} জন কাস্টমারের কাছে মোট বকেয়া জমা` : `${totalDebtors} customers with outstanding balances`}
-          </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          <h1 className="text-xl font-bold tracking-tight font-serif shrink-0">{lang === "bn" ? "বাকী" : "Dues"}</h1>
+          <span className="text-[10px] text-muted-foreground font-sans">
+            — {lang === "bn" ? `${totalDebtors} জন কাস্টমারের বকেয়া` : `${totalDebtors} customers with outstanding balances`}
+          </span>
         </div>
         <div className="flex gap-1.5 items-center">
           <Button
