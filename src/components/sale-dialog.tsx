@@ -17,6 +17,7 @@ import { getParties, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
 import { createSaleFn, createPartyFn } from "@/lib/rpc";
 import { Plus, Trash2 } from "lucide-react";
+import { safeUUID } from "@/lib/utils";
 
 type CartLine = { productId: string; qty: string; sellPrice: string };
 
@@ -131,7 +132,7 @@ export function SaleDialog({
       const duePerItem = type === "credit" ? due / cart.length : 0;
       const paidPerItem = type === "credit" ? paidNum / cart.length : 0;
 
-      const cartId = crypto.randomUUID();
+      const cartId = safeUUID();
       for (const line of cart) {
         const product = products.find(p => p.id === line.productId)!;
         const qtyNum = Number(line.qty) || 0;

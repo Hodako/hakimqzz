@@ -31,6 +31,7 @@ const businessLinks = [
   { to: "/purchases",      labelKey: "new_purchase",    desc: "Log product inventory buys", icon: ShoppingCart, perm: "purchases"  as const },
   { to: "/online-sells",   labelKey: "online_sell",     desc: "Track web and online sales", icon: DollarSign,   perm: "sales"      as const },
   { to: "/dues",           labelKey: "due",             desc: "Customer's debt (Owned/Lending/Owe)", icon: Banknote, perm: "parties"    as const },
+  { to: "/parties",        labelKey: "parties",         desc: "Suppliers, vendors, and partner logs", icon: Users, perm: "parties"    as const },
   { to: "/settings",       labelKey: "settings",        desc: "Business profile & settings", icon: Settings,     perm: "settings"   as const },
 ] as const;
 
