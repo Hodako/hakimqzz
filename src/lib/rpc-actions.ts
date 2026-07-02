@@ -48,6 +48,15 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
   const business = user.business_id
     ? await db.collection("businesses").findOne({ _id: user.business_id as any })
     : null;
+  const cookieStore = await cookies();
+  const activeProfile = cookieStore.get("active_profile")?.value || "default";
+  
+  const ownerId = user.role === "employee" ? (user.owner_id as string) : (user._id as any as string);
+  const ownerUser = ownerId === (user._id as any as string) ? user : await db.collection("users").findOne({ _id: ownerId as any });
+  const profiles = ownerUser?.profiles || [
+    { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
+  ];
+
   return {
     id: user._id as any as string,
     email: user.email as string,
@@ -59,6 +68,8 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     logo_url: (business?.logo_url as string) || "/logo.png",
     avatar_url: (user.avatar_url as string) || "",
     permissions: (user.role === "owner" ? OWNER_PERMISSIONS : (user.permissions as PermissionSet)) || DEFAULT_EMPLOYEE_PERMISSIONS,
+    profiles,
+    activeProfile,
   };
 }
 
@@ -218,17 +229,17 @@ export async function getPartiesFn() {
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
-export async function createPartyFn(input: { data: { name: string; phone?: string | null } }) {
+export async function createPartyFn(input: { data: { name: string; phone?: string | null; address?: string | null } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, name: data.name, phone: data.phone || null, created_at: new Date().toISOString() };
+  const doc = { _id: id, owner_id: session.ownerId, name: data.name, phone: data.phone || null, address: data.address || null, created_at: new Date().toISOString() };
   await db.collection("parties").insertOne(doc as any);
   return { ...doc, id };
 }
 
-export async function updatePartyFn(input: { data: { id: string; name?: string; phone?: string | null } }) {
+export async function updatePartyFn(input: { data: { id: string; name?: string; phone?: string | null; address?: string | null } }) {
   const { data } = input;
   const session = await requireSession();
   const { id, ...updates } = data;
@@ -1134,5 +1145,172 @@ export async function changeMyPasswordFn(input: { data: { currentPassword?: stri
   );
 
   return { success: true };
+}
+
+export async function createProfileFn(input: { data: { name: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  
+  const profileId = crypto.randomUUID();
+  const newProfile = {
+    id: profileId,
+    name: data.name.trim() || "New Profile",
+    created_at: new Date().toISOString()
+  };
+
+  const ownerIdBase = session.ownerId.split(":")[0];
+  const owner = await db.collection("users").findOne({ _id: ownerIdBase as any });
+  let profiles = owner?.profiles || [
+    { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
+  ];
+  profiles.push(newProfile);
+
+  await db.collection("users").updateOne(
+    { _id: ownerIdBase as any },
+    { $set: { profiles } }
+  );
+
+  const cookieStore = await cookies();
+  cookieStore.set("active_profile", profileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
+
+  const mapped = await mapUser(db, session.userId);
+  return { user: mapped };
+}
+
+export async function switchProfileFn(input: { data: { profileId: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const ownerIdBase = session.ownerId.split(":")[0];
+  const owner = await db.collection("users").findOne({ _id: ownerIdBase as any });
+  const profiles = owner?.profiles || [
+    { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
+  ];
+
+  const exists = profiles.some((p: any) => p.id === data.profileId);
+  if (!exists && data.profileId !== "default") {
+    throw new Error("Profile not found");
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("active_profile", data.profileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
+
+  const mapped = await mapUser(db, session.userId);
+  return { user: mapped };
+}
+
+export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const ownerIdBase = session.ownerId.split(":")[0];
+  const destOwnerId = session.ownerId;
+  const sourceProfileId = data.fromProfileId;
+  const sourceOwnerId = sourceProfileId === "default" ? ownerIdBase : `${ownerIdBase}:${sourceProfileId}`;
+
+  if (sourceOwnerId === destOwnerId) {
+    throw new Error("Cannot import from the same profile");
+  }
+
+  let importedCount = 0;
+
+  if (data.module === "products") {
+    const srcProducts = await db.collection("products").find({ owner_id: sourceOwnerId }).toArray();
+    for (const p of srcProducts) {
+      const { _id, ...rest } = p;
+      const newId = crypto.randomUUID();
+      const doc = {
+        ...rest,
+        _id: newId,
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("products").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "somiti") {
+    const srcSomiti = await db.collection("somiti_entries").find({ owner_id: sourceOwnerId }).toArray();
+    for (const s of srcSomiti) {
+      const { _id, ...rest } = s;
+      const newId = crypto.randomUUID();
+      const doc = {
+        ...rest,
+        _id: newId,
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("somiti_entries").insertOne(doc as any);
+      importedCount++;
+    }
+  } else if (data.module === "party") {
+    const srcParties = await db.collection("parties").find({ owner_id: sourceOwnerId }).toArray();
+    for (const p of srcParties) {
+      const newPartyId = crypto.randomUUID();
+      const oldPartyId = p._id as any as string;
+      const { _id, ...rest } = p;
+
+      const docParty = {
+        ...rest,
+        _id: newPartyId,
+        owner_id: destOwnerId,
+        created_at: new Date().toISOString()
+      };
+      await db.collection("parties").insertOne(docParty as any);
+      importedCount++;
+
+      const srcReceivables = await db.collection("party_receivables").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
+      for (const r of srcReceivables) {
+        const { _id: rId, ...rRest } = r;
+        await db.collection("party_receivables").insertOne({
+          ...rRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newPartyId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+
+      const srcPayables = await db.collection("party_payables").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
+      for (const pb of srcPayables) {
+        const { _id: pbId, ...pbRest } = pb;
+        await db.collection("party_payables").insertOne({
+          ...pbRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newPartyId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+
+      const srcPayments = await db.collection("payments").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
+      for (const pay of srcPayments) {
+        const { _id: payId, ...payRest } = pay;
+        await db.collection("payments").insertOne({
+          ...payRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newPartyId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+
+      const srcSettlements = await db.collection("party_payable_settlements").find({ owner_id: sourceOwnerId, party_id: oldPartyId }).toArray();
+      for (const st of srcSettlements) {
+        const { _id: stId, ...stRest } = st;
+        await db.collection("party_payable_settlements").insertOne({
+          ...stRest,
+          _id: crypto.randomUUID(),
+          owner_id: destOwnerId,
+          party_id: newPartyId,
+          created_at: new Date().toISOString()
+        } as any);
+      }
+    }
+  }
+
+  return { success: true, importedCount };
 }
 

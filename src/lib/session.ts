@@ -12,6 +12,7 @@ export type AppSession = {
   businessId: string | null;
   activated: boolean;
   permissions: PermissionSet;
+  profileId: string;
 };
 
 export async function requireSession(requireActivated = true): Promise<AppSession> {
@@ -37,7 +38,9 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     }
   }
 
-  const ownerId = role === "employee" ? (user.owner_id as string) : (user._id as any as string);
+  const activeProfile = cookieStore.get("active_profile")?.value || "default";
+  const ownerIdBase = role === "employee" ? (user.owner_id as string) : (user._id as any as string);
+  const ownerId = activeProfile === "default" ? ownerIdBase : `${ownerIdBase}:${activeProfile}`;
   const permissions = (user.permissions as PermissionSet) || (role === "owner" ? OWNER_PERMISSIONS : {});
 
   return {
@@ -48,6 +51,7 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     businessId,
     activated,
     permissions: role === "owner" ? OWNER_PERMISSIONS : permissions,
+    profileId: activeProfile,
   };
 }
 

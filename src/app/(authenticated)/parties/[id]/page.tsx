@@ -45,6 +45,7 @@ export default function PartyDetail() {
   const settlements = useCachedQuery(["party-settlements", id], () => getPayableSettlements(id));
 
   const [payOpen, setPayOpen] = useState(false);
+  const [collectOpen, setCollectOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addKind, setAddKind] = useState<"receivable" | "payable" | null>(null);
 
@@ -197,7 +198,10 @@ export default function PartyDetail() {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">{party.name || "Unnamed"}</h1>
-          {party.phone && <p className="text-sm text-muted-foreground">{party.phone}</p>}
+          <div className="text-sm text-muted-foreground space-y-0.5">
+            {party.phone && <p>{party.phone}</p>}
+            {party.address && <p>{party.address}</p>}
+          </div>
         </div>
         <div className="flex gap-1.5 shrink-0">
           <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
@@ -223,6 +227,24 @@ export default function PartyDetail() {
       {/* Decoupled balances, netting card removed */}
 
       <div className="max-w-md mx-auto w-full space-y-4">
+        {/* Receivable (They owe me) */}
+        <Card className="p-5 glass-card border-amber-500/20 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">{t("borrowed_from_me")} (জমা / তারা দেবে)</div>
+          <div className="text-3xl font-extrabold text-amber-600 mt-2 font-serif">{fmtMoney(outstanding)}</div>
+          <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
+            হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
+          </p>
+          <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
+            <Plus className="size-3.5 mr-1.5" /> {t("collect_payment")} (টাকা আদায় করুন)
+          </Button>
+        </Card>
+
+        <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
+          <Plus className="size-3.5 mr-1" /> {t("add_money_owed")} (জমা/বাকী যোগ করুন)
+        </Button>
+
+        {/* Payable (I owe them) */}
         <Card className="p-5 glass-card border-rose-500/20 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
           <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">{t("borrowed_from_him")} (বকেয়া)</div>
@@ -263,6 +285,7 @@ export default function PartyDetail() {
         </Card>
       </div>
 
+      <CollectDialog partyId={id} open={collectOpen} onOpenChange={setCollectOpen} />
       <PayPartyDialog partyId={id} open={payOpen} onOpenChange={setPayOpen} />
       <EditPartyDialog party={party} open={editOpen} onOpenChange={setEditOpen} />
       {addKind && (
@@ -295,33 +318,36 @@ function EditPartyDialog({ party, open, onOpenChange }: { party: Party; open: bo
   const qc = useQueryClient();
   const [name, setName] = useState(party.name || "");
   const [phone, setPhone] = useState(party.phone ?? "");
+  const [address, setAddress] = useState(party.address ?? "");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(party.name || "");
       setPhone(party.phone ?? "");
+      setAddress(party.address ?? "");
     }
-  }, [open, party.id, party.name, party.phone]);
+  }, [open, party.id, party.name, party.phone, party.address]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) return;
     const phoneVal = phone.trim() || null;
+    const addressVal = address.trim() || null;
     const prevParty = qc.getQueryData<Party>(["party", party.id]);
     const prevParties = qc.getQueryData<Party[]>(["parties"]);
 
-    setCachedData<Party>(qc, ["party", party.id], { ...party, name: trimmedName, phone: phoneVal });
+    setCachedData<Party>(qc, ["party", party.id], { ...party, name: trimmedName, phone: phoneVal, address: addressVal });
     setCachedData<Party[]>(qc, ["parties"], old =>
-      (old ?? []).map(p => (p.id === party.id ? { ...p, name: trimmedName, phone: phoneVal } : p)),
+      (old ?? []).map(p => (p.id === party.id ? { ...p, name: trimmedName, phone: phoneVal, address: addressVal } : p)),
     );
     onOpenChange(false);
     toast.success(t("save"));
 
     setBusy(true);
     try {
-      await updatePartyFn({ data: { id: party.id, name: trimmedName, phone: phoneVal } });
+      await updatePartyFn({ data: { id: party.id, name: trimmedName, phone: phoneVal, address: addressVal } });
       await refreshQueries(qc, ["parties"], ["party", party.id]);
     } catch (err: unknown) {
       if (prevParty) setCachedData(qc, ["party", party.id], prevParty);
@@ -339,6 +365,10 @@ function EditPartyDialog({ party, open, onOpenChange }: { party: Party; open: bo
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("party_name")}</Label><Input required value={name} onChange={e => setName(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("phone")}</Label><Input inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Address (ঠিকানা)</Label>
+            <Input placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} />
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
             <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>

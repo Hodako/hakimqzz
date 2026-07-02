@@ -21,12 +21,16 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { createProfileFn, switchProfileFn, importProfileModuleFn } from "@/lib/rpc";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus } from "lucide-react";
 
 const businessLinks = [
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
   { to: "/purchases",      labelKey: "new_purchase",    desc: "Log product inventory buys", icon: ShoppingCart, perm: "purchases"  as const },
   { to: "/online-sells",   labelKey: "online_sell",     desc: "Track web and online sales", icon: DollarSign,   perm: "sales"      as const },
-  { to: "/dues",           labelKey: "due",             desc: "Total customer outstanding dues", icon: Banknote, perm: "parties"    as const },
+  { to: "/dues",           labelKey: "due",             desc: "Customer's debt (Owned/Lending/Owe)", icon: Banknote, perm: "parties"    as const },
   { to: "/settings",       labelKey: "settings",        desc: "Business profile & settings", icon: Settings,     perm: "settings"   as const },
 ] as const;
 
@@ -43,7 +47,7 @@ const financeLinks = [
 
 export default function MorePage() {
   const { lang, t } = useT();
-  const { user, logout, isUploading, uploadProgress, uploadProfilePic } = useAuth();
+  const { user, logout, refresh, isUploading, uploadProgress, uploadProfilePic } = useAuth();
   const perms = resolvePermissions(user?.role ?? "employee", user?.permissions);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
@@ -1508,6 +1512,164 @@ export default function MorePage() {
         </Card>
       </div>
     );
+
+  // Profile Switcher State
+  const [createProfileOpen, setCreateProfileOpen] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSourceProfileId, setImportSourceProfileId] = useState("");
+  const [importModule, setImportModule] = useState<"products" | "somiti" | "party" | "">("");
+  const [isProcessingProfile, setIsProcessingProfile] = useState(false);
+
+  const handleCreateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProfileName.trim() || isProcessingProfile) return;
+    setIsProcessingProfile(true);
+    try {
+      await createProfileFn({ data: { name: newProfileName.trim() } });
+      toast.success(lang === "bn" ? `প্রোফাইল "${newProfileName}" তৈরি এবং পরিবর্তন করা হয়েছে` : `Profile "${newProfileName}" created & switched`);
+      setNewProfileName("");
+      setCreateProfileOpen(false);
+      refresh();
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setIsProcessingProfile(false);
+    }
+  };
+
+  const handleSwitchProfile = async (profileId: string) => {
+    if (isProcessingProfile) return;
+    setIsProcessingProfile(true);
+    try {
+      await switchProfileFn({ data: { profileId } });
+      const pName = user?.profiles?.find(p => p.id === profileId)?.name || "Default";
+      toast.success(lang === "bn" ? `প্রোফাইল "${pName}" এ পরিবর্তন করা হয়েছে` : `Switched to profile "${pName}"`);
+      refresh();
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setIsProcessingProfile(false);
+    }
+  };
+
+  const handleImportModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importSourceProfileId || !importModule || isProcessingProfile) return;
+    setIsProcessingProfile(true);
+    try {
+      const res = await importProfileModuleFn({
+        data: {
+          fromProfileId: importSourceProfileId,
+          module: importModule as any
+        }
+      });
+      toast.success(lang === "bn"
+        ? `সফলভাবে ${res.importedCount}টি তথ্য আমদানি করা হয়েছে!`
+        : `Successfully imported ${res.importedCount} records!`);
+      setImportOpen(false);
+      setImportModule("");
+      setImportSourceProfileId("");
+      qc.invalidateQueries();
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setIsProcessingProfile(false);
+    }
+  };
+
+  const renderProfileSwitcher = () => {
+    const currentProfileObj = user?.profiles?.find(p => p.id === (user?.activeProfile || "default"));
+    const currentProfileName = currentProfileObj?.name || (user?.activeProfile === "default" || !user?.activeProfile ? "Default Profile" : "Active Profile");
+    const otherProfiles = user?.profiles?.filter(p => p.id !== (user?.activeProfile || "default")) || [];
+
+    return (
+      <Card className="p-4 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-background border-indigo-500/25 beveled-card relative overflow-hidden space-y-3.5">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="size-8.5 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 grid place-items-center border border-indigo-500/20 shadow-sm shrink-0">
+              <RefreshCw className={`size-4.5 ${isProcessingProfile ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                {lang === "bn" ? "প্রোফাইল সুইচার" : "Profile Switcher"}
+              </div>
+              <div className="text-sm font-bold text-zinc-950 dark:text-zinc-50 flex items-center gap-1.5 mt-0.5">
+                <span>{currentProfileName}</span>
+                <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wide">
+                  {lang === "bn" ? "সক্রিয়" : "Active"}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <Button
+            size="sm"
+            onClick={() => setCreateProfileOpen(true)}
+            className="h-8 text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white beveled-button"
+          >
+            <Plus className="size-3.5 mr-1" />
+            {lang === "bn" ? "নতুন প্রোফাইল" : "New Profile"}
+          </Button>
+        </div>
+
+        {/* Profiles Dropdown / Swapper */}
+        <div className="flex items-center gap-2 pt-1 border-t border-dashed border-border/70">
+          <div className="text-xs text-muted-foreground shrink-0">
+            {lang === "bn" ? "প্রোফাইল পরিবর্তন:" : "Switch Profile:"}
+          </div>
+          <div className="flex-1 flex gap-1.5 flex-wrap">
+            {user?.profiles?.map(p => {
+              const isActive = p.id === (user?.activeProfile || "default");
+              return (
+                <Button
+                  key={p.id}
+                  size="sm"
+                  variant={isActive ? "default" : "outline"}
+                  onClick={() => !isActive && handleSwitchProfile(p.id)}
+                  disabled={isProcessingProfile}
+                  className={`h-7 px-2.5 text-[10px] rounded-lg transition-all ${
+                    isActive
+                      ? "bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                      : "text-zinc-700 dark:text-zinc-300 hover:bg-muted font-medium"
+                  }`}
+                >
+                  {p.name}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Data Import Section */}
+        {user?.activeProfile !== "default" && user?.activeProfile && otherProfiles.length > 0 && (
+          <div className="pt-2 border-t border-dashed border-border/70 space-y-2">
+            <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">
+              {lang === "bn" ? "অন্য প্রোফাইল থেকে ডাটা আমদানি" : "Import Data from Other Profiles"}
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-snug">
+              {lang === "bn"
+                ? "আপনি চাইলে অন্য কোনো প্রোফাইলের পণ্য, সমিতি বা পার্টনার (গ্রাহক বকেয়া) ডাটা এই প্রোফাইলে আমদানি করতে পারেন।"
+                : "You can import products, samity, or customer debt logs from another profile into this profile to get started quickly."}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+              className="w-full h-8 text-[11px] font-semibold border-indigo-500/20 text-indigo-600 hover:bg-indigo-500/5 beveled-button"
+            >
+              {lang === "bn" ? "ডাটা আমদানি করুন" : "Import Modules"}
+            </Button>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-6">
       {/* Profile Header */}
@@ -1568,6 +1730,9 @@ export default function MorePage() {
         </div>
       </Card>
 
+      {/* Profile Switcher */}
+      {renderProfileSwitcher()}
+
       {isMobile ? (
         <Tabs defaultValue="menu" className="space-y-4">
           <TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/65 backdrop-blur-sm rounded-xl border border-border/40">
@@ -1591,6 +1756,79 @@ export default function MorePage() {
           {renderSignOut()}
         </div>
       )}
+
+      {/* Create Profile Dialog */}
+      <Dialog open={createProfileOpen} onOpenChange={setCreateProfileOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif">
+              {lang === "bn" ? "নতুন প্রোফাইল তৈরি করুন" : "Create New Profile"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateProfile} className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "প্রোফাইলের নাম *" : "Profile Name *"}</Label>
+              <Input
+                required
+                value={newProfileName}
+                onChange={e => setNewProfileName(e.target.value)}
+                placeholder="e.g. Fresh Start, Branch 2"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setCreateProfileOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={isProcessingProfile}>
+                {isProcessingProfile ? "…" : t("save")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Module Dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif">
+              {lang === "bn" ? "অন্য প্রোফাইল থেকে তথ্য আমদানি" : "Import Data from Profile"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleImportModule} className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "উৎস প্রোফাইল (যেখান থেকে আসবে) *" : "Source Profile *"}</Label>
+              <Select value={importSourceProfileId} onValueChange={setImportSourceProfileId} required>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {user?.profiles?.filter(p => p.id !== (user?.activeProfile || "default")).map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "মডিউল বা বিভাগ *" : "Module to Import *"}</Label>
+              <Select value={importModule} onValueChange={setImportModule as any} required>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="products">{lang === "bn" ? "পণ্য মডিউল (Products)" : "Products Module"}</SelectItem>
+                  <SelectItem value="somiti">{lang === "bn" ? "সমিতি মডিউল (Samity)" : "Samity Module"}</SelectItem>
+                  <SelectItem value="party">{lang === "bn" ? "গ্রাহক ও বাকী মডিউল (Customer & Debts)" : "Customer & Debts Module"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setImportOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={isProcessingProfile || !importSourceProfileId || !importModule}>
+                {isProcessingProfile ? "…" : (lang === "bn" ? "আমদানি নিশ্চিত করুন" : "Confirm Import")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

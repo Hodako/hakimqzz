@@ -55,6 +55,9 @@ export const changeMyPasswordFn = actions.changeMyPasswordFn;
 export const verifyOwnerPasswordFn = actions.verifyOwnerPasswordFn;
 export const uploadImageFn = actions.uploadImageFn;
 export const bulkExportToGoogleSheetsFn = actions.bulkExportToGoogleSheetsFn;
+export const createProfileFn = actions.createProfileFn;
+export const switchProfileFn = actions.switchProfileFn;
+export const importProfileModuleFn = actions.importProfileModuleFn;
 
 // Write Actions with Offline support
 export const createProductFn = (args: any) => runWriteAction("createProductFn", actions.createProductFn, args);

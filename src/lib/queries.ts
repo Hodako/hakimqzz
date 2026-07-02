@@ -30,7 +30,7 @@ export type Product = {
   min_stock?: number;
   category?: string;
 };
-export type Party = { id: string; name: string; phone: string | null; created_at: string; archived?: boolean };
+export type Party = { id: string; name: string; phone: string | null; address?: string | null; created_at: string; archived?: boolean };
 export type Sale = {
   id: string; product_id: string | null; product_name: string;
   qty: number; buy_price: number; sell_price: number; profit: number;

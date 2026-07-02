@@ -16,6 +16,8 @@ export type AuthUser = {
   logo_url: string;
   avatar_url?: string;
   permissions?: PermissionSet;
+  profiles?: { id: string; name: string; created_at: string }[];
+  activeProfile?: string;
 };
 
 type AuthCtx = {
@@ -57,7 +59,9 @@ function cacheUser(u: AuthUser | null) {
     business_name: u.business_name,
     logo_url: u.logo_url,
     avatar_url: u.avatar_url,
-  });
+    profiles: u.profiles,
+    activeProfile: u.activeProfile,
+  } as any);
 }
 
 function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
@@ -72,6 +76,8 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
     business_name: p.business_name,
     logo_url: p.logo_url,
     avatar_url: p.avatar_url,
+    profiles: (p as any).profiles,
+    activeProfile: (p as any).activeProfile,
   };
 }
 

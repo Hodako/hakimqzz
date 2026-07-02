@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createPaymentFn, createPartyReceivableFn } from "@/lib/rpc";
+import { createPaymentFn, createPartyReceivableFn, createPartyFn } from "@/lib/rpc";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import Link from "next/link";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
@@ -58,6 +58,35 @@ export default function DuesPage() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Quick Customer Creation
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [addingCust, setAddingCust] = useState(false);
+
+  const handleAddCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newCustName.trim();
+    if (!name) return;
+    const phone = newCustPhone.trim() || null;
+    const address = newCustAddress.trim() || null;
+    setAddingCust(true);
+    try {
+      await createPartyFn({ data: { name, phone, address } });
+      await refreshQueries(qc, ["parties"]);
+      setNewCustName("");
+      setNewCustPhone("");
+      setNewCustAddress("");
+      setAddCustomerOpen(false);
+      toast.success(lang === "bn" ? `${name} কে কাস্টমার হিসেবে যোগ করা হয়েছে` : `Added customer ${name}`);
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setAddingCust(false);
+    }
+  };
 
   // Dues calculations
   const duesByParty: Record<string, number> = {};
@@ -243,27 +272,33 @@ export default function DuesPage() {
     <div className="space-y-4 pb-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "বাকী খাতা ও আদায়" : "Dues & Collections"}</h1>
+          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "বাকী খাতা ও আদায়" : "Customer's Debt & Collections"}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {lang === "bn" ? `${totalDebtors} জন কাস্টমারের কাছে মোট বকেয়া জমা` : `${totalDebtors} customers with outstanding balances`}
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" className="h-8 text-xs beveled-button">
-              <Download className="size-3.5 mr-1" />
-              {t("download_csv")}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => exportCSV("en")}>
-              English (ইংরেজি)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => exportCSV("bn")}>
-              Bangla (বাংলা)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex gap-1.5 items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 text-xs beveled-button">
+                <Download className="size-3.5 mr-1" />
+                {t("download_csv")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportCSV("en")}>
+                English (ইংরেজি)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportCSV("bn")}>
+                Bangla (বাংলা)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" className="h-8 text-xs beveled-button" onClick={() => setAddCustomerOpen(true)}>
+            <Plus className="size-3.5 mr-1" />
+            {lang === "bn" ? "নতুন গ্রাহক" : "Add Customer"}
+          </Button>
+        </div>
       </div>
 
       {/* Main KPI Summary Card */}
@@ -375,7 +410,11 @@ export default function DuesPage() {
                       {fmtMoney(Math.abs(p.outstanding))} ({labelText})
                     </span>
                   </div>
-                  {p.phone && <div className="text-xs text-muted-foreground">{p.phone}</div>}
+                  {(p.phone || p.address) && (
+                    <div className="text-xs text-muted-foreground truncate">
+                      {p.phone}{p.phone && p.address ? " · " : ""}{p.address}
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-[10px] grid grid-cols-2 gap-2 py-1.5 border-t border-b border-dashed border-border/70 my-1">
@@ -509,6 +548,53 @@ export default function DuesPage() {
               </Button>
               <Button type="submit" size="sm" disabled={busy}>
                 {busy ? "…" : (lang === "bn" ? "বাকী যোগ করুন" : "Add Due")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif">
+              {lang === "bn" ? "নতুন গ্রাহক যোগ করুন" : "Add New Customer"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddCustomer} className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "গ্রাহকের নাম *" : "Customer Name *"}</Label>
+              <Input
+                required
+                value={newCustName}
+                onChange={e => setNewCustName(e.target.value)}
+                placeholder="e.g. Abul Kalam"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "ফোন নম্বর" : "Phone Number"}</Label>
+              <Input
+                type="tel"
+                inputMode="tel"
+                value={newCustPhone}
+                onChange={e => setNewCustPhone(e.target.value)}
+                placeholder="e.g. 017XXXXXXXX"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "ঠিকানা" : "Address"}</Label>
+              <Input
+                value={newCustAddress}
+                onChange={e => setNewCustAddress(e.target.value)}
+                placeholder="e.g. Dhaka, Bangladesh"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddCustomerOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={addingCust}>
+                {addingCust ? "…" : t("save")}
               </Button>
             </DialogFooter>
           </form>

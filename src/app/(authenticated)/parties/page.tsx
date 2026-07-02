@@ -232,7 +232,11 @@ export default function PartiesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-sm truncate">{p.name}</div>
-                    {p.phone && <div className="text-[10px] text-muted-foreground">{p.phone}</div>}
+                    {(p.phone || p.address) && (
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {p.phone}{p.phone && p.address ? " · " : ""}{p.address}
+                      </div>
+                    )}
                     <div className="text-[10px] text-primary mt-0.5">{t("view")} →</div>
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-2">
@@ -285,6 +289,7 @@ function AddPartyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -292,18 +297,19 @@ function AddPartyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
     const trimmedName = name.trim();
     if (!trimmedName) return;
     const phoneVal = phone.trim() || null;
+    const addressVal = address.trim() || null;
     const tempId = `temp-${Date.now()}`;
-    const optimistic: Party = { id: tempId, name: trimmedName, phone: phoneVal, created_at: new Date().toISOString() };
+    const optimistic: Party = { id: tempId, name: trimmedName, phone: phoneVal, address: addressVal, created_at: new Date().toISOString() };
 
     const prevParties = qc.getQueryData<Party[]>(["parties"]);
     setCachedData<Party[]>(qc, ["parties"], old => [...(old ?? []), optimistic].sort((a, b) => (a.name || "").localeCompare(b.name || "")));
-    setName(""); setPhone("");
+    setName(""); setPhone(""); setAddress("");
     onOpenChange(false);
     toast.success(`${trimmedName} — ${t("add_party")}`);
 
     setBusy(true);
     try {
-      const saved = await createPartyFn({ data: { name: trimmedName, phone: phoneVal } });
+      const saved = await createPartyFn({ data: { name: trimmedName, phone: phoneVal, address: addressVal } });
       setCachedData<Party[]>(qc, ["parties"], old =>
         (old ?? []).map(p => (p.id === tempId ? { ...saved, id: saved.id } as Party : p)),
       );
@@ -336,6 +342,10 @@ function AddPartyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{t("phone")}</Label>
             <Input inputMode="tel" placeholder={t("phone")} value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Address (ঠিকানা)</Label>
+            <Input placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
