@@ -117,4 +117,5 @@ export const resetSalesFn = actions.resetSalesFn;
 export const resetPurchasesFn = actions.resetPurchasesFn;
 export const resetSomitiFn = actions.resetSomitiFn;
 export const resetExpensesFn = actions.resetExpensesFn;
+export const resetPartiesFn = actions.resetPartiesFn;
 export const resetAllDataFn = actions.resetAllDataFn;

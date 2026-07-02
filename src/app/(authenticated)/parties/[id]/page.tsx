@@ -174,10 +174,16 @@ export default function PartyDetail() {
     try {
       setCachedData<Party[]>(qc, ["parties"], old => (old ?? []).filter(p => p.id !== id));
       await deletePartyFn({ data: { id } });
+      qc.removeQueries({ queryKey: ["party", id] });
+      qc.removeQueries({ queryKey: ["party-detail", "sales", id] });
+      qc.removeQueries({ queryKey: ["payments", id] });
+      qc.removeQueries({ queryKey: ["party-receivables", id] });
+      qc.removeQueries({ queryKey: ["party-payables", id] });
+      qc.removeQueries({ queryKey: ["party-settlements", id] });
       await refreshQueries(qc, ["parties"]);
       toast.success(t("delete"));
       setPartyToDelete(null);
-      router.push("/parties");
+      router.push(backPath);
     } catch (err: unknown) {
       if (prevParties) setCachedData<Party[]>(qc, ["parties"], prevParties);
       toast.error(err instanceof Error ? err.message : String(err));
@@ -221,13 +227,8 @@ export default function PartyDetail() {
           <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil className="size-3.5 mr-1" />{t("edit")}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive border-destructive/30"
-            onClick={() => setPartyToDelete(party)}
-          >
-            <Trash2 className="size-3.5" />
+          <Button size="sm" variant="destructive" className="beveled-button" onClick={() => setPartyToDelete(party)}>
+            <Trash2 className="size-3.5 mr-1" />{lang === "bn" ? "মুছুন" : "Delete"}
           </Button>
         </div>
       </div>
@@ -335,24 +336,25 @@ export default function PartyDetail() {
   );
 }
 
-function EditPartyDialog({ party, open, onOpenChange }: { party: Party; open: boolean; onOpenChange: (v: boolean) => void }) {
+function EditPartyDialog({ party, open, onOpenChange }: { party: Party | undefined; open: boolean; onOpenChange: (v: boolean) => void }) {
   const { t } = useT();
   const qc = useQueryClient();
-  const [name, setName] = useState(party.name || "");
-  const [phone, setPhone] = useState(party.phone ?? "");
-  const [address, setAddress] = useState(party.address ?? "");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && party) {
       setName(party.name || "");
       setPhone(party.phone ?? "");
       setAddress(party.address ?? "");
     }
-  }, [open, party.id, party.name, party.phone, party.address]);
+  }, [open, party]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!party) return;
     const trimmedName = name.trim();
     if (!trimmedName) return;
     const phoneVal = phone.trim() || null;

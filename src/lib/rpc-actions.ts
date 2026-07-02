@@ -1093,6 +1093,19 @@ export async function resetExpensesFn() {
   return { success: true };
 }
 
+export async function resetPartiesFn() {
+  const session = await requireSession();
+  if (session.role !== "owner") throw new Error("Only owner can reset data");
+  const db = await getDb();
+  const ownerId = session.ownerId;
+  await db.collection("parties").deleteMany({ owner_id: ownerId });
+  await db.collection("payments").deleteMany({ owner_id: ownerId });
+  await db.collection("party_receivables").deleteMany({ owner_id: ownerId });
+  await db.collection("party_payables").deleteMany({ owner_id: ownerId });
+  await db.collection("party_payable_settlements").deleteMany({ owner_id: ownerId });
+  return { success: true };
+}
+
 
 export async function resetAllDataFn() {
   const session = await requireSession();

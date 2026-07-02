@@ -125,7 +125,7 @@ export default function DuesPage() {
   };
 
   // Compile parties with calculations
-  const parsedParties = (parties.data ?? []).map(p => {
+  const parsedParties = (parties.data ?? []).filter(Boolean).map(p => {
     const outstanding = getOutstanding(p.id);
     const totalDues = (duesByParty[p.id] ?? 0) + (receivablesByParty[p.id] ?? 0);
     const totalPaid = paidByParty[p.id] ?? 0;

@@ -81,16 +81,18 @@ export default function PartiesPage() {
     return Math.max(payableTotal - settledTotal, 0);
   };
 
-  const totalPayable = (parties.data ?? []).reduce((sum, p) => {
+  const totalPayable = (parties.data ?? []).filter(Boolean).reduce((sum, p) => {
     if (p.archived) return sum;
     return sum + getPartyPayable(p.id);
   }, 0);
 
-  const filtered = (parties.data ?? []).filter(p => {
-    const matchesSearch = (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.phone ?? "").includes(search);
-    const matchesTab = activeTab === "archived" ? p.archived === true : p.archived !== true;
-    return matchesSearch && matchesTab;
-  });
+  const filtered = (parties.data ?? [])
+    .filter(Boolean)
+    .filter(p => {
+      const matchesSearch = (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.phone ?? "").includes(search);
+      const matchesTab = activeTab === "archived" ? p.archived === true : p.archived !== true;
+      return matchesSearch && matchesTab;
+    });
 
   const { items: pagedParties, totalPages, safePage } = paginate(filtered, page, pageSize);
 

@@ -32,6 +32,7 @@ import {
   bulkExportToGoogleSheetsFn,
   resetSomitiFn,
   resetExpensesFn,
+  resetPartiesFn,
   changeMyPasswordFn,
 } from "@/lib/rpc";
 import { useTheme, type ThemeMode, type AccentColor, type BgStyle } from "@/hooks/use-theme";
@@ -71,7 +72,7 @@ export default function SettingsPage() {
   const [isBulkExporting, setIsBulkExporting] = useState(false);
 
   // Reset states
-  const [resetType, setResetType] = useState<"cashbox" | "products" | "sales" | "purchases" | "somiti" | "expenses" | "all" | null>(null);
+  const [resetType, setResetType] = useState<"cashbox" | "products" | "sales" | "purchases" | "somiti" | "expenses" | "parties" | "all" | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
@@ -289,6 +290,9 @@ export default function SettingsPage() {
       } else if (resetType === "expenses") {
         await resetExpensesFn();
         toast.success("Expenses data reset successfully!");
+      } else if (resetType === "parties") {
+        await resetPartiesFn();
+        toast.success("Customer, Party, and Debt data reset successfully!");
       } else if (resetType === "all") {
         await resetAllDataFn();
         toast.success("All business data reset to factory settings!");
@@ -804,6 +808,25 @@ export default function SettingsPage() {
               </Button>
             </div>
 
+            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customers & Debts</h3>
+                <p className="text-[11px] text-muted-foreground mt-1">Delete all customer profiles, party details, and outstanding debt history.</p>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
+                onClick={() => {
+                  setResetType("parties");
+                  setConfirmText("");
+                }}
+              >
+                Reset Customers & Debts
+              </Button>
+            </div>
+
             <div className="p-3.5 rounded-lg border border-red-500/20 bg-red-500/10 flex flex-col justify-between space-y-3 sm:col-span-2 md:col-span-1">
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">Factory Reset</h3>
@@ -920,6 +943,8 @@ export default function SettingsPage() {
                   ? "Samity (Somiti) Entries"
                   : resetType === "expenses"
                   ? "Expenses"
+                  : resetType === "parties"
+                  ? "Customers, Parties & Debts"
                   : resetType}
               </span>.
               This will erase all related database records for your business.
