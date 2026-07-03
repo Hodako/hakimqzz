@@ -27,7 +27,8 @@ async function callRemoteRpc(actionName: string, args: any) {
     return JSON.parse(txt);
   } catch (err) {
     console.error("Failed to parse RPC response as JSON. Server returned:", txt);
-    throw new Error(`Server returned invalid response for ${actionName}. Please ensure your production server has been updated with the latest code (git pull & npm run build).`);
+    const snippet = txt.slice(0, 150) + (txt.length > 150 ? "..." : "");
+    throw new Error(`Server returned invalid response for ${actionName}. Response snippet: "${snippet}". Please check your server status.`);
   }
 }
 
