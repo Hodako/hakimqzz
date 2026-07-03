@@ -1092,6 +1092,7 @@ export async function verifyOwnerPasswordFn(input: { data: { password: string } 
   const db = await getDb();
   const user = await db.collection("users").findOne({ _id: session.userId as any });
   if (!user) throw new Error("User not found");
+  if (!user.password) throw new Error("No password set for this account");
   const match = await comparePassword(input.data.password, user.password as string);
   if (!match) throw new Error("Incorrect password");
   return { success: true };
@@ -1202,6 +1203,7 @@ export async function changeMyPasswordFn(input: { data: { currentPassword?: stri
   if (!user) throw new Error("User not found");
 
   if (data.currentPassword) {
+    if (!user.password) throw new Error("No current password is set for this account");
     const ok = await comparePassword(data.currentPassword, user.password as string);
     if (!ok) throw new Error("Current password is incorrect");
   }

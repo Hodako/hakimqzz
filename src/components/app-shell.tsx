@@ -182,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen min-h-dvh bg-background flex w-full app-shell">
+    <div className="min-h-screen min-h-dvh bg-transparent flex w-full app-shell">
       {!isMobile && (
         <Sidebar collapsible="icon" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <SidebarHeader className="border-b border-sidebar-border px-2 py-3">
