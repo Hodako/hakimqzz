@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { hashPassword, comparePassword, signToken, verifyToken } from "@/lib/auth-helpers";
 import { requireSession } from "@/lib/session";
+import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS } from "@/lib/permissions";
 import { appendRowToGoogleSheet, bulkExportToGoogleSheets } from "@/lib/google-sheets";
@@ -77,8 +78,14 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
 
 export async function getMeFn() {
   try {
-    const cookieStore = await cookies();
-    let token = cookieStore.get("token")?.value;
+    const store = requestStore.getStore();
+    let token = store?.token;
+
+    if (!token) {
+      const cookieStore = await cookies();
+      token = cookieStore.get("token")?.value;
+    }
+
     if (!token) {
       const headersList = await headers();
       const authHeader = headersList.get("authorization");

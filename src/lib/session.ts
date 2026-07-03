@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { verifyToken } from "@/lib/auth-helpers";
+import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
 import { OWNER_PERMISSIONS } from "@/lib/permissions";
 
@@ -16,8 +17,13 @@ export type AppSession = {
 };
 
 export async function requireSession(requireActivated = true): Promise<AppSession> {
-  const cookieStore = await cookies();
-  let token = cookieStore.get("token")?.value;
+  const store = requestStore.getStore();
+  let token = store?.token;
+
+  if (!token) {
+    const cookieStore = await cookies();
+    token = cookieStore.get("token")?.value;
+  }
 
   if (!token) {
     const headersList = await headers();

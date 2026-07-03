@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { requestStore } from "@/lib/request-store";
 import * as actions from "@/lib/rpc-actions";
 import * as adminActions from "@/lib/rpc-admin-actions";
 
@@ -29,32 +30,34 @@ export async function POST(req: NextRequest) {
   try {
     const { actionName, args, token } = await req.json();
 
-    if (token) {
-      const cookieStore = await cookies();
-      cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
-    }
+    return await requestStore.run({ token }, async () => {
+      if (token) {
+        const cookieStore = await cookies();
+        cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+      }
 
-    const action = allActions[actionName];
-    if (!action || typeof action !== "function") {
-      return new NextResponse(`Action ${actionName} not found`, {
-        status: 404,
+      const action = allActions[actionName];
+      if (!action || typeof action !== "function") {
+        return new NextResponse(`Action ${actionName} not found`, {
+          status: 404,
+          headers: {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+          },
+        });
+      }
+
+      const result = await action(args);
+
+      return NextResponse.json(result, {
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Credentials": "true",
         },
       });
-    }
-
-    const result = await action(args);
-
-    return NextResponse.json(result, {
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
     });
   } catch (error: any) {
-    console.error(`RPC API error during ${req.method}:`, error);
+    console.error(`RPC API error during POST:`, error);
     return new NextResponse(error?.message || "Internal Server Error", {
       status: 500,
       headers: {
