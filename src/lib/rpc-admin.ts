@@ -18,11 +18,17 @@ async function callRemoteRpc(actionName: string, args: any) {
     body: JSON.stringify({ actionName, args }),
   });
 
+  const txt = await res.text();
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || "RPC Request failed");
+    throw new Error(txt || `RPC Request failed with status ${res.status}`);
   }
-  return res.json();
+
+  try {
+    return JSON.parse(txt);
+  } catch (err) {
+    console.error("Failed to parse RPC response as JSON. Server returned:", txt);
+    throw new Error(`Server returned invalid response for ${actionName}. Please ensure your production server has been updated with the latest code (git pull & npm run build).`);
+  }
 }
 
 const makeAdminAction = (name: string) => (args?: any) => callRemoteRpc(name, args);
