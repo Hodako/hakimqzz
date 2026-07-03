@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import * as actions from "@/lib/rpc-actions";
 import * as adminActions from "@/lib/rpc-admin-actions";
 
@@ -26,7 +27,12 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") || "*";
   try {
-    const { actionName, args } = await req.json();
+    const { actionName, args, token } = await req.json();
+
+    if (token) {
+      const cookieStore = await cookies();
+      cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+    }
 
     const action = allActions[actionName];
     if (!action || typeof action !== "function") {

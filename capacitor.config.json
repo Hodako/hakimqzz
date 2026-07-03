@@ -7,6 +7,9 @@
   "plugins": {
     "CapacitorCookies": {
       "enabled": true
+    },
+    "Keyboard": {
+      "resize": "none"
     }
   }
 }

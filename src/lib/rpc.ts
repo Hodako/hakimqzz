@@ -26,7 +26,7 @@ async function callRemoteRpc(actionName: string, args: any) {
   const res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ actionName, args }),
+    body: JSON.stringify({ actionName, args, token }),
   });
 
   const txt = await res.text();
