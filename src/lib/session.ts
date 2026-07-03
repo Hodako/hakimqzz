@@ -19,9 +19,9 @@ export type AppSession = {
 export async function requireSession(requireActivated = true): Promise<AppSession> {
   const store = requestStore.getStore();
   let token = store?.token;
+  const cookieStore = await cookies();
 
   if (!token) {
-    const cookieStore = await cookies();
     token = cookieStore.get("token")?.value;
   }
 
