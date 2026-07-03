@@ -36,11 +36,7 @@ export default function AuthPage() {
   function afterAuth(u: AuthUser | null) {
     if (!u) return;
     login(u);
-    if (typeof window !== "undefined") {
-      window.location.href = u.activated ? "/dashboard" : "/activate";
-    } else {
-      router.replace(u.activated ? "/dashboard" : "/activate");
-    }
+    router.replace(u.activated ? "/dashboard" : "/activate");
   }
 
   async function signIn(e: React.FormEvent) {
