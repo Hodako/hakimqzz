@@ -58,6 +58,7 @@ const makeWriteAction = (name: string) => (args?: any) => runWriteAction(name, a
 // ─── Export READS ────────────────────────────────────────────────────────────
 export const getMeFn = makeReadAction("getMeFn");
 export const getProductsFn = makeReadAction("getProductsFn");
+export const getStorefrontBySlug = makeReadAction("getStorefrontBySlug");
 export const getPartiesFn = makeReadAction("getPartiesFn");
 export const getPartyFn = makeReadAction("getPartyFn");
 export const getCustomersFn = makeReadAction("getCustomersFn");

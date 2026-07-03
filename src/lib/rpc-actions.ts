@@ -1540,3 +1540,13 @@ export async function archiveCustomerFn(input: { data: { id: string; archived: b
   return { success: true };
 }
 
+export async function getStorefrontBySlug(slug: string) {
+  const db = await getDb();
+  const business = await db.collection("businesses").findOne({ slug: slug.toLowerCase() });
+  if (!business) {
+    return await db.collection("businesses").findOne({ name: slug });
+  }
+  return business;
+}
+
+
