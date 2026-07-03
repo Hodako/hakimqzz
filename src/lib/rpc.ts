@@ -16,6 +16,7 @@ async function callRemoteRpc(actionName: string, args: any) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Accept": "application/json",
     },
     body: JSON.stringify({ actionName, args }),
   });
