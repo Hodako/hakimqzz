@@ -1,0 +1,13 @@
+{
+  "appId": "com.dreamfashion.app",
+  "appName": "Dream Fashion",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://hakim.qzz.io",
+    "cleartext": true,
+    "allowNavigation": [
+      "hakim.qzz.io"
+    ]
+  }
+}

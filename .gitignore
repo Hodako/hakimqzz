@@ -38,3 +38,7 @@ dist-ssr
 .next/
 next-env.d.ts
 
+# Compiled APKs
+*.apk
+
+
