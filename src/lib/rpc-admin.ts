@@ -1,7 +1,9 @@
 // Detect if we are running inside the Capacitor Android/iOS native app
 const isCapacitor = typeof window !== "undefined" && (
+  !!(window as any).Capacitor ||
+  window.location.hostname === "localhost" ||
+  window.location.origin.includes("localhost") ||
   window.location.origin.startsWith("capacitor:") ||
-  window.location.origin.startsWith("http://localhost") ||
   window.location.origin.startsWith("file:")
 );
 
