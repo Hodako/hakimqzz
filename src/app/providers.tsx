@@ -33,6 +33,36 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.tagName === "INPUT") {
+        const name = (target.name || "").toLowerCase();
+        const id = (target.id || "").toLowerCase();
+        const type = (target.type || "").toLowerCase();
+        
+        // If it is a number, tel, or has phone/mobile in its attributes, force correct numeric inputmode
+        if (
+          type === "number" ||
+          type === "tel" ||
+          name.includes("phone") ||
+          name.includes("mobile") ||
+          id.includes("phone") ||
+          id.includes("mobile")
+        ) {
+          if (!target.hasAttribute("inputmode")) {
+            const isPhone = type === "tel" || name.includes("phone") || name.includes("mobile") || id.includes("phone") || id.includes("mobile");
+            target.setAttribute("inputmode", isPhone ? "numeric" : "decimal");
+          }
+        }
+      }
+    };
+    document.addEventListener("focusin", handleFocus, true);
+    return () => {
+      document.removeEventListener("focusin", handleFocus, true);
+    };
+  }, []);
+
   if (!mounted) {
     return <SpeedLoader />;
   }
