@@ -18,7 +18,7 @@ export async function OPTIONS(req: NextRequest) {
     headers: {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Cookie",
+      "Access-Control-Allow-Headers": "Content-Type, Cookie, Authorization",
       "Access-Control-Allow-Credentials": "true",
     },
   });

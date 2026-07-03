@@ -7,6 +7,7 @@ const AI_API_KEY = "sk-wbNyUKEzeR81I36DHsOA8gEaCO5iKz7uksedde5pkhsLbbiw";
 const AI_MODEL = "MiniMax-M3";
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin") || "*";
   try {
     // 1. Verify user session
     const session = await requireSession();
@@ -155,15 +156,45 @@ You are a professional business advisor. Analyze the data above and give structu
 
     if (!response.ok) {
       const errText = await response.text();
-      return NextResponse.json({ error: `AI error: ${response.status} — ${errText}` }, { status: 500 });
+      return NextResponse.json({ error: `AI error: ${response.status} — ${errText}` }, {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
+        },
+      });
     }
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content ?? "No response from AI.";
 
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply }, {
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+      },
+    });
   } catch (err: any) {
     console.error("[ai-chat]", err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Internal server error" }, {
+      status: 500,
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+      },
+    });
   }
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin") || "*";
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Cookie, Authorization",
+      "Access-Control-Allow-Credentials": "true",
+    },
+  });
 }
