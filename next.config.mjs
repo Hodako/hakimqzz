@@ -4,13 +4,17 @@ import { dirname } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const isStatic = process.env.EXPORT_STATIC === "true";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: "export",
-  images: {
-    unoptimized: true,
-  },
+  ...(isStatic ? {
+    output: "export",
+    images: {
+      unoptimized: true,
+    },
+  } : {}),
   // Allow MongoDB server-side code to build properly
   serverExternalPackages: ["mongodb"],
   eslint: {
