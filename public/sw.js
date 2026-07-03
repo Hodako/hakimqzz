@@ -1,11 +1,22 @@
-const CACHE_NAME = "dreamfashion-v4";
+const CACHE_NAME = "dreamfashion-v5";
 const ASSETS_TO_CACHE = [
   "/",
   "/manifest.json",
   "/logo.png",
   "/apple-touch-icon.png",
   "/icon-512.png",
-  "/login_illustration.jpg"
+  "/login_illustration.jpg",
+  "/dashboard",
+  "/sales",
+  "/purchases",
+  "/expenses",
+  "/customers",
+  "/more",
+  "/cash-management",
+  "/somiti",
+  "/reports",
+  "/dues",
+  "/trackback"
 ];
 
 self.addEventListener("install", (event) => {
