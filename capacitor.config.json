@@ -9,5 +9,10 @@
     "allowNavigation": [
       "hakim.qzz.io"
     ]
+  },
+  "plugins": {
+    "CapacitorCookies": {
+      "enabled": true
+    }
   }
 }
