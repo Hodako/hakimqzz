@@ -5,8 +5,8 @@ const isCapacitor = typeof window !== "undefined" && (
   window.location.origin.startsWith("file:")
 );
 
-// Point to hosted endpoint when in Capacitor, otherwise use relative path
-const API_BASE = isCapacitor ? "https://hakim.qzz.io" : "";
+// Point to hosted endpoint when in Capacitor or during SSR to prevent ERR_INVALID_URL, otherwise use relative path
+const API_BASE = (typeof window === "undefined" || isCapacitor) ? "https://hakim.qzz.io" : "";
 
 async function callRemoteRpc(actionName: string, args: any) {
   const url = `${API_BASE}/api/rpc`;
