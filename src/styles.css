@@ -303,8 +303,8 @@
 /* Native-like mobile app feel */
 .app-shell {
   -webkit-tap-highlight-color: transparent;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: 100vh;
+  max-height: 100vh;
   overflow: hidden;
 }
 

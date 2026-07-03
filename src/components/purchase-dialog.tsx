@@ -86,7 +86,7 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{t("new_purchase")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           {lines.map((line, i) => (

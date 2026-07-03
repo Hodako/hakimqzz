@@ -172,7 +172,7 @@ export function SaleDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         {/* Fixed height dialog — prevents resize/jump when cart or dropdowns change */}
-        <DialogContent className="max-w-md w-full h-[90dvh] max-h-[90dvh] flex flex-col overflow-hidden p-0">
+        <DialogContent className="max-w-md w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0">
           {/* Pinned header */}
           <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-border">
             <DialogTitle>{t("new_sale")}</DialogTitle>

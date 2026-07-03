@@ -64,6 +64,7 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
             className="w-full pr-8 h-9 text-sm bg-background border-border/80"
             placeholder={placeholder ?? t("select_product")}
             value={searchQuery}
+            autoFocus={isOpen}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setIsOpen(true);

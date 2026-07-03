@@ -111,7 +111,7 @@ export function EditSaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{lang === "bn" ? "বিক্রি এডিট করুন" : "Edit Sale"}</DialogTitle>
         </DialogHeader>

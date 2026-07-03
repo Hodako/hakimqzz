@@ -83,8 +83,23 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const cached = typeof window !== "undefined" ? readAuthProfile() : null;
-  const [user, setUser] = useState<AuthUser | null>(() => profileToUser(cached));
-  const [loading, setLoading] = useState(!cached);
+  
+  // Robust Capacitor detection
+  const isCap = typeof window !== "undefined" && (
+    !!(window as any).Capacitor ||
+    window.location.hostname === "localhost" ||
+    window.location.origin.includes("localhost") ||
+    window.location.origin.startsWith("capacitor:") ||
+    window.location.origin.startsWith("file:")
+  );
+  
+  const tokenExists = typeof window !== "undefined" ? !!window.localStorage.getItem("auth_token") : false;
+  
+  // If in Capacitor and token is missing, we must log out to acquire a token via login
+  const initialUser = (cached && (!isCap || tokenExists)) ? profileToUser(cached) : null;
+
+  const [user, setUser] = useState<AuthUser | null>(initialUser);
+  const [loading, setLoading] = useState(initialUser ? false : true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { lang } = useT();
