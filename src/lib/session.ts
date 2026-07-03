@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { verifyToken } from "@/lib/auth-helpers";
 import type { PermissionSet } from "@/lib/permissions";
@@ -17,7 +17,16 @@ export type AppSession = {
 
 export async function requireSession(requireActivated = true): Promise<AppSession> {
   const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  let token = cookieStore.get("token")?.value;
+
+  if (!token) {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+  }
+
   if (!token) throw new Error("Unauthorized");
   const payload = await verifyToken(token);
   if (!payload) throw new Error("Unauthorized");

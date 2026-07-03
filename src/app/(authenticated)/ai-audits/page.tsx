@@ -59,16 +59,8 @@ export default function AiAuditsPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/ai-chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          lang,
-        }),
-      });
+      const { callAiChat } = await import("@/lib/rpc");
+      const res = await callAiChat(newMessages, lang);
 
       if (!res.ok) {
         throw new Error(lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI");

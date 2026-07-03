@@ -1,6 +1,6 @@
 // Server action wrapper replaced by API proxy.
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { hashPassword, comparePassword, signToken, verifyToken } from "@/lib/auth-helpers";
 import { requireSession } from "@/lib/session";
@@ -78,7 +78,14 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
 export async function getMeFn() {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+    let token = cookieStore.get("token")?.value;
+    if (!token) {
+      const headersList = await headers();
+      const authHeader = headersList.get("authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
     if (!token) return { user: null };
     const session = await verifyToken(token);
     if (!session) return { user: null };
@@ -101,7 +108,7 @@ export async function loginFn(input: { data: { email: string; password: string }
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, user._id as any as string);
-  return { user: mapped };
+  return { user: mapped, token };
 }
 
 function sanitizeInput(text: string): string {
@@ -151,7 +158,7 @@ export async function registerFn(input: { data: { email: string; password: strin
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, userId);
-  return { user: mapped };
+  return { user: mapped, token };
 }
 
 export async function logoutFn() {

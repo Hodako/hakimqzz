@@ -96,9 +96,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(next);
       cacheUser(next);
       if (next) writeBrand({ name: next.business_name, logo_url: next.logo_url });
-    } catch {
-      setUser(null);
-      clearAuthProfile();
+    } catch (err: any) {
+      console.warn("Failed to check user status:", err);
+      const isNetworkError = (
+        (typeof window !== "undefined" && !navigator.onLine) ||
+        err?.message?.includes("Failed to fetch") ||
+        err?.message?.includes("NetworkError") ||
+        err?.message?.includes("network error") ||
+        err?.message?.includes("status 502") ||
+        err?.message?.includes("status 503") ||
+        err?.message?.includes("status 504")
+      );
+      if (isNetworkError) {
+        console.log("Network/offline state detected. Keeping cached user session.");
+      } else {
+        setUser(null);
+        clearAuthProfile();
+      }
     } finally {
       setLoading(false);
     }

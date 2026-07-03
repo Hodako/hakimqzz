@@ -12,12 +12,18 @@ const API_BASE = (typeof window === "undefined" || isCapacitor) ? "https://hakim
 
 async function callRemoteRpc(actionName: string, args: any) {
   const url = `${API_BASE}/api/rpc`;
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
+    headers,
     body: JSON.stringify({ actionName, args }),
   });
 
@@ -27,7 +33,18 @@ async function callRemoteRpc(actionName: string, args: any) {
   }
 
   try {
-    return JSON.parse(txt);
+    const result = JSON.parse(txt);
+    if ((actionName === "superAdminLoginFn" || actionName === "loginFn") && result?.token) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("auth_token", result.token);
+      }
+    }
+    if (actionName === "superAdminLogoutFn" || actionName === "logoutFn") {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("auth_token");
+      }
+    }
+    return result;
   } catch (err) {
     console.error("Failed to parse RPC response as JSON. Server returned:", txt);
     const snippet = txt.slice(0, 150) + (txt.length > 150 ? "..." : "");

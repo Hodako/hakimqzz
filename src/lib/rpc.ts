@@ -14,12 +14,18 @@ const API_BASE = (typeof window === "undefined" || isCapacitor) ? "https://hakim
 
 async function callRemoteRpc(actionName: string, args: any) {
   const url = `${API_BASE}/api/rpc`;
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    },
+    headers,
     body: JSON.stringify({ actionName, args }),
   });
 
@@ -29,7 +35,18 @@ async function callRemoteRpc(actionName: string, args: any) {
   }
 
   try {
-    return JSON.parse(txt);
+    const result = JSON.parse(txt);
+    if ((actionName === "loginFn" || actionName === "registerFn") && result?.token) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("auth_token", result.token);
+      }
+    }
+    if (actionName === "logoutFn") {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("auth_token");
+      }
+    }
+    return result;
   } catch (err) {
     console.error("Failed to parse RPC response as JSON. Server returned:", txt);
     const snippet = txt.slice(0, 150) + (txt.length > 150 ? "..." : "");
@@ -183,4 +200,33 @@ actionsList.forEach(name => {
 
 if (typeof window !== "undefined") {
   startBackgroundSync(syncActions);
+}
+
+export async function callAiChat(messages: any[], lang: string) {
+  const isCap = typeof window !== "undefined" && (
+    !!(window as any).Capacitor ||
+    window.location.hostname === "localhost" ||
+    window.location.origin.includes("localhost") ||
+    window.location.origin.startsWith("capacitor:") ||
+    window.location.origin.startsWith("file:")
+  );
+  const base = isCap ? "https://hakim.qzz.io" : "";
+  const url = `${base}/api/ai-chat`;
+  
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      lang,
+    }),
+  });
 }
