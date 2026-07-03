@@ -25,6 +25,9 @@ import { createProfileFn, switchProfileFn, importProfileModuleFn, createSaleFn, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
+import { getProducts } from "@/lib/queries";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { ProductSearchSelect } from "@/components/product-search";
 
 const businessLinks = [
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
@@ -54,6 +57,8 @@ export default function MorePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const qc = useQueryClient();
+  const productsQuery = useCachedQuery(["products"], getProducts);
+  const products = productsQuery.data ?? [];
 
   const handleRefresh = async () => {
     try {
@@ -529,6 +534,7 @@ export default function MorePage() {
   const [txnSubmitting, setTxnSubmitting] = useState(false);
 
   // Sale fields
+  const [saleProdId, setSaleProdId] = useState("");
   const [saleProdName, setSaleProdName] = useState("");
   const [saleQty, setSaleQty] = useState("");
   const [saleBuyPrice, setSaleBuyPrice] = useState("");
@@ -543,6 +549,7 @@ export default function MorePage() {
   const [expNote, setExpNote] = useState("");
 
   // Purchase fields
+  const [purProdId, setPurProdId] = useState("");
   const [purProdName, setPurProdName] = useState("");
   const [purQty, setPurQty] = useState("");
   const [purUnitCost, setPurUnitCost] = useState("");
@@ -569,6 +576,7 @@ export default function MorePage() {
         }
         await createSaleFn({
           data: {
+            product_id: saleProdId || null,
             product_name: saleProdName.trim(),
             qty: qtyVal,
             buy_price: buyVal,
@@ -581,7 +589,7 @@ export default function MorePage() {
           }
         });
         toast.success(lang === "bn" ? "সরাসরি বিক্রি সফলভাবে যুক্ত হয়েছে!" : "Custom Sale record added successfully!");
-        setSaleProdName(""); setSaleQty(""); setSaleBuyPrice(""); setSaleSellPrice(""); setSalePaidAmt(""); setSaleDueAmt("");
+        setSaleProdId(""); setSaleProdName(""); setSaleQty(""); setSaleBuyPrice(""); setSaleSellPrice(""); setSalePaidAmt(""); setSaleDueAmt("");
       } else if (txnType === "expense") {
         const amtVal = Number(expAmt) || 0;
         if (!expTitle.trim() || amtVal <= 0) {
@@ -605,6 +613,7 @@ export default function MorePage() {
         }
         await createPurchaseFn({
           data: {
+            product_id: purProdId || null,
             product_name: purProdName.trim(),
             qty: qtyVal,
             unit_cost: costVal,
@@ -613,7 +622,7 @@ export default function MorePage() {
           }
         });
         toast.success(lang === "bn" ? "সরাসরি ক্রয় সফলভাবে যুক্ত হয়েছে!" : "Custom Purchase record added successfully!");
-        setPurProdName(""); setPurQty(""); setPurUnitCost("");
+        setPurProdId(""); setPurProdName(""); setPurQty(""); setPurUnitCost("");
       } else if (txnType === "withdraw") {
         const amtVal = Number(withAmt) || 0;
         if (amtVal <= 0) {
@@ -1829,9 +1838,28 @@ export default function MorePage() {
           {/* Conditional Forms */}
           {txnType === "sale" && (
             <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম *" : "Product Name *"}</Label>
-                <Input value={saleProdName} onChange={e => setSaleProdName(e.target.value)} required placeholder="E.g. Cotton Panjabi" className="h-8 text-xs" />
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "বিদ্যমান পণ্য নির্বাচন করুন (খুঁজুন)" : "Select Existing Product"}</Label>
+                  <ProductSearchSelect
+                    products={products}
+                    value={saleProdId}
+                    onChange={(val) => {
+                      setSaleProdId(val);
+                      const prod = products.find(p => p.id === val);
+                      if (prod) {
+                        setSaleProdName(prod.name);
+                        setSaleBuyPrice(String(prod.buy_price || 0));
+                        setSaleSellPrice(String(prod.sell_price || 0));
+                      }
+                    }}
+                    placeholder={lang === "bn" ? "পণ্য খুঁজুন বা সিলেক্ট করুন" : "Search or select product"}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে) *" : "Product Name (Can also type manually) *"}</Label>
+                  <Input value={saleProdName} onChange={e => setSaleProdName(e.target.value)} required placeholder="E.g. Cotton Panjabi" className="h-8 text-xs" />
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
@@ -1891,9 +1919,27 @@ export default function MorePage() {
 
           {txnType === "purchase" && (
             <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম *" : "Product Name *"}</Label>
-                <Input value={purProdName} onChange={e => setPurProdName(e.target.value)} required placeholder="E.g. Premium Silk Saree" className="h-8 text-xs" />
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "বিদ্যমান পণ্য নির্বাচন করুন (খুঁজুন)" : "Select Existing Product"}</Label>
+                  <ProductSearchSelect
+                    products={products}
+                    value={purProdId}
+                    onChange={(val) => {
+                      setPurProdId(val);
+                      const prod = products.find(p => p.id === val);
+                      if (prod) {
+                        setPurProdName(prod.name);
+                        setPurUnitCost(String(prod.buy_price || 0));
+                      }
+                    }}
+                    placeholder={lang === "bn" ? "পণ্য খুঁজুন বা সিলেক্ট করুন" : "Search or select product"}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে) *" : "Product Name (Can also type manually) *"}</Label>
+                  <Input value={purProdName} onChange={e => setPurProdName(e.target.value)} required placeholder="E.g. Premium Silk Saree" className="h-8 text-xs" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
