@@ -1,4 +1,4 @@
-"use server";
+// Server action wrapper replaced by API proxy.
 
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";

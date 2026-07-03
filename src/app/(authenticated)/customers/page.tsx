@@ -182,7 +182,7 @@ export default function CustomersPage() {
           return (
             <Link
               key={p.id}
-              href={`/customers/${p.id}`}
+              href={`/customers/detail?id=${p.id}`}
               onMouseEnter={() => prefetchCustomer(p)}
               className="flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors gap-3"
             >

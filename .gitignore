@@ -40,5 +40,7 @@ next-env.d.ts
 
 # Compiled APKs
 *.apk
+out/
+
 
 

@@ -26,13 +26,13 @@ import {
 } from "@/lib/rpc";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 export default function PartyDetail() {
-  const params = useParams();
-  const id = typeof params?.id === "string" ? params.id : "";
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") || "";
   const { lang, t } = useT();
   const router = useRouter();
   const qc = useQueryClient();

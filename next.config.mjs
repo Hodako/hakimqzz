@@ -7,6 +7,10 @@ const __dirname = dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: "export",
+  images: {
+    unoptimized: true,
+  },
   // Allow MongoDB server-side code to build properly
   serverExternalPackages: ["mongodb"],
   eslint: {

@@ -222,7 +222,7 @@ export default function PartiesPage() {
           return (
             <Link
               key={p.id}
-              href={`/parties/${p.id}`}
+              href={`/parties/detail?id=${p.id}`}
               onMouseEnter={() => prefetchParty(p)}
               onTouchStart={() => prefetchParty(p)}
               className="block w-full text-left active:scale-[0.99] transition-transform"

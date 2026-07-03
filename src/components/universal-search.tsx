@@ -184,7 +184,7 @@ export function UniversalSearch({ role, permissions }: UniversalSearchProps) {
                   {filtered.parties.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => go(`/parties/${p.id}`)}
+                      onClick={() => go(`/parties/detail?id=${p.id}`)}
                       className="w-full flex items-center justify-between text-left text-xs px-2.5 py-2 hover:bg-muted active:bg-muted/70 rounded-md gap-2.5 transition-colors"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -270,7 +270,7 @@ export function UniversalSearch({ role, permissions }: UniversalSearchProps) {
               <CommandSeparator />
               <CommandGroup heading={t("parties")}>
                 {filtered.parties.map(p => (
-                  <CommandItem key={p.id} value={`party-${p.id}-${p.name}`} onSelect={() => go(`/parties/${p.id}`)}>
+                  <CommandItem key={p.id} value={`party-${p.id}-${p.name}`} onSelect={() => go(`/parties/detail?id=${p.id}`)}>
                     <Users className="icon-sm mr-2 opacity-60" />
                     <span className="truncate">{p.name}</span>
                     {p.phone && <span className="ml-auto text-xs text-muted-foreground">{p.phone}</span>}

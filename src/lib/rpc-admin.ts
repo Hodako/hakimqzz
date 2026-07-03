@@ -1,27 +1,54 @@
-import * as actions from "./rpc-admin-actions";
+// Detect if we are running inside the Capacitor Android/iOS native app
+const isCapacitor = typeof window !== "undefined" && (
+  window.location.origin.startsWith("capacitor:") ||
+  window.location.origin.startsWith("http://localhost") ||
+  window.location.origin.startsWith("file:")
+);
 
-// Direct proxy client for admin functions as superadmin consoles require active network.
-export const superAdminLoginFn = actions.superAdminLoginFn;
-export const superAdminLogoutFn = actions.superAdminLogoutFn;
-export const superAdminCheckFn = actions.superAdminCheckFn;
-export const generatePlatformLicenseFn = actions.generatePlatformLicenseFn;
-export const listPlatformLicensesFn = actions.listPlatformLicensesFn;
-export const listBusinessesFn = actions.listBusinessesFn;
-export const listAllUsersFn = actions.listAllUsersFn;
-export const getPlatformStatsFn = actions.getPlatformStatsFn;
-export const getPlatformActivitiesFn = actions.getPlatformActivitiesFn;
-export const suspendBusinessFn = actions.suspendBusinessFn;
-export const deleteBusinessFn = actions.deleteBusinessFn;
-export const activateLicenseFn = actions.activateLicenseFn;
-export const getBusinessSettingsFn = actions.getBusinessSettingsFn;
-export const updateBusinessSettingsFn = actions.updateBusinessSettingsFn;
-export const createEmployeeLicenseFn = actions.createEmployeeLicenseFn;
-export const updateEmployeePermissionsFn = actions.updateEmployeePermissionsFn;
-export const deleteLicenseFn = actions.deleteLicenseFn;
-export const impersonateUserFn = actions.impersonateUserFn;
-export const deleteUserFn = actions.deleteUserFn;
-export const changeUserPasswordFn = actions.changeUserPasswordFn;
-export const changeSuperAdminPasswordFn = actions.changeSuperAdminPasswordFn;
-export const resetSalesFn = actions.resetSalesFn;
-export const resetSomitiFn = actions.resetSomitiFn;
-export const resetExpensesFn = actions.resetExpensesFn;
+// Point to hosted endpoint when in Capacitor, otherwise use relative path
+const API_BASE = isCapacitor ? "https://hakim.qzz.io" : "";
+
+async function callRemoteRpc(actionName: string, args: any) {
+  const url = `${API_BASE}/api/rpc`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ actionName, args }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || "RPC Request failed");
+  }
+  return res.json();
+}
+
+const makeAdminAction = (name: string) => (args?: any) => callRemoteRpc(name, args);
+
+// Expose admin actions
+export const superAdminLoginFn = makeAdminAction("superAdminLoginFn");
+export const superAdminLogoutFn = makeAdminAction("superAdminLogoutFn");
+export const superAdminCheckFn = makeAdminAction("superAdminCheckFn");
+export const generatePlatformLicenseFn = makeAdminAction("generatePlatformLicenseFn");
+export const listPlatformLicensesFn = makeAdminAction("listPlatformLicensesFn");
+export const listBusinessesFn = makeAdminAction("listBusinessesFn");
+export const listAllUsersFn = makeAdminAction("listAllUsersFn");
+export const getPlatformStatsFn = makeAdminAction("getPlatformStatsFn");
+export const getPlatformActivitiesFn = makeAdminAction("getPlatformActivitiesFn");
+export const suspendBusinessFn = makeAdminAction("suspendBusinessFn");
+export const deleteBusinessFn = makeAdminAction("deleteBusinessFn");
+export const activateLicenseFn = makeAdminAction("activateLicenseFn");
+export const getBusinessSettingsFn = makeAdminAction("getBusinessSettingsFn");
+export const updateBusinessSettingsFn = makeAdminAction("updateBusinessSettingsFn");
+export const createEmployeeLicenseFn = makeAdminAction("createEmployeeLicenseFn");
+export const updateEmployeePermissionsFn = makeAdminAction("updateEmployeePermissionsFn");
+export const deleteLicenseFn = makeAdminAction("deleteLicenseFn");
+export const impersonateUserFn = makeAdminAction("impersonateUserFn");
+export const deleteUserFn = makeAdminAction("deleteUserFn");
+export const changeUserPasswordFn = makeAdminAction("changeUserPasswordFn");
+export const changeSuperAdminPasswordFn = makeAdminAction("changeSuperAdminPasswordFn");
+export const resetSalesFn = makeAdminAction("resetSalesFn");
+export const resetSomitiFn = makeAdminAction("resetSomitiFn");
+export const resetExpensesFn = makeAdminAction("resetExpensesFn");

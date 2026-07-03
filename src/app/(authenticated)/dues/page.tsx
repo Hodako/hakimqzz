@@ -400,7 +400,7 @@ export default function DuesPage() {
               <Card key={p.id} className={`p-4 flex flex-col justify-between gap-3 bg-card/75 backdrop-blur-sm hover:shadow-md transition-shadow beveled-card ${cardBorder}`}>
                 <div className="space-y-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/customers/${p.id}`} className="font-semibold text-sm hover:text-primary transition-colors hover:underline flex items-center gap-1 group">
+                    <Link href={`/customers/detail?id=${p.id}`} className="font-semibold text-sm hover:text-primary transition-colors hover:underline flex items-center gap-1 group">
                       {p.name}
                       <ArrowRight className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </Link>

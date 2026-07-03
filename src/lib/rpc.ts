@@ -1,14 +1,40 @@
-import * as actions from "./rpc-actions";
 import { queueOfflineAction, startBackgroundSync } from "./offline-sync";
 
+// Detect if we are running inside the Capacitor Android/iOS native app
+const isCapacitor = typeof window !== "undefined" && (
+  window.location.origin.startsWith("capacitor:") ||
+  window.location.origin.startsWith("http://localhost") ||
+  window.location.origin.startsWith("file:")
+);
+
+// Point to hosted endpoint when in Capacitor, otherwise use relative path
+const API_BASE = isCapacitor ? "https://hakim.qzz.io" : "";
+
+async function callRemoteRpc(actionName: string, args: any) {
+  const url = `${API_BASE}/api/rpc`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ actionName, args }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || "RPC Request failed");
+  }
+  return res.json();
+}
+
 // Helper to determine if we are offline or if a network error occurs
-async function runWriteAction<T>(actionName: string, fn: (args: any) => Promise<T>, args: any): Promise<T | any> {
+async function runWriteAction<T>(actionName: string, args: any): Promise<T | any> {
   if (typeof window !== "undefined" && !navigator.onLine) {
     queueOfflineAction(actionName, args);
     return { success: true, offline: true, id: crypto.randomUUID() };
   }
   try {
-    return await fn(args);
+    return await callRemoteRpc(actionName, args);
   } catch (err) {
     if (typeof window !== "undefined") {
       console.warn(`Write action ${actionName} failed, queuing offline:`, err);
@@ -19,110 +45,131 @@ async function runWriteAction<T>(actionName: string, fn: (args: any) => Promise<
   }
 }
 
-// Register server actions map for background syncing
+// Action factories
+const makeReadAction = (name: string) => (args?: any) => callRemoteRpc(name, args);
+const makeWriteAction = (name: string) => (args?: any) => runWriteAction(name, args);
+
+// ─── Export READS ────────────────────────────────────────────────────────────
+export const getMeFn = makeReadAction("getMeFn");
+export const getProductsFn = makeReadAction("getProductsFn");
+export const getPartiesFn = makeReadAction("getPartiesFn");
+export const getPartyFn = makeReadAction("getPartyFn");
+export const getCustomersFn = makeReadAction("getCustomersFn");
+export const getCustomerFn = makeReadAction("getCustomerFn");
+export const getAllPartyReceivablesFn = makeReadAction("getAllPartyReceivablesFn");
+export const getAllPartyPayablesFn = makeReadAction("getAllPartyPayablesFn");
+export const getAllPayableSettlementsFn = makeReadAction("getAllPayableSettlementsFn");
+export const getPartyReceivablesFn = makeReadAction("getPartyReceivablesFn");
+export const getPartyPayablesFn = makeReadAction("getPartyPayablesFn");
+export const getPayableSettlementsFn = makeReadAction("getPayableSettlementsFn");
+export const getSalesFn = makeReadAction("getSalesFn");
+export const getSalesForPartyFn = makeReadAction("getSalesForPartyFn");
+export const getReturnsFn = makeReadAction("getReturnsFn");
+export const getPurchasesFn = makeReadAction("getPurchasesFn");
+export const getExpensesFn = makeReadAction("getExpensesFn");
+export const getPaymentsForPartyFn = makeReadAction("getPaymentsForPartyFn");
+export const getAllPaymentsFn = makeReadAction("getAllPaymentsFn");
+export const getSomitiFn = makeReadAction("getSomitiFn");
+export const getWithdrawalsFn = makeReadAction("getWithdrawalsFn");
+export const getCashboxFn = makeReadAction("getCashboxFn");
+export const getRemindersFn = makeReadAction("getRemindersFn");
+
+// ─── Export Network-Only Auth/Writes ─────────────────────────────────────────
+export const loginFn = makeReadAction("loginFn");
+export const registerFn = makeReadAction("registerFn");
+export const logoutFn = makeReadAction("logoutFn");
+export const changeMyPasswordFn = makeReadAction("changeMyPasswordFn");
+export const verifyOwnerPasswordFn = makeReadAction("verifyOwnerPasswordFn");
+export const uploadImageFn = makeReadAction("uploadImageFn");
+export const bulkExportToGoogleSheetsFn = makeReadAction("bulkExportToGoogleSheetsFn");
+export const createProfileFn = makeReadAction("createProfileFn");
+export const switchProfileFn = makeReadAction("switchProfileFn");
+export const importProfileModuleFn = makeReadAction("importProfileModuleFn");
+
+// ─── Export Offline-Supported Writes ─────────────────────────────────────────
+export const createProductFn = makeWriteAction("createProductFn");
+export const updateProductFn = makeWriteAction("updateProductFn");
+export const deleteProductFn = makeWriteAction("deleteProductFn");
+export const archiveProductFn = makeWriteAction("archiveProductFn");
+
+export const createPartyFn = makeWriteAction("createPartyFn");
+export const updatePartyFn = makeWriteAction("updatePartyFn");
+export const deletePartyFn = makeWriteAction("deletePartyFn");
+export const archivePartyFn = makeWriteAction("archivePartyFn");
+
+export const createCustomerFn = makeWriteAction("createCustomerFn");
+export const updateCustomerFn = makeWriteAction("updateCustomerFn");
+export const deleteCustomerFn = makeWriteAction("deleteCustomerFn");
+export const archiveCustomerFn = makeWriteAction("archiveCustomerFn");
+
+export const createPartyReceivableFn = makeWriteAction("createPartyReceivableFn");
+export const createPartyPayableFn = makeWriteAction("createPartyPayableFn");
+export const deletePartyReceivableFn = makeWriteAction("deletePartyReceivableFn");
+export const deletePartyPayableFn = makeWriteAction("deletePartyPayableFn");
+
+export const createPayableSettlementFn = makeWriteAction("createPayableSettlementFn");
+export const deletePayableSettlementFn = makeWriteAction("deletePayableSettlementFn");
+
+export const createSaleFn = makeWriteAction("createSaleFn");
+export const deleteSaleFn = makeWriteAction("deleteSaleFn");
+export const editSaleFn = makeWriteAction("editSaleFn");
+
+export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
+export const createReturnFn = makeWriteAction("createReturnFn");
+export const createDirectProductReturnFn = makeWriteAction("createDirectProductReturnFn");
+export const deleteReturnFn = makeWriteAction("deleteReturnFn");
+
+export const createPurchaseFn = makeWriteAction("createPurchaseFn");
+export const deletePurchaseFn = makeWriteAction("deletePurchaseFn");
+
+export const createExpenseFn = makeWriteAction("createExpenseFn");
+export const deleteExpenseFn = makeWriteAction("deleteExpenseFn");
+
+export const createPaymentFn = makeWriteAction("createPaymentFn");
+export const deletePaymentFn = makeWriteAction("deletePaymentFn");
+
+export const createSomitiFn = makeWriteAction("createSomitiFn");
+export const updateSomitiFn = makeWriteAction("updateSomitiFn");
+export const deleteSomitiFn = makeWriteAction("deleteSomitiFn");
+export const renameSomitiFn = makeWriteAction("renameSomitiFn");
+export const deleteSomitiFnByName = makeWriteAction("deleteSomitiFnByName");
+
+export const createWithdrawalFn = makeWriteAction("createWithdrawalFn");
+export const createCashboxFn = makeWriteAction("createCashboxFn");
+
+export const createReminderFn = makeWriteAction("createReminderFn");
+export const toggleReminderFn = makeWriteAction("toggleReminderFn");
+export const deleteReminderFn = makeWriteAction("deleteReminderFn");
+
+// ─── Export Reset Operations ─────────────────────────────────────────────────
+export const emptyCashboxFn = makeReadAction("emptyCashboxFn");
+export const resetProductsFn = makeReadAction("resetProductsFn");
+export const resetSalesFn = makeReadAction("resetSalesFn");
+export const resetPurchasesFn = makeReadAction("resetPurchasesFn");
+export const resetSomitiFn = makeReadAction("resetSomitiFn");
+export const resetExpensesFn = makeReadAction("resetExpensesFn");
+export const resetPartiesFn = makeReadAction("resetPartiesFn");
+export const resetAllDataFn = makeReadAction("resetAllDataFn");
+
+// Register background sync engine with remote HTTP execution map
+const actionsList = [
+  "createProductFn", "updateProductFn", "deleteProductFn", "archiveProductFn",
+  "createPartyFn", "updatePartyFn", "deletePartyFn", "archivePartyFn",
+  "createCustomerFn", "updateCustomerFn", "deleteCustomerFn", "archiveCustomerFn",
+  "createPartyReceivableFn", "createPartyPayableFn", "deletePartyReceivableFn", "deletePartyPayableFn",
+  "createPayableSettlementFn", "deletePayableSettlementFn", "createSaleFn", "deleteSaleFn", "editSaleFn",
+  "updateUserAvatarFn", "createReturnFn", "createDirectProductReturnFn", "deleteReturnFn",
+  "createPurchaseFn", "deletePurchaseFn", "createExpenseFn", "deleteExpenseFn",
+  "createPaymentFn", "deletePaymentFn", "createSomitiFn", "updateSomitiFn", "deleteSomitiFn",
+  "renameSomitiFn", "deleteSomitiFnByName", "createWithdrawalFn", "createCashboxFn",
+  "createReminderFn", "toggleReminderFn", "deleteReminderFn"
+];
+
+const syncActions: Record<string, Function> = {};
+actionsList.forEach(name => {
+  syncActions[name] = (args: any) => callRemoteRpc(name, args);
+});
+
 if (typeof window !== "undefined") {
-  startBackgroundSync(actions as any);
+  startBackgroundSync(syncActions);
 }
-
-// Export READS directly
-export const getMeFn = actions.getMeFn;
-export const getProductsFn = actions.getProductsFn;
-export const getPartiesFn = actions.getPartiesFn;
-export const getPartyFn = actions.getPartyFn;
-export const getCustomersFn = actions.getCustomersFn;
-export const getCustomerFn = actions.getCustomerFn;
-export const getAllPartyReceivablesFn = actions.getAllPartyReceivablesFn;
-export const getAllPartyPayablesFn = actions.getAllPartyPayablesFn;
-export const getAllPayableSettlementsFn = actions.getAllPayableSettlementsFn;
-export const getPartyReceivablesFn = actions.getPartyReceivablesFn;
-export const getPartyPayablesFn = actions.getPartyPayablesFn;
-export const getPayableSettlementsFn = actions.getPayableSettlementsFn;
-export const getSalesFn = actions.getSalesFn;
-export const getSalesForPartyFn = actions.getSalesForPartyFn;
-export const getReturnsFn = actions.getReturnsFn;
-export const getPurchasesFn = actions.getPurchasesFn;
-export const getExpensesFn = actions.getExpensesFn;
-export const getPaymentsForPartyFn = actions.getPaymentsForPartyFn;
-export const getAllPaymentsFn = actions.getAllPaymentsFn;
-export const getSomitiFn = actions.getSomitiFn;
-export const getWithdrawalsFn = actions.getWithdrawalsFn;
-export const getCashboxFn = actions.getCashboxFn;
-export const getRemindersFn = actions.getRemindersFn;
-
-// Auth / network-only writes (usually need internet, so we don't sync offline)
-export const loginFn = actions.loginFn;
-export const registerFn = actions.registerFn;
-export const logoutFn = actions.logoutFn;
-export const changeMyPasswordFn = actions.changeMyPasswordFn;
-export const verifyOwnerPasswordFn = actions.verifyOwnerPasswordFn;
-export const uploadImageFn = actions.uploadImageFn;
-export const bulkExportToGoogleSheetsFn = actions.bulkExportToGoogleSheetsFn;
-export const createProfileFn = actions.createProfileFn;
-export const switchProfileFn = actions.switchProfileFn;
-export const importProfileModuleFn = actions.importProfileModuleFn;
-
-// Write Actions with Offline support
-export const createProductFn = (args: any) => runWriteAction("createProductFn", actions.createProductFn, args);
-export const updateProductFn = (args: any) => runWriteAction("updateProductFn", actions.updateProductFn, args);
-export const deleteProductFn = (args: any) => runWriteAction("deleteProductFn", actions.deleteProductFn, args);
-export const archiveProductFn = (args: any) => runWriteAction("archiveProductFn", actions.archiveProductFn, args);
-
-export const createPartyFn = (args: any) => runWriteAction("createPartyFn", actions.createPartyFn, args);
-export const updatePartyFn = (args: any) => runWriteAction("updatePartyFn", actions.updatePartyFn, args);
-export const deletePartyFn = (args: any) => runWriteAction("deletePartyFn", actions.deletePartyFn, args);
-export const archivePartyFn = (args: any) => runWriteAction("archivePartyFn", actions.archivePartyFn, args);
-
-export const createCustomerFn = (args: any) => runWriteAction("createCustomerFn", actions.createCustomerFn, args);
-export const updateCustomerFn = (args: any) => runWriteAction("updateCustomerFn", actions.updateCustomerFn, args);
-export const deleteCustomerFn = (args: any) => runWriteAction("deleteCustomerFn", actions.deleteCustomerFn, args);
-export const archiveCustomerFn = (args: any) => runWriteAction("archiveCustomerFn", actions.archiveCustomerFn, args);
-
-export const createPartyReceivableFn = (args: any) => runWriteAction("createPartyReceivableFn", actions.createPartyReceivableFn, args);
-export const createPartyPayableFn = (args: any) => runWriteAction("createPartyPayableFn", actions.createPartyPayableFn, args);
-export const deletePartyReceivableFn = (args: any) => runWriteAction("deletePartyReceivableFn", actions.deletePartyReceivableFn, args);
-export const deletePartyPayableFn = (args: any) => runWriteAction("deletePartyPayableFn", actions.deletePartyPayableFn, args);
-
-export const createPayableSettlementFn = (args: any) => runWriteAction("createPayableSettlementFn", actions.createPayableSettlementFn, args);
-export const deletePayableSettlementFn = (args: any) => runWriteAction("deletePayableSettlementFn", actions.deletePayableSettlementFn, args);
-
-export const createSaleFn = (args: any) => runWriteAction("createSaleFn", actions.createSaleFn, args);
-export const deleteSaleFn = (args: any) => runWriteAction("deleteSaleFn", actions.deleteSaleFn, args);
-export const editSaleFn = (args: any) => runWriteAction("editSaleFn", actions.editSaleFn, args);
-
-export const updateUserAvatarFn = (args: any) => runWriteAction("updateUserAvatarFn", actions.updateUserAvatarFn, args);
-export const createReturnFn = (args: any) => runWriteAction("createReturnFn", actions.createReturnFn, args);
-export const createDirectProductReturnFn = (args: any) => runWriteAction("createDirectProductReturnFn", actions.createDirectProductReturnFn, args);
-export const deleteReturnFn = (args: any) => runWriteAction("deleteReturnFn", actions.deleteReturnFn, args);
-
-export const createPurchaseFn = (args: any) => runWriteAction("createPurchaseFn", actions.createPurchaseFn, args);
-export const deletePurchaseFn = (args: any) => runWriteAction("deletePurchaseFn", actions.deletePurchaseFn, args);
-
-export const createExpenseFn = (args: any) => runWriteAction("createExpenseFn", actions.createExpenseFn, args);
-export const deleteExpenseFn = (args: any) => runWriteAction("deleteExpenseFn", actions.deleteExpenseFn, args);
-
-export const createPaymentFn = (args: any) => runWriteAction("createPaymentFn", actions.createPaymentFn, args);
-export const deletePaymentFn = (args: any) => runWriteAction("deletePaymentFn", actions.deletePaymentFn, args);
-
-export const createSomitiFn = (args: any) => runWriteAction("createSomitiFn", actions.createSomitiFn, args);
-export const updateSomitiFn = (args: any) => runWriteAction("updateSomitiFn", actions.updateSomitiFn, args);
-export const deleteSomitiFn = (args: any) => runWriteAction("deleteSomitiFn", actions.deleteSomitiFn, args);
-export const renameSomitiFn = (args: any) => runWriteAction("renameSomitiFn", actions.renameSomitiFn, args);
-export const deleteSomitiFnByName = (args: any) => runWriteAction("deleteSomitiFnByName", actions.deleteSomitiFnByName, args);
-
-export const createWithdrawalFn = (args: any) => runWriteAction("createWithdrawalFn", actions.createWithdrawalFn, args);
-
-export const createCashboxFn = (args: any) => runWriteAction("createCashboxFn", actions.createCashboxFn, args);
-
-export const createReminderFn = (args: any) => runWriteAction("createReminderFn", actions.createReminderFn, args);
-export const toggleReminderFn = (args: any) => runWriteAction("toggleReminderFn", actions.toggleReminderFn, args);
-export const deleteReminderFn = (args: any) => runWriteAction("deleteReminderFn", actions.deleteReminderFn, args);
-
-// Reset Actions (require network normally, but proxy anyway)
-export const emptyCashboxFn = actions.emptyCashboxFn;
-export const resetProductsFn = actions.resetProductsFn;
-export const resetSalesFn = actions.resetSalesFn;
-export const resetPurchasesFn = actions.resetPurchasesFn;
-export const resetSomitiFn = actions.resetSomitiFn;
-export const resetExpensesFn = actions.resetExpensesFn;
-export const resetPartiesFn = actions.resetPartiesFn;
-export const resetAllDataFn = actions.resetAllDataFn;
