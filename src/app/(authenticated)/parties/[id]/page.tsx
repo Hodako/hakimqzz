@@ -60,6 +60,9 @@ export default function PartyDetail() {
   const [isDeletingEntry, setIsDeletingEntry] = useState(false);
   const [partyToDelete, setPartyToDelete] = useState<Party | null>(null);
   const [isDeletingParty, setIsDeletingParty] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
 
   const party = partyQuery.data;
   const isLoading = partyQuery.isLoading && !party;
