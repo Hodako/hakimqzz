@@ -31,6 +31,42 @@ export function Providers({ children }: { children: React.ReactNode }) {
         .then((reg) => console.log("Service Worker registered with scope:", reg.scope))
         .catch((err) => console.error("Service Worker registration failed:", err));
     }
+
+    let appBackButtonListener: any = null;
+    const initBackButton = async () => {
+      try {
+        const { App } = await import("@capacitor/app");
+        appBackButtonListener = await App.addListener("backButton", (info) => {
+          const overlayBackdrop = document.querySelector('[role="dialog"], [data-state="open"], .fixed.inset-0');
+          if (overlayBackdrop) {
+            const escapeEvent = new KeyboardEvent("keydown", {
+              key: "Escape",
+              code: "Escape",
+              keyCode: 27,
+              which: 27,
+              bubbles: true,
+              cancelable: true
+            });
+            document.dispatchEvent(escapeEvent);
+            return;
+          }
+          if (info.canGoBack) {
+            window.history.back();
+          } else {
+            App.exitApp();
+          }
+        });
+      } catch (err) {
+        console.warn("Capacitor App plugin not available or not running on native device.", err);
+      }
+    };
+    initBackButton();
+
+    return () => {
+      if (appBackButtonListener) {
+        appBackButtonListener.remove();
+      }
+    };
   }, []);
 
   useEffect(() => {

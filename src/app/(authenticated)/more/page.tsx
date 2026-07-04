@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { createProfileFn, switchProfileFn, importProfileModuleFn, createSaleFn, createExpenseFn, createPurchaseFn, createCashboxFn } from "@/lib/rpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -653,6 +654,7 @@ export default function MorePage() {
     uiStyle: "default",
     bevelStrength: "medium",
     glowEnabled: false,
+    glowIntensity: 15,
     borderRadius: "",
     productBoxSize: "standard",
     borderWidth: "thin",
@@ -783,6 +785,7 @@ export default function MorePage() {
       uiStyle: "default",
       bevelStrength: "medium",
       glowEnabled: false,
+      glowIntensity: 15,
       borderRadius: "",
       productBoxSize: "standard",
       borderWidth: "thin",
@@ -829,6 +832,60 @@ export default function MorePage() {
     const file = e.target.files?.[0];
     if (file) {
       await uploadProfilePic(file);
+    }
+  };
+
+  const [isUploadingBg, setIsUploadingBg] = useState(false);
+  const bgFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingBg(true);
+    toast.info(lang === "bn" ? "ব্যাকগ্রাউন্ড ছবি আপলোড হচ্ছে..." : "Uploading background image...");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const isCap = typeof window !== "undefined" && (
+        !!(window as any).Capacitor ||
+        window.location.hostname === "localhost" ||
+        window.location.origin.includes("localhost") ||
+        window.location.origin.startsWith("capacitor:") ||
+        window.location.origin.startsWith("file:")
+      );
+      const uploadUrl = isCap ? "https://hakim.qzz.io/api/upload" : "/api/upload";
+
+      const headers: Record<string, string> = {};
+      if (isCap) {
+        const token = localStorage.getItem("auth_token");
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+      }
+
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+        headers,
+      });
+
+      if (!res.ok) {
+        throw new Error(lang === "bn" ? "আপলোড ব্যর্থ হয়েছে" : "Upload failed");
+      }
+
+      const data = await res.json();
+      if (data.url) {
+        updateThemeField("bgImage", data.url);
+        updateThemeField("bgImageOpacity", 0.15);
+        toast.success(lang === "bn" ? "ব্যাকগ্রাউন্ড ছবি আপলোড সফল হয়েছে!" : "Background image uploaded successfully!");
+      } else {
+        throw new Error("No URL returned");
+      }
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setIsUploadingBg(false);
     }
   };
 
@@ -1111,6 +1168,23 @@ export default function MorePage() {
                 </button>
               </div>
 
+              {theme.glowEnabled && (
+                <div className="space-y-1 pt-2 border-t border-border/20">
+                  <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                    <Label>{lang === "bn" ? "গ্লো তীব্রতা (Glow Intensity)" : "Neon Glow Intensity"}</Label>
+                    <span className="font-mono text-[9px]">{theme.glowIntensity ?? 15}px</span>
+                  </div>
+                  <Slider
+                    min={5}
+                    max={40}
+                    step={1}
+                    value={[theme.glowIntensity ?? 15]}
+                    onValueChange={val => updateThemeField("glowIntensity", val[0])}
+                    className="py-2"
+                  />
+                </div>
+              )}
+
               {/* Card Roundness & Sharpness selector */}
               <div className="space-y-1 pt-2 border-t border-border/20">
                 <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ড ও মেট্রিক্স কোণার রাউন্ডনেস (শার্পনেস)" : "Card Roundness & Sharpness"}</Label>
@@ -1144,14 +1218,13 @@ export default function MorePage() {
                   <Label>{lang === "bn" ? "কার্ডের অস্বচ্ছতা (Opacity)" : "Card Opacity"}</Label>
                   <span className="font-mono text-[9px]">{Math.round((theme.cardOpacity ?? 1) * 100)}%</span>
                 </div>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="1.0"
-                  step="0.05"
-                  value={theme.cardOpacity ?? 1}
-                  onChange={e => updateThemeField("cardOpacity", parseFloat(e.target.value))}
-                  className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                <Slider
+                  min={0.2}
+                  max={1.0}
+                  step={0.05}
+                  value={[theme.cardOpacity ?? 1]}
+                  onValueChange={val => updateThemeField("cardOpacity", val[0])}
+                  className="py-2"
                 />
               </div>
 
@@ -1161,14 +1234,13 @@ export default function MorePage() {
                   <Label>{lang === "bn" ? "কার্ডের ব্যাকগ্রাউন্ড ব্লার (Blur)" : "Card Backdrop Blur"}</Label>
                   <span className="font-mono text-[9px]">{theme.cardBlur ?? 0}px</span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="30"
-                  step="1"
-                  value={theme.cardBlur ?? 0}
-                  onChange={e => updateThemeField("cardBlur", parseInt(e.target.value))}
-                  className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                <Slider
+                  min={0}
+                  max={30}
+                  step={1}
+                  value={[theme.cardBlur ?? 0]}
+                  onValueChange={val => updateThemeField("cardBlur", val[0])}
+                  className="py-2"
                 />
               </div>
 
@@ -1291,14 +1363,13 @@ export default function MorePage() {
                   <Label>{lang === "bn" ? "ফন্ট সাইজ (স্কেল)" : "Base Font Size"}</Label>
                   <span className="font-mono">{theme.fontSize || "16px"}</span>
                 </div>
-                <input
-                  type="range"
-                  min="13"
-                  max="22"
-                  step="1"
-                  value={parseInt(theme.fontSize || "16")}
-                  onChange={e => updateThemeField("fontSize", `${e.target.value}px`)}
-                  className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                <Slider
+                  min={13}
+                  max={22}
+                  step={1}
+                  value={[parseInt(theme.fontSize || "16")]}
+                  onValueChange={val => updateThemeField("fontSize", `${val[0]}px`)}
+                  className="py-2"
                 />
               </div>
             </div>
@@ -1534,14 +1605,33 @@ export default function MorePage() {
             </div>
 
             <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "ছবি ইউআরএল (Image URL)" : "Custom Background Image URL"}</Label>
-                <Input
-                  className="bg-background h-8 text-xs placeholder:text-[10px]"
-                  placeholder="https://example.com/bg.jpg"
-                  value={theme.bgImage}
-                  onChange={e => updateThemeField("bgImage", e.target.value)}
-                />
+              <div className="space-y-2">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "ব্যাকগ্রাউন্ড ছবি আপলোড অথবা ইউআরএল" : "Custom Background Image"}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    className="bg-background h-8 text-xs placeholder:text-[10px] flex-1"
+                    placeholder="https://example.com/bg.jpg"
+                    value={theme.bgImage}
+                    onChange={e => updateThemeField("bgImage", e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-[10px] px-2.5 shrink-0"
+                    onClick={() => bgFileInputRef.current?.click()}
+                    disabled={isUploadingBg}
+                  >
+                    {isUploadingBg ? "..." : (lang === "bn" ? "আপলোড" : "Upload")}
+                  </Button>
+                  <input
+                    type="file"
+                    ref={bgFileInputRef}
+                    onChange={handleBgUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
               </div>
 
               {theme.bgImage && (
@@ -1550,14 +1640,13 @@ export default function MorePage() {
                     <Label>{lang === "bn" ? "ছবির অপাসিটি" : "Background Opacity"}</Label>
                     <span className="font-mono">{Math.round(theme.bgImageOpacity * 100)}%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0.02"
-                    max="0.40"
-                    step="0.01"
-                    value={theme.bgImageOpacity}
-                    onChange={e => updateThemeField("bgImageOpacity", parseFloat(e.target.value))}
-                    className="w-full accent-primary h-1.5 bg-muted rounded-lg appearance-none cursor-pointer"
+                  <Slider
+                    min={0.02}
+                    max={0.40}
+                    step={0.01}
+                    value={[theme.bgImageOpacity]}
+                    onValueChange={val => updateThemeField("bgImageOpacity", val[0])}
+                    className="py-2"
                   />
                 </div>
               )}
@@ -1648,7 +1737,7 @@ export default function MorePage() {
       toast.success(lang === "bn" ? `প্রোফাইল "${newProfileName}" তৈরি এবং পরিবর্তন করা হয়েছে` : `Profile "${newProfileName}" created & switched`);
       setNewProfileName("");
       setCreateProfileOpen(false);
-      refresh();
+      await refresh();
       window.location.reload();
     } catch (err: any) {
       toast.error(err.message || String(err));
@@ -1664,7 +1753,7 @@ export default function MorePage() {
       await switchProfileFn({ data: { profileId } });
       const pName = user?.profiles?.find(p => p.id === profileId)?.name || "Default";
       toast.success(lang === "bn" ? `প্রোফাইল "${pName}" এ পরিবর্তন করা হয়েছে` : `Switched to profile "${pName}"`);
-      refresh();
+      await refresh();
       window.location.reload();
     } catch (err: any) {
       toast.error(err.message || String(err));

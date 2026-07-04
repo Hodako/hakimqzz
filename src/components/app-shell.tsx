@@ -210,7 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           onClick={() => router.push(to)}
                         >
                           <Icon className="icon-sm" />
-                          <span>{t(labelKey)}</span>
+                          <span className="truncate text-left">{t(labelKey)}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}

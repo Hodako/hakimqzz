@@ -50,7 +50,8 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     ? await db.collection("businesses").findOne({ _id: user.business_id as any })
     : null;
   const cookieStore = await cookies();
-  const activeProfile = cookieStore.get("active_profile")?.value || "default";
+  const store = requestStore.getStore();
+  const activeProfile = store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
   
   const ownerId = user.role === "employee" ? (user.owner_id as string) : (user._id as any as string);
   const ownerUser = ownerId === (user._id as any as string) ? user : await db.collection("users").findOne({ _id: ownerId as any });
@@ -719,7 +720,7 @@ export async function getPurchasesFn() {
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
-export async function createPurchaseFn(input: { data: { product_id?: string | null; product_name: string; qty: number; unit_cost: number; sell_price?: number; total: number; note?: string | null; created_at?: string } }) {
+export async function createPurchaseFn(input: { data: { product_id?: string | null; product_name: string; qty: number; unit_cost: number; sell_price?: number; total: number; note?: string | null; created_at?: string; party_id?: string | null; payment_type?: "cash" | "credit" | null } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -740,26 +741,41 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
     }
   }
 
-  // Add product purchase to expenses collection
-  const expenseId = crypto.randomUUID();
-  const expenseDoc = {
-    _id: expenseId,
-    owner_id: session.ownerId,
-    title: `Product Purchase: ${data.product_name}`,
-    amount: data.total,
-    note: `Purchased ${data.qty} units of ${data.product_name} at unit cost ${data.unit_cost}. Purchase ID: ${id}`,
-    created_at: doc.created_at,
-  };
-  await db.collection("expenses").insertOne(expenseDoc as any);
+  // Deduct from cashbox ONLY if payment_type is NOT credit
+  if (data.payment_type !== "credit") {
+    // Add product purchase to expenses collection
+    const expenseId = crypto.randomUUID();
+    const expenseDoc = {
+      _id: expenseId,
+      owner_id: session.ownerId,
+      title: `Product Purchase: ${data.product_name}`,
+      amount: data.total,
+      note: `Purchased ${data.qty} units of ${data.product_name} at unit cost ${data.unit_cost}. Purchase ID: ${id}`,
+      created_at: doc.created_at,
+    };
+    await db.collection("expenses").insertOne(expenseDoc as any);
 
-  // Deduct from cashbox using expense entry
-  await insertCashboxEntry(db, session.ownerId, {
-    kind: "expense",
-    amount: data.total,
-    note: `Product Purchase: ${data.product_name}`,
-    ref_id: expenseId,
-    created_at: doc.created_at,
-  });
+    // Deduct from cashbox using expense entry
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "expense",
+      amount: data.total,
+      note: `Product Purchase: ${data.product_name}`,
+      ref_id: expenseId,
+      created_at: doc.created_at,
+    });
+  } else if (data.party_id) {
+    // Record it as a debt/payable to the party
+    const payableId = crypto.randomUUID();
+    const payableDoc = {
+      _id: payableId,
+      owner_id: session.ownerId,
+      party_id: data.party_id,
+      amount: data.total,
+      note: `Credit Purchase: ${data.qty}x ${data.product_name}. Purchase ID: ${id}`,
+      created_at: doc.created_at,
+    };
+    await db.collection("party_payables").insertOne(payableDoc as any);
+  }
 
   // Sheets Sync for Purchase
   appendRowToGoogleSheet(session.ownerId, "Purchases",

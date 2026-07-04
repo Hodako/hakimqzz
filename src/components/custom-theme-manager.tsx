@@ -16,6 +16,7 @@ export type ThemeConfig = {
   uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism" | "cyberpunk" | "minimalist" | "forest" | "luxury";
   bevelStrength?: "none" | "light" | "medium" | "heavy";
   glowEnabled?: boolean;
+  glowIntensity?: number;
   borderRadius?: "none" | "small" | "medium" | "large" | "full";
   borderWidth?: "none" | "thin" | "medium" | "thick" | "heavy";
   shadowStyle?: "none" | "soft" | "medium" | "deep" | "brutal";
@@ -920,16 +921,17 @@ export function CustomThemeManager() {
 
     // Glow Effect overrides
     if (config.glowEnabled) {
+      const intensity = config.glowIntensity ?? 15;
       css += `
         /* Glow Effect Overrides */
         button[class*="bg-primary"], .bg-primary, .beveled-button, button[class*="bg-indigo"] {
-          box-shadow: 0 0 10px var(--primary) !important;
+          box-shadow: 0 0 ${intensity}px var(--primary) !important;
         }
         .card, .beveled-card, .glass-card {
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 0 15px rgba(99, 102, 241, 0.1) !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), 0 0 ${intensity + 5}px rgba(99, 102, 241, ${Math.min(0.3, 0.05 + intensity * 0.005)}) !important;
         }
         .dark .card, .dark .beveled-card, .dark .glass-card {
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 15px rgba(99, 102, 241, 0.15) !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 ${intensity + 5}px rgba(99, 102, 241, ${Math.min(0.4, 0.08 + intensity * 0.007)}) !important;
         }
       `;
     }
@@ -1233,6 +1235,47 @@ export function CustomThemeManager() {
         }
       `;
     }
+
+    // 13. General dark/cyberpunk/luxury text color overrides for hardcoded black utility classes
+    const isDarkTheme = config.uiStyle === "cyberpunk" || config.uiStyle === "luxury";
+    css += `
+      .dark .text-black,
+      .dark .text-zinc-950,
+      .dark .text-zinc-900,
+      .dark .text-zinc-800,
+      .dark .text-zinc-700,
+      .dark .text-slate-950,
+      .dark .text-slate-900,
+      .dark .text-slate-800,
+      .dark .text-slate-700,
+      .dark .text-neutral-950,
+      .dark .text-neutral-900,
+      .dark .text-neutral-800,
+      .dark .text-neutral-700,
+      .dark .text-gray-950,
+      .dark .text-gray-900,
+      .dark .text-gray-800,
+      .dark .text-gray-700 ${isDarkTheme ? `,
+      .text-black,
+      .text-zinc-950,
+      .text-zinc-900,
+      .text-zinc-800,
+      .text-zinc-700,
+      .text-slate-950,
+      .text-slate-900,
+      .text-slate-800,
+      .text-slate-700,
+      .text-neutral-950,
+      .text-neutral-900,
+      .text-neutral-800,
+      .text-neutral-700,
+      .text-gray-950,
+      .text-gray-900,
+      .text-gray-800,
+      .text-gray-700` : ""} {
+        color: var(--foreground, #ffffff) !important;
+      }
+    `;
 
     styleEl.innerHTML = css;
   }, [config]);

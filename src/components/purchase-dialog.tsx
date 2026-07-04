@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProductSearchSelect } from "@/components/product-search";
 import { useCachedQuery } from "@/hooks/use-cached-query";
-import { getProducts } from "@/lib/queries";
+import { getProducts, getParties } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
 import { fmtMoney } from "@/lib/format";
 import { toast } from "sonner";
@@ -17,16 +17,30 @@ import { Plus, Trash2 } from "lucide-react";
 
 type PurchaseLine = { productId: string; qty: string; unitCost: string; sellPrice: string };
 
-export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { t } = useT();
+export function PurchaseDialog({ open, onOpenChange, presetPartyId }: { open: boolean; onOpenChange: (v: boolean) => void; presetPartyId?: string }) {
+  const { lang, t } = useT();
   const qc = useQueryClient();
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
-  const [lines, setLines] = useState<PurchaseLine[]>([{ productId: "", qty: "1", unitCost: "", sellPrice: "" }]);
+  const { data: parties = [] } = useCachedQuery(["parties"], getParties);
+
+  const [lines, setLines] = useState<PurchaseLine[]>([]);
+  const [partyId, setPartyId] = useState("");
+  const [paymentType, setPaymentType] = useState<"cash" | "credit">("cash");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) setLines([{ productId: "", qty: "1", unitCost: "", sellPrice: "" }]);
-  }, [open]);
+    if (presetPartyId) {
+      setPartyId(presetPartyId);
+    }
+  }, [presetPartyId]);
+
+  useEffect(() => {
+    if (open) {
+      setLines([{ productId: "", qty: "1", unitCost: "", sellPrice: "" }]);
+      setPartyId(presetPartyId ?? "");
+      setPaymentType("cash");
+    }
+  }, [open, presetPartyId]);
 
   function updateLine(i: number, patch: Partial<PurchaseLine>) {
     setLines(prev => prev.map((l, idx) => {
@@ -53,6 +67,9 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     e.preventDefault();
     const valid = lines.filter(l => l.productId && Number(l.qty) > 0);
     if (valid.length === 0) return toast.error(t("select_product"));
+    if (paymentType === "credit" && !partyId) {
+      return toast.error(lang === "bn" ? "ক্রেডিট ক্রয়ের জন্য সাপ্লায়ার নির্বাচন করা বাধ্যতামূলক" : "Supplier is required for credit purchases");
+    }
     setBusy(true);
     try {
       for (const line of valid) {
@@ -68,6 +85,8 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             unit_cost,
             sell_price: sell_price > 0 ? sell_price : undefined,
             total: qty * unit_cost,
+            party_id: partyId || null,
+            payment_type: paymentType,
           },
         });
       }
@@ -76,6 +95,8 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
+      qc.invalidateQueries({ queryKey: ["parties"] });
+      qc.invalidateQueries({ queryKey: ["party-detail"] });
       onOpenChange(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -119,6 +140,33 @@ export function PurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setLines(prev => [...prev, { productId: "", qty: "1", unitCost: "", sellPrice: "" }])}>
             <Plus className="size-3.5 mr-1" />{t("add_product")}
           </Button>
+
+          {/* Supplier & Payment Type Selection */}
+          <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">{t("party")}</Label>
+              <select
+                value={partyId}
+                onChange={e => setPartyId(e.target.value)}
+                className="w-full h-8 rounded border border-border bg-background px-2 text-xs"
+              >
+                <option value="">— Select Supplier —</option>
+                {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "পেমেন্ট টাইপ" : "Payment Type"}</Label>
+              <select
+                value={paymentType}
+                onChange={e => setPaymentType(e.target.value as any)}
+                className="w-full h-8 rounded border border-border bg-background px-2 text-xs"
+              >
+                <option value="cash">{lang === "bn" ? "ক্যাশ" : "Cash"}</option>
+                <option value="credit">{lang === "bn" ? "বকেয়া (ক্রেডিট)" : "Credit"}</option>
+              </select>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between text-sm border-t border-border pt-3">
             <span className="text-muted-foreground">{t("total")}</span>
             <span className="font-semibold">{fmtMoney(grandTotal)}</span>

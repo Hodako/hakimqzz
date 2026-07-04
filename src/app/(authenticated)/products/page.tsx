@@ -8,7 +8,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { getProducts, getSales, getParties, type Product } from "@/lib/queries";
+import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
 import { fmtMoney } from "@/lib/format";
 import { ProductImage } from "@/components/product-image";
@@ -97,17 +97,17 @@ export default function ProductsPage() {
   };
 
   const [sellType, setSellType] = useState<"cash" | "credit" | "online">("cash");
-  const [sellPartyId, setSellPartyId] = useState("");
+  const [sellCustomerId, setSellCustomerId] = useState("");
   const [sellPaidAmount, setSellPaidAmount] = useState("");
   const [sellBusy, setSellBusy] = useState(false);
 
-  const partiesQuery = useCachedQuery(["parties"], getParties);
-  const parties = partiesQuery.data ?? [];
+  const customersQuery = useCachedQuery(["customers"], getCustomers);
+  const customers = customersQuery.data ?? [];
 
   async function handleCompleteDirectSell() {
     if (sellCart.length === 0) return;
-    if (sellType === "credit" && !sellPartyId) {
-      toast.error(t("party") + " " + t("required"));
+    if (sellType === "credit" && !sellCustomerId) {
+      toast.error((lang === "bn" ? "কাস্টমার" : "Customer") + " " + t("required"));
       return;
     }
     setSellBusy(true);
@@ -132,7 +132,7 @@ export default function ProductsPage() {
             sell_price: sellPrice,
             profit: lineProfit,
             type: sellType,
-            party_id: sellType === "credit" ? sellPartyId : null,
+            party_id: sellType === "credit" ? sellCustomerId : null,
             paid_amount: sellType === "credit" ? paidPerItem : lineSell,
             due_amount: sellType === "credit" ? duePerItem : 0,
             cart_id: cartId,
@@ -142,7 +142,7 @@ export default function ProductsPage() {
       toast.success(t("record_sale"));
       setSellCart([]);
       setShowCartPanel(false);
-      setSellPartyId("");
+      setSellCustomerId("");
       setSellPaidAmount("");
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -499,14 +499,14 @@ export default function ProductsPage() {
               {sellType === "credit" && (
                 <div className="space-y-1.5 p-2.5 bg-background/50 rounded-xl border border-emerald-500/15 shadow-inner">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{t("party")}:</span>
+                    <span className="text-[10px] text-muted-foreground w-12 shrink-0">{lang === "bn" ? "কাস্টমার" : "Customer"}:</span>
                     <select
-                      value={sellPartyId}
-                      onChange={e => setSellPartyId(e.target.value)}
+                      value={sellCustomerId}
+                      onChange={e => setSellCustomerId(e.target.value)}
                       className="h-7 rounded border border-input bg-background px-2 text-xs flex-1"
                     >
-                      <option value="">— Select Party —</option>
-                      {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      <option value="">— Select Customer —</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div className="flex items-center gap-2">

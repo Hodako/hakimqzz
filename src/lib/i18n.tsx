@@ -12,7 +12,7 @@ const dict = {
   products: { bn: "পণ্য", en: "Products" },
   sales: { bn: "বিক্রি", en: "Sales" },
   parties: { bn: "সাপ্লায়ার ও পার্টনার", en: "Suppliers & Partners" },
-  customers: { bn: "কাস্টমার খাতা", en: "Customers Ledger" },
+  customers: { bn: "কাস্টমার খাতা", en: "Customer Ledger" },
   more: { bn: "আরও", en: "More" },
   online_sell: { bn: "অনলাইন বিক্রি", en: "Online Sell" },
   cash_management: { bn: "নগদ ব্যবস্থাপনা", en: "Cash Management" },

@@ -28,12 +28,16 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") || "*";
   try {
-    const { actionName, args, token } = await req.json();
+    const { actionName, args, token, activeProfile } = await req.json();
 
-    return await requestStore.run({ token }, async () => {
+    return await requestStore.run({ token, activeProfile }, async () => {
       if (token) {
         const cookieStore = await cookies();
         cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+      }
+      if (activeProfile) {
+        const cookieStore = await cookies();
+        cookieStore.set("active_profile", activeProfile, { maxAge: 365 * 24 * 60 * 60, path: "/" });
       }
 
       const action = allActions[actionName];

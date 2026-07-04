@@ -53,7 +53,7 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     }
   }
 
-  const activeProfile = cookieStore.get("active_profile")?.value || "default";
+  const activeProfile = store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
   const ownerIdBase = role === "employee" ? (user.owner_id as string) : (user._id as any as string);
   const ownerId = activeProfile === "default" ? ownerIdBase : `${ownerIdBase}:${activeProfile}`;
   const permissions = (user.permissions as PermissionSet) || (role === "owner" ? OWNER_PERMISSIONS : {});
