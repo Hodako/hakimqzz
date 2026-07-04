@@ -23,6 +23,10 @@ export type ThemeConfig = {
   cardOpacity?: number;
   cardBlur?: number;
   animationSpeed?: "none" | "fast" | "normal" | "slow";
+  cardDarkness?: number;
+  kpiStyle?: "default" | "glass" | "neon" | "borderless";
+  customFontUrl?: string;
+  customFontName?: string;
 };
 
 export function CustomThemeManager() {
@@ -1132,7 +1136,31 @@ export function CustomThemeManager() {
       `;
     }
 
-    // 4. Font Family
+    // 4. Custom Font File Injection
+    if (config.customFontUrl) {
+      css += `
+        @font-face {
+          font-family: 'CustomUploadedFont';
+          src: url('${config.customFontUrl}') !important;
+        }
+      `;
+    }
+
+    // Load custom Google Font dynamically if configured
+    if (typeof window !== "undefined" && config.fontFamily && config.fontFamily !== "CustomUploadedFont" && !config.fontFamily.includes(",") && !["sans-serif", "serif", "monospace", "system-ui"].includes(config.fontFamily)) {
+      const fontName = config.fontFamily.trim().replace(/'/g, "").replace(/"/g, "");
+      const linkId = "hz-custom-google-font";
+      let linkEl = document.getElementById(linkId) as HTMLLinkElement;
+      if (!linkEl) {
+        linkEl = document.createElement("link");
+        linkEl.id = linkId;
+        linkEl.rel = "stylesheet";
+        document.head.appendChild(linkEl);
+      }
+      linkEl.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, "+")}:wght@300;400;500;600;700&display=swap`;
+    }
+
+    // 4b. Font Family Apply
     if (config.fontFamily) {
       css += `
         :root, .dark {
@@ -1202,12 +1230,12 @@ export function CustomThemeManager() {
       const opacity = config.bgImageOpacity !== undefined ? config.bgImageOpacity : 0.1;
       css += `
         html {
-          background-color: var(--background) !important;
+          background-color: hsl(var(--background)) !important;
         }
         body {
           background-image: linear-gradient(
-            color-mix(in srgb, var(--background) ${(1 - opacity) * 100}%, transparent),
-            color-mix(in srgb, var(--background) ${(1 - opacity) * 100}%, transparent)
+            color-mix(in srgb, hsl(var(--background)) ${(1 - opacity) * 100}%, transparent),
+            color-mix(in srgb, hsl(var(--background)) ${(1 - opacity) * 100}%, transparent)
           ), url('${config.bgImage}') !important;
           background-size: cover !important;
           background-position: center !important;
@@ -1371,6 +1399,56 @@ export function CustomThemeManager() {
       }
       ` : ""}
     `;
+
+    // 16. Custom Card Darkness Overlay
+    if (config.cardDarkness !== undefined && config.cardDarkness > 0) {
+      css += `
+        .dark .card,
+        .dark .beveled-card,
+        .dark .glass-card,
+        .card,
+        .beveled-card,
+        .glass-card {
+          background-color: color-mix(in srgb, var(--card) ${(1 - config.cardDarkness) * 100}%, #000000) !important;
+          background: color-mix(in srgb, var(--card) ${(1 - config.cardDarkness) * 100}%, #000000) !important;
+        }
+      `;
+    }
+
+    // 17. Custom KPI Card styles
+    if (config.kpiStyle) {
+      if (config.kpiStyle === "glass") {
+        css += `
+          .kpi-card, [key="kpis"] .card, [key="valuations"] > div {
+            background: rgba(255, 255, 255, 0.03) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1) !important;
+          }
+          .dark .kpi-card, .dark [key="kpis"] .card, .dark [key="valuations"] > div {
+            background: rgba(0, 0, 0, 0.2) !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          }
+        `;
+      } else if (config.kpiStyle === "neon") {
+        css += `
+          .kpi-card, [key="kpis"] .card, [key="valuations"] > div {
+            background-color: var(--card) !important;
+            border: 1.5px solid var(--primary) !important;
+            box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 20%, transparent) !important;
+          }
+        `;
+      } else if (config.kpiStyle === "borderless") {
+        css += `
+          .kpi-card, [key="kpis"] .card, [key="valuations"] > div {
+            background-color: var(--muted) !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+        `;
+      }
+    }
 
     styleEl.innerHTML = css;
   }, [config]);

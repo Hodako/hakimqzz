@@ -837,6 +837,42 @@ export default function MorePage() {
 
   const [isUploadingBg, setIsUploadingBg] = useState(false);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingFont, setIsUploadingFont] = useState(false);
+  const fontFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1.5 * 1024 * 1024) {
+      toast.error(lang === "bn" ? "ফাইলটি অনেক বড়! ১.৫ এমবি এর কম ফাইল আপলোড করুন।" : "File is too large! Please upload a file smaller than 1.5MB.");
+      return;
+    }
+
+    setIsUploadingFont(true);
+    toast.info(lang === "bn" ? "ফাইল লোড হচ্ছে..." : "Loading font file...");
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const base64Url = reader.result as string;
+        const fontName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        updateThemeField("customFontUrl", base64Url);
+        updateThemeField("customFontName", fontName);
+        updateThemeField("fontFamily", "CustomUploadedFont");
+        toast.success(lang === "bn" ? "কাস্টম ফন্ট আপলোড সফল হয়েছে!" : "Custom font uploaded successfully!");
+      } catch (err: any) {
+        toast.error(err.message || String(err));
+      } finally {
+        setIsUploadingFont(false);
+      }
+    };
+    reader.onerror = () => {
+      toast.error(lang === "bn" ? "ফাইল পড়তে সমস্যা হয়েছে" : "Error reading file");
+      setIsUploadingFont(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1373,6 +1409,54 @@ export default function MorePage() {
                   className="py-2"
                 />
               </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "গুগল ফন্ট নাম (যেকোনো ফন্ট)" : "Custom Google Font Name"}</Label>
+                <Input
+                  className="bg-background h-8 text-xs placeholder:text-[10px]"
+                  placeholder="E.g. Lobster, Pacifico, Orbitron, Great Vibes"
+                  value={theme.fontFamily && !theme.fontFamily.includes(",") && !["Roboto", "Montserrat", "Nunito", "Ubuntu", "Playfair", "Poppins", "Lora", "Times", "Fira", "system", "sans", "Arial", "Georgia", "CustomUploadedFont"].some(x => theme.fontFamily?.toLowerCase().includes(x)) ? theme.fontFamily : ""}
+                  onChange={e => updateThemeField("fontFamily", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কাস্টম ফন্ট ফাইল আপলোড করুন" : "Upload Custom Font File (.ttf, .otf, .woff, .woff2)"}</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-[10px] px-2.5 shrink-0 flex-1"
+                    onClick={() => fontFileInputRef.current?.click()}
+                    disabled={isUploadingFont}
+                  >
+                    {isUploadingFont ? "..." : (theme.customFontName ? (lang === "bn" ? `ফন্ট: ${theme.customFontName}` : `Font: ${theme.customFontName}`) : (lang === "bn" ? "ফন্ট ফাইল সিলেক্ট করুন" : "Choose Font File"))}
+                  </Button>
+                  {theme.customFontUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-[10px] px-2 text-destructive shrink-0"
+                      onClick={() => {
+                        updateThemeField("customFontUrl", "");
+                        updateThemeField("customFontName", "");
+                        updateThemeField("fontFamily", "");
+                      }}
+                    >
+                      {lang === "bn" ? "মুছুন" : "Clear"}
+                    </Button>
+                  )}
+                  <input
+                    type="file"
+                    ref={fontFileInputRef}
+                    onChange={handleFontUpload}
+                    accept=".ttf,.otf,.woff,.woff2"
+                    className="hidden"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1444,6 +1528,37 @@ export default function MorePage() {
                     />
                     <span className="text-[9px] font-mono truncate">{theme.textColor || "Default"}</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Card Darkness and KPI style */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                    <Label>{lang === "bn" ? "কার্ড ডার্কনেস (অন্ধকার)" : "Card Darkness (Overlay)"}</Label>
+                    <span className="font-mono">{Math.round((theme.cardDarkness || 0) * 100)}%</span>
+                  </div>
+                  <Slider
+                    min={0}
+                    max={0.9}
+                    step={0.05}
+                    value={[theme.cardDarkness || 0]}
+                    onValueChange={val => updateThemeField("cardDarkness", val[0])}
+                    className="py-2"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কেপিআই ডিজাইন স্টাইল" : "KPI Metric Card Style"}</Label>
+                  <select
+                    value={theme.kpiStyle || "default"}
+                    onChange={e => updateThemeField("kpiStyle", e.target.value)}
+                    className="w-full h-8 rounded border border-border bg-background px-2 text-xs"
+                  >
+                    <option value="default">{lang === "bn" ? "ডিফল্ট (সফট গ্রেডিয়েন্ট)" : "Default Soft Gradient"}</option>
+                    <option value="glass">{lang === "bn" ? "গ্লাস মরফিজম (স্বচ্ছ)" : "Glassmorphic Translucent"}</option>
+                    <option value="neon">{lang === "bn" ? "নিয়ন বর্ডার ও গ্লো" : "Neon Bordered Glow"}</option>
+                    <option value="borderless">{lang === "bn" ? "বর্ডারলেস মিনিমাল" : "Borderless Flat"}</option>
+                  </select>
                 </div>
               </div>
             </div>
