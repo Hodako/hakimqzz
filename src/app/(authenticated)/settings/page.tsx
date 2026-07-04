@@ -390,8 +390,10 @@ export default function SettingsPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, 512, 512);
+    if (cropImageType === "image/jpeg" || cropImageType === "image/jpg") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 512, 512);
+    }
 
     const S = 512 / viewportRect.width;
     const dx = (imgRect.left - viewportRect.left) * S;

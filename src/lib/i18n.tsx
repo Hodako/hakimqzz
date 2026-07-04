@@ -12,7 +12,7 @@ const dict = {
   products: { bn: "পণ্য", en: "Products" },
   sales: { bn: "বিক্রি", en: "Sales" },
   parties: { bn: "সাপ্লায়ার ও পার্টনার", en: "Suppliers & Partners" },
-  customers: { bn: "কাস্টমার খাতা", en: "Customer Ledger" },
+  customers: { bn: "কাস্টমার", en: "Customer" },
   more: { bn: "আরও", en: "More" },
   online_sell: { bn: "অনলাইন বিক্রি", en: "Online Sell" },
   cash_management: { bn: "নগদ ব্যবস্থাপনা", en: "Cash Management" },
@@ -106,7 +106,7 @@ const dict = {
   add_somiti: { bn: "সমিতি এন্ট্রি", en: "Samity entry" },
   balance: { bn: "ব্যালেন্স", en: "Balance" },
   // parties
-  party_collection: { bn: "সাপ্লায়ার ও পার্টনার খাতা", en: "Supplier & Partner Ledger" },
+  party_collection: { bn: "সাপ্লায়ার ও পার্টনার", en: "Supplier & Partner" },
   add_party: { bn: "নতুন সাপ্লায়ার/পার্টনার", en: "Add Supplier/Partner" },
   party_name: { bn: "নাম", en: "Name" },
   phone: { bn: "ফোন", en: "Phone" },

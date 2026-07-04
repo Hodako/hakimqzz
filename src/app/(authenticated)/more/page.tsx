@@ -845,7 +845,7 @@ export default function MorePage() {
     toast.info(lang === "bn" ? "ব্যাকগ্রাউন্ড ছবি আপলোড হচ্ছে..." : "Uploading background image...");
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("image", file);
 
       const isCap = typeof window !== "undefined" && (
         !!(window as any).Capacitor ||
@@ -1892,7 +1892,7 @@ export default function MorePage() {
         <form onSubmit={handleAddCustomRecord} className="space-y-3.5">
           <div className="grid grid-cols-2 gap-2.5">
             <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "লেনদেনের ধরন *" : "Record Type *"}</Label>
+              <Label className="text-xs">{lang === "bn" ? "লেনদেনের ধরন" : "Record Type *"}</Label>
               <Select value={txnType} onValueChange={(v: any) => setTxnType(v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -1905,7 +1905,7 @@ export default function MorePage() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "তারিখ ও সময় *" : "Custom Date & Time *"}</Label>
+              <Label className="text-xs">{lang === "bn" ? "তারিখ ও সময়" : "Custom Date & Time *"}</Label>
               <Input
                 type="datetime-local"
                 value={customDate}
@@ -1938,13 +1938,13 @@ export default function MorePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে) *" : "Product Name (Can also type manually) *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে)" : "Product Name (Can also type manually) *"}</Label>
                   <Input value={saleProdName} onChange={e => setSaleProdName(e.target.value)} required placeholder="E.g. Cotton Panjabi" className="h-8 text-xs" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ *" : "Quantity *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ" : "Quantity *"}</Label>
                   <Input type="number" value={saleQty} onChange={e => setSaleQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
@@ -1952,7 +1952,7 @@ export default function MorePage() {
                   <Input type="number" value={saleBuyPrice} onChange={e => setSaleBuyPrice(e.target.value)} placeholder="0" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "বিক্রি দাম (প্রতি পিস) *" : "Sell Price (Unit) *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "বিক্রি দাম (প্রতি পিস)" : "Sell Price (Unit) *"}</Label>
                   <Input type="number" value={saleSellPrice} onChange={e => setSaleSellPrice(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
@@ -1983,11 +1983,11 @@ export default function MorePage() {
             <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "খরচের শিরোনাম *" : "Expense Title *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "খরচের শিরোনাম" : "Expense Title *"}</Label>
                   <Input value={expTitle} onChange={e => setExpTitle(e.target.value)} required placeholder="E.g. Tea & Snacks" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "টাকার পরিমাণ *" : "Amount *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "টাকার পরিমাণ" : "Amount *"}</Label>
                   <Input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
@@ -2018,17 +2018,17 @@ export default function MorePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে) *" : "Product Name (Can also type manually) *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "পণ্যের নাম (সরাসরি টাইপও করা যাবে)" : "Product Name (Can also type manually) *"}</Label>
                   <Input value={purProdName} onChange={e => setPurProdName(e.target.value)} required placeholder="E.g. Premium Silk Saree" className="h-8 text-xs" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ *" : "Quantity *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "পরিমাণ" : "Quantity *"}</Label>
                   <Input type="number" value={purQty} onChange={e => setPurQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "কেনা দাম (ইউনিট) *" : "Unit Cost *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "কেনা দাম (ইউনিট)" : "Unit Cost *"}</Label>
                   <Input type="number" value={purUnitCost} onChange={e => setPurUnitCost(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
@@ -2039,7 +2039,7 @@ export default function MorePage() {
             <div className="space-y-3 p-3 bg-background/50 rounded-lg border border-amber-500/10 animate-in fade-in duration-200">
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <Label className="text-xs">{lang === "bn" ? "উত্তোলন পরিমাণ *" : "Withdrawal Amount *"}</Label>
+                  <Label className="text-xs">{lang === "bn" ? "উত্তোলন পরিমাণ" : "Withdrawal Amount *"}</Label>
                   <Input type="number" value={withAmt} onChange={e => setWithAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">

@@ -1277,6 +1277,53 @@ export function CustomThemeManager() {
       }
     `;
 
+    // 14. Adjust green text (emerald-600, etc.) in dark/cyberpunk/luxury modes to have excellent contrast
+    if (isDarkTheme) {
+      if (config.uiStyle === "cyberpunk") {
+        css += `
+          .text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-500 {
+            color: #00f0ff !important;
+          }
+        `;
+      } else if (config.uiStyle === "luxury") {
+        css += `
+          .text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-emerald-500 {
+            color: #d4af37 !important;
+          }
+        `;
+      }
+    } else {
+      css += `
+        .dark .text-emerald-600, .dark .text-emerald-700, .dark .text-emerald-800, .dark .text-emerald-900, .dark .text-emerald-500 {
+          color: #34d399 !important;
+        }
+      `;
+    }
+
+    // 15. Make dark mode look premium by removing light gradients from cards and respecting theme card colors
+    css += `
+      .dark .card,
+      .dark .beveled-card,
+      .dark .card[class*="bg-gradient-"],
+      .dark .beveled-card[class*="bg-gradient-"],
+      .dark [class*="glass-card"] {
+        background-image: none !important;
+        background-color: var(--card) !important;
+        border-color: var(--border, rgba(255,255,255,0.08)) !important;
+      }
+      ${isDarkTheme ? `
+      .card,
+      .beveled-card,
+      .card[class*="bg-gradient-"],
+      .beveled-card[class*="bg-gradient-"],
+      [class*="glass-card"] {
+        background-image: none !important;
+        background-color: var(--card) !important;
+        border-color: var(--border, rgba(255,255,255,0.08)) !important;
+      }
+      ` : ""}
+    `;
+
     styleEl.innerHTML = css;
   }, [config]);
 

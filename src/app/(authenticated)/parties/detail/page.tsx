@@ -258,16 +258,16 @@ export default function PartyDetail() {
                 হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
               </p>
               <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
-                <Plus className="size-3.5 mr-1.5" /> Taka Joma/Porishod Korun (টাকা জমা/পরিশোধ করুন)
+                <Plus className="size-3.5 mr-1.5" /> {lang === "bn" ? "পরিশোধ করুন" : "Collect Payment"}
               </Button>
             </Card>
 
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
-                <Plus className="size-3.5 mr-1" /> {t("add_money_owed")} (জমা/বাকী যোগ করুন)
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকি" : "Balance"}
               </Button>
               <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/5" onClick={() => setBuyOpen(true)}>
-                <Plus className="size-3.5 mr-1" /> Mal croy korun (মাল ক্রয় করুন)
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "মাল ক্রয়" : "Buy Goods"}
               </Button>
             </div>
           </>
@@ -284,16 +284,16 @@ export default function PartyDetail() {
                 হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
               </p>
               <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
-                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> Taka Joma/Porishod Korun (টাকা জমা/পরিশোধ করুন)
+                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {lang === "bn" ? "পরিশোধ করুন" : "Pay Party"}
               </Button>
             </Card>
 
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("payable")}>
-                <Plus className="size-3.5 mr-1" /> {t("add_payable")} (বকেয়া যোগ করুন)
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকি" : "Balance"}
               </Button>
               <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/5" onClick={() => setBuyOpen(true)}>
-                <Plus className="size-3.5 mr-1" /> Mal croy korun (মাল ক্রয় করুন)
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "মাল ক্রয়" : "Buy Goods"}
               </Button>
             </div>
           </>
