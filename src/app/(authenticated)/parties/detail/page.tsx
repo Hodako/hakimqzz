@@ -87,8 +87,8 @@ export default function PartyDetail() {
   const hasReceivableHistory = outstanding > 0 || saleDue > 0 || extraReceivable > 0 || paidTotal > 0;
   const hasPayableHistory = payableOutstanding > 0 || payableTotal > 0 || settledTotal > 0;
 
-  const showReceivable = hasReceivableHistory || (!hasReceivableHistory && !hasPayableHistory);
-  const showPayable = hasPayableHistory;
+  const showReceivable = true;
+  const showPayable = true;
 
   const entries: Entry[] = [
     ...(showReceivable ? (sales.data ?? []).filter(s => Number(s.due_amount) > 0 && !s.returned).map(s => ({
@@ -247,6 +247,32 @@ export default function PartyDetail() {
       {/* Decoupled balances, netting card removed */}
 
       <div className="max-w-md mx-auto w-full space-y-4">
+        {/* Payable (I owe them) */}
+        {showPayable && (
+          <>
+            <Card className="p-5 glass-card border-rose-500/20 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">{t("borrowed_from_him")} (বকেয়া)</div>
+              <div className="text-3xl font-extrabold text-rose-600 mt-2 font-serif">{fmtMoney(payableOutstanding)}</div>
+              <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
+                হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
+              </p>
+              <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
+                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {lang === "bn" ? "আদায় করুন" : "Pay Party"}
+              </Button>
+            </Card>
+
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("payable")}>
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকি" : "Balance"}
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/5" onClick={() => setBuyOpen(true)}>
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "মাল ক্রয়" : "Buy Goods"}
+              </Button>
+            </div>
+          </>
+        )}
+
         {/* Receivable (They owe me) */}
         {showReceivable && (
           <>
@@ -262,38 +288,9 @@ export default function PartyDetail() {
               </Button>
             </Card>
 
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
-                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকি" : "Balance"}
-              </Button>
-              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/5" onClick={() => setBuyOpen(true)}>
-                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "মাল ক্রয়" : "Buy Goods"}
-              </Button>
-            </div>
-          </>
-        )}
-
-        {/* Payable (I owe them) */}
-        {showPayable && (
-          <>
-            <Card className="p-5 glass-card border-rose-500/20 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
-              <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">{t("borrowed_from_him")} (বকেয়া)</div>
-              <div className="text-3xl font-extrabold text-rose-600 mt-2 font-serif">{fmtMoney(payableOutstanding)}</div>
-              <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
-                হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
-              </p>
-              <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
-                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {lang === "bn" ? "পরিশোধ করুন" : "Pay Party"}
-              </Button>
-            </Card>
-
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("payable")}>
-                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকি" : "Balance"}
-              </Button>
-              <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/5" onClick={() => setBuyOpen(true)}>
-                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "মাল ক্রয়" : "Buy Goods"}
+            <div className="w-full">
+              <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
+                <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "টাকা ধার দিসি" : "Lent Money"}
               </Button>
             </div>
           </>

@@ -134,9 +134,9 @@ export default function PartiesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-xl font-bold">{t("party_collection")}</h1>
+          <h1 className="text-xl font-bold whitespace-nowrap">{t("party_collection")}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">{filtered.length} {t("parties")}</p>
         </div>
         <div className="flex gap-1.5 items-center">

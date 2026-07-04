@@ -6,6 +6,7 @@ export interface QueuedAction {
   actionName: string;
   args: any;
   timestamp: number;
+  retries?: number;
 }
 
 const QUEUE_KEY = "df-offline-sync-queue";
@@ -267,6 +268,7 @@ export function startBackgroundSync(actionsMap: Record<string, Function>) {
 
     const remainingQueue: QueuedAction[] = [];
     let successCount = 0;
+    let discardedCount = 0;
 
     for (const item of queue) {
       const action = actionsMap[item.actionName];
@@ -276,10 +278,17 @@ export function startBackgroundSync(actionsMap: Record<string, Function>) {
           successCount++;
         } catch (err) {
           console.error(`Failed to sync action ${item.actionName}:`, err);
-          remainingQueue.push(item); // Keep failed action to retry later
+          const currentRetries = (item.retries ?? 0) + 1;
+          if (currentRetries >= 3) {
+            discardedCount++;
+            console.warn(`Action ${item.actionName} failed 3 times. Discarding from queue.`, item);
+          } else {
+            remainingQueue.push({ ...item, retries: currentRetries });
+          }
         }
       } else {
         console.warn(`Action ${item.actionName} not found in sync register.`);
+        discardedCount++;
       }
     }
 
@@ -290,6 +299,8 @@ export function startBackgroundSync(actionsMap: Record<string, Function>) {
       toast.success(`Successfully synced ${successCount} transactions to cloud!`, { id: toastId });
       // Invalidate queries so that clean DB state is re-fetched
       window.dispatchEvent(new CustomEvent("df-sync-complete"));
+    } else if (discardedCount > 0 && remainingQueue.length === 0) {
+      toast.error("Some offline changes failed validation and were discarded.", { id: toastId });
     } else {
       toast.error("Failed to sync offline changes. Will retry later.", { id: toastId });
     }
