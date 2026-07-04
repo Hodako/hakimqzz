@@ -264,7 +264,6 @@ export function startBackgroundSync(actionsMap: Record<string, Function>) {
     if (!navigator.onLine) return;
 
     isSyncing = true;
-    const toastId = toast.loading(`Syncing ${queue.length} offline changes...`);
 
     const remainingQueue: QueuedAction[] = [];
     let successCount = 0;
@@ -296,13 +295,11 @@ export function startBackgroundSync(actionsMap: Record<string, Function>) {
     isSyncing = false;
 
     if (successCount > 0) {
-      toast.success(`Successfully synced ${successCount} transactions to cloud!`, { id: toastId });
+      toast.success(`Successfully synced ${successCount} transactions to cloud!`);
       // Invalidate queries so that clean DB state is re-fetched
       window.dispatchEvent(new CustomEvent("df-sync-complete"));
     } else if (discardedCount > 0 && remainingQueue.length === 0) {
-      toast.error("Some offline changes failed validation and were discarded.", { id: toastId });
-    } else {
-      toast.error("Failed to sync offline changes. Will retry later.", { id: toastId });
+      toast.error("Some offline changes failed validation and were discarded.");
     }
   }
 

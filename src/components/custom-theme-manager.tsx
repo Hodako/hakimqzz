@@ -13,7 +13,7 @@ export type ThemeConfig = {
   density?: "compact" | "standard" | "cozy";
   widgetOrder?: string[];
   isMaterialUI?: boolean;
-  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism" | "cyberpunk" | "minimalist" | "forest" | "luxury";
+  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism" | "cyberpunk" | "minimalist" | "forest" | "luxury" | "feather";
   bevelStrength?: "none" | "light" | "medium" | "heavy";
   glowEnabled?: boolean;
   glowIntensity?: number;
@@ -870,6 +870,63 @@ export function CustomThemeManager() {
           font-weight: 600 !important;
         }
       `;
+    } else if (config.uiStyle === "feather") {
+      css += `
+        /* Feather UI Overrides */
+        :root {
+          --radius: 14px !important;
+          --background: oklch(0.99 0.005 180) !important;
+          --card: oklch(1 0 0) !important;
+          --muted: oklch(0.97 0.005 180) !important;
+          --muted-foreground: oklch(0.5 0.01 180) !important;
+          --popover: oklch(1 0 0) !important;
+          --primary: oklch(0.6 0.16 195) !important;
+          --primary-foreground: oklch(0.99 0.005 180) !important;
+          --border: oklch(0.92 0.01 180) !important;
+        }
+        .dark {
+          --radius: 14px !important;
+          --background: oklch(0.12 0.01 195) !important;
+          --card: oklch(0.16 0.02 195) !important;
+          --muted: oklch(0.18 0.02 195) !important;
+          --muted-foreground: oklch(0.65 0.03 195) !important;
+          --popover: oklch(0.16 0.02 195) !important;
+          --primary: oklch(0.75 0.14 195) !important;
+          --primary-foreground: oklch(0.12 0.01 195) !important;
+          --border: oklch(0.24 0.02 195) !important;
+        }
+        body {
+          background-color: var(--background) !important;
+          font-family: 'Poppins', sans-serif !important;
+        }
+        .beveled-card, [class*="beveled-card"], .card {
+          background-color: var(--card) !important;
+          border: 1px solid var(--border) !important;
+          border-radius: 14px !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.015), 0 10px 40px rgba(0, 0, 0, 0.025) !important;
+          backdrop-filter: blur(16px) !important;
+          -webkit-backdrop-filter: blur(16px) !important;
+        }
+        .beveled-card:hover, .card:hover {
+          border-color: var(--primary) !important;
+          box-shadow: 0 6px 24px rgba(6, 182, 212, 0.08), 0 12px 48px rgba(0, 0, 0, 0.03) !important;
+          transform: translateY(-1px) !important;
+        }
+        .beveled-button, button.beveled-button, [class*="beveled-button"], a.beveled-button {
+          border-radius: 12px !important;
+          border: 1px solid var(--primary) !important;
+          background: linear-gradient(135deg, oklch(0.65 0.16 195), oklch(0.55 0.16 195)) !important;
+          color: #ffffff !important;
+          font-weight: 500 !important;
+          box-shadow: 0 4px 14px rgba(6, 182, 212, 0.15) !important;
+          transition: all 0.2s ease !important;
+        }
+        .beveled-button:hover, button.beveled-button:hover, [class*="beveled-button"]:hover, a.beveled-button:hover {
+          box-shadow: 0 6px 20px rgba(6, 182, 212, 0.25) !important;
+          transform: translateY(-1px) !important;
+          opacity: 0.95;
+        }
+      `;
     }
 
     // Bevel Strength overrides
@@ -1148,23 +1205,14 @@ export function CustomThemeManager() {
           background-color: var(--background) !important;
         }
         body {
-          background-color: transparent !important;
-          background-image: none !important;
-        }
-        body::before {
-          content: "";
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100vw;
-          height: 100vh;
-          z-index: -1;
-          background-image: url('${config.bgImage}') !important;
-          background-size: cover;
-          background-position: center;
-          background-repeat: no-repeat;
-          opacity: ${opacity};
-          pointer-events: none;
+          background-image: linear-gradient(
+            color-mix(in srgb, var(--background) ${(1 - opacity) * 100}%, transparent),
+            color-mix(in srgb, var(--background) ${(1 - opacity) * 100}%, transparent)
+          ), url('${config.bgImage}') !important;
+          background-size: cover !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          background-attachment: fixed !important;
         }
       `;
     }
