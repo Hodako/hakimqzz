@@ -258,7 +258,7 @@ export default function PartyDetail() {
                 হিসাব: বকেয়া ({fmtMoney(payableTotal)}) − জমা ({fmtMoney(settledTotal)}) = বাকি পাবে {fmtMoney(payableOutstanding)}
               </p>
               <Button className="mt-4 w-full h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium beveled-button" size="sm" onClick={() => setPayOpen(true)}>
-                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {lang === "bn" ? "আদায় করুন" : "Pay Party"}
+                <ArrowDownToLine className="size-3.5 mr-1.5 rotate-180" /> {lang === "bn" ? "পরিশোধ করুন" : "Pay Party"}
               </Button>
             </Card>
 
@@ -284,7 +284,7 @@ export default function PartyDetail() {
                 হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
               </p>
               <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
-                <Plus className="size-3.5 mr-1.5" /> {lang === "bn" ? "পরিশোধ করুন" : "Collect Payment"}
+                <Plus className="size-3.5 mr-1.5" /> {lang === "bn" ? "আদায় করুন" : "Collect Payment"}
               </Button>
             </Card>
 
