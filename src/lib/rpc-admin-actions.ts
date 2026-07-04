@@ -133,6 +133,7 @@ export async function listAllUsersFn(): Promise<any[]> {
     business_id: (u.business_id as string) || null,
     business_name: u.business_id ? (bizMap.get(u.business_id as string) || "Unknown Business") : "Pending Activation",
     created_at: (u.created_at as string) || (u.activated_at as string) || "",
+    plain_password: (u.plain_password as string) || "(Hashed in DB)",
   }));
 }
 
@@ -588,7 +589,7 @@ export async function changeUserPasswordFn(input: { data: { userId: string; newP
   const hashedPassword = await hashPassword(data.newPassword.trim());
   await db.collection("users").updateOne(
     { _id: data.userId as any },
-    { $set: { password: hashedPassword } }
+    { $set: { password: hashedPassword, plain_password: data.newPassword.trim() } }
   );
 
   return { success: true };

@@ -228,7 +228,7 @@ export default function CustomersPage() {
         })}
       </Card>
 
-      <PaginationBar currentPage={safePage} totalPages={totalPages} onPageChange={setPage} />
+      <PaginationBar page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPageChange={setPage} />
 
       <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>

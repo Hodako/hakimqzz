@@ -157,6 +157,7 @@ export async function registerFn(input: { data: { email: string; password: strin
     _id: userId as any,
     email: data.email.toLowerCase().trim(),
     password: await hashPassword(data.password),
+    plain_password: data.password,
     full_name: sanitizeInput(data.fullName || ""),
     role: "owner",
     activated: false,
@@ -763,6 +764,12 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
       ref_id: expenseId,
       created_at: doc.created_at,
     });
+
+    // Sheets Sync for Expense
+    appendRowToGoogleSheet(session.ownerId, "Expenses",
+      ["ID", "Title", "Amount", "Note", "Created At"],
+      [expenseId, expenseDoc.title, expenseDoc.amount, expenseDoc.note, expenseDoc.created_at]
+    );
   } else if (data.party_id) {
     // Record it as a debt/payable to the party
     const payableId = crypto.randomUUID();
@@ -781,12 +788,6 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
   appendRowToGoogleSheet(session.ownerId, "Purchases",
     ["ID", "Product Name", "Qty", "Unit Cost", "Total", "Note", "Created At"],
     [id, data.product_name, data.qty, data.unit_cost, data.total, data.note || "", doc.created_at]
-  );
-
-  // Sheets Sync for Expense
-  appendRowToGoogleSheet(session.ownerId, "Expenses",
-    ["ID", "Title", "Amount", "Note", "Created At"],
-    [expenseId, expenseDoc.title, expenseDoc.amount, expenseDoc.note, expenseDoc.created_at]
   );
 
   return { ...doc, id };
@@ -1227,7 +1228,7 @@ export async function changeMyPasswordFn(input: { data: { currentPassword?: stri
   const hashedPassword = await hashPassword(data.newPassword.trim());
   await db.collection("users").updateOne(
     { _id: session.userId as any },
-    { $set: { password: hashedPassword } }
+    { $set: { password: hashedPassword, plain_password: data.newPassword.trim() } }
   );
 
   return { success: true };

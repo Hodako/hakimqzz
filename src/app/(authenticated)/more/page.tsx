@@ -662,6 +662,10 @@ export default function MorePage() {
     cardOpacity: 1,
     cardBlur: 0,
     animationSpeed: "normal",
+    customFontUrl: "",
+    customFontName: "",
+    cardDarkness: 0,
+    kpiStyle: "default",
   });
 
   // KPI config state
@@ -793,6 +797,10 @@ export default function MorePage() {
       cardOpacity: 1,
       cardBlur: 0,
       animationSpeed: "normal",
+      customFontUrl: "",
+      customFontName: "",
+      cardDarkness: 0,
+      kpiStyle: "default",
     });
     window.dispatchEvent(new Event("hz-theme-updated"));
     toast.success(lang === "bn" ? "থিম রিসেট সফল হয়েছে" : "Theme settings reset successfully");

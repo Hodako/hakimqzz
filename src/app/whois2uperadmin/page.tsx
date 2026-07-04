@@ -806,6 +806,7 @@ export default function SuperAdminPage() {
                         <th className="p-4">User Detail</th>
                         <th className="p-4">Role & Business</th>
                         <th className="p-4">Registered On</th>
+                        <th className="p-4">Password</th>
                         <th className="p-4 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -848,6 +849,11 @@ export default function SuperAdminPage() {
                             </td>
                             <td className="p-4 text-muted-foreground text-xs font-mono">
                               {u.created_at ? fmtDateTime(u.created_at) : "N/A"}
+                            </td>
+                            <td className="p-4">
+                              <span className="text-xs font-mono bg-muted/80 px-2 py-1 rounded border border-border/50 text-foreground font-medium select-all">
+                                {u.plain_password}
+                              </span>
                             </td>
                             <td className="p-4 text-right">
                               <div className="flex items-center justify-end gap-2">
@@ -960,6 +966,12 @@ export default function SuperAdminPage() {
                           <div className="flex justify-between">
                             <span>Business:</span>
                             <span className="font-semibold text-foreground truncate max-w-[200px]">{u.business_name}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Password:</span>
+                            <span className="text-xs font-mono bg-muted/80 px-2 py-0.5 rounded border border-border/50 text-foreground font-semibold select-all">
+                              {u.plain_password}
+                            </span>
                           </div>
                         </div>
 
