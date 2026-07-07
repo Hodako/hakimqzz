@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, Wallet, AlertCircle, Receipt, ShoppingBag,
   Package, PlusCircle, ArrowUpRight, ArrowDownRight,
-  DollarSign, Banknote, Users, Search, ChevronDown, ChevronUp,
+  DollarSign, Banknote, Users, Search, ChevronDown, ChevronUp, ArrowUpDown,
   Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
@@ -262,6 +262,25 @@ export default function Dashboard() {
   const [dateFilter, setDateFilter] = useState<{ from: string; to: string }>({ from: '', to: '' });
   const [showFilter, setShowFilter] = useState(false);
 
+  const dateRangeLabel = useMemo(() => {
+    if (!dateFilter.from && !dateFilter.to) {
+      return t("today");
+    }
+    if (dateFilter.from && dateFilter.to) {
+      if (dateFilter.from === dateFilter.to) {
+        return dateFilter.from;
+      }
+      return `${dateFilter.from} - ${dateFilter.to}`;
+    }
+    if (dateFilter.from) {
+      return `>= ${dateFilter.from}`;
+    }
+    if (dateFilter.to) {
+      return `<= ${dateFilter.to}`;
+    }
+    return t("today");
+  }, [dateFilter, t]);
+
   // Custom Chart State
   const [chartMetric, setChartMetric] = useState<"sales" | "profit" | "expenses">("sales");
   const [chartType, setChartType] = useState<"area" | "bar" | "line">("area");
@@ -447,24 +466,32 @@ export default function Dashboard() {
   });
 
   // KPIs
-  const cashToday    = filteredSales.filter(s => new Date(s.created_at) >= today && s.type === "cash").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
-  const creditToday  = filteredSales.filter(s => new Date(s.created_at) >= today && s.type === "credit").reduce((a, s) => a + Number(s.due_amount), 0);
-  const onlineToday  = filteredSales.filter(s => new Date(s.created_at) >= today && s.type === "online").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
+  const cashToday    = filteredSales.filter(s => s.type === "cash").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
+  const creditToday  = filteredSales.filter(s => s.type === "credit").reduce((a, s) => a + Number(s.due_amount), 0);
+  const onlineToday  = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
   
   // profit today
-  const profitToday  = filteredSales.filter(s => new Date(s.created_at) >= today).reduce((a, s) => a + Number(s.profit), 0);
+  const profitToday  = filteredSales.reduce((a, s) => a + Number(s.profit), 0);
   
   // loss today
-  const lossToday = filteredSales.filter(s => new Date(s.created_at) >= today && Number(s.profit) < 0).reduce((a, s) => a + Math.abs(Number(s.profit)), 0);
+  const lossToday = filteredSales.filter(s => Number(s.profit) < 0).reduce((a, s) => a + Math.abs(Number(s.profit)), 0);
   
   const totalDues = allParties.reduce((sum, p) => {
     if (p.archived) return sum;
     return sum + getPartyOutstanding(p.id);
   }, 0);
 
-  const expenseToday = filteredExpenses.filter(e => new Date(e.created_at) >= today).reduce((a, e) => a + Number(e.amount), 0);
-  // Cashbox balance is a running total across ALL time — old credits persist until spent
-  const cashboxTotal = cashboxBalance(allCashbox);
+  const expenseToday = filteredExpenses.reduce((a, e) => a + Number(e.amount), 0);
+
+  // Cashbox balance is a running total across ALL time or up to the filtered period
+  const cashboxTotal = useMemo(() => {
+    if (dateFilter.to || dateFilter.from) {
+      const maxDate = dateFilter.to ? new Date(dateFilter.to + "T23:59:59") : new Date(dateFilter.from + "T23:59:59");
+      const filtered = allCashbox.filter(c => new Date(c.created_at) <= maxDate);
+      return cashboxBalance(filtered);
+    }
+    return cashboxBalance(allCashbox);
+  }, [allCashbox, dateFilter]);
 
   // Stock Valuation
   const totalStockCostValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + (p.buy_price * p.stock), 0);
@@ -788,7 +815,7 @@ export default function Dashboard() {
               key="credit_sale"
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-amber-500"
               onClick={() => {
@@ -805,7 +832,7 @@ export default function Dashboard() {
               key="cash_sale"
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-indigo-500"
               onClick={() => {
@@ -822,7 +849,7 @@ export default function Dashboard() {
               key="online_sell"
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-sky-500"
               onClick={() => {
@@ -840,7 +867,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
                 color="bg-emerald-500"
                 className="h-full w-full"
@@ -854,7 +881,7 @@ export default function Dashboard() {
               <KPICard
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/external-flaticons-lineal-color-flat-icons/64/external-loss-casino-flaticons-lineal-color-flat-icons.png"
                 color="bg-rose-500"
                 className="h-full w-full"
@@ -869,7 +896,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/color/48/tax.png"
                 color="bg-rose-500"
                 className="h-full w-full"
@@ -883,6 +910,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("due")}
                 value={fmtMoney(totalDues)}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/color/48/loan.png"
                 color="bg-amber-600"
                 trendUp={false}
@@ -897,6 +925,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
                 color="bg-indigo-600"
                 trendUp={cashboxTotal >= 0}
@@ -1195,7 +1224,7 @@ export default function Dashboard() {
               key="credit_sale"
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-amber-500"
               onClick={() => {
@@ -1212,7 +1241,7 @@ export default function Dashboard() {
               key="cash_sale"
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-indigo-500"
               onClick={() => {
@@ -1229,7 +1258,7 @@ export default function Dashboard() {
               key="online_sell"
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
-              sub={t("today")}
+              sub={dateRangeLabel}
               imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-sky-500"
               onClick={() => {
@@ -1246,7 +1275,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
                 color="bg-emerald-500"
                 className="h-full"
@@ -1260,7 +1289,7 @@ export default function Dashboard() {
               <KPICard
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/external-flaticons-lineal-color-flat-icons/64/external-loss-casino-flaticons-lineal-color-flat-icons.png"
                 color="bg-rose-500"
                 className="h-full"
@@ -1275,7 +1304,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
-                sub={t("today")}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/color/48/tax.png"
                 color="bg-orange-500"
                 className="h-full"
@@ -1289,6 +1318,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("due")}
                 value={fmtMoney(totalDues)}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/color/48/loan.png"
                 color="bg-amber-600"
                 trendUp={false}
@@ -1303,6 +1333,7 @@ export default function Dashboard() {
               <KPICard
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
+                sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
                 color="bg-indigo-600"
                 trendUp={cashboxTotal >= 0}
@@ -1557,7 +1588,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
           </div>
           <Button variant="ghost" size="icon" className="size-8" onClick={() => setShowFilter(!showFilter)} aria-label="Toggle filter">
-            <Search className="size-4" />
+            <ArrowUpDown className="size-4" />
           </Button>
         </div>
 
@@ -1671,12 +1702,40 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setShowFilter(!showFilter)} aria-label="Toggle filter">
+            <ArrowUpDown className="size-4" />
+            {lang === "bn" ? "ফিল্টার" : "Filter"}
+          </Button>
           <Link href="/sales" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
             <ShoppingBag className="size-4" />
             {t("new_sale")}
           </Link>
         </div>
       </div>
+
+      {/* Date Filter */}
+      {showFilter && (
+        <Card className="p-4 bg-card border border-border">
+          <div className="flex items-end gap-4 max-w-2xl">
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground block mb-1">Date from</label>
+              <Input type="date" className="h-9 text-sm" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground block mb-1">Date to</label>
+              <Input type="date" className="h-9 text-sm" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" className="h-9 text-sm px-4">
+                Apply
+              </Button>
+              <Button onClick={clearFilter} variant="outline" className="h-9 text-sm px-4">
+                Clear
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Render Desktop widgets dynamically in custom order */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
