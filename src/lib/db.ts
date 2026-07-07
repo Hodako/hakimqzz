@@ -18,9 +18,10 @@ async function getClient(): Promise<MongoClient> {
   const { MongoClient } = await import("mongodb");
 
   const options = {
-    serverSelectionTimeoutMS: 10000,
-    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 15000,
+    connectTimeoutMS: 15000,
     socketTimeoutMS: 45000,
+    family: 4, // Force IPv4 to avoid secureConnect hangs on Windows/IPv6 networks
   };
 
   if (process.env.NODE_ENV === "development") {
