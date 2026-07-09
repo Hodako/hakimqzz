@@ -1051,7 +1051,7 @@ function EmployeePermissions({
 }) {
   const [perms, setPerms] = useState<PermissionSet>(employee.permissions || DEFAULT_EMPLOYEE_PERMISSIONS);
 
-  const modules: (keyof PermissionSet)[] = ["dashboard", "products", "sales", "parties", "purchases", "expenses", "settings", "reports"];
+  const modules: (keyof PermissionSet)[] = ["dashboard", "products", "sales", "parties", "purchases", "expenses", "cashbox", "settings", "reports"];
 
   return (
     <div className="border border-border rounded-lg p-3 space-y-2">

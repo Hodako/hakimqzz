@@ -356,11 +356,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={to}
                   href={to}
-                  className={`flex flex-col items-center justify-center gap-0.5 text-[9px] font-medium transition-colors active:scale-95 ${
-                    active ? "text-primary" : "text-muted-foreground"
+                  className={`flex flex-col items-center justify-center gap-1 text-[9px] transition-colors active:scale-95 ${
+                    active ? "text-primary font-semibold" : "text-muted-foreground font-medium"
                   }`}
                 >
-                  <div className={`p-1.5 rounded-xl ${active ? "bg-primary/15" : ""}`}>
+                  <div className={`flex items-center justify-center rounded-full transition-all duration-200 ${
+                    active ? "bg-primary/15 px-5 py-1 text-primary" : "px-5 py-1 text-muted-foreground/80 hover:text-foreground"
+                  }`}>
                     {labelKey === "home" ? (
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

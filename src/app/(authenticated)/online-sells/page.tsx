@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { getSales } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -57,7 +58,18 @@ function OnlineSalesList({ items }: { items: ReturnType<typeof Array.prototype.s
           <div className="min-w-0">
             <div className="font-medium truncate">{s.product_name} <span className="text-muted-foreground text-xs">×{s.qty}</span></div>
             <div className="text-xs text-muted-foreground">
-              {s.parties?.name ? `${s.parties.name} · ` : ""}{fmtDateTime(s.created_at)}
+              {s.parties?.name && s.party_id ? (
+                <>
+                  <Link
+                    href={`/customers/detail?id=${s.party_id}`}
+                    className="font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                  >
+                    {s.parties.name}
+                  </Link>
+                  {" · "}
+                </>
+              ) : null}
+              {fmtDateTime(s.created_at)}
             </div>
           </div>
           <div className="text-right">

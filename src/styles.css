@@ -256,7 +256,7 @@
 }
 
 .beveled-card:hover, .beveled-card:focus-within {
-  border: 1.5px solid #2d79f3 !important;
+  border: 1.5px solid var(--primary) !important;
 }
 
 .dark .beveled-card {
@@ -265,7 +265,7 @@
 }
 
 .dark .beveled-card:hover, .dark .beveled-card:focus-within {
-  border: 1.5px solid #2d79f3 !important;
+  border: 1.5px solid var(--primary) !important;
 }
 
 .safe-area-pb {
@@ -619,7 +619,7 @@
 }
 
 .card:hover {
-  border-color: #2d79f3 !important;
+  border-color: var(--primary) !important;
 }
 
 .title {

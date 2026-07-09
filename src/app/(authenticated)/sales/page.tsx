@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -258,7 +259,18 @@ function SalesTab({
                     {s.items.some(x => x.returned) && <span className="text-xs text-destructive">({t("returned")})</span>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {credit && s.parties?.name ? `${s.parties.name} · ` : ""}{fmtDateTime(s.created_at)}
+                    {s.parties?.name && s.items?.[0]?.party_id ? (
+                      <>
+                        <Link
+                          href={`/customers/detail?id=${s.items[0].party_id}`}
+                          className="font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                        >
+                          {s.parties.name}
+                        </Link>
+                        {" · "}
+                      </>
+                    ) : null}
+                    {fmtDateTime(s.created_at)}
                   </div>
                 </div>
                 <div className="text-right shrink-0">

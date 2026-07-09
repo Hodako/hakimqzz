@@ -5,6 +5,7 @@ export type PermissionSet = {
   parties: boolean;
   purchases: boolean;
   expenses: boolean;
+  cashbox: boolean;
   settings: boolean;
   reports: boolean;
 };
@@ -16,6 +17,7 @@ export const OWNER_PERMISSIONS: PermissionSet = {
   parties: true,
   purchases: true,
   expenses: true,
+  cashbox: true,
   settings: true,
   reports: true,
 };
@@ -27,6 +29,7 @@ export const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionSet = {
   parties: false,
   purchases: false,
   expenses: false,
+  cashbox: false,
   settings: false,
   reports: false,
 };
@@ -49,7 +52,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; perm: keyof PermissionSet }[] 
   { prefix: "/dues", perm: "parties" },
   { prefix: "/expenses", perm: "expenses" },
   { prefix: "/trackback", perm: "reports" },
-  { prefix: "/cash-management", perm: "expenses" },
+  { prefix: "/cash-management", perm: "cashbox" },
   { prefix: "/somiti", perm: "expenses" },
   { prefix: "/settings", perm: "settings" },
   { prefix: "/purchases", perm: "purchases" },

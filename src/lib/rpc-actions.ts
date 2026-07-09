@@ -39,7 +39,7 @@ async function insertCashboxEntry(
 
 function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
   if (data.type === "credit") return Number(data.paid_amount) || 0;
-  if (data.type === "cash" || data.type === "online") return Number(data.sell_price) * data.qty;
+  if (data.type === "cash") return Number(data.sell_price) * data.qty;
   return 0;
 }
 
@@ -398,7 +398,23 @@ export async function getSalesFn() {
   const session = await requireSession();
   const db = await getDb();
   const items = await db.collection("sales").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
-  return items.map((s) => ({ ...s, id: s._id as any as string }));
+
+  const partyIds = items.map(s => s.party_id).filter(Boolean);
+  const customers = await db.collection("customers").find({ _id: { $in: partyIds } }).toArray();
+  const parties = await db.collection("parties").find({ _id: { $in: partyIds } }).toArray();
+
+  const partyMap = new Map();
+  customers.forEach(c => partyMap.set(c._id.toString(), c));
+  parties.forEach(p => partyMap.set(p._id.toString(), p));
+
+  return items.map((s) => {
+    const p = s.party_id ? partyMap.get(s.party_id.toString()) : null;
+    return {
+      ...s,
+      id: s._id as any as string,
+      parties: p ? { name: p.name } : null
+    };
+  });
 }
 
 export async function getSalesForPartyFn(input: { data: { partyId: string } }) {
@@ -414,7 +430,7 @@ export async function createSaleFn(input: { data: { product_id?: string | null; 
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, party_id: data.type === "credit" ? data.party_id : null, created_at: data.created_at || new Date().toISOString() };
+  const doc = { _id: id, owner_id: session.ownerId, ...data, party_id: data.party_id || null, created_at: data.created_at || new Date().toISOString() };
   await db.collection("sales").insertOne(doc as any);
   if (data.product_id) {
     const product = await db.collection("products").findOne({ _id: data.product_id as any });
@@ -526,7 +542,7 @@ export async function editSaleFn(input: {
     sell_price: data.sell_price,
     profit: data.profit,
     type: data.type,
-    party_id: data.type === "credit" ? data.party_id : null,
+    party_id: data.party_id || null,
     paid_amount: data.paid_amount,
     due_amount: data.due_amount,
     note: data.note || null,
@@ -652,6 +668,83 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
   return { ...doc, id };
 }
 
+export async function createPartyReturnFn(input: { data: { party_id: string; product_id: string; qty: number; refund_amount: number; deduct_type: "receivable" | "payable" | "cash"; note?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  
+  const product = await db.collection("products").findOne({ _id: data.product_id as any, owner_id: session.ownerId });
+  if (!product) throw new Error("Product not found");
+
+  const returnQty = Number(data.qty);
+  if (returnQty <= 0) throw new Error("Invalid quantity");
+
+  const refundAmt = Number(data.refund_amount) || 0;
+
+  const id = crypto.randomUUID();
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    party_id: data.party_id,
+    sale_id: null,
+    product_id: data.product_id,
+    product_name: product.name,
+    qty: returnQty,
+    return_price: refundAmt / returnQty,
+    amount: refundAmt,
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("returns").insertOne(doc as any);
+
+  // 1. Update product stock
+  await db.collection("products").updateOne(
+    { _id: data.product_id as any, owner_id: session.ownerId },
+    { $set: { stock: ((product.stock as number) ?? 0) + returnQty } }
+  );
+
+  // 2. Deduct from party's dues/bokeya by inserting a negative party_receivable or party_payable, or withdraw from cashbox if cash refund
+  if (refundAmt > 0) {
+    const formattedNote = data.note 
+      ? `${product.name} (Qty: ${returnQty}) - ${data.note}` 
+      : `${product.name} (Qty: ${returnQty})`;
+
+    if (data.deduct_type === "payable") {
+      const payableId = crypto.randomUUID();
+      await db.collection("party_payables").insertOne({
+        _id: payableId,
+        owner_id: session.ownerId,
+        party_id: data.party_id,
+        amount: -refundAmt,
+        note: `Returned to Supplier: ${formattedNote}`,
+        created_at: doc.created_at,
+        ref_id: id,
+      });
+    } else if (data.deduct_type === "receivable") {
+      const receivableId = crypto.randomUUID();
+      await db.collection("party_receivables").insertOne({
+        _id: receivableId,
+        owner_id: session.ownerId,
+        party_id: data.party_id,
+        amount: -refundAmt,
+        note: `Product Return: ${formattedNote}`,
+        created_at: doc.created_at,
+        ref_id: id,
+      });
+    } else if (data.deduct_type === "cash") {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "withdraw",
+        amount: refundAmt,
+        note: `Product Return Refund: ${formattedNote}`,
+        ref_id: id,
+        created_at: doc.created_at,
+      });
+    }
+  }
+
+  return { ...doc, id };
+}
+
 export async function getReturnsFn() {
   const session = await requireSession();
   const db = await getDb();
@@ -702,6 +795,8 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
       }
     }
 
+    await db.collection("party_receivables").deleteMany({ owner_id: session.ownerId, ref_id: data.id as any });
+    await db.collection("party_payables").deleteMany({ owner_id: session.ownerId, ref_id: data.id as any });
     await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
     await db.collection("returns").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
 
@@ -889,7 +984,10 @@ export async function createPaymentFn(input: { data: { party_id: string; amount:
   await db.collection("payments").insertOne(doc as any);
 
   // Also insert cashbox entry when party pays
-  const party = await db.collection("parties").findOne({ _id: data.party_id, owner_id: session.ownerId } as any);
+  let party = await db.collection("customers").findOne({ _id: data.party_id, owner_id: session.ownerId } as any);
+  if (!party) {
+    party = await db.collection("parties").findOne({ _id: data.party_id, owner_id: session.ownerId } as any);
+  }
   const partyName = party ? (party.name || "Party") : "Party";
   await insertCashboxEntry(db, session.ownerId, {
     kind: "deposit",

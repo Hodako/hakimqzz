@@ -183,7 +183,7 @@ function KPICard({
       }`}
     >
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
-        <span className={`${labelSize} font-medium text-muted-foreground`}>{label}</span>
+        <span className={`${labelSize} font-medium text-muted-foreground truncate mr-2`}>{label}</span>
         {imageUrl ? (
           <div className="size-6 sm:size-7 flex items-center justify-center shrink-0">
             <img src={imageUrl} className={`size-5 sm:size-6 object-contain ${imageClassName || ""}`} alt={label} />
@@ -194,12 +194,12 @@ function KPICard({
           </div>
         ) : null}
       </div>
-      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"} mt-1`}>
+      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"} mt-1 min-w-0`}>
         <div className={`${valSize} font-bold tracking-tight text-foreground`} title={value}>{value}</div>
-        {sub && <div className={`${subSize} text-muted-foreground mt-0.5`}>{sub}</div>}
+        {sub && <div className={`${subSize} text-muted-foreground mt-0.5 truncate w-full`} title={sub}>{sub}</div>}
       </div>
       {trend && (
-        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600" : "text-red-500"} mt-0.5`}>
+        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600" : "text-red-500"} mt-0.5 truncate w-full`} title={trend}>
           {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
           {trend}
         </div>
@@ -920,7 +920,7 @@ export default function Dashboard() {
               />
             </Link>
           ) : <div key="due" className="hidden" />,
-          cashbox: canAccess(perms, "expenses") ? (
+          cashbox: canAccess(perms, "cashbox") ? (
             <Link href="/cash-management/cashbox" className={`block ${kpiConfig.columns > 1 ? "col-span-2 h-24 sm:h-36" : "h-full"}`} key="cashbox" onClick={() => playTapSound()}>
               <KPICard
                 label={t("cashbox")}
@@ -1328,7 +1328,7 @@ export default function Dashboard() {
               />
             </Link>
           ) : <div key="due" className="hidden" />,
-          cashbox: canAccess(perms, "expenses") ? (
+          cashbox: canAccess(perms, "cashbox") ? (
             <Link href="/cash-management/cashbox" className="block" key="cashbox" onClick={() => playTapSound()}>
               <KPICard
                 label={t("cashbox")}

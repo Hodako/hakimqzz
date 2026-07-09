@@ -27,6 +27,8 @@ import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PartyReturnDialog } from "@/components/party-return-dialog";
 
 export default function CustomerDetail() {
   const searchParams = useSearchParams();
@@ -43,6 +45,7 @@ export default function CustomerDetail() {
   const [collectOpen, setCollectOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addKind, setAddKind] = useState<"receivable" | null>(null);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   const [backPath, setBackPath] = useState("/dues");
   useEffect(() => {
@@ -215,39 +218,85 @@ export default function CustomerDetail() {
           </Button>
         </Card>
 
-        <Button size="sm" variant="outline" className="w-full h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
-          <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকী যোগ করুন" : "Add money owned"}
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>
+            <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "বাকী যোগ করুন" : "Add money owned"}
+          </Button>
+          <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button border-rose-200 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/10 text-rose-600 font-medium" onClick={() => setReturnOpen(true)}>
+            <Plus className="size-3.5 mr-1" /> {lang === "bn" ? "পণ্য ফেরত" : "Product Return"}
+          </Button>
+        </div>
       </div>
 
-      <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t("history")}</h2>
-        <Card className="divide-y divide-border overflow-hidden">
-          {entries.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">{t("no_activity")}</div>}
-          {entries.map(e => (
-            <div key={e.id} className="p-3 flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="font-medium truncate text-sm">{e.label}</div>
-                <div className="text-xs text-muted-foreground">{fmtDateTime(e.date)}</div>
+      <Tabs defaultValue="ledger" className="w-full">
+        <TabsList className="grid grid-cols-2 w-full max-w-xs mx-auto mb-3">
+          <TabsTrigger value="ledger" className="text-xs">{lang === "bn" ? "লেনদেন খাতা" : "Ledger"}</TabsTrigger>
+          <TabsTrigger value="purchases" className="text-xs">{lang === "bn" ? "ক্রয়সমূহ" : "Purchases"}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ledger">
+          <Card className="divide-y divide-border overflow-hidden">
+            {entries.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">{t("no_activity")}</div>}
+            {entries.map(e => (
+              <div key={e.id} className="p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate text-sm">{e.label}</div>
+                  <div className="text-xs text-muted-foreground">{fmtDateTime(e.date)}</div>
+                </div>
+                <div className={`text-sm font-semibold shrink-0 ${e.amount < 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                  {e.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(e.amount))}
+                </div>
+                {e.deletable && (
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" onClick={() => setEntryToDelete(e)}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
               </div>
-              <div className={`text-sm font-semibold shrink-0 ${e.amount < 0 ? "text-emerald-600" : "text-amber-600"}`}>
-                {e.amount < 0 ? "−" : "+"}{fmtMoney(Math.abs(e.amount))}
+            ))}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="purchases">
+          <Card className="divide-y divide-border overflow-hidden">
+            {(!sales.data || sales.data.length === 0) ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                {lang === "bn" ? "কোন ক্রয়ের বিবরণ নেই" : "No purchase records"}
               </div>
-              {e.deletable && (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive shrink-0" onClick={() => setEntryToDelete(e)}>
-                  <Trash2 className="size-3.5" />
-                </Button>
-              )}
-            </div>
-          ))}
-        </Card>
-      </div>
+            ) : (
+              (sales.data ?? []).map(s => (
+                <div key={s.id} className="p-3 flex items-center justify-between gap-3 text-xs">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-sm text-foreground truncate">{s.product_name}</div>
+                    <div className="text-muted-foreground flex gap-1.5 flex-wrap items-center">
+                      <span>{fmtDateTime(s.created_at)}</span>
+                      <span>·</span>
+                      <span className="capitalize px-1 bg-zinc-100 dark:bg-zinc-800 rounded font-medium text-[10px]">
+                        {s.type === "cash" ? (lang === "bn" ? "নগদ" : "Cash") : s.type === "online" ? (lang === "bn" ? "অনলাইন" : "Online") : (lang === "bn" ? "বাকী" : "Credit")}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold text-foreground text-sm">
+                      {fmtMoney(Number(s.sell_price) * s.qty)}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      ৳{s.sell_price} × {s.qty}
+                      {Number((s as any).discount) > 0 && ` (Dis: ৳${(s as any).discount})`}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <CollectDialog partyId={id} open={collectOpen} onOpenChange={setCollectOpen} />
       <EditCustomerDialog customer={customer} open={editOpen} onOpenChange={setEditOpen} />
       {addKind && (
         <AddLedgerDialog partyId={id} kind={addKind} open={!!addKind} onOpenChange={v => { if (!v) setAddKind(null); }} />
       )}
+      <PartyReturnDialog partyId={id} open={returnOpen} onOpenChange={setReturnOpen} />
 
       <ConfirmDeleteDialog
         open={entryToDelete !== null}

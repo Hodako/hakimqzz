@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProductSearchSelect } from "@/components/product-search";
+import { CustomerSearchSelect } from "@/components/customer-search";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,7 +19,7 @@ import { createSaleFn, createCustomerFn } from "@/lib/rpc";
 import { Plus, Trash2 } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
 
-type CartLine = { productId: string; qty: string; sellPrice: string };
+type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 
 export function SaleDialog({
   open, onOpenChange, presetType, presetProductId, presetCart,
@@ -38,7 +38,7 @@ export function SaleDialog({
   const [partyId, setPartyId] = useState("");
   const [paid, setPaid] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [draft, setDraft] = useState<CartLine>({ productId: "", qty: "1", sellPrice: "" });
+  const [draft, setDraft] = useState<CartLine>({ productId: "", qty: "1", sellPrice: "", discount: "" });
   const [busy, setBusy] = useState(false);
 
   // Quick Customer Creation
@@ -77,29 +77,26 @@ export function SaleDialog({
       setPartyId("");
       setPaid("");
       if (presetCart && presetCart.length > 0) {
-        setCart(presetCart);
+        setCart(presetCart.map(x => ({ ...x, discount: (x as any).discount ?? "" })));
       } else if (presetProductId) {
         const p = products.find(x => x.id === presetProductId);
-        setCart([{ productId: presetProductId, qty: "1", sellPrice: p ? String(p.sell_price || "") : "" }]);
+        setCart([{ productId: presetProductId, qty: "1", sellPrice: p ? String(p.sell_price || "") : "", discount: "" }]);
       } else {
         setCart([]);
       }
-      setDraft({ productId: "", qty: "1", sellPrice: "" });
+      setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
     }
-  }, [open, presetType, presetProductId, presetCart]);
+  }, [open, presetType, presetProductId, presetCart, products]);
 
-  useEffect(() => {
-    if (draft.productId && !draft.sellPrice) {
-      const p = products.find(x => x.id === draft.productId);
-      if (p && p.sell_price > 0) setDraft(d => ({ ...d, sellPrice: String(p.sell_price) }));
-    }
-  }, [draft.productId, draft.sellPrice, products]);
+
 
   function lineTotal(line: CartLine) {
     const p = products.find(x => x.id === line.productId);
     if (!p) return 0;
     const sell = Number(line.sellPrice) || p.sell_price || 0;
-    return sell * (Number(line.qty) || 0);
+    const disc = Number(line.discount) || 0;
+    const finalPrice = Math.max(sell - disc, 0);
+    return finalPrice * (Number(line.qty) || 0);
   }
 
   const sellTotal = cart.reduce((a, l) => a + lineTotal(l), 0);
@@ -107,8 +104,10 @@ export function SaleDialog({
     const p = products.find(x => x.id === l.productId);
     if (!p) return a;
     const sell = Number(l.sellPrice) || p.sell_price || 0;
+    const disc = Number(l.discount) || 0;
+    const finalPrice = Math.max(sell - disc, 0);
     const qty = Number(l.qty) || 0;
-    return a + (sell - p.buy_price) * qty;
+    return a + (finalPrice - p.buy_price) * qty;
   }, 0);
   const paidNum = (type === "cash" || type === "online") ? sellTotal : Number(paid) || 0;
   const due = Math.max(sellTotal - paidNum, 0);
@@ -119,8 +118,11 @@ export function SaleDialog({
     if (qty <= 0) return;
     const sell = Number(draft.sellPrice);
     if (!sell || sell <= 0) return toast.error(t("sell_price") + " " + t("required"));
+    const disc = Number(draft.discount) || 0;
+    if (disc < 0) return toast.error(lang === "bn" ? "ডিসকাউন্ট নেতিবাচক হতে পারে না" : "Discount cannot be negative");
+    
     setCart(prev => [...prev, { ...draft }]);
-    setDraft({ productId: "", qty: "1", sellPrice: "" });
+    setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
   }
 
   async function submit(e: React.FormEvent) {
@@ -137,8 +139,10 @@ export function SaleDialog({
         const product = products.find(p => p.id === line.productId)!;
         const qtyNum = Number(line.qty) || 0;
         const sellPrice = Number(line.sellPrice) || product.sell_price || 0;
-        const lineSell = sellPrice * qtyNum;
-        const lineProfit = (sellPrice - product.buy_price) * qtyNum;
+        const disc = Number(line.discount) || 0;
+        const finalSellPrice = Math.max(sellPrice - disc, 0);
+        const lineSell = finalSellPrice * qtyNum;
+        const lineProfit = (finalSellPrice - product.buy_price) * qtyNum;
 
         await createSaleFn({
           data: {
@@ -146,13 +150,14 @@ export function SaleDialog({
             product_name: product.name,
             qty: qtyNum,
             buy_price: product.buy_price,
-            sell_price: sellPrice,
+            sell_price: finalSellPrice,
             profit: lineProfit,
             type,
-            party_id: type === "credit" ? partyId : null,
+            party_id: partyId || null,
             paid_amount: type === "credit" ? paidPerItem : lineSell,
             due_amount: type === "credit" ? duePerItem : 0,
             cart_id: cartId,
+            discount: disc,
           },
         });
       }
@@ -171,14 +176,13 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        {/* Fixed height dialog — prevents resize/jump when cart or dropdowns change */}
         <DialogContent className="max-w-md w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0">
           {/* Pinned header */}
           <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-border">
             <DialogTitle>{t("new_sale")}</DialogTitle>
           </DialogHeader>
 
-          {/* Scrollable body — only this area grows/shrinks */}
+          {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3">
             <form id="sale-form" onSubmit={submit} className="space-y-3">
               <Tabs value={type} onValueChange={(v) => setType(v as "cash" | "credit" | "online")}>
@@ -189,14 +193,54 @@ export function SaleDialog({
                 </TabsList>
               </Tabs>
 
+              {/* Customer selection - always visible but required only for Credit */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  {lang === "bn" ? "কাস্টমার (গ্রাহক)" : "Customer"} {type === "credit" ? "*" : `(${lang === "bn" ? "ঐচ্ছিক" : "Optional"})`}
+                </Label>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1">
+                    <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 cursor-pointer"
+                    onClick={() => setAddCustomerOpen(true)}
+                    title="Add Customer"
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
               <div className="border border-border rounded-lg p-3 space-y-2">
                 <Field label={t("select_product")}>
-                  <ProductSearchSelect products={products} value={draft.productId} onChange={v => setDraft(d => ({ ...d, productId: v }))} />
+                  <ProductSearchSelect
+                    products={products}
+                    value={draft.productId}
+                    onChange={v => {
+                      const p = products.find(x => x.id === v);
+                      setDraft(d => ({
+                        ...d,
+                        productId: v,
+                        sellPrice: p && p.sell_price > 0 ? String(p.sell_price) : "",
+                        discount: "",
+                      }));
+                    }}
+                  />
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Field label={t("qty")}><Input inputMode="numeric" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
                   <Field label={t("sell_price")}><Input inputMode="decimal" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
+                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}><Input inputMode="decimal" placeholder="0" value={draft.discount} onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))} /></Field>
                 </div>
+                {draft.productId && draft.sellPrice && (
+                  <div className="text-[11px] text-muted-foreground text-right font-medium">
+                    {lang === "bn" ? "চূড়ান্ত মূল্য: " : "Final Price: "} ৳{Math.max((Number(draft.sellPrice) || 0) - (Number(draft.discount) || 0), 0)}
+                  </div>
+                )}
                 <Button type="button" variant="outline" size="sm" className="w-full" onClick={addToCart}>
                   <Plus className="size-3.5 mr-1" />{t("add_to_cart")}
                 </Button>
@@ -216,7 +260,7 @@ export function SaleDialog({
                               <Trash2 className="size-3.5" />
                             </Button>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 mt-1">
+                          <div className="grid grid-cols-3 gap-2 mt-1">
                             <div className="space-y-0.5">
                               <span className="text-[9px] text-muted-foreground">{t("qty")}</span>
                               <Input
@@ -241,6 +285,18 @@ export function SaleDialog({
                                 }}
                               />
                             </div>
+                            <div className="space-y-0.5">
+                              <span className="text-[9px] text-muted-foreground">{lang === "bn" ? "ডিসকাউন্ট" : "Discount"}</span>
+                              <Input
+                                className="h-7 text-xs bg-background"
+                                type="number"
+                                value={line.discount}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setCart(prev => prev.map((x, idx) => idx === i ? { ...x, discount: val } : x));
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
                       );
@@ -250,40 +306,15 @@ export function SaleDialog({
               )}
 
               {type === "credit" && (
-                <>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">{lang === "bn" ? "কাস্টমার (গ্রাহক)" : "Customer"}</Label>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex-1">
-                        <Select value={partyId} onValueChange={setPartyId}>
-                          <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                          <SelectContent>
-                            {customers.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-9 shrink-0 cursor-pointer"
-                        onClick={() => setAddCustomerOpen(true)}
-                        title="Add Customer"
-                      >
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label={t("paid_amount")}><Input inputMode="decimal" placeholder={t("paid_amount")} value={paid} onChange={e => setPaid(e.target.value)} /></Field>
-                    <Field label={t("due_amount")}><div className="h-9 px-3 grid items-center rounded-md bg-warning/10 font-semibold text-sm">{fmtMoney(due)}</div></Field>
-                  </div>
-                </>
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <Field label={t("paid_amount")}><Input inputMode="decimal" placeholder={t("paid_amount")} value={paid} onChange={e => setPaid(e.target.value)} /></Field>
+                  <Field label={t("due_amount")}><div className="h-9 px-3 grid items-center rounded-md bg-warning/10 font-semibold text-sm">{fmtMoney(due)}</div></Field>
+                </div>
               )}
             </form>
           </div>
 
-          {/* Pinned footer — total + action buttons */}
+          {/* Pinned footer */}
           <div className="shrink-0 border-t border-border px-5 py-3 space-y-2 bg-background">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{t("total")}</span>

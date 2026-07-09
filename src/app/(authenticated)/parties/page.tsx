@@ -20,6 +20,7 @@ import type { Party } from "@/lib/queries";
 import Link from "next/link";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,

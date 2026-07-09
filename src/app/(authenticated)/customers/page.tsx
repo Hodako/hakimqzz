@@ -20,6 +20,8 @@ import type { Customer } from "@/lib/queries";
 import Link from "next/link";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PartyReturnDialog } from "@/components/party-return-dialog";
+import { Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +37,7 @@ export default function CustomersPage() {
   const allReceivables = useCachedQuery(["all-party-receivables"], getAllPartyReceivables);
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
@@ -135,6 +138,11 @@ export default function CustomersPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <Button size="sm" variant="outline" onClick={() => setReturnOpen(true)} className="h-8 text-xs border-rose-200 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/10 beveled-button">
+            <Plus className="size-4 mr-1" />
+            {lang === "bn" ? "পণ্য ফেরত" : "Product Return"}
+          </Button>
+
           <Button size="sm" onClick={() => setAddOpen(true)} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white beveled-button">
             <UserPlus className="size-4 mr-1" />
             {lang === "bn" ? "নতুন কাস্টমার" : "Add Customer"}
@@ -231,6 +239,7 @@ export default function CustomersPage() {
       <PaginationBar page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPageChange={setPage} />
 
       <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} />
+      <PartyReturnDialog open={returnOpen} onOpenChange={setReturnOpen} />
     </div>
   );
 }

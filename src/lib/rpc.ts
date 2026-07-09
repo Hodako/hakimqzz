@@ -152,6 +152,7 @@ export const editSaleFn = makeWriteAction("editSaleFn");
 export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
 export const createReturnFn = makeWriteAction("createReturnFn");
 export const createDirectProductReturnFn = makeWriteAction("createDirectProductReturnFn");
+export const createPartyReturnFn = makeWriteAction("createPartyReturnFn");
 export const deleteReturnFn = makeWriteAction("deleteReturnFn");
 
 export const createPurchaseFn = makeWriteAction("createPurchaseFn");

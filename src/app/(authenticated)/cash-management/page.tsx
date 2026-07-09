@@ -47,10 +47,10 @@ function KPI({ label, value, icon: Icon, color, sub }: {
       <div className={`size-10 sm:size-11 rounded-xl ${color} flex items-center justify-center shrink-0`}>
         <Icon className="size-5 text-white" />
       </div>
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground truncate">{label}</div>
-        <div className="text-lg sm:text-xl font-bold mt-0.5">{value}</div>
-        {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-muted-foreground truncate" title={label}>{label}</div>
+        <div className="text-lg sm:text-xl font-bold mt-0.5 truncate" title={value}>{value}</div>
+        {sub && <div className="text-xs text-muted-foreground truncate" title={sub}>{sub}</div>}
       </div>
     </Card>
   );
