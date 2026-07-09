@@ -68,7 +68,7 @@ export default function CustomerDetail() {
   const saleDue = (sales.data ?? []).filter(s => !s.returned).reduce((a, s) => a + Number(s.due_amount), 0);
   const extraReceivable = (receivables.data ?? []).reduce((a, r) => a + Number(r.amount), 0);
   const paidTotal = (payments.data ?? []).reduce((a, p) => a + Number(p.amount), 0);
-  const outstanding = Math.max(saleDue + extraReceivable - paidTotal, 0);
+  const netBalance = saleDue + extraReceivable - paidTotal;
 
   type Entry = {
     id: string; date: string; label: string; amount: number;
@@ -205,18 +205,49 @@ export default function CustomerDetail() {
       )}
 
       <div className="max-w-md mx-auto w-full space-y-4">
-        {/* Receivable (They owe me) */}
-        <Card className="p-5 glass-card border-amber-500/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">{t("borrowed_from_me")} (জমা / তারা দেবে)</div>
-          <div className="text-3xl font-extrabold text-amber-600 mt-2 font-serif">{fmtMoney(outstanding)}</div>
-          <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
-            হিসাব: বাকী ও অন্যান্য ({fmtMoney(saleDue + extraReceivable)}) − আদায় ({fmtMoney(paidTotal)}) = বাকি দেবে {fmtMoney(outstanding)}
-          </p>
-          <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
-            <Plus className="size-3.5 mr-1.5" /> {t("collect_payment")} (টাকা আদায় করুন)
-          </Button>
-        </Card>
+        {/* Dynamic Balance Card */}
+        {(() => {
+          const isDue = netBalance > 0;
+          const isAdvance = netBalance < 0;
+          const absVal = Math.abs(netBalance);
+          
+          let cardBg = "bg-rose-500/5 border-rose-500/20";
+          let textColor = "text-rose-600 dark:text-rose-400";
+          let labelText = lang === "bn" ? "বকেয়া বাকী (তারা দেবে)" : "Outstanding Dues";
+          let formula = lang === "bn"
+            ? `হিসাব: বাকী ও অন্যান্য (${fmtMoney(saleDue + extraReceivable)}) − আদায় (${fmtMoney(paidTotal)}) = বাকি দেবে ${fmtMoney(absVal)}`
+            : `Calculation: Dues (${fmtMoney(saleDue + extraReceivable)}) − Paid (${fmtMoney(paidTotal)}) = Owed ${fmtMoney(absVal)}`;
+
+          if (isAdvance) {
+            cardBg = "bg-emerald-500/5 border-emerald-500/20";
+            textColor = "text-emerald-600 dark:text-emerald-400";
+            labelText = lang === "bn" ? "অগ্রিম জমা (গ্রাহক পাবে)" : "Customer Advance Credit";
+            formula = lang === "bn"
+              ? `হিসাব: আদায় (${fmtMoney(paidTotal)}) − বাকী ও অন্যান্য (${fmtMoney(saleDue + extraReceivable)}) = অগ্রিম জমা পাবে ${fmtMoney(absVal)}`
+              : `Calculation: Paid (${fmtMoney(paidTotal)}) − Dues (${fmtMoney(saleDue + extraReceivable)}) = Credit ${fmtMoney(absVal)}`;
+          } else if (netBalance === 0) {
+            cardBg = "bg-zinc-500/5 border-zinc-200 dark:border-zinc-800";
+            textColor = "text-zinc-500 dark:text-zinc-400";
+            labelText = lang === "bn" ? "পরিশোধিত হিসাব" : "Account Settled";
+            formula = lang === "bn"
+              ? `হিসাব: কোনো বাকী বা বকেয়া নেই (ব্যালেন্স ৳০)`
+              : `Calculation: Settled (Balance ৳0)`;
+          }
+
+          return (
+            <Card className={`p-5 glass-card relative overflow-hidden ${cardBg}`}>
+              <div className="absolute top-0 right-0 w-24 h-24 bg-current opacity-[0.03] rounded-full blur-2xl pointer-events-none" />
+              <div className={`text-xs font-semibold uppercase tracking-wider ${textColor}`}>{labelText}</div>
+              <div className={`text-3xl font-extrabold mt-2 font-serif ${textColor}`}>{fmtMoney(absVal)}</div>
+              <p className="text-[11px] text-muted-foreground mt-3 leading-normal border-t border-dashed border-border/80 pt-2">
+                {formula}
+              </p>
+              <Button className="mt-4 w-full h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium beveled-button" size="sm" onClick={() => setCollectOpen(true)}>
+                <Plus className="size-3.5 mr-1.5" /> {lang === "bn" ? "টাকা আদায় করুন" : "Collect Payment"}
+              </Button>
+            </Card>
+          );
+        })()}
 
         <div className="flex gap-2 w-full">
           <Button size="sm" variant="outline" className="flex-1 h-9 text-xs beveled-button" onClick={() => setAddKind("receivable")}>

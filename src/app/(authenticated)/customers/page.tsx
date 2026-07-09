@@ -60,15 +60,26 @@ export default function CustomersPage() {
     extraByParty[r.party_id] = (extraByParty[r.party_id] ?? 0) + Number(r.amount);
   });
 
-  const getCustomerReceivable = (customerId: string) => {
+  const getCustomerBalance = (customerId: string) => {
     const totalDues = (duesByParty[customerId] ?? 0) + (extraByParty[customerId] ?? 0);
     const paid = paidByParty[customerId] ?? 0;
-    return Math.max(totalDues - paid, 0);
+    return totalDues - paid;
+  };
+
+  const getCustomerReceivable = (customerId: string) => {
+    return Math.max(getCustomerBalance(customerId), 0);
   };
 
   const totalOutstanding = (customers.data ?? []).filter(Boolean).reduce((sum, p) => {
     if (p.archived) return sum;
-    return sum + getCustomerReceivable(p.id);
+    const bal = getCustomerBalance(p.id);
+    return sum + (bal > 0 ? bal : 0);
+  }, 0);
+
+  const totalAdvance = (customers.data ?? []).filter(Boolean).reduce((sum, p) => {
+    if (p.archived) return sum;
+    const bal = getCustomerBalance(p.id);
+    return sum + (bal < 0 ? Math.abs(bal) : 0);
   }, 0);
 
   const filtered = (customers.data ?? [])
@@ -150,11 +161,16 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-        <Card className="p-4 bg-amber-500/5 border-amber-500/20 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
-          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">{lang === "bn" ? "গ্রাহকদের থেকে মোট বকেয়া" : "Total Outstanding Receivable"}</span>
-          <span className="text-2xl font-black text-amber-600 font-serif mt-1">{fmtMoney(totalOutstanding)}</span>
+      <div className="grid grid-cols-2 gap-4 max-w-2xl">
+        <Card className="p-4 bg-rose-500/5 border-rose-500/20 relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-rose-500/5 rounded-full blur-xl pointer-events-none" />
+          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wide truncate">{lang === "bn" ? "মোট বকেয়া বাকী" : "Total Customer Dues"}</span>
+          <span className="text-xl font-black text-rose-600 font-serif mt-1">{fmtMoney(totalOutstanding)}</span>
+        </Card>
+        <Card className="p-4 bg-emerald-500/5 border-emerald-500/20 relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide truncate">{lang === "bn" ? "মোট অগ্রিম জমা" : "Total Customer Advances"}</span>
+          <span className="text-xl font-black text-emerald-600 font-serif mt-1">{fmtMoney(totalAdvance)}</span>
         </Card>
       </div>
 
@@ -208,12 +224,37 @@ export default function CustomersPage() {
               </div>
 
               <div className="flex items-center gap-4 shrink-0 text-right">
-                <div>
-                  <div className="text-xs text-muted-foreground">{lang === "bn" ? "পাওনা" : "Outstanding"}</div>
-                  <div className={`text-sm font-bold font-serif ${outstanding > 0 ? "text-amber-600" : "text-muted-foreground/60"}`}>
-                    {fmtMoney(outstanding)}
-                  </div>
-                </div>
+                {(() => {
+                  const bal = getCustomerBalance(p.id);
+                  if (bal > 0) {
+                    return (
+                      <div>
+                        <div className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wide">{lang === "bn" ? "বাকী পাবে" : "Owes Us"}</div>
+                        <div className="text-sm font-bold font-serif text-rose-600 dark:text-rose-400">
+                          {fmtMoney(bal)}
+                        </div>
+                      </div>
+                    );
+                  } else if (bal < 0) {
+                    return (
+                      <div>
+                        <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">{lang === "bn" ? "অগ্রিম জমা" : "Advance"}</div>
+                        <div className="text-sm font-bold font-serif text-emerald-600 dark:text-emerald-400">
+                          {fmtMoney(Math.abs(bal))}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div>
+                        <div className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">{lang === "bn" ? "পরিশোধিত" : "Settled"}</div>
+                        <div className="text-sm font-semibold font-serif text-zinc-400 dark:text-zinc-500">
+                          {fmtMoney(0)}
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
 
                 <div className="flex items-center gap-1">
                   <Button
