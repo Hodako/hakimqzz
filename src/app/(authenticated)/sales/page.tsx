@@ -365,6 +365,7 @@ function ReturnDialog({
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["returns"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
       toast.success(t("return_product"));
       onOpenChange(false);
     } catch (err: unknown) {

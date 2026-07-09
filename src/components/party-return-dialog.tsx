@@ -125,6 +125,7 @@ export function PartyReturnDialog({
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["customers"] });
       qc.invalidateQueries({ queryKey: ["parties"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
       
       onOpenChange(false);
     } catch (err: any) {

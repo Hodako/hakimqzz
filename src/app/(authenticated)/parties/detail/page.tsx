@@ -160,7 +160,7 @@ export default function PartyDetail() {
         );
         await deletePayableSettlementFn({ data: { id: entryToDelete.rawId } });
       }
-      await refreshQueries(qc, ["all-payments"], ["sales"], ["all-party-receivables"], ["all-party-payables"], ["party-settlements", id], ["all-payable-settlements"]);
+      await refreshQueries(qc, ["all-payments"], ["sales"], ["all-party-receivables"], ["all-party-payables"], ["party-settlements", id], ["all-payable-settlements"], ["cashbox"]);
       toast.success(t("delete"));
       setEntryToDelete(null);
     } catch (err: unknown) {
@@ -552,7 +552,7 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
       setCachedData<Payment[]>(qc, ["payments", partyId], old =>
         (old ?? []).map(p => (p.id === tempId ? { ...saved, id: saved.id } as any : p)),
       );
-      await refreshQueries(qc, ["all-payments"]);
+      await refreshQueries(qc, ["all-payments"], ["cashbox"]);
     } catch (err: unknown) {
       setCachedData<Payment[]>(qc, ["payments", partyId], old => (old ?? []).filter(p => p.id !== tempId));
       toast.error(err instanceof Error ? err.message : String(err));
@@ -606,7 +606,7 @@ function PayPartyDialog({ partyId, open, onOpenChange }: { partyId: string; open
       setCachedData<PartyLedger[]>(qc, ["party-settlements", partyId], old =>
         (old ?? []).map(s => (s.id === tempId ? { ...saved, id: saved.id } : s)),
       );
-      await refreshQueries(qc, ["party-settlements", partyId]);
+      await refreshQueries(qc, ["party-settlements", partyId], ["cashbox"]);
     } catch (err: unknown) {
       setCachedData<PartyLedger[]>(qc, ["party-settlements", partyId], old => (old ?? []).filter(s => s.id !== tempId));
       toast.error(err instanceof Error ? err.message : String(err));

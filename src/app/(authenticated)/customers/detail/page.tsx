@@ -121,7 +121,7 @@ export default function CustomerDetail() {
         );
         await deletePartyReceivableFn({ data: { id: entryToDelete.rawId } });
       }
-      await refreshQueries(qc, ["all-payments"], ["sales"], ["all-party-receivables"]);
+      await refreshQueries(qc, ["all-payments"], ["sales"], ["all-party-receivables"], ["cashbox"]);
       toast.success(t("delete"));
       setEntryToDelete(null);
     } catch (err: unknown) {
@@ -481,7 +481,7 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
       setCachedData<Payment[]>(qc, ["payments", partyId], old =>
         (old ?? []).map(p => (p.id === tempId ? { ...saved, id: saved.id } : p)),
       );
-      await refreshQueries(qc, ["all-payments"]);
+      await refreshQueries(qc, ["all-payments"], ["cashbox"]);
     } catch (err: unknown) {
       setCachedData<Payment[]>(qc, ["payments", partyId], old => (old ?? []).filter(p => p.id !== tempId));
       toast.error(err instanceof Error ? err.message : String(err));
