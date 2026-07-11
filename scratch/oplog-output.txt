@@ -1,0 +1,286 @@
+--- DB WRITE EVENT LOGS FOR JULY 7, 2026 AFTER 11:00 AM LOCAL TIME ---
+
+[2026-07-07 11:38:38.406+06:00 | UTC: 2026-07-07T05:38:38.406Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"fddc986f-d9d7-4cb1-909c-8685153b8b47","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"37243299-b044-4758-9b8a-c27cb38d6972","product_name":"Export t shirt ( ARD )","qty":1,"buy_price":120,"sell_price":170,"profit":50,"type":"cash","party_id":null,"paid_amount":170,"due_amount":0,"cart_id":"58a012da-5118-49f8-82fc-fc6538007fdb","created_at":"2026-07-07T05:38:38.299Z"}
+
+[2026-07-07 11:38:38.808+06:00 | UTC: 2026-07-07T05:38:38.808Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":28}}
+  Target ID: 37243299-b044-4758-9b8a-c27cb38d6972
+
+[2026-07-07 11:38:39.011+06:00 | UTC: 2026-07-07T05:38:39.011Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"cfd7166b-e386-4ca3-a6d7-09c28f8bfa0f","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":170,"note":"Sale: Export t shirt ( ARD )","ref_id":"fddc986f-d9d7-4cb1-909c-8685153b8b47","created_at":"2026-07-07T05:38:38.299Z"}
+
+[2026-07-07 11:40:32.861+06:00 | UTC: 2026-07-07T05:40:32.861Z] Op: INSERT | Collection: dreamfashion.party_payables
+  Inserted Document: {"_id":"5a4e3896-718d-4f5e-80c8-48a42d0cea63","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"6b8492f0-6923-498e-94a8-40d2232935c0","amount":5000,"note":null,"created_at":"2026-07-07T05:40:32.737Z"}
+
+[2026-07-07 11:40:49.791+06:00 | UTC: 2026-07-07T05:40:49.791Z] Op: DELETE | Collection: dreamfashion.party_payables
+  Deleted ID: 5a4e3896-718d-4f5e-80c8-48a42d0cea63
+
+[2026-07-07 11:41:26.407+06:00 | UTC: 2026-07-07T05:41:26.407Z] Op: INSERT | Collection: dreamfashion.party_payables
+  Inserted Document: {"_id":"2c3205d8-1a30-4771-92fb-103751fadc81","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"6b8492f0-6923-498e-94a8-40d2232935c0","amount":5000,"note":null,"created_at":"2026-07-07T05:41:26.313Z"}
+
+[2026-07-07 11:41:42.378+06:00 | UTC: 2026-07-07T05:41:42.378Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"7fc71b74-8ec8-4434-9864-ba5136ba851b","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"f9fd9f89-a5c6-408b-88c9-070d3da83267","product_name":"Export Pant ( RID )","qty":1,"buy_price":250,"sell_price":500,"profit":250,"type":"cash","party_id":null,"paid_amount":500,"due_amount":0,"cart_id":"a7c4a70a-8daf-41b2-9c0f-4bdeda0e2458","created_at":"2026-07-07T05:41:42.272Z"}
+
+[2026-07-07 11:41:42.779+06:00 | UTC: 2026-07-07T05:41:42.779Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":118}}
+  Target ID: f9fd9f89-a5c6-408b-88c9-070d3da83267
+
+[2026-07-07 11:41:42.980+06:00 | UTC: 2026-07-07T05:41:42.980Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"87975b87-569f-4f21-a82d-cea4287561e7","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":500,"note":"Sale: Export Pant ( RID )","ref_id":"7fc71b74-8ec8-4434-9864-ba5136ba851b","created_at":"2026-07-07T05:41:42.272Z"}
+
+[2026-07-07 12:51:33.528+06:00 | UTC: 2026-07-07T06:51:33.528Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"7f1a4188-7113-4e56-b702-dda2f0467fd5","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"9374a8e0-ce57-41d6-8911-f80ef1eddafa","product_name":"Short Pant ( AiD )","qty":5,"buy_price":150,"sell_price":250,"profit":500,"type":"cash","party_id":null,"paid_amount":1250,"due_amount":0,"cart_id":"c767d23b-7d78-4349-aad6-44f7c209e93c","created_at":"2026-07-07T06:51:33.419Z"}
+
+[2026-07-07 12:51:33.942+06:00 | UTC: 2026-07-07T06:51:33.942Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":74}}
+  Target ID: 9374a8e0-ce57-41d6-8911-f80ef1eddafa
+
+[2026-07-07 12:51:34.147+06:00 | UTC: 2026-07-07T06:51:34.147Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"53e0606b-dc31-47fe-bb2a-5e86313a2ee3","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":1250,"note":"Sale: Short Pant ( AiD )","ref_id":"7f1a4188-7113-4e56-b702-dda2f0467fd5","created_at":"2026-07-07T06:51:33.419Z"}
+
+[2026-07-07 12:51:35.084+06:00 | UTC: 2026-07-07T06:51:35.084Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"a4117477-0305-4359-a8bb-967fd6269531","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"f9fd9f89-a5c6-408b-88c9-070d3da83267","product_name":"Export Pant ( RID )","qty":1,"buy_price":250,"sell_price":550,"profit":300,"type":"cash","party_id":null,"paid_amount":550,"due_amount":0,"cart_id":"c767d23b-7d78-4349-aad6-44f7c209e93c","created_at":"2026-07-07T06:51:34.976Z"}
+
+[2026-07-07 12:51:35.488+06:00 | UTC: 2026-07-07T06:51:35.488Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":117}}
+  Target ID: f9fd9f89-a5c6-408b-88c9-070d3da83267
+
+[2026-07-07 12:51:35.691+06:00 | UTC: 2026-07-07T06:51:35.691Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"b84cb2cb-576b-49d2-b346-8c068bf0017b","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":550,"note":"Sale: Export Pant ( RID )","ref_id":"a4117477-0305-4359-a8bb-967fd6269531","created_at":"2026-07-07T06:51:34.976Z"}
+
+[2026-07-07 13:48:10.348+06:00 | UTC: 2026-07-07T07:48:10.348Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"57232d02-03d1-4247-80b8-d7ba9db47596","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"37243299-b044-4758-9b8a-c27cb38d6972","product_name":"Export t shirt ( ARD )","qty":3,"buy_price":120,"sell_price":183.333,"profit":189.999,"type":"cash","party_id":null,"paid_amount":549.999,"due_amount":0,"cart_id":"571c6ca2-cb5b-48d7-809c-f09102a7e9d7","created_at":"2026-07-07T07:48:10.237Z"}
+
+[2026-07-07 13:48:10.753+06:00 | UTC: 2026-07-07T07:48:10.753Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":25}}
+  Target ID: 37243299-b044-4758-9b8a-c27cb38d6972
+
+[2026-07-07 13:48:10.959+06:00 | UTC: 2026-07-07T07:48:10.959Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"4c18e924-b65d-4ed8-81c8-4f5dbe40c221","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":549.999,"note":"Sale: Export t shirt ( ARD )","ref_id":"57232d02-03d1-4247-80b8-d7ba9db47596","created_at":"2026-07-07T07:48:10.237Z"}
+
+[2026-07-07 15:43:45.313+06:00 | UTC: 2026-07-07T09:43:45.313Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"67a09ff9-cdd9-4a3b-b1cf-052897249858","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"5d667179-de9f-42d9-a00d-93849402800e","product_name":"China polo t shirt   ( IID )","qty":1,"buy_price":550,"sell_price":750,"profit":200,"type":"cash","party_id":null,"paid_amount":750,"due_amount":0,"cart_id":"8688954c-6fd4-464d-95ad-c87fb697af76","created_at":"2026-07-07T09:43:45.208Z"}
+
+[2026-07-07 15:43:45.691+06:00 | UTC: 2026-07-07T09:43:45.691Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":3}}
+  Target ID: 5d667179-de9f-42d9-a00d-93849402800e
+
+[2026-07-07 15:43:45.880+06:00 | UTC: 2026-07-07T09:43:45.880Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"12cf285d-01cf-41ae-a0ef-a41feeddd7b7","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":750,"note":"Sale: China polo t shirt   ( IID )","ref_id":"67a09ff9-cdd9-4a3b-b1cf-052897249858","created_at":"2026-07-07T09:43:45.208Z"}
+
+[2026-07-07 15:43:46.799+06:00 | UTC: 2026-07-07T09:43:46.799Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"69d19951-66b4-4d5b-a754-a98ff667fce8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"51d3941d-5539-4b1b-b768-e808f840434f","product_name":"Baggi Pant ( SiD )","qty":2,"buy_price":350,"sell_price":500,"profit":300,"type":"cash","party_id":null,"paid_amount":1000,"due_amount":0,"cart_id":"8688954c-6fd4-464d-95ad-c87fb697af76","created_at":"2026-07-07T09:43:46.690Z"}
+
+[2026-07-07 15:43:47.206+06:00 | UTC: 2026-07-07T09:43:47.206Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":2}}
+  Target ID: 51d3941d-5539-4b1b-b768-e808f840434f
+
+[2026-07-07 15:43:47.410+06:00 | UTC: 2026-07-07T09:43:47.410Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"b3523587-3788-43a0-bbc5-90a51db29331","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":1000,"note":"Sale: Baggi Pant ( SiD )","ref_id":"69d19951-66b4-4d5b-a754-a98ff667fce8","created_at":"2026-07-07T09:43:46.690Z"}
+
+[2026-07-07 15:44:24.235+06:00 | UTC: 2026-07-07T09:44:24.235Z] Op: INSERT | Collection: dreamfashion.party_payable_settlements
+  Inserted Document: {"_id":"d5ede6dc-5151-4829-a4dc-0bd3ccd9fef8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"6b8492f0-6923-498e-94a8-40d2232935c0","amount":1750,"note":"২ টা জিন্স বেগী আর একটা আফ শার্ট ","created_at":"2026-07-07T09:44:24.125Z"}
+
+[2026-07-07 15:44:24.642+06:00 | UTC: 2026-07-07T09:44:24.642Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"2b11908e-35f3-4546-abf8-38e13bc0b200","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"withdraw","amount":1750,"note":"২ টা জিন্স বেগী আর একটা আফ শার্ট ","ref_id":"d5ede6dc-5151-4829-a4dc-0bd3ccd9fef8","created_at":"2026-07-07T09:44:24.534Z"}
+
+[2026-07-07 18:44:40.131+06:00 | UTC: 2026-07-07T12:44:40.131Z] Op: INSERT | Collection: dreamfashion.products
+  Inserted Document: {"_id":"4979f7ca-8662-4f76-be82-6a503232391b","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","name":"Cap (AID)","image_url":"https://i.ibb.co/7dxJ4vR1/818e3f0f4206.jpg","buy_price":150,"sell_price":0,"stock":20,"attributes":{},"min_stock":2,"category":"ক্যপ","archived":false,"created_at":"2026-07-07T12:44:40.020Z"}
+
+[2026-07-07 18:45:31.346+06:00 | UTC: 2026-07-07T12:45:31.346Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"71e66c6d-d1e8-4380-975a-0922df9f966d","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"aa84b1e1-a49b-4530-906d-6335c9efa797","product_name":"Export Pant ( MID )","qty":2,"buy_price":650,"sell_price":1300,"profit":1300,"type":"cash","party_id":null,"paid_amount":2600,"due_amount":0,"cart_id":"2eb86755-4bf8-4d57-a162-4e777a5f77ee","created_at":"2026-07-07T12:45:31.238Z"}
+
+[2026-07-07 18:45:31.723+06:00 | UTC: 2026-07-07T12:45:31.723Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":43}}
+  Target ID: aa84b1e1-a49b-4530-906d-6335c9efa797
+
+[2026-07-07 18:45:31.912+06:00 | UTC: 2026-07-07T12:45:31.912Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"a499e7db-ed91-4e4c-bab4-9c7c574c7282","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":2600,"note":"Sale: Export Pant ( MID )","ref_id":"71e66c6d-d1e8-4380-975a-0922df9f966d","created_at":"2026-07-07T12:45:31.238Z"}
+
+[2026-07-07 18:45:32.883+06:00 | UTC: 2026-07-07T12:45:32.883Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"869fb262-6f83-4d63-960e-a28446763307","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"35ebedb8-0c38-4b86-a203-1f815e7861ae","product_name":"China polo t shirt  ( MID )","qty":1,"buy_price":650,"sell_price":1000,"profit":350,"type":"cash","party_id":null,"paid_amount":1000,"due_amount":0,"cart_id":"2eb86755-4bf8-4d57-a162-4e777a5f77ee","created_at":"2026-07-07T12:45:32.777Z"}
+
+[2026-07-07 18:45:33.284+06:00 | UTC: 2026-07-07T12:45:33.284Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":0}}
+  Target ID: 35ebedb8-0c38-4b86-a203-1f815e7861ae
+
+[2026-07-07 18:45:33.484+06:00 | UTC: 2026-07-07T12:45:33.484Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"07b728c9-a1a0-4d68-9f23-5be2a5be6ce6","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":1000,"note":"Sale: China polo t shirt  ( MID )","ref_id":"869fb262-6f83-4d63-960e-a28446763307","created_at":"2026-07-07T12:45:32.777Z"}
+
+[2026-07-07 18:45:34.838+06:00 | UTC: 2026-07-07T12:45:34.838Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"ced086df-2564-4357-9789-618e437531ba","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"4979f7ca-8662-4f76-be82-6a503232391b","product_name":"Cap (AID)","qty":1,"buy_price":150,"sell_price":250,"profit":100,"type":"cash","party_id":null,"paid_amount":250,"due_amount":0,"cart_id":"2eb86755-4bf8-4d57-a162-4e777a5f77ee","created_at":"2026-07-07T12:45:34.732Z"}
+
+[2026-07-07 18:45:35.238+06:00 | UTC: 2026-07-07T12:45:35.238Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":19}}
+  Target ID: 4979f7ca-8662-4f76-be82-6a503232391b
+
+[2026-07-07 18:45:35.440+06:00 | UTC: 2026-07-07T12:45:35.440Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"8488103b-92c2-4e76-84de-02bdc4493945","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":250,"note":"Sale: Cap (AID)","ref_id":"ced086df-2564-4357-9789-618e437531ba","created_at":"2026-07-07T12:45:34.732Z"}
+
+[2026-07-07 18:49:49.685+06:00 | UTC: 2026-07-07T12:49:49.685Z] Op: INSERT | Collection: dreamfashion.expenses
+  Inserted Document: {"_id":"6ecce443-e463-4402-a2e1-f5aafc8c1772","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","title":"মেহেদী","amount":100,"note":null,"created_at":"2026-07-07T12:49:49.575Z"}
+
+[2026-07-07 18:49:49.891+06:00 | UTC: 2026-07-07T12:49:49.891Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"34536310-965d-46db-ac29-5df37350e4e8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"expense","amount":100,"note":"মেহেদী","ref_id":"6ecce443-e463-4402-a2e1-f5aafc8c1772","created_at":"2026-07-07T12:49:49.575Z"}
+
+[2026-07-07 18:50:01.805+06:00 | UTC: 2026-07-07T12:50:01.805Z] Op: INSERT | Collection: dreamfashion.expenses
+  Inserted Document: {"_id":"67d70acb-1806-4e5a-9bdd-0b07c9f30a3c","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","title":"সোনালী সমিতি","amount":500,"note":null,"created_at":"2026-07-07T12:50:01.696Z"}
+
+[2026-07-07 18:50:02.010+06:00 | UTC: 2026-07-07T12:50:02.010Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"fbfb2e8f-97d0-45f9-ae03-ba93b0a0669b","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"expense","amount":500,"note":"সোনালী সমিতি","ref_id":"67d70acb-1806-4e5a-9bdd-0b07c9f30a3c","created_at":"2026-07-07T12:50:01.696Z"}
+
+[2026-07-07 18:50:13.238+06:00 | UTC: 2026-07-07T12:50:13.238Z] Op: INSERT | Collection: dreamfashion.expenses
+  Inserted Document: {"_id":"bb61215c-cb13-41a9-b9ab-3c993a7cf90c","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","title":"একতা ব্যবসায়ী সমিতি","amount":200,"note":null,"created_at":"2026-07-07T12:50:13.129Z"}
+
+[2026-07-07 18:50:13.443+06:00 | UTC: 2026-07-07T12:50:13.443Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"27976c33-e330-47ff-830b-2d9f70a58237","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"expense","amount":200,"note":"একতা ব্যবসায়ী সমিতি","ref_id":"bb61215c-cb13-41a9-b9ab-3c993a7cf90c","created_at":"2026-07-07T12:50:13.129Z"}
+
+[2026-07-07 18:50:20.789+06:00 | UTC: 2026-07-07T12:50:20.789Z] Op: INSERT | Collection: dreamfashion.expenses
+  Inserted Document: {"_id":"64e1d48a-7b62-4cc1-8e27-ed4699a5bc0e","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","title":"সমিতি","amount":1000,"note":null,"created_at":"2026-07-07T12:50:20.680Z"}
+
+[2026-07-07 18:50:20.993+06:00 | UTC: 2026-07-07T12:50:20.993Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"1bc399f5-51c4-47c4-942f-fc9d3396e961","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"expense","amount":1000,"note":"সমিতি","ref_id":"64e1d48a-7b62-4cc1-8e27-ed4699a5bc0e","created_at":"2026-07-07T12:50:20.680Z"}
+
+[2026-07-07 20:15:26.066+06:00 | UTC: 2026-07-07T14:15:26.066Z] Op: DELETE | Collection: dreamfashion.party_payables
+  Deleted ID: 035d14a9-e7d9-4ed9-bc51-b00b36356cf8
+
+[2026-07-07 20:15:30.508+06:00 | UTC: 2026-07-07T14:15:30.508Z] Op: DELETE | Collection: dreamfashion.party_payable_settlements
+  Deleted ID: 130fce31-57a6-44ae-ba6c-6d0853b3653c
+
+[2026-07-07 20:15:30.704+06:00 | UTC: 2026-07-07T14:15:30.704Z] Op: DELETE | Collection: dreamfashion.cashbox_entries
+  Deleted ID: 4262373d-8bd3-4d72-816d-71adae12bbc6
+
+[2026-07-07 20:15:48.418+06:00 | UTC: 2026-07-07T14:15:48.418Z] Op: INSERT | Collection: dreamfashion.party_payables
+  Inserted Document: {"_id":"5c1ad590-199e-4cfc-b0a0-b51cc123e1a8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"544be692-3bd6-449d-b9b7-e6398f74b2e8","amount":47500,"note":null,"created_at":"2026-07-07T14:15:48.319Z"}
+
+[2026-07-07 20:15:52.982+06:00 | UTC: 2026-07-07T14:15:52.982Z] Op: INSERT | Collection: dreamfashion.party_payable_settlements
+  Inserted Document: {"_id":"76730094-2ede-497a-b86c-cc498ec0c8d8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"544be692-3bd6-449d-b9b7-e6398f74b2e8","amount":3000,"note":null,"created_at":"2026-07-07T14:15:52.884Z"}
+
+[2026-07-07 20:15:53.367+06:00 | UTC: 2026-07-07T14:15:53.367Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"188fd2c9-d80c-4539-9b60-ede9f939ae14","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"withdraw","amount":3000,"note":"Paid to শরিফ শার্ট (Payable Settlement)","ref_id":"76730094-2ede-497a-b86c-cc498ec0c8d8","created_at":"2026-07-07T14:15:53.269Z"}
+
+[2026-07-07 20:16:21.189+06:00 | UTC: 2026-07-07T14:16:21.189Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"0d2f631f-1951-4b57-890c-4e43fe760fcf","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"9374a8e0-ce57-41d6-8911-f80ef1eddafa","product_name":"Short Pant ( AiD )","qty":2,"buy_price":150,"sell_price":350,"profit":400,"type":"cash","party_id":null,"paid_amount":700,"due_amount":0,"cart_id":"2845a9ad-c0ff-46b5-8a14-24875ae6feff","created_at":"2026-07-07T14:16:21.089Z"}
+
+[2026-07-07 20:16:21.589+06:00 | UTC: 2026-07-07T14:16:21.589Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":72}}
+  Target ID: 9374a8e0-ce57-41d6-8911-f80ef1eddafa
+
+[2026-07-07 20:16:21.789+06:00 | UTC: 2026-07-07T14:16:21.789Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"38a83447-bd8b-48ca-952e-9fc528eb300a","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":700,"note":"Sale: Short Pant ( AiD )","ref_id":"0d2f631f-1951-4b57-890c-4e43fe760fcf","created_at":"2026-07-07T14:16:21.089Z"}
+
+[2026-07-07 20:17:42.677+06:00 | UTC: 2026-07-07T14:17:42.677Z] Op: INSERT | Collection: dreamfashion.sales
+  Inserted Document: {"_id":"7c932ffc-5060-4cd8-b2d9-17546f2e6f8d","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","product_id":"f9fd9f89-a5c6-408b-88c9-070d3da83267","product_name":"Export Pant ( RID )","qty":1,"buy_price":250,"sell_price":400,"profit":150,"type":"cash","party_id":null,"paid_amount":400,"due_amount":0,"cart_id":"6cd952da-4508-432e-b61c-2f118045ee6e","created_at":"2026-07-07T14:17:42.583Z"}
+
+[2026-07-07 20:17:43.054+06:00 | UTC: 2026-07-07T14:17:43.054Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":116}}
+  Target ID: f9fd9f89-a5c6-408b-88c9-070d3da83267
+
+[2026-07-07 20:17:43.243+06:00 | UTC: 2026-07-07T14:17:43.243Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"72e75621-49c1-4740-b17d-9c4db58b57c6","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"sale","amount":400,"note":"Sale: Export Pant ( RID )","ref_id":"7c932ffc-5060-4cd8-b2d9-17546f2e6f8d","created_at":"2026-07-07T14:17:42.583Z"}
+
+[2026-07-07 20:19:35.200+06:00 | UTC: 2026-07-07T14:19:35.200Z] Op: INSERT | Collection: dreamfashion.parties
+  Inserted Document: {"_id":"2c0c057a-814c-4659-93ed-e40e19f4b04a","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","name":"সাজাহান","phone":null,"address":"বসুন্ধরা মার্কেট","created_at":"2026-07-07T14:19:35.092Z"}
+
+[2026-07-07 20:19:59.791+06:00 | UTC: 2026-07-07T14:19:59.791Z] Op: INSERT | Collection: dreamfashion.party_payables
+  Inserted Document: {"_id":"effb7bf5-8ef0-4af0-96f6-989135416ac8","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"2c0c057a-814c-4659-93ed-e40e19f4b04a","amount":2067,"note":null,"created_at":"2026-07-07T14:19:59.685Z"}
+
+[2026-07-07 20:20:03.660+06:00 | UTC: 2026-07-07T14:20:03.660Z] Op: INSERT | Collection: dreamfashion.party_payable_settlements
+  Inserted Document: {"_id":"92bf673b-18aa-44a3-be7e-2ea9da93943e","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"2c0c057a-814c-4659-93ed-e40e19f4b04a","amount":200,"note":null,"created_at":"2026-07-07T14:20:03.555Z"}
+
+[2026-07-07 20:20:04.062+06:00 | UTC: 2026-07-07T14:20:04.062Z] Op: INSERT | Collection: dreamfashion.cashbox_entries
+  Inserted Document: {"_id":"545b51b5-4f21-47d7-b3eb-4bc4c7566af9","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","kind":"withdraw","amount":200,"note":"Paid to সাজাহান (Payable Settlement)","ref_id":"92bf673b-18aa-44a3-be7e-2ea9da93943e","created_at":"2026-07-07T14:20:03.956Z"}
+
+[2026-07-07 21:52:22.909+06:00 | UTC: 2026-07-07T15:52:22.909Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Short Pant AID"}}
+  Target ID: 9374a8e0-ce57-41d6-8911-f80ef1eddafa
+
+[2026-07-07 21:52:49.074+06:00 | UTC: 2026-07-07T15:52:49.074Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Joggar's Pant IID"}}
+  Target ID: da1ee422-5112-472b-b453-1ef5c1be8ec8
+
+[2026-07-07 21:53:25.145+06:00 | UTC: 2026-07-07T15:53:25.145Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Joggar's Pant IID"}}
+  Target ID: c4064661-f159-4173-9ac2-ea8f419303ad
+
+[2026-07-07 21:53:38.944+06:00 | UTC: 2026-07-07T15:53:38.944Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Jince Panat OID"}}
+  Target ID: 95e3617b-f83d-4c03-b7aa-b56af523f1b3
+
+[2026-07-07 21:54:01.796+06:00 | UTC: 2026-07-07T15:54:01.796Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Jince Panat NID"}}
+  Target ID: 45f3240f-b732-43a4-9b3a-e1d4cb555977
+
+[2026-07-07 21:54:34.928+06:00 | UTC: 2026-07-07T15:54:34.928Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Short Pant SID"}}
+  Target ID: b5b43f8f-c628-445c-8994-90102554eec6
+
+[2026-07-07 21:55:01.219+06:00 | UTC: 2026-07-07T15:55:01.219Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Baggi Pant IID"}}
+  Target ID: cba477c2-46b9-4add-ab80-6ee95e49e2cc
+
+[2026-07-07 21:55:27.325+06:00 | UTC: 2026-07-07T15:55:27.325Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Jince Panat YID"}}
+  Target ID: c61e3f0b-6dbd-4fc3-bacf-1edbdabaea9b
+
+[2026-07-07 21:55:46.771+06:00 | UTC: 2026-07-07T15:55:46.771Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Joggar's Pant MDD"}}
+  Target ID: 2a9a83f5-3320-4e06-8beb-79df46b920d3
+
+[2026-07-07 21:56:16.283+06:00 | UTC: 2026-07-07T15:56:16.283Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Baggi Pant IDD"}}
+  Target ID: 508f2c4d-8f60-4f52-b5d5-2672305b4647
+
+[2026-07-07 21:56:54.116+06:00 | UTC: 2026-07-07T15:56:54.116Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Baghi Pant HID"}}
+  Target ID: e8f4ca71-a552-4a5b-ace1-f1f5226b33e2
+
+[2026-07-07 21:57:26.333+06:00 | UTC: 2026-07-07T15:57:26.333Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"China polo t shirt MID","stock":8}}
+  Target ID: 35ebedb8-0c38-4b86-a203-1f815e7861ae
+
+[2026-07-07 21:57:38.245+06:00 | UTC: 2026-07-07T15:57:38.245Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Export t shirt ARD"}}
+  Target ID: 37243299-b044-4758-9b8a-c27cb38d6972
+
+[2026-07-07 21:57:53.802+06:00 | UTC: 2026-07-07T15:57:53.802Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"China polo t shirt MDD"}}
+  Target ID: d7ca9f65-1d41-42da-b4e9-cb15b21ab2c6
+
+[2026-07-07 21:58:04.970+06:00 | UTC: 2026-07-07T15:58:04.970Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"name":"Magi Hata T shirt RDD"}}
+  Target ID: fe263d6a-3b12-4a72-ad32-d901b1a82b51
+
+[2026-07-08 00:59:06.798+06:00 | UTC: 2026-07-07T18:59:06.798Z] Op: DELETE | Collection: dreamfashion.party_payables
+  Deleted ID: 2c3205d8-1a30-4771-92fb-103751fadc81
+
+[2026-07-08 01:01:12.743+06:00 | UTC: 2026-07-07T19:01:12.743Z] Op: INSERT | Collection: dreamfashion.party_payables
+  Inserted Document: {"_id":"7d094be9-f713-4d29-a01f-77e980dde3e1","owner_id":"a174e49a-fb34-4b89-8f32-37b8903d89f2","party_id":"6b8492f0-6923-498e-94a8-40d2232935c0","amount":5000,"note":"04.07.2026 ","created_at":"2026-07-07T19:01:12.619Z"}
+
+[2026-07-08 01:25:38.700+06:00 | UTC: 2026-07-07T19:25:38.700Z] Op: DELETE | Collection: dreamfashion.users
+  Deleted ID: 9001d4e7-3136-4724-90b9-455d96c1d6f8
+
+[2026-07-08 01:25:47.910+06:00 | UTC: 2026-07-07T19:25:47.910Z] Op: INSERT | Collection: dreamfashion.customers
+  Inserted Document: {"_id":"ebbeacb5-0828-4422-9998-3cfbb381b166","owner_id":"71520e4a-89f4-4e9e-96e8-c5a5e6e3ffa9","name":"Shohel Rana","phone":"01305695770","created_at":"2026-06-28T14:01:07.560Z","archived":true}
+
+[2026-07-08 01:29:59.640+06:00 | UTC: 2026-07-07T19:29:59.640Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":98}}
+  Target ID: 81aaad7a-f677-4480-9be7-1c5d2c9183a3
+
+[2026-07-08 01:29:59.756+06:00 | UTC: 2026-07-07T19:29:59.756Z] Op: DELETE | Collection: dreamfashion.cashbox_entries
+  Deleted ID: 1fe6c647-a74d-43c0-9d22-3b1365fd1642
+
+[2026-07-08 01:29:59.821+06:00 | UTC: 2026-07-07T19:29:59.821Z] Op: DELETE | Collection: dreamfashion.sales
+  Deleted ID: 022e243f-85e1-4791-af2b-2d9929e86cd7
+
+[2026-07-08 01:30:03.888+06:00 | UTC: 2026-07-07T19:30:03.888Z] Op: UPDATE | Collection: dreamfashion.products
+  Update Diff: {"u":{"stock":148}}
+  Target ID: fake-1781776174076-0
+
+[2026-07-08 01:30:04.066+06:00 | UTC: 2026-07-07T19:30:04.066Z] Op: DELETE | Collection: dreamfashion.cashbox_entries
+  Deleted ID: a8cad384-192d-44c4-84fd-975b3b256a4f
+
+[2026-07-08 01:30:04.118+06:00 | UTC: 2026-07-07T19:30:04.118Z] Op: DELETE | Collection: dreamfashion.sales
+  Deleted ID: 6e613b6f-b4e3-46f5-a122-b02d865ddd66
+

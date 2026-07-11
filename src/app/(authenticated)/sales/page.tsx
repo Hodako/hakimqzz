@@ -292,18 +292,16 @@ function SalesTab({
                       {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
                     </Button>
                   )}
-                  {!s.isGroup && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 cursor-pointer"
-                      onClick={() => onEdit(s.items[0])}
-                      title="Edit Sale"
-                    >
-                      <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 cursor-pointer"
+                    onClick={() => onEdit(s.items[0])}
+                    title="Edit Sale"
+                  >
+                    <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"

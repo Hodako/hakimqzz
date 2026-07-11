@@ -11,7 +11,10 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { useT } from "@/lib/i18n";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
-import { Calendar, RefreshCw } from "lucide-react";
+import { Calendar, RefreshCw, Trash2 } from "lucide-react";
+import { deleteSaleFn } from "@/lib/rpc";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { toast } from "sonner";
 
 type Range = "today" | "week" | "month" | "all";
 
@@ -25,6 +28,26 @@ export default function LossesPage() {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 15;
+
+  const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function performDelete() {
+    if (!saleToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteSaleFn({ data: { id: saleToDelete } });
+      toast.success(lang === "bn" ? "লেনদেন মুছে ফেলা হয়েছে" : "Record deleted successfully");
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
+      setSaleToDelete(null);
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   const lostSales = useMemo(() => {
     return data.filter(s => !s.returned && Number(s.profit) < 0);
@@ -163,6 +186,7 @@ export default function LossesPage() {
                   <th className="p-3 text-right">{lang === "bn" ? "কেনা দাম" : "Buy Price"}</th>
                   <th className="p-3 text-right">{lang === "bn" ? "বিক্রি দাম" : "Sell Price"}</th>
                   <th className="p-3 text-right">{lang === "bn" ? "লোকসান" : "Loss"}</th>
+                  <th className="p-3 text-right">{lang === "bn" ? "মুছুন" : "Delete"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -178,6 +202,17 @@ export default function LossesPage() {
                       <td className="p-3 text-right font-mono">{fmtMoney(s.buy_price)}</td>
                       <td className="p-3 text-right font-mono">{fmtMoney(s.sell_price)}</td>
                       <td className="p-3 text-right font-mono text-rose-600 font-bold">-{fmtMoney(itemLoss)}</td>
+                      <td className="p-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 rounded-full"
+                          onClick={() => setSaleToDelete(s.id)}
+                          title={lang === "bn" ? "মুছে ফেলুন" : "Delete"}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -188,6 +223,15 @@ export default function LossesPage() {
       </Card>
 
       <PaginationBar page={safePage} totalPages={totalPages} total={filteredLostSales.length} pageSize={pageSize} onPageChange={setPage} />
+
+      <ConfirmDeleteDialog
+        open={saleToDelete !== null}
+        onOpenChange={(v) => { if (!v) setSaleToDelete(null); }}
+        title={lang === "bn" ? "লেনদেন মুছে ফেলুন" : "Delete Loss Record"}
+        description={lang === "bn" ? "এই লোকসান রেকর্ডটি স্থায়ীভাবে মুছে ফেলা হবে। এই কাজটি পূর্বাবস্থায় ফেরানো যাবে না।" : "This loss record will be permanently deleted. This action cannot be undone."}
+        onConfirm={performDelete}
+        busy={isDeleting}
+      />
     </div>
   );
 }
