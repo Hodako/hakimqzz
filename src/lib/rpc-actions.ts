@@ -1813,4 +1813,271 @@ export async function getStorefrontBySlug(input: any) {
   return business;
 }
 
+export async function repairCashboxDbFn() {
+  const session = await requireSession();
+  if (session.role !== "owner" && session.role !== "superadmin") {
+    throw new Error("Only owners or superadmins can repair the cashbox.");
+  }
+  const db = await getDb();
 
+  const sales = await db.collection("sales").find({ owner_id: session.ownerId }).toArray();
+  const returns = await db.collection("returns").find({ owner_id: session.ownerId }).toArray();
+  const expenses = await db.collection("expenses").find({ owner_id: session.ownerId }).toArray();
+  const purchases = await db.collection("purchases").find({ owner_id: session.ownerId }).toArray();
+  const somitiEntries = await db.collection("somiti_entries").find({ owner_id: session.ownerId }).toArray();
+  const ownerWithdrawals = await db.collection("owner_withdrawals").find({ owner_id: session.ownerId }).toArray();
+  const payments = await db.collection("payments").find({ owner_id: session.ownerId }).toArray();
+  const payableSettlements = await db.collection("party_payable_settlements").find({ owner_id: session.ownerId }).toArray();
+  const cashboxEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).toArray();
+
+  let repairedCount = 0;
+
+  // 1. Repair Sales
+  for (const sale of sales) {
+    const saleId = sale._id.toString();
+    const expectedAmount = saleCashboxAmount(sale as any);
+    if (expectedAmount > 0) {
+      const match = cashboxEntries.find(e => e.ref_id === saleId);
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "sale",
+          amount: expectedAmount,
+          note: `Sale: ${sale.product_name}`,
+          ref_id: saleId,
+          created_at: sale.created_at,
+        });
+        repairedCount++;
+      } else if (match.kind !== "sale" || Number(match.amount) !== expectedAmount || match.created_at !== sale.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "sale", amount: expectedAmount, created_at: sale.created_at } }
+        );
+        repairedCount++;
+      }
+    }
+  }
+
+  // 2. Repair Returns
+  for (const ret of returns) {
+    const retId = ret._id.toString();
+    let expectedAmount = 0;
+    if (ret.sale_id) {
+      const sale = sales.find(s => s._id.toString() === ret.sale_id.toString());
+      if (sale) {
+        const saleType: string = (sale.type as string) || "cash";
+        const returnQty = Number(ret.qty) || 0;
+        if (saleType === "cash") {
+          expectedAmount = Number(sale.sell_price) * returnQty;
+        } else if (saleType === "credit") {
+          const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
+          expectedAmount = paidPerUnit * returnQty;
+        }
+      }
+    } else if (ret.return_price) {
+      expectedAmount = Number(ret.qty) * (Number(ret.return_price) || 0);
+    } else if (ret.amount && ret.deduct_type === "cash") {
+      expectedAmount = Number(ret.amount) || 0;
+    }
+
+    if (expectedAmount > 0) {
+      const match = cashboxEntries.find(e => e.ref_id === retId);
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "withdraw",
+          amount: expectedAmount,
+          note: ret.note ? `Return refund: ${ret.note}` : `Return: ${ret.product_name || "Product"}`,
+          ref_id: retId,
+          created_at: ret.created_at,
+        });
+        repairedCount++;
+      } else if (match.kind !== "withdraw" || Number(match.amount) !== expectedAmount || match.created_at !== ret.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "withdraw", amount: expectedAmount, created_at: ret.created_at } }
+        );
+        repairedCount++;
+      }
+    }
+  }
+
+  // 3. Track Purchase Linked Expenses
+  const purchaseLinkedExpenseIds = new Set<string>();
+  for (const p of purchases) {
+    const linkedExp = expenses.find(e => e.note && e.note.includes(`Purchase ID: ${p._id}`));
+    if (linkedExp) {
+      purchaseLinkedExpenseIds.add(linkedExp._id.toString());
+    } else {
+      const fallbackExp = expenses.find(e => 
+        e.title === `Product Purchase: ${p.product_name}` && 
+        Number(e.amount) === Number(p.total) && 
+        !purchaseLinkedExpenseIds.has(e._id.toString())
+      );
+      if (fallbackExp) {
+        purchaseLinkedExpenseIds.add(fallbackExp._id.toString());
+      }
+    }
+  }
+
+  // 4. Standalone Expenses
+  for (const exp of expenses) {
+    const expId = exp._id.toString();
+    if (purchaseLinkedExpenseIds.has(expId)) continue;
+
+    const match = cashboxEntries.find(e => e.ref_id === expId);
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "expense",
+        amount: Number(exp.amount) || 0,
+        note: exp.title,
+        ref_id: expId,
+        created_at: exp.created_at,
+      });
+      repairedCount++;
+    } else if (match.kind !== "expense" || Number(match.amount) !== Number(exp.amount) || match.created_at !== exp.created_at) {
+      await db.collection("cashbox_entries").updateOne(
+        { _id: match._id },
+        { $set: { kind: "expense", amount: Number(exp.amount) || 0, created_at: exp.created_at } }
+      );
+      repairedCount++;
+    }
+  }
+
+  // 5. Purchases
+  for (const p of purchases) {
+    const pId = p._id.toString();
+    const linkedExp = expenses.find(e => e.note && e.note.includes(`Purchase ID: ${p._id}`));
+    const fallbackExp = expenses.find(e => 
+      e.title === `Product Purchase: ${p.product_name}` && 
+      Number(e.amount) === Number(p.total)
+    );
+    const expId = linkedExp ? linkedExp._id.toString() : (fallbackExp ? fallbackExp._id.toString() : null);
+
+    const match = cashboxEntries.find(e => e.ref_id === pId || (expId && e.ref_id === expId));
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "expense",
+        amount: Number(p.total) || 0,
+        note: `Product Purchase: ${p.product_name}`,
+        ref_id: pId,
+        created_at: p.created_at,
+      });
+      repairedCount++;
+    } else {
+      if (match.kind !== "expense" || Number(match.amount) !== Number(p.total) || match.created_at !== p.created_at || match.ref_id !== pId) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "expense", amount: Number(p.total) || 0, ref_id: pId, created_at: p.created_at } }
+        );
+        repairedCount++;
+      }
+    }
+  }
+
+  // 6. Somiti Entries
+  for (const som of somitiEntries) {
+    const somId = som._id.toString();
+    const match = cashboxEntries.find(e => e.ref_id === somId);
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "withdraw",
+        amount: Number(som.amount) || 0,
+        note: som.note || "Samity payment",
+        ref_id: somId,
+        created_at: som.created_at,
+      });
+      repairedCount++;
+    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(som.amount) || match.created_at !== som.created_at) {
+      await db.collection("cashbox_entries").updateOne(
+        { _id: match._id },
+        { $set: { kind: "withdraw", amount: Number(som.amount) || 0, created_at: som.created_at } }
+      );
+      repairedCount++;
+    }
+  }
+
+  // 7. Withdrawals
+  for (const w of ownerWithdrawals) {
+    const wId = w._id.toString();
+    const match = cashboxEntries.find(e => e.ref_id === wId);
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "withdraw",
+        amount: Number(w.amount) || 0,
+        note: w.note || "Owner Withdrawal",
+        ref_id: wId,
+        created_at: w.created_at,
+      });
+      repairedCount++;
+    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(w.amount) || match.created_at !== w.created_at) {
+      await db.collection("cashbox_entries").updateOne(
+        { _id: match._id },
+        { $set: { kind: "withdraw", amount: Number(w.amount) || 0, created_at: w.created_at } }
+      );
+      repairedCount++;
+    }
+  }
+
+  // 8. Payments
+  for (const pay of payments) {
+    const payId = pay._id.toString();
+    const match = cashboxEntries.find(e => e.ref_id === payId);
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "deposit",
+        amount: Number(pay.amount) || 0,
+        note: pay.note || "Collected dues",
+        ref_id: payId,
+        created_at: pay.created_at,
+      });
+      repairedCount++;
+    } else if (match.kind !== "deposit" || Number(match.amount) !== Number(pay.amount) || match.created_at !== pay.created_at) {
+      await db.collection("cashbox_entries").updateOne(
+        { _id: match._id },
+        { $set: { kind: "deposit", amount: Number(pay.amount) || 0, created_at: pay.created_at } }
+      );
+      repairedCount++;
+    }
+  }
+
+  // 9. Payable Settlements
+  for (const set of payableSettlements) {
+    const setId = set._id.toString();
+    const match = cashboxEntries.find(e => e.ref_id === setId);
+    if (!match) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "withdraw",
+        amount: Number(set.amount) || 0,
+        note: set.note || "Paid to Supplier",
+        ref_id: setId,
+        created_at: set.created_at,
+      });
+      repairedCount++;
+    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(set.amount) || match.created_at !== set.created_at) {
+      await db.collection("cashbox_entries").updateOne(
+        { _id: match._id },
+        { $set: { kind: "withdraw", amount: Number(set.amount) || 0, created_at: set.created_at } }
+      );
+      repairedCount++;
+    }
+  }
+
+  // 10. Orphan Cleanup
+  const validRefIds = new Set<string>();
+  sales.forEach(s => validRefIds.add(s._id.toString()));
+  returns.forEach(r => validRefIds.add(r._id.toString()));
+  expenses.forEach(e => validRefIds.add(e._id.toString()));
+  purchases.forEach(p => validRefIds.add(p._id.toString()));
+  somitiEntries.forEach(s => validRefIds.add(s._id.toString()));
+  ownerWithdrawals.forEach(w => validRefIds.add(w._id.toString()));
+  payments.forEach(p => validRefIds.add(p._id.toString()));
+  payableSettlements.forEach(s => validRefIds.add(s._id.toString()));
+
+  const toDelete = cashboxEntries.filter(e => e.ref_id && !validRefIds.has(e.ref_id.toString()));
+  if (toDelete.length > 0) {
+    const toDeleteIds = toDelete.map(e => e._id);
+    await db.collection("cashbox_entries").deleteMany({ _id: { $in: toDeleteIds } });
+    repairedCount += toDelete.length;
+  }
+
+  return { success: true, repairedCount };
+}

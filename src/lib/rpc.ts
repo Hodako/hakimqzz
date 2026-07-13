@@ -173,6 +173,7 @@ export const createWithdrawalFn = makeWriteAction("createWithdrawalFn");
 export const createCashboxFn = makeReadAction("createCashboxFn");
 export const updateCashboxFn = makeReadAction("updateCashboxFn");
 export const deleteCashboxFn = makeReadAction("deleteCashboxFn");
+export const repairCashboxDbFn = makeReadAction("repairCashboxDbFn");
 
 export const createReminderFn = makeWriteAction("createReminderFn");
 export const toggleReminderFn = makeWriteAction("toggleReminderFn");
