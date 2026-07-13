@@ -71,7 +71,8 @@ export default function CashboxDetailsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
-  const balance = cashboxBalance(cashbox.data ?? []);
+  const entries = cashbox.data ?? [];
+  const balance = cashbox.isLoading ? null : cashboxBalance(entries);
 
   const { from, to } = useMemo(() => {
     const end = new Date(); end.setHours(23, 59, 59, 999);
@@ -92,7 +93,7 @@ export default function CashboxDetailsPage() {
   }, [range, startDate, endDate]);
 
   const filtered = useMemo(() => {
-    return (cashbox.data ?? [])
+    return entries
       .filter(e => {
         const dt = new Date(e.created_at);
         if (dt < from || dt > to) return false;
@@ -100,7 +101,7 @@ export default function CashboxDetailsPage() {
         return true;
       })
       .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-  }, [cashbox.data, from, to, filterKind]);
+  }, [entries, from, to, filterKind]);
 
   const periodIn = filtered.filter(e => e.kind === "deposit" || e.kind === "sale").reduce((a, e) => a + Number(e.amount), 0);
   const periodOut = filtered.filter(e => e.kind === "withdraw" || e.kind === "expense").reduce((a, e) => a + Number(e.amount), 0);
@@ -212,7 +213,11 @@ export default function CashboxDetailsPage() {
           </div>
           <div>
             <div className="text-xs text-muted-foreground">{t("balance")}</div>
-            <div className="text-2xl sm:text-3xl font-bold text-indigo-600">{fmtMoney(balance)}</div>
+            {balance === null ? (
+              <div className="h-9 w-32 rounded-md bg-indigo-200/60 dark:bg-indigo-800/40 animate-pulse mt-1" />
+            ) : (
+              <div className="text-2xl sm:text-3xl font-bold text-indigo-600">{fmtMoney(balance)}</div>
+            )}
           </div>
         </div>
       </Card>

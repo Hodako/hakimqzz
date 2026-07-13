@@ -78,7 +78,7 @@ export default function CashManagementPage() {
   const withdrawals = useCachedQuery(["withdrawals"], getWithdrawals);
   const cashbox = useCashboxQuery();
 
-  const balance = cashboxBalance(cashbox.data ?? []);
+  const balance = cashbox.isLoading ? null : cashboxBalance(cashbox.data ?? []);
 
   type Range = "today" | "week" | "month" | "custom";
   const [range, setRange] = useState<Range>("week");
@@ -216,7 +216,11 @@ export default function CashManagementPage() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground">{t("cashbox")} — {t("balance")}</div>
-              <div className="text-2xl font-bold text-indigo-600 mt-0.5">{fmtMoney(balance)}</div>
+              {balance === null ? (
+                <div className="h-8 w-28 rounded-md bg-indigo-200/60 dark:bg-indigo-800/40 animate-pulse mt-1" />
+              ) : (
+                <div className="text-2xl font-bold text-indigo-600 mt-0.5">{fmtMoney(balance)}</div>
+              )}
             </div>
           </div>
           <Link href="/cash-management/cashbox">
@@ -248,7 +252,7 @@ export default function CashManagementPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KPI label={t("cashbox")} value={fmtMoney(balance)} icon={Wallet} color="bg-indigo-500" sub={t("balance")} />
+        <KPI label={t("cashbox")} value={balance === null ? "…" : fmtMoney(balance)} icon={Wallet} color="bg-indigo-500" sub={t("balance")} />
         <KPI label={t("total_sales")} value={fmtMoney(totalSales)} icon={TrendingUp} color="bg-emerald-500" sub={rangeLabel} />
         <KPI label={t("expense")} value={fmtMoney(totalExp)} icon={Receipt} color="bg-rose-500" sub={rangeLabel} />
         <KPI label={t("profit")} value={fmtMoney(profit)} icon={AlertCircle} color="bg-amber-500" sub={rangeLabel} />

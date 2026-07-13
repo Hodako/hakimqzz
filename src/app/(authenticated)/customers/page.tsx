@@ -28,9 +28,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function CustomersPage() {
   const { lang, t } = useT();
+  const isMobile = useIsMobile();
   const customers = useCachedQuery(["customers"], getCustomers);
   const sales = useCachedQuery(["sales"], getSales);
   const allPayments = useCachedQuery(["all-payments"], getAllPayments);
@@ -140,7 +142,7 @@ export default function CustomersPage() {
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 text-xs">
                 <Download className="size-4 mr-1" />
-                {t("download_csv")}
+                {isMobile ? "" : t("download_csv")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

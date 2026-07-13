@@ -195,12 +195,13 @@ function applyOptimisticUpdate(actionName: string, args: any) {
     };
     writeQueryCache(["somiti"], [newSomiti, ...somiti]);
 
+    // Samity always takes money OUT of the cashbox regardless of its own kind
     const cashbox = readQueryCache<any[]>(["cashbox"]) ?? [];
     const newCashbox = {
       id: crypto.randomUUID(),
-      kind: newSomiti.kind,
+      kind: "withdraw",
       amount: newSomiti.amount,
-      note: newSomiti.note || `Samity ${newSomiti.kind}`,
+      note: newSomiti.note || "Samity payment",
       created_at: now,
     };
     writeQueryCache(["cashbox"], [newCashbox, ...cashbox]);
@@ -239,11 +240,24 @@ function applyOptimisticUpdate(actionName: string, args: any) {
     }
 
     const cashbox = readQueryCache<any[]>(["cashbox"]) ?? [];
-    const newCashbox = {
+    const newCashboxEntry = {
       id: crypto.randomUUID(),
       kind: "withdraw",
       amount: newPurchase.total,
       note: newPurchase.note || `Purchase: ${newPurchase.product_name}`,
+      created_at: now,
+    };
+    writeQueryCache(["cashbox"], [newCashboxEntry, ...cashbox]);
+  }
+
+  else if (actionName === "createWithdrawalFn") {
+    // Owner withdrawal takes money out of the cashbox
+    const cashbox = readQueryCache<any[]>(["cashbox"]) ?? [];
+    const newCashbox = {
+      id: crypto.randomUUID(),
+      kind: "withdraw",
+      amount: Number(args.data.amount) || 0,
+      note: args.data.note || "Owner Withdrawal",
       created_at: now,
     };
     writeQueryCache(["cashbox"], [newCashbox, ...cashbox]);

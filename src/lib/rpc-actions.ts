@@ -1175,6 +1175,16 @@ export async function createWithdrawalFn(input: { data: { amount: number; note?:
   const id = crypto.randomUUID();
   const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
   await db.collection("owner_withdrawals").insertOne(doc as any);
+
+  // Deduct from cashbox — owner withdrawal always takes money out of the cashbox
+  await insertCashboxEntry(db, session.ownerId, {
+    kind: "withdraw",
+    amount: Number(data.amount) || 0,
+    note: data.note || "Owner Withdrawal",
+    ref_id: id,
+    created_at: doc.created_at,
+  });
+
   return { ...doc, id };
 }
 
@@ -1184,7 +1194,15 @@ export async function getCashboxFn() {
   const session = await requireSession();
   const db = await getDb();
   const items = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
-  return items.map((e) => ({ ...e, id: e._id as any as string }));
+  // Explicitly cast amount to Number — MongoDB BSON types (Long, Decimal128) can break JS arithmetic
+  return items.map((e) => ({
+    id: e._id as any as string,
+    kind: e.kind as string,
+    amount: Number(e.amount) || 0,
+    note: e.note ?? null,
+    ref_id: e.ref_id ?? null,
+    created_at: e.created_at as string,
+  }));
 }
 
 export async function createCashboxFn(input: { data: { kind: "deposit" | "withdraw"; amount: number; note?: string | null; created_at?: string } }) {
