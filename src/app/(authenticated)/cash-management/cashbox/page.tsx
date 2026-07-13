@@ -9,25 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getCashbox } from "@/lib/queries";
+import { Textarea } from "@/components/ui/textarea";
 import type { CashboxEntry } from "@/lib/queries";
-import { useCachedQuery } from "@/hooks/use-cached-query";
+import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { useT } from "@/lib/i18n";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { cashboxBalance, cashboxDelta } from "@/lib/cashbox-utils";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
-import { ArrowLeft, Plus, Minus, Download, Banknote, TrendingUp, TrendingDown } from "lucide-react";
-import { createCashboxFn } from "@/lib/rpc";
+import { ArrowLeft, Plus, Minus, Download, Banknote, TrendingUp, TrendingDown, Pencil, Trash2, MoreVertical } from "lucide-react";
+import { createCashboxFn, updateCashboxFn, deleteCashboxFn } from "@/lib/rpc";
 import { toast } from "sonner";
-import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
+import { refreshQueries } from "@/lib/optimistic-cache";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-
+import { useAuth } from "@/hooks/use-auth";
 
 type Range = "today" | "week" | "month" | "all" | "custom";
 type FilterKind = "all" | CashboxEntry["kind"];
@@ -55,9 +54,16 @@ function kindLabel(t: (k: any) => string, kind: CashboxEntry["kind"]) {
 
 export default function CashboxDetailsPage() {
   const { t } = useT();
-  const cashbox = useCachedQuery(["cashbox"], getCashbox);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "superadmin";
+  const cashbox = useCashboxQuery();
+  const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogKind, setDialogKind] = useState<"deposit" | "withdraw">("deposit");
+  const [editEntry, setEditEntry] = useState<CashboxEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CashboxEntry | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [range, setRange] = useState<Range>("month");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -104,6 +110,27 @@ export default function CashboxDetailsPage() {
 
   useEffect(() => { setPage(1); }, [range, startDate, endDate, filterKind]);
 
+  async function handleDelete(entry: CashboxEntry) {
+    setDeleteTarget(entry);
+    setDeleteConfirmOpen(true);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await deleteCashboxFn({ data: { id: deleteTarget.id } });
+      toast.success(t("deleted"));
+      setDeleteConfirmOpen(false);
+      setDeleteTarget(null);
+      await refreshQueries(qc, ["cashbox"]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   function exportCSV(langCode: "en" | "bn") {
     const rows = langCode === "bn"
       ? [["তারিখ", "সময়", "ধরণ", "মন্তব্য", "পরিমাণ", "দিকনির্দেশ"]]
@@ -126,7 +153,7 @@ export default function CashboxDetailsPage() {
         typeLabel,
         e.note ?? "",
         String(e.amount),
-        cashboxDelta(e.kind, e.amount) >= 0 
+        cashboxDelta(e.kind, e.amount) >= 0
           ? (langCode === "bn" ? "ভিতরে (ইন)" : "in")
           : (langCode === "bn" ? "বাহিরে (আউট)" : "out"),
       ]);
@@ -134,8 +161,8 @@ export default function CashboxDetailsPage() {
     rows.push([]);
     if (langCode === "bn") {
       rows.push(["সারসংক্ষেপ", "", "", "ব্যালেন্স", String(balance), ""]);
-      rows.push(["নির্বাচিত সময়ে মোট জমা", "", "", "", String(periodIn), ""]);
-      rows.push(["নির্বাচিত সময়ে মোট উত্তোলন", "", "", "", String(periodOut), ""]);
+      rows.push(["নির্বাচিত সময়ে মোট জমা", "", "", "", String(periodIn), ""]);
+      rows.push(["নির্বাচিত সময়ে মোট উত্তোলন", "", "", "", String(periodOut), ""]);
     } else {
       rows.push(["Summary", "", "", "Balance", String(balance), ""]);
       rows.push(["Period In", "", "", "", String(periodIn), ""]);
@@ -146,7 +173,7 @@ export default function CashboxDetailsPage() {
     a.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }));
     a.download = `cashbox-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
-    toast.success(langCode === "bn" ? "CSV ফাইল ডাউনলোড সফল হয়েছে!" : "CSV exported successfully!");
+    toast.success(langCode === "bn" ? "CSV ফাইল ডাউনলোড সফল হয়েছে!" : "CSV exported successfully!");
   }
 
   const rangeLabel =
@@ -169,10 +196,10 @@ export default function CashboxDetailsPage() {
           <p className="text-xs text-muted-foreground mt-0.5">{t("cashbox_ledger")}</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => { setDialogKind("deposit"); setDialogOpen(true); }}>
+          <Button size="sm" onClick={() => { setDialogKind("deposit"); setEditEntry(null); setDialogOpen(true); }}>
             <Plus className="size-3.5 mr-1" />{t("add_money")}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => { setDialogKind("withdraw"); setDialogOpen(true); }}>
+          <Button size="sm" variant="outline" onClick={() => { setDialogKind("withdraw"); setEditEntry(null); setDialogOpen(true); }}>
             <Minus className="size-3.5 mr-1" />{t("take_money")}
           </Button>
         </div>
@@ -268,8 +295,9 @@ export default function CashboxDetailsPage() {
         )}
         {paged.map(e => {
           const delta = cashboxDelta(e.kind, e.amount);
+          const canEdit = isAdmin && (e.kind === "deposit" || e.kind === "withdraw");
           return (
-            <div key={e.id} className="p-3 flex items-center justify-between gap-2">
+            <div key={e.id} className="p-3 flex items-center justify-between gap-2 group">
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-sm truncate">{e.note || kindLabel(t, e.kind)}</div>
                 <div className="text-xs text-muted-foreground">{fmtDateTime(e.created_at)}</div>
@@ -280,9 +308,48 @@ export default function CashboxDetailsPage() {
                 }`}>
                   {kindLabel(t, e.kind)}
                 </span>
+                {(e.kind === "sale" || e.kind === "expense") && (
+                  <span className="ml-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                    auto
+                  </span>
+                )}
               </div>
-              <div className={`text-sm font-bold shrink-0 ${delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                {delta >= 0 ? "+" : "−"}{fmtMoney(Math.abs(delta))}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className={`text-sm font-bold ${delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {delta >= 0 ? "+" : "−"}{fmtMoney(Math.abs(delta))}
+                </div>
+                {isAdmin && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        title="Actions"
+                      >
+                        <MoreVertical className="size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {canEdit && (
+                        <DropdownMenuItem
+                          onClick={() => { setEditEntry(e); setDialogOpen(true); }}
+                          className="gap-2"
+                        >
+                          <Pencil className="size-3.5" />
+                          {t("edit")}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(e)}
+                        className="gap-2 text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="size-3.5" />
+                        {t("delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
           );
@@ -291,49 +358,107 @@ export default function CashboxDetailsPage() {
 
       <PaginationBar page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPageChange={setPage} />
 
-      <CashboxDialog open={dialogOpen} onOpenChange={setDialogOpen} initialKind={dialogKind} />
+      <CashboxDialog
+        open={dialogOpen}
+        onOpenChange={(v) => { setDialogOpen(v); if (!v) setEditEntry(null); }}
+        initialKind={editEntry ? (editEntry.kind === "deposit" ? "deposit" : "withdraw") : dialogKind}
+        editEntry={editEntry}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">{t("delete")} — {t("cashbox")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {deleteTarget && (
+              <>
+                <span className="font-semibold text-foreground">{fmtMoney(deleteTarget.amount)}</span>
+                {" "}({kindLabel(t, deleteTarget.kind)})
+                {deleteTarget.note && <> — {deleteTarget.note}</>}
+                <br />
+                <span className="text-xs">{fmtDateTime(deleteTarget.created_at)}</span>
+              </>
+            )}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            This will permanently remove this entry and adjust the cashbox balance. This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} disabled={deleteBusy}>
+              {t("cancel")}
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteBusy}>
+              {deleteBusy ? "…" : t("delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function CashboxDialog({
-  open, onOpenChange, initialKind,
-}: { open: boolean; onOpenChange: (v: boolean) => void; initialKind: "deposit" | "withdraw" }) {
+  open, onOpenChange, initialKind, editEntry,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  initialKind: "deposit" | "withdraw";
+  editEntry: CashboxEntry | null;
+}) {
   const { t } = useT();
   const qc = useQueryClient();
+  const isEdit = !!editEntry;
   const [kind, setKind] = useState<"deposit" | "withdraw">(initialKind);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [dateVal, setDateVal] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setKind(initialKind);
-      setAmount("");
-      setNote("");
+      if (editEntry) {
+        setKind(editEntry.kind === "deposit" ? "deposit" : "withdraw");
+        setAmount(String(editEntry.amount));
+        setNote(editEntry.note ?? "");
+        // Format to datetime-local value
+        const d = new Date(editEntry.created_at);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setDateVal(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+      } else {
+        setKind(initialKind);
+        setAmount("");
+        setNote("");
+        setDateVal("");
+      }
     }
-  }, [open, initialKind]);
+  }, [open, initialKind, editEntry]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const amt = Number(amount) || 0;
     if (amt <= 0) return;
-    const tempId = `temp-${Date.now()}`;
-    const entry: CashboxEntry = { id: tempId, kind, amount: amt, note: note || null, created_at: new Date().toISOString() };
-
-    setCachedData<CashboxEntry[]>(qc, ["cashbox"], old => [entry, ...(old ?? [])]);
-    onOpenChange(false);
-    toast.success(t("save"));
-
     setBusy(true);
     try {
-      const saved = await createCashboxFn({ data: { kind, amount: amt, note: note || null } });
-      setCachedData<CashboxEntry[]>(qc, ["cashbox"], old =>
-        (old ?? []).map(item => (item.id === tempId ? { ...saved, id: saved.id } as CashboxEntry : item)),
-      );
+      if (isEdit && editEntry) {
+        await updateCashboxFn({
+          data: {
+            id: editEntry.id,
+            kind,
+            amount: amt,
+            note: note || null,
+            created_at: dateVal ? new Date(dateVal).toISOString() : editEntry.created_at,
+          },
+        });
+        toast.success(t("save"));
+      } else {
+        await createCashboxFn({ data: { kind, amount: amt, note: note || null } });
+        toast.success(t("save"));
+      }
+      onOpenChange(false);
       await refreshQueries(qc, ["cashbox"]);
     } catch (err: unknown) {
-      setCachedData<CashboxEntry[]>(qc, ["cashbox"], old => (old ?? []).filter(item => item.id !== tempId));
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -343,7 +468,11 @@ function CashboxDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t("cashbox")}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? `${t("edit")} — ${t("cashbox")}` : t("cashbox")}
+          </DialogTitle>
+        </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <Tabs value={kind} onValueChange={v => setKind(v as "deposit" | "withdraw")}>
             <TabsList className="grid grid-cols-2 w-full">
@@ -359,6 +488,17 @@ function CashboxDialog({
             <Label className="text-xs text-muted-foreground">{t("note")}</Label>
             <Input value={note} onChange={e => setNote(e.target.value)} />
           </div>
+          {isEdit && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Date & Time</Label>
+              <Input
+                type="datetime-local"
+                value={dateVal}
+                onChange={e => setDateVal(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
             <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>

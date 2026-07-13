@@ -1,6 +1,7 @@
 "use client";
 
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp, Wallet, AlertCircle, Receipt, ShoppingBag,
@@ -9,7 +10,7 @@ import {
   Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getCashbox, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements } from "@/lib/queries";
+import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements } from "@/lib/queries";
 import type { Reminder } from "@/lib/queries";
 import { cashboxBalance } from "@/lib/cashbox-utils";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -237,7 +238,7 @@ export default function Dashboard() {
   const sales = useCachedQuery(["sales"], getSales);
   const expenses = useCachedQuery(["expenses"], getExpenses);
   const withdrawals = useCachedQuery(["withdrawals"], getWithdrawals);
-  const cashbox = useCachedQuery(["cashbox"], getCashbox);
+  const cashbox = useCashboxQuery();
   const products = useCachedQuery(["products"], getProducts);
   const parties = useCachedQuery(["parties"], getParties);
   const allPayments = useCachedQuery(["all-payments"], getAllPayments);

@@ -623,8 +623,36 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
       { $set: { qty: remaining, profit: profitPerUnit * remaining, return_qty: returnQty } },
     );
   }
+
+  // Cash/online sales added money to the cashbox — returning them must withdraw it back.
+  // Credit sales only created cashbox entries for the paid_amount portion (not the full amount),
+  // so we refund proportionally based on what was actually collected.
+  const saleType: string = (sale.type as string) || "cash";
+  let refundAmt = 0;
+  if (saleType === "cash") {
+    refundAmt = Number(sale.sell_price) * returnQty;
+  } else if (saleType === "credit") {
+    // Proportional refund of what was already paid in cash
+    const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
+    refundAmt = paidPerUnit * returnQty;
+  }
+  // online_sell: no direct cashbox impact (payment handled externally)
+
+  if (refundAmt > 0) {
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "withdraw",
+      amount: refundAmt,
+      note: data.note
+        ? `Return: ${sale.product_name as string} (${returnQty} pcs) — ${data.note}`
+        : `Return: ${sale.product_name as string} (${returnQty} pcs)`,
+      ref_id: id,
+      created_at: doc.created_at,
+    });
+  }
+
   return { ...doc, id };
 }
+
 
 export async function createDirectProductReturnFn(input: { data: { product_id: string; qty: number; return_price: number; note?: string | null } }) {
   const { data } = input;
@@ -851,12 +879,12 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
     };
     await db.collection("expenses").insertOne(expenseDoc as any);
 
-    // Deduct from cashbox using expense entry
+    // Deduct from cashbox using expense entry — ref_id points to purchase ID for reliable delete
     await insertCashboxEntry(db, session.ownerId, {
       kind: "expense",
       amount: data.total,
       note: `Product Purchase: ${data.product_name}`,
-      ref_id: expenseId,
+      ref_id: id, // Use purchase ID so deletePurchaseFn can find this directly
       created_at: doc.created_at,
     });
 
@@ -905,12 +933,25 @@ export async function deletePurchaseFn(input: { data: { id: string } }) {
   }
   await db.collection("purchases").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
 
-  // Delete associated expense and cashbox entry
-  const expenseTitle = `Product Purchase: ${purchase.product_name}`;
-  const expense = await db.collection("expenses").findOne({ owner_id: session.ownerId, title: expenseTitle, amount: purchase.total });
-  if (expense) {
-    await db.collection("expenses").deleteOne({ _id: expense._id });
-    await db.collection("cashbox_entries").deleteOne({ ref_id: expense._id });
+  // Delete cashbox entry directly by purchase ID (new approach — ref_id = purchase ID)
+  const cashboxDelResult = await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+
+  // Fallback: legacy entries used expenseId as ref_id — find via expense title+note containing purchase ID
+  if (cashboxDelResult.deletedCount === 0) {
+    const expense = await db.collection("expenses").findOne({
+      owner_id: session.ownerId,
+      note: { $regex: `Purchase ID: ${data.id}` },
+    });
+    if (expense) {
+      await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: expense._id as any });
+      await db.collection("expenses").deleteOne({ _id: expense._id });
+    }
+  } else {
+    // Also clean up the auto-created expense record for this purchase
+    await db.collection("expenses").deleteMany({
+      owner_id: session.ownerId,
+      note: { $regex: `Purchase ID: ${data.id}` },
+    });
   }
 
   return { success: true };
@@ -1024,6 +1065,16 @@ export async function createSomitiFn(input: { data: { kind: string; amount: numb
   const id = crypto.randomUUID();
   const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
   await db.collection("somiti_entries").insertOne(doc as any);
+
+  // Sync to cashbox — ALL somiti entries take money out of the business cashbox
+  // (samity contributions always leave the business, regardless of deposit/withdraw kind)
+  await insertCashboxEntry(db, session.ownerId, {
+    kind: "withdraw",
+    amount: Number(data.amount),
+    note: data.note || "Samity payment",
+    ref_id: id,
+  });
+
   return { ...doc, id };
 }
 
@@ -1036,6 +1087,18 @@ export async function updateSomitiFn(input: { data: { id: string; kind: string; 
     { _id: id as any, owner_id: session.ownerId },
     { $set: updates }
   );
+
+  // Keep cashbox entry in sync — always withdraw since samity always takes money out
+  await db.collection("cashbox_entries").updateOne(
+    { owner_id: session.ownerId, ref_id: id },
+    { $set: {
+        kind: "withdraw",
+        amount: Number(data.amount),
+        note: data.note || "Samity payment",
+      }
+    }
+  );
+
   const updated = await db.collection("somiti_entries").findOne({ _id: id as any });
   return { ...updated, id };
 }
@@ -1044,6 +1107,8 @@ export async function deleteSomitiFn(input: { data: { id: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
+  // Clean up linked cashbox entry before deleting the somiti record
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
   await db.collection("somiti_entries").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
 }
@@ -1084,6 +1149,8 @@ export async function deleteSomitiFnByName(input: { data: { name: string } }) {
     if (match) {
       const parsedName = match[1].trim();
       if (parsedName.toLowerCase() === data.name.trim().toLowerCase()) {
+        // Clean up linked cashbox entry before deleting
+        await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: entry._id as any });
         await db.collection("somiti_entries").deleteOne({ _id: entry._id });
       }
     }
@@ -1097,7 +1164,7 @@ export async function deleteSomitiFnByName(input: { data: { name: string } }) {
 export async function getWithdrawalsFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("owner_withdrawals").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("owner_withdrawals").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
   return items.map((w) => ({ ...w, id: w._id as any as string }));
 }
 
@@ -1116,7 +1183,7 @@ export async function createWithdrawalFn(input: { data: { amount: number; note?:
 export async function getCashboxFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
   return items.map((e) => ({ ...e, id: e._id as any as string }));
 }
 
@@ -1131,6 +1198,40 @@ export async function createCashboxFn(input: { data: { kind: "deposit" | "withdr
     created_at: data.created_at,
   });
   return saved;
+}
+
+export async function updateCashboxFn(input: { data: { id: string; kind: "deposit" | "withdraw"; amount: number; note?: string | null; created_at?: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role !== "owner" && session.role !== "superadmin") {
+    throw new Error("Only owners can edit cashbox entries.");
+  }
+  const db = await getDb();
+  const result = await db.collection("cashbox_entries").findOneAndUpdate(
+    { _id: data.id as any, owner_id: session.ownerId },
+    { $set: {
+        kind: data.kind,
+        amount: Number(data.amount),
+        note: data.note ?? null,
+        ...(data.created_at ? { created_at: data.created_at } : {}),
+      }
+    },
+    { returnDocument: "after" }
+  );
+  if (!result) throw new Error("Cashbox entry not found.");
+  return { ...result, id: result._id as any as string };
+}
+
+export async function deleteCashboxFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role !== "owner" && session.role !== "superadmin") {
+    throw new Error("Only owners can delete cashbox entries.");
+  }
+  const db = await getDb();
+  const result = await db.collection("cashbox_entries").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (result.deletedCount === 0) throw new Error("Cashbox entry not found.");
+  return { success: true };
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────

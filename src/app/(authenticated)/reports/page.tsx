@@ -19,9 +19,10 @@ import { Label } from "@/components/ui/label";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import {
   getSales, getPurchases, getExpenses,
-  getSomiti, getParties, getCashbox
+  getSomiti, getParties
 } from "@/lib/queries";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -134,7 +135,7 @@ export default function ReportsGeneratorPage() {
   const purchasesQuery = useCachedQuery(["purchases"], getPurchases);
   const expensesQuery = useCachedQuery(["expenses"], getExpenses);
   const somitiQuery = useCachedQuery(["somiti"], getSomiti);
-  const cashboxQuery = useCachedQuery(["cashbox"], getCashbox);
+  const cashboxQuery = useCashboxQuery();
   const partiesQuery = useCachedQuery(["parties"], getParties);
 
   const bizName = bizSettings?.business?.name || "Dream Fashion";

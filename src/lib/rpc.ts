@@ -170,7 +170,9 @@ export const renameSomitiFn = makeWriteAction("renameSomitiFn");
 export const deleteSomitiFnByName = makeWriteAction("deleteSomitiFnByName");
 
 export const createWithdrawalFn = makeWriteAction("createWithdrawalFn");
-export const createCashboxFn = makeWriteAction("createCashboxFn");
+export const createCashboxFn = makeReadAction("createCashboxFn");
+export const updateCashboxFn = makeReadAction("updateCashboxFn");
+export const deleteCashboxFn = makeReadAction("deleteCashboxFn");
 
 export const createReminderFn = makeWriteAction("createReminderFn");
 export const toggleReminderFn = makeWriteAction("toggleReminderFn");
@@ -196,7 +198,7 @@ const actionsList = [
   "updateUserAvatarFn", "createReturnFn", "createDirectProductReturnFn", "deleteReturnFn",
   "createPurchaseFn", "deletePurchaseFn", "createExpenseFn", "deleteExpenseFn",
   "createPaymentFn", "deletePaymentFn", "createSomitiFn", "updateSomitiFn", "deleteSomitiFn",
-  "renameSomitiFn", "deleteSomitiFnByName", "createWithdrawalFn", "createCashboxFn",
+  "renameSomitiFn", "deleteSomitiFnByName", "createWithdrawalFn",
   "createReminderFn", "toggleReminderFn", "deleteReminderFn"
 ];
 

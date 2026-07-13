@@ -15,9 +15,14 @@ function storageKey(queryKey: readonly unknown[]) {
   return CACHE_PREFIX + JSON.stringify(queryKey);
 }
 
+function isCashboxKey(queryKey: readonly unknown[]) {
+  return Array.isArray(queryKey) && queryKey.length === 1 && queryKey[0] === "cashbox";
+}
+
 /** Read cached query data from localStorage if still fresh. */
 export function readQueryCache<T>(queryKey: readonly unknown[]): T | undefined {
   if (typeof window === "undefined") return undefined;
+  if (isCashboxKey(queryKey)) return undefined;
   try {
     const raw = localStorage.getItem(storageKey(queryKey));
     if (!raw) return undefined;
@@ -35,6 +40,7 @@ export function readQueryCache<T>(queryKey: readonly unknown[]): T | undefined {
 /** Persist query data to localStorage. */
 export function writeQueryCache(queryKey: readonly unknown[], data: unknown) {
   if (typeof window === "undefined") return;
+  if (isCashboxKey(queryKey)) return;
   try {
     const key = storageKey(queryKey);
     const entry: CacheEntry = { data, updatedAt: Date.now() };

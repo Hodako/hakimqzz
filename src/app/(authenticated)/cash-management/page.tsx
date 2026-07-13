@@ -9,8 +9,9 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { getSales, getExpenses, getWithdrawals, getCashbox } from "@/lib/queries";
+import { getSales, getExpenses, getWithdrawals } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { useT } from "@/lib/i18n";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { cashboxBalance } from "@/lib/cashbox-utils";
@@ -75,7 +76,7 @@ export default function CashManagementPage() {
   const sales = useCachedQuery(["sales"], getSales);
   const expenses = useCachedQuery(["expenses"], getExpenses);
   const withdrawals = useCachedQuery(["withdrawals"], getWithdrawals);
-  const cashbox = useCachedQuery(["cashbox"], getCashbox);
+  const cashbox = useCashboxQuery();
 
   const balance = cashboxBalance(cashbox.data ?? []);
 
