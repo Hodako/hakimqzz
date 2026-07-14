@@ -11,11 +11,44 @@ import { appendRowToGoogleSheet, bulkExportToGoogleSheets } from "@/lib/google-s
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
+async function checkCashboxBalanceEffect(
+  db: any,
+  ownerId: string,
+  deltaEffect: number,
+  excludeEntryIds?: string | string[]
+) {
+  const query: any = { owner_id: ownerId };
+  if (excludeEntryIds) {
+    const ids = Array.isArray(excludeEntryIds) ? excludeEntryIds : [excludeEntryIds];
+    query._id = { $nin: ids.map(id => id as any) };
+  }
+  const items = await db.collection("cashbox_entries").find(query).toArray();
+  const normalized = items.map((e: any) => ({
+    kind: e.kind,
+    amount: Number(e.amount) || 0
+  }));
+  const currentBalance = normalized.reduce((sum: number, e: any) => {
+    const isPositive = e.kind === "deposit" || e.kind === "sale";
+    const delta = isPositive ? e.amount : -e.amount;
+    return sum + delta;
+  }, 0);
+  
+  if (Math.round((currentBalance + deltaEffect) * 100) / 100 < 0) {
+    throw new Error(`Insufficient cashbox balance! This transaction would drop the cashbox balance to ${Math.round((currentBalance + deltaEffect) * 100) / 100}, which is below 0.`);
+  }
+}
+
 async function insertCashboxEntry(
   db: Awaited<ReturnType<typeof getDb>>,
   ownerId: string,
   entry: { kind: CashboxKind; amount: number; note?: string | null; ref_id?: string | null; created_at?: string },
+  bypassValidation = false
 ) {
+  const delta = (entry.kind === "deposit" || entry.kind === "sale") ? entry.amount : -entry.amount;
+  if (delta < 0 && !bypassValidation) {
+    await checkCashboxBalanceEffect(db, ownerId, delta);
+  }
+
   const id = crypto.randomUUID();
   const doc = {
     _id: id,
@@ -471,6 +504,21 @@ export async function deleteSaleFn(input: { data: { id: string } }) {
       salesToDelete = await db.collection("sales").find({ cart_id: cartId, owner_id: session.ownerId }).toArray();
     }
 
+    // Calculate total cashbox delta impact of deleting these sales
+    let totalSaleDeltaEffect = 0;
+    const allSaleIds = salesToDelete.map(s => s._id);
+    const relatedEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId, ref_id: { $in: allSaleIds } }).toArray();
+    const relatedIds = relatedEntries.map(e => e._id.toString());
+    for (const entry of relatedEntries) {
+      const isPos = entry.kind === "sale" || entry.kind === "deposit";
+      const val = isPos ? Number(entry.amount) : -Number(entry.amount);
+      totalSaleDeltaEffect += val;
+    }
+    // Deleting them means the balance changes by -totalSaleDeltaEffect
+    if (-totalSaleDeltaEffect < 0) {
+      await checkCashboxBalanceEffect(db, session.ownerId, -totalSaleDeltaEffect, relatedIds);
+    }
+
     for (const s of salesToDelete) {
       if (s.product_id) {
         const qtyToRestore = s.returned ? 0 : (Number(s.qty) || 0);
@@ -520,6 +568,15 @@ export async function editSaleFn(input: {
 
   const oldSale = await db.collection("sales").findOne({ _id: data.id as any, owner_id: session.ownerId });
   if (!oldSale) throw new Error("Sale not found");
+
+  const oldCashAmt = saleCashboxAmount(oldSale as any);
+  const newCashAmt = saleCashboxAmount(data);
+  const netEffect = newCashAmt - oldCashAmt;
+  if (netEffect < 0) {
+    const oldEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId, ref_id: data.id, kind: "sale" }).toArray();
+    const oldEntryIds = oldEntries.map(e => e._id.toString());
+    await checkCashboxBalanceEffect(db, session.ownerId, netEffect, oldEntryIds);
+  }
 
   if (oldSale.product_id && !oldSale.returned) {
     const oldQty = Number(oldSale.qty) || 0;
@@ -1044,6 +1101,21 @@ export async function deletePaymentFn(input: { data: { id: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
+  
+  // Calculate total cashbox delta impact of deleting this payment (which is a deposit)
+  const relatedEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId, ref_id: data.id } as any).toArray();
+  const relatedIds = relatedEntries.map(e => e._id.toString());
+  let paymentDeltaEffect = 0;
+  for (const entry of relatedEntries) {
+    const isPos = entry.kind === "sale" || entry.kind === "deposit";
+    const val = isPos ? Number(entry.amount) : -Number(entry.amount);
+    paymentDeltaEffect += val;
+  }
+  // Deleting it means the balance changes by -paymentDeltaEffect
+  if (-paymentDeltaEffect < 0) {
+    await checkCashboxBalanceEffect(db, session.ownerId, -paymentDeltaEffect, relatedIds);
+  }
+
   await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id } as any);
   await db.collection("payments").deleteOne({ _id: data.id, owner_id: session.ownerId } as any);
   return { success: true };
@@ -1218,13 +1290,29 @@ export async function createCashboxFn(input: { data: { kind: "deposit" | "withdr
   return saved;
 }
 
-export async function updateCashboxFn(input: { data: { id: string; kind: "deposit" | "withdraw"; amount: number; note?: string | null; created_at?: string } }) {
+export async function updateCashboxFn(input: { data: { id: string; kind: string; amount: number; note?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   if (session.role !== "owner" && session.role !== "superadmin") {
     throw new Error("Only owners can edit cashbox entries.");
   }
   const db = await getDb();
+
+  // Calculate delta effect
+  const oldEntry = await db.collection("cashbox_entries").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!oldEntry) throw new Error("Cashbox entry not found.");
+
+  const oldIsPositive = oldEntry.kind === "deposit" || oldEntry.kind === "sale";
+  const oldDelta = oldIsPositive ? Number(oldEntry.amount) : -Number(oldEntry.amount);
+
+  const newIsPositive = data.kind === "deposit" || data.kind === "sale";
+  const newDelta = newIsPositive ? Number(data.amount) : -Number(data.amount);
+
+  const deltaEffect = newDelta - oldDelta;
+  if (deltaEffect < 0) {
+    await checkCashboxBalanceEffect(db, session.ownerId, deltaEffect, data.id);
+  }
+
   const result = await db.collection("cashbox_entries").findOneAndUpdate(
     { _id: data.id as any, owner_id: session.ownerId },
     { $set: {
@@ -1247,6 +1335,18 @@ export async function deleteCashboxFn(input: { data: { id: string } }) {
     throw new Error("Only owners can delete cashbox entries.");
   }
   const db = await getDb();
+
+  const oldEntry = await db.collection("cashbox_entries").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!oldEntry) throw new Error("Cashbox entry not found.");
+
+  const oldIsPositive = oldEntry.kind === "deposit" || oldEntry.kind === "sale";
+  const oldDelta = oldIsPositive ? Number(oldEntry.amount) : -Number(oldEntry.amount);
+
+  const deltaEffect = -oldDelta;
+  if (deltaEffect < 0) {
+    await checkCashboxBalanceEffect(db, session.ownerId, deltaEffect, data.id);
+  }
+
   const result = await db.collection("cashbox_entries").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   if (result.deletedCount === 0) throw new Error("Cashbox entry not found.");
   return { success: true };

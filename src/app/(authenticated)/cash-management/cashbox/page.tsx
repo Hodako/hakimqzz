@@ -333,7 +333,7 @@ export default function CashboxDetailsPage() {
         )}
         {paged.map(e => {
           const delta = cashboxDelta(e.kind, e.amount);
-          const canEdit = isAdmin && (e.kind === "deposit" || e.kind === "withdraw");
+          const canEdit = isAdmin;
           return (
             <div key={e.id} className="p-3 flex items-center justify-between gap-2 group">
               <div className="min-w-0 flex-1">
@@ -399,7 +399,7 @@ export default function CashboxDetailsPage() {
       <CashboxDialog
         open={dialogOpen}
         onOpenChange={(v) => { setDialogOpen(v); if (!v) setEditEntry(null); }}
-        initialKind={editEntry ? (editEntry.kind === "deposit" ? "deposit" : "withdraw") : dialogKind}
+        initialKind={editEntry ? editEntry.kind : dialogKind}
         editEntry={editEntry}
       />
 
@@ -442,13 +442,13 @@ function CashboxDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  initialKind: "deposit" | "withdraw";
+  initialKind: CashboxEntry["kind"];
   editEntry: CashboxEntry | null;
 }) {
   const { t } = useT();
   const qc = useQueryClient();
   const isEdit = !!editEntry;
-  const [kind, setKind] = useState<"deposit" | "withdraw">(initialKind);
+  const [kind, setKind] = useState<CashboxEntry["kind"]>(initialKind);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [dateVal, setDateVal] = useState("");
@@ -457,7 +457,7 @@ function CashboxDialog({
   useEffect(() => {
     if (open) {
       if (editEntry) {
-        setKind(editEntry.kind === "deposit" ? "deposit" : "withdraw");
+        setKind(editEntry.kind);
         setAmount(String(editEntry.amount));
         setNote(editEntry.note ?? "");
         // Format to datetime-local value
@@ -512,12 +512,23 @@ function CashboxDialog({
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <Tabs value={kind} onValueChange={v => setKind(v as "deposit" | "withdraw")}>
-            <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="deposit">{t("add_money")}</TabsTrigger>
-              <TabsTrigger value="withdraw">{t("take_money")}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {isEdit ? (
+            <Tabs value={kind} onValueChange={v => setKind(v as any)}>
+              <TabsList className="grid grid-cols-4 w-full">
+                <TabsTrigger value="sale" className="text-[10px] sm:text-xs">{t("sale") || "Sale"}</TabsTrigger>
+                <TabsTrigger value="deposit" className="text-[10px] sm:text-xs">{t("deposit") || "Deposit"}</TabsTrigger>
+                <TabsTrigger value="withdraw" className="text-[10px] sm:text-xs">{t("withdraw") || "Withdraw"}</TabsTrigger>
+                <TabsTrigger value="expense" className="text-[10px] sm:text-xs">{t("expense") || "Expense"}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          ) : (
+            <Tabs value={kind} onValueChange={v => setKind(v as any)}>
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="deposit">{t("add_money")}</TabsTrigger>
+                <TabsTrigger value="withdraw">{t("take_money")}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{t("amount")}</Label>
             <Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
