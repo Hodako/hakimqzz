@@ -73,6 +73,7 @@ async function insertCashboxEntry(
 function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
   if (data.type === "credit") return Number(data.paid_amount) || 0;
   if (data.type === "cash") return Number(data.sell_price) * data.qty;
+  // Online sales: admin does not receive money immediately, so not added to cashbox
   return 0;
 }
 
@@ -681,9 +682,10 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
     );
   }
 
-  // Cash/online sales added money to the cashbox — returning them must withdraw it back.
+  // Cash sales added money to the cashbox — returning them must withdraw it back.
   // Credit sales only created cashbox entries for the paid_amount portion (not the full amount),
   // so we refund proportionally based on what was actually collected.
+  // Online sales: admin does not receive money immediately, so no cashbox impact on return either.
   const saleType: string = (sale.type as string) || "cash";
   let refundAmt = 0;
   if (saleType === "cash") {
@@ -693,7 +695,6 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
     const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
     refundAmt = paidPerUnit * returnQty;
   }
-  // online_sell: no direct cashbox impact (payment handled externally)
 
   if (refundAmt > 0) {
     await insertCashboxEntry(db, session.ownerId, {
@@ -1945,7 +1946,7 @@ export async function repairCashboxDbFn() {
           note: `Sale: ${sale.product_name}`,
           ref_id: saleId,
           created_at: sale.created_at,
-        });
+        }, true);
         repairedCount++;
       } else if (match.kind !== "sale" || Number(match.amount) !== expectedAmount || match.created_at !== sale.created_at) {
         await db.collection("cashbox_entries").updateOne(
@@ -1972,6 +1973,7 @@ export async function repairCashboxDbFn() {
           const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
           expectedAmount = paidPerUnit * returnQty;
         }
+        // online: no cashbox impact — admin does not receive money immediately
       }
     } else if (ret.return_price) {
       expectedAmount = Number(ret.qty) * (Number(ret.return_price) || 0);
@@ -1988,7 +1990,7 @@ export async function repairCashboxDbFn() {
           note: ret.note ? `Return refund: ${ret.note}` : `Return: ${ret.product_name || "Product"}`,
           ref_id: retId,
           created_at: ret.created_at,
-        });
+        }, true);
         repairedCount++;
       } else if (match.kind !== "withdraw" || Number(match.amount) !== expectedAmount || match.created_at !== ret.created_at) {
         await db.collection("cashbox_entries").updateOne(
@@ -2031,7 +2033,7 @@ export async function repairCashboxDbFn() {
         note: exp.title,
         ref_id: expId,
         created_at: exp.created_at,
-      });
+      }, true);
       repairedCount++;
     } else if (match.kind !== "expense" || Number(match.amount) !== Number(exp.amount) || match.created_at !== exp.created_at) {
       await db.collection("cashbox_entries").updateOne(
@@ -2060,7 +2062,7 @@ export async function repairCashboxDbFn() {
         note: `Product Purchase: ${p.product_name}`,
         ref_id: pId,
         created_at: p.created_at,
-      });
+      }, true);
       repairedCount++;
     } else {
       if (match.kind !== "expense" || Number(match.amount) !== Number(p.total) || match.created_at !== p.created_at || match.ref_id !== pId) {
@@ -2084,7 +2086,7 @@ export async function repairCashboxDbFn() {
         note: som.note || "Samity payment",
         ref_id: somId,
         created_at: som.created_at,
-      });
+      }, true);
       repairedCount++;
     } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(som.amount) || match.created_at !== som.created_at) {
       await db.collection("cashbox_entries").updateOne(
@@ -2106,7 +2108,7 @@ export async function repairCashboxDbFn() {
         note: w.note || "Owner Withdrawal",
         ref_id: wId,
         created_at: w.created_at,
-      });
+      }, true);
       repairedCount++;
     } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(w.amount) || match.created_at !== w.created_at) {
       await db.collection("cashbox_entries").updateOne(
@@ -2128,7 +2130,7 @@ export async function repairCashboxDbFn() {
         note: pay.note || "Collected dues",
         ref_id: payId,
         created_at: pay.created_at,
-      });
+      }, true);
       repairedCount++;
     } else if (match.kind !== "deposit" || Number(match.amount) !== Number(pay.amount) || match.created_at !== pay.created_at) {
       await db.collection("cashbox_entries").updateOne(
@@ -2150,7 +2152,7 @@ export async function repairCashboxDbFn() {
         note: set.note || "Paid to Supplier",
         ref_id: setId,
         created_at: set.created_at,
-      });
+      }, true);
       repairedCount++;
     } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(set.amount) || match.created_at !== set.created_at) {
       await db.collection("cashbox_entries").updateOne(

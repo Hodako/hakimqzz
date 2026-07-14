@@ -218,18 +218,6 @@ export default function CashboxDetailsPage() {
           <p className="text-xs text-muted-foreground mt-0.5">{t("cashbox_ledger")}</p>
         </div>
         <div className="flex gap-2">
-          {isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={repairing}
-              onClick={runRepair}
-              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/20"
-            >
-              <Wrench className={`size-3.5 mr-1 ${repairing ? "animate-spin" : ""}`} />
-              {repairing ? "..." : (lang === "bn" ? "ডাটা সংস্কার" : "Reconcile Data")}
-            </Button>
-          )}
           <Button size="sm" onClick={() => { setDialogKind("deposit"); setEditEntry(null); setDialogOpen(true); }}>
             <Plus className="size-3.5 mr-1" />{t("add_money")}
           </Button>
@@ -357,36 +345,26 @@ export default function CashboxDetailsPage() {
                   {delta >= 0 ? "+" : "−"}{fmtMoney(Math.abs(delta))}
                 </div>
                 {isAdmin && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                        title="Actions"
-                      >
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canEdit && (
-                        <DropdownMenuItem
-                          onClick={() => { setEditEntry(e); setDialogOpen(true); }}
-                          className="gap-2"
-                        >
-                          <Pencil className="size-3.5" />
-                          {t("edit")}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(e)}
-                        className="gap-2 text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="size-3.5" />
-                        {t("delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 hover:bg-muted rounded-full"
+                      onClick={() => { setEditEntry(e); setDialogOpen(true); }}
+                      title={t("edit")}
+                    >
+                      <Pencil className="size-3.5 text-muted-foreground hover:text-foreground" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 hover:bg-destructive/10 rounded-full"
+                      onClick={() => handleDelete(e)}
+                      title={t("delete")}
+                    >
+                      <Trash2 className="size-3.5 text-destructive" />
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
