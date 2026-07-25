@@ -1056,7 +1056,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/bubbles/100/buy.png"
+                imageUrl="https://img.icons8.com/fluency/48/buy.png"
                 color="bg-teal-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1531,7 +1531,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/bubbles/100/buy.png"
+                imageUrl="https://img.icons8.com/fluency/48/buy.png"
                 color="bg-teal-500"
                 className="h-full"
                 align={kpiConfig.align as any}
