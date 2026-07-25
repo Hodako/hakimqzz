@@ -89,7 +89,7 @@
   --font-sans: 'Siyam Rupali', Roboto, "Hind Siliguri", sans-serif;
   --font-serif: Lora, serif;
   --font-mono: "Fira Code", monospace;
-  --radius: 1.375rem;
+  --radius: 0rem;
 
   /* bKash Fintech Design System Tokens */
   --bkash-primary: #E2136E;
@@ -102,10 +102,10 @@
   --bkash-border: #ECEDEF;
   --bkash-text: #202124;
   --bkash-text-sec: #5F6368;
-  --bkash-radius-card: 22px;
-  --bkash-radius-btn: 16px;
-  --bkash-radius-modal: 28px;
-  --bkash-radius-input: 18px;
+  --bkash-radius-card: 0px;
+  --bkash-radius-btn: 0px;
+  --bkash-radius-modal: 0px;
+  --bkash-radius-input: 0px;
   --bkash-shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
   --bkash-shadow-md: 0 8px 24px rgba(0,0,0,0.06);
   --bkash-shadow-lg: 0 18px 45px rgba(0,0,0,0.10);

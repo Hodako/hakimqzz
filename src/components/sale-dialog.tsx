@@ -286,17 +286,6 @@ export function SaleDialog({
               <div className="border border-border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs text-muted-foreground">{t("select_product")}</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="size-7 p-0 flex items-center justify-center border-dashed text-primary border-primary/40 hover:bg-primary/5 shrink-0"
-                    onClick={() => setScannerOpen(true)}
-                    title={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
-                    aria-label={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
-                  >
-                    <Scan className="size-3.5" />
-                  </Button>
                 </div>
                 <ProductSearchSelect
                   products={products}
