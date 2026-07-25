@@ -1173,7 +1173,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
                 value={fmtMoney(somitiTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/association.png"
+                imageUrl="https://img.icons8.com/fluency/48/piggy-bank.png"
                 color="bg-purple-600"
                 trendUp={somitiTotal >= 0}
                 trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
@@ -1650,7 +1650,7 @@ export default function Dashboard() {
                 label={t("inventory_val_sale")}
                 value={fmtMoney(totalStockSaleValuation)}
                 sub={lang === "bn" ? "বিক্রি মূল্যের হিসাব" : "Selling Worth of Stock"}
-                icon={Package}
+                imageUrl="https://img.icons8.com/fluency/48/sell.png"
                 color="bg-pink-500"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
