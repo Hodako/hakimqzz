@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Trash2, Download, ShoppingBag, DollarSign, Tag, Info } from "lucide-react";
+import { Trash2, Download, ShoppingBag, DollarSign, Tag, Info, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -42,7 +42,7 @@ export default function PurchasesPage() {
     return filteredPurchases.reduce((sum, p) => sum + (p.qty || 0), 0);
   }, [filteredPurchases]);
 
-  // ── CSV Export Function with Download ──────────────────────────────────────
+  // ── CSV Export Function ────────────────────────────────────────────────────
   const handleExportCSV = () => {
     if (!filteredPurchases || filteredPurchases.length === 0) {
       toast.error(lang === "bn" ? "ডাউনলোড করার মত কোন তথ্য পাওয়া যায়নি" : "No purchase data available to export");
@@ -53,9 +53,9 @@ export default function PurchasesPage() {
       "ID",
       lang === "bn" ? "তারিখ ও সময়" : "Date & Time",
       lang === "bn" ? "পণ্যের নাম" : "Product Name",
-      lang === "bn" ? "পরিমাণ (Qty)" : "Quantity",
+      lang === "bn" ? "পরিমাণ" : "Quantity",
       lang === "bn" ? "একক ক্রয় মূল্য" : "Unit Cost",
-      lang === "bn" ? "মোট ক্রয় খরচ (Expense)" : "Total Buy Expense",
+      lang === "bn" ? "মোট ক্রয় খরচ" : "Total Buy Expense",
       lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Mode",
     ];
 
@@ -66,7 +66,7 @@ export default function PurchasesPage() {
       p.qty,
       p.unit_cost,
       p.total,
-      `"${p.payment_type || "cash"}"`,
+      `"${p.payment_type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : (lang === "bn" ? "ক্যাশ" : "Cash")}"`,
     ]);
 
     const csvContent =
@@ -115,167 +115,180 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="space-y-4 pb-4">
-      {/* Page Title & Download/Export Header Action */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingBag className="size-6 text-primary" />
-            <span>{t("new_purchase")}</span>
+    <div className="space-y-3.5 pb-20 sm:pb-6 font-sans">
+      {/* Page Title & Add/Export Header Actions */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-foreground truncate">
+            <ShoppingBag className="size-5 sm:size-6 text-primary shrink-0" />
+            <span>{lang === "bn" ? "মাল ক্রয়" : "Product Purchases"}</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
             {lang === "bn"
-              ? "নতুন মাল ক্রয় ও ক্রয় খরচের পূর্ণাঙ্গ হিসাব (Product Buy Expense Ledger)"
+              ? "নতুন মাল ক্রয় ও ক্রয় খরচের হিসাব"
               : "Product buy expenses & purchase inventory records"}
           </p>
         </div>
+        
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            onClick={() => setOpen(true)}
+            size="sm"
+            className="h-8 sm:h-9 px-3 gap-1.5 font-bold shadow-md text-xs sm:text-sm"
+          >
+            <Plus className="size-4 stroke-[2.5]" />
+            <span>{lang === "bn" ? "নতুন ক্রয়" : "Add Purchase"}</span>
+          </Button>
+
+          <Button
+            onClick={handleExportCSV}
+            variant="outline"
+            size="sm"
+            className="h-8 sm:h-9 px-2.5 sm:px-3 gap-1.5 font-semibold text-xs border-border hover:bg-accent"
+          >
+            <Download className="size-3.5" />
+            <span className="hidden sm:inline">{lang === "bn" ? "ডাউনলোড" : "Export CSV"}</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Product Buy Expense Summary KPI Cards ────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <Card className="p-3 border-teal-500/20 bg-gradient-to-br from-white via-teal-50/30 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/20 dark:to-teal-500/5 rounded-2xl shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-muted-foreground text-[11px] sm:text-xs font-medium">
+            <span>{lang === "bn" ? "মোট মাল ক্রয় খরচ" : "Total Buy Expense"}</span>
+            <DollarSign className="size-3.5 sm:size-4 text-teal-600 dark:text-teal-400 shrink-0" />
+          </div>
+          <div className="text-lg sm:text-2xl font-bold text-foreground tracking-tight">
+            {fmtMoney(totalBuyExpense)}
+          </div>
+          <div className="text-[9px] sm:text-[10px] text-muted-foreground truncate">
+            {filterDate ? `${filterDate} তারিখের হিসাব` : (lang === "bn" ? "সর্বমোট ক্রয় খরচ" : "Lifetime Total")}
+          </div>
+        </Card>
+
+        <Card className="p-3 border-indigo-500/20 bg-gradient-to-br from-white via-indigo-50/30 to-indigo-500/5 dark:from-zinc-900 dark:via-indigo-950/20 dark:to-indigo-500/5 rounded-2xl shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-muted-foreground text-[11px] sm:text-xs font-medium">
+            <span>{lang === "bn" ? "ক্রয়কৃত মোট পরিমাণ" : "Total Purchased Qty"}</span>
+            <Tag className="size-3.5 sm:size-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          </div>
+          <div className="text-lg sm:text-2xl font-bold text-foreground">
+            {totalBuyQty} {lang === "bn" ? "টি" : "items"}
+          </div>
+          <div className="text-[9px] sm:text-[10px] text-muted-foreground truncate">
+            {filteredPurchases.length} {lang === "bn" ? "টি ক্রয় হিসাব" : "purchases"}
+          </div>
+        </Card>
+
+        <Card className="hidden sm:block p-3 border-amber-500/20 bg-gradient-to-br from-white via-amber-50/30 to-amber-500/5 dark:from-zinc-900 dark:via-amber-950/20 dark:to-amber-500/5 rounded-2xl shadow-xs space-y-1 col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
+            <span>{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Ledger"}</span>
+            <Info className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          </div>
+          <div className="text-[11px] text-muted-foreground leading-snug">
+            {lang === "bn"
+              ? "ক্যাশ ক্রয় ক্যাশবক্স হিসাব এবং বকেয়া ক্রয় সাপ্লায়ার হিসাব আপডেট করে।"
+              : "Cash purchases update Cashbox; Credit purchases update Supplier Dues."}
+          </div>
+        </Card>
+      </div>
+
+      {/* Date Filter Bar */}
+      <div className="flex items-center justify-between gap-2 bg-card p-2.5 rounded-2xl border border-border/80 shadow-xs">
+        <div className="flex gap-2 items-center min-w-0 flex-1">
+          <Label className="text-xs font-medium text-muted-foreground shrink-0">{t("filter_date")}:</Label>
+          <Input
+            type="date"
+            className="h-8 text-xs w-36 sm:w-44 rounded-lg bg-background"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+          />
+          {filterDate && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setFilterDate("")}
+            >
+              {lang === "bn" ? "সাফ করুন" : "Clear"}
+            </Button>
+          )}
+        </div>
+
         <Button
           onClick={handleExportCSV}
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="h-9 px-3 gap-2 font-bold border-primary/30 text-primary hover:bg-primary/10 shadow-sm"
+          className="h-8 text-xs font-semibold gap-1 text-primary hover:bg-primary/10 shrink-0"
         >
-          <Download className="size-4" />
+          <Download className="size-3.5" />
           <span>{lang === "bn" ? "ডাউনলোড" : "Export CSV"}</span>
         </Button>
       </div>
 
-      {/* ── Product Buy Expense Summary KPI Cards ────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card className="p-3.5 border-teal-500/20 bg-gradient-to-br from-teal-500/10 via-card to-transparent rounded-2xl shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
-            <span>{lang === "bn" ? "মোট মাল ক্রয় খরচ (Total Buy Expense)" : "Total Buy Expense"}</span>
-            <DollarSign className="size-4 text-teal-600 dark:text-teal-400" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold text-foreground font-mono">
-            {fmtMoney(totalBuyExpense)}
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            {filterDate ? `${filterDate} তারিখের হিসাব` : "সর্বমোট ক্রয় খরচ"}
-          </div>
-        </Card>
-
-        <Card className="p-3.5 border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 via-card to-transparent rounded-2xl shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
-            <span>{lang === "bn" ? "ক্রয়কৃত মোট পরিমাণ" : "Total Purchased Qty"}</span>
-            <Tag className="size-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold text-foreground">
-            {totalBuyQty} {lang === "bn" ? "টি মাল" : "items"}
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            {filteredPurchases.length} {lang === "bn" ? "টি ক্রয় ট্রানজ্যাকশন" : "purchase transactions"}
-          </div>
-        </Card>
-
-        <Card className="p-3.5 border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-card to-transparent rounded-2xl shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
-            <span>{lang === "bn" ? "পেমেন্ট মাধ্যমসমূহ" : "Payment Ledger"}</span>
-            <Info className="size-4 text-amber-600 dark:text-amber-400" />
-          </div>
-          <div className="text-xs text-muted-foreground leading-relaxed">
-            {lang === "bn"
-              ? "ক্যাশ ক্রয়ে ক্যাশবক্স থেকে টাকা কাটা হয়, আর ক্রেডিট ক্রয়ে সাপ্লায়ারের বকেয়া হিসাব আপডেট হয়।"
-              : "Cash purchases deduct from Cashbox; Credit purchases update Supplier Dues."}
-          </div>
-        </Card>
-      </div>
-
-      {/* Date Filter & Export Row */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between bg-card p-3 rounded-2xl border border-border/80 shadow-xs">
-        <div className="space-y-1 w-full sm:w-auto">
-          <Label className="text-xs font-medium text-muted-foreground">{t("filter_date")}</Label>
-          <div className="flex gap-2 items-center">
-            <Input
-              type="date"
-              className="h-8 text-xs w-44 rounded-lg"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-            />
-            {filterDate && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs text-muted-foreground"
-                onClick={() => setFilterDate("")}
-              >
-                {lang === "bn" ? "সাফ" : "Clear"}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <Button
-          onClick={handleExportCSV}
-          variant="secondary"
-          size="sm"
-          className="h-8 text-xs font-bold gap-1.5 shrink-0"
-        >
-          <Download className="size-3.5 text-primary" />
-          <span>{lang === "bn" ? "ক্রয় খরচের ফাইল ডাউনলোড করুন" : "Download Buy Expenses CSV"}</span>
-        </Button>
-      </div>
-
-      {/* Purchases List Table Card */}
+      {/* Purchases List */}
       {(!filteredPurchases || filteredPurchases.length === 0) && (
-        <Card className="p-8 text-center text-sm text-muted-foreground rounded-2xl">
+        <Card className="p-8 text-center text-sm text-muted-foreground rounded-2xl border-dashed">
           {t("no_activity")}
         </Card>
       )}
 
       {filteredPurchases.length > 0 && (
-        <Card className="divide-y divide-border overflow-hidden rounded-2xl shadow-sm">
+        <Card className="divide-y divide-border/60 overflow-hidden rounded-2xl shadow-xs border-border/80">
           {filteredPurchases.map((p) => (
-            <div key={p.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-muted/30 transition">
+            <div key={p.id} className="p-3 flex items-center justify-between gap-2.5 hover:bg-muted/30 transition">
               <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="font-semibold text-sm truncate flex items-center gap-2 text-foreground">
-                  <span>{p.product_name}</span>
-                  <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
+                <div className="font-bold text-xs sm:text-sm truncate flex items-center gap-1.5 text-foreground">
+                  <span className="truncate">{p.product_name}</span>
+                  <span className="text-[11px] font-semibold bg-muted px-1.5 py-0.2 rounded-md text-muted-foreground shrink-0">
                     ×{p.qty}
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-3">
+                <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span>{fmtDateTime(p.created_at)}</span>
                   {p.unit_cost ? (
-                    <span className="text-[11px] text-muted-foreground">
-                      @{fmtMoney(p.unit_cost)} / pc
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      @{fmtMoney(p.unit_cost)}
                     </span>
                   ) : null}
                   {p.payment_type && (
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-tight ${
                         p.payment_type === "cash"
                           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                           : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
                       }`}
                     >
-                      {p.payment_type}
+                      {p.payment_type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : (lang === "bn" ? "ক্যাশ" : "Cash")}
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="text-right shrink-0">
-                <div className="font-bold text-sm text-foreground font-mono">{fmtMoney(p.total)}</div>
-                <div className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
-                  {lang === "bn" ? "ক্রয় খরচ (Expense)" : "Buy Expense"}
+                <div className="font-bold text-xs sm:text-sm text-foreground">{fmtMoney(p.total)}</div>
+                <div className="text-[9px] sm:text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
+                  {lang === "bn" ? "ক্রয় খরচ" : "Buy Expense"}
                 </div>
               </div>
 
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 rounded-lg"
                 onClick={() => handleDelete(p)}
+                title={lang === "bn" ? "মুছে ফেলুন" : "Delete"}
               >
-                <Trash2 className="size-4" />
+                <Trash2 className="size-3.5" />
               </Button>
             </div>
           ))}
         </Card>
       )}
 
+      {/* Floating Action + Icon Button */}
       <FAB onClick={() => setOpen(true)} />
+
       <PurchaseDialog open={open} onOpenChange={setOpen} />
 
       <ConfirmDeleteDialog
@@ -283,11 +296,16 @@ export default function PurchasesPage() {
         onOpenChange={(v) => {
           if (!v) setPurchaseToDelete(null);
         }}
-        title="Delete Purchase"
-        description={`Are you sure you want to delete purchase "${purchaseToDelete?.product_name}"? This action is permanent and cannot be undone.`}
+        title={lang === "bn" ? "মাল ক্রয় হিসেব মুছুন" : "Delete Purchase Record"}
+        description={
+          lang === "bn"
+            ? `আপনি কি নিশ্চিত যে "${purchaseToDelete?.product_name}" পণ্যটির ক্রয় হিসাব মুছে ফেলতে চান? এটি স্থায়ীভাবে মুছে যাবে।`
+            : `Are you sure you want to delete purchase "${purchaseToDelete?.product_name}"? This action is permanent and cannot be undone.`
+        }
         onConfirm={performDelete}
         busy={isDeleting}
       />
     </div>
   );
 }
+

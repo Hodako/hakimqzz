@@ -144,36 +144,36 @@ export function PurchaseDialog({ open, onOpenChange, presetPartyId }: { open: bo
           {/* Supplier & Payment Type Selection */}
           <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">{t("party")}</Label>
+              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "সাপ্লায়ার / পার্টি" : t("party")}</Label>
               <select
                 value={partyId}
                 onChange={e => setPartyId(e.target.value)}
-                className="w-full h-8 rounded border border-border bg-background px-2 text-xs"
+                className="w-full h-8 rounded border border-border bg-background px-2 text-xs font-sans"
               >
-                <option value="">— Select Supplier —</option>
+                <option value="">{lang === "bn" ? "— সাপ্লায়ার বা পার্টি নির্বাচন করুন —" : "— Select Supplier —"}</option>
                 {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "পেমেন্ট টাইপ" : "Payment Type"}</Label>
+              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Type"}</Label>
               <select
                 value={paymentType}
                 onChange={e => setPaymentType(e.target.value as any)}
-                className="w-full h-8 rounded border border-border bg-background px-2 text-xs"
+                className="w-full h-8 rounded border border-border bg-background px-2 text-xs font-sans"
               >
                 <option value="cash">{lang === "bn" ? "ক্যাশ" : "Cash"}</option>
-                <option value="credit">{lang === "bn" ? "বকেয়া (ক্রেডিট)" : "Credit"}</option>
+                <option value="credit">{lang === "bn" ? "বকেয়া" : "Credit"}</option>
               </select>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-sm border-t border-border pt-3">
-            <span className="text-muted-foreground">{t("total")}</span>
-            <span className="font-semibold">{fmtMoney(grandTotal)}</span>
+            <span className="text-muted-foreground font-medium">{t("total")}</span>
+            <span className="font-bold text-foreground">{fmtMoney(grandTotal)}</span>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-            <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" size="sm" className="h-9 px-4 text-xs font-semibold" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+            <Button type="submit" size="sm" className="h-9 px-4 text-xs font-bold shadow-md" disabled={busy}>{busy ? "…" : (lang === "bn" ? "সংরক্ষণ করুন" : t("save"))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
