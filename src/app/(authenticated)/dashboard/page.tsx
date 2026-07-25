@@ -990,7 +990,7 @@ export default function Dashboard() {
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/?size=100&id=T2sWX12Ltrlf&format=png&color=000000"
+              imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-amber-500"
               onClick={() => {
                 playTapSound();
@@ -1012,7 +1012,7 @@ export default function Dashboard() {
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/?size=100&id=G7q7tdQNp8Df&format=png&color=000000"
+              imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-indigo-500"
               onClick={() => {
                 playTapSound();
@@ -1034,7 +1034,7 @@ export default function Dashboard() {
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/?size=100&id=orBFqOEXlyRY&format=png&color=000000"
+              imageUrl="https://img.icons8.com/fluency/48/sell.png"
               color="bg-sky-500"
               onClick={() => {
                 playTapSound();
@@ -1056,7 +1056,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/fluency/48/buy.png"
+                imageUrl="https://img.icons8.com/bubbles/100/buy.png"
                 color="bg-teal-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1075,7 +1075,7 @@ export default function Dashboard() {
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/?size=100&id=2WTPiYe1pxGL&format=png&color=000000"
+                imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
                 color="bg-emerald-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1113,8 +1113,8 @@ export default function Dashboard() {
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/?size=100&id=HlwD8zZo3kq2&format=png&color=000000"
-                color="bg-rose-500"
+                imageUrl="https://img.icons8.com/color/48/tax.png"
+                color="bg-orange-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
@@ -1132,7 +1132,7 @@ export default function Dashboard() {
                 label={t("due")}
                 value={fmtMoney(totalDues)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/?size=100&id=1UkUBpLuCw8p&format=png&color=000000"
+                imageUrl="https://img.icons8.com/color/48/loan.png"
                 color="bg-amber-600"
                 trendUp={false}
                 className="h-full w-full"
@@ -1152,7 +1152,7 @@ export default function Dashboard() {
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/?size=100&id=ZChZIFRa544N&format=png&color=000000"
+                imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
                 color="bg-emerald-600"
                 trendUp={cashboxTotal >= 0}
                 trend={t("balance")}
@@ -1173,7 +1173,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
                 value={fmtMoney(somitiTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/?size=100&id=a0UZZQ8i2NIo&format=png&color=000000"
+                imageUrl="https://img.icons8.com/color/48/association.png"
                 color="bg-purple-600"
                 trendUp={somitiTotal >= 0}
                 trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
