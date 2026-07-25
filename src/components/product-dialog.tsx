@@ -10,16 +10,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getProducts, type Product } from "@/lib/queries";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2, Scan } from "lucide-react";
 import { createProductFn, updateProductFn, uploadImageFn } from "@/lib/rpc";
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 
 export function ProductDialog({
   open, onOpenChange, product,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void; product?: Product | null;
 }) {
-  const { t } = useT();
+  const { lang, t } = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
@@ -30,6 +31,8 @@ export function ProductDialog({
   const [stock, setStock] = useState("0");
   const [minStock, setMinStock] = useState("5");
   const [category, setCategory] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [attrs, setAttrs] = useState<{ key: string; val: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +47,7 @@ export function ProductDialog({
       setStock(String(product?.stock ?? "0"));
       setMinStock(String(product?.min_stock ?? "5"));
       setCategory(product?.category ?? "");
+      setBarcode(product?.barcode ?? "");
       setFile(null);
       if (product?.attributes) {
         setAttrs(Object.entries(product.attributes).map(([key, val]) => ({ key, val })));
@@ -97,6 +101,7 @@ export function ProductDialog({
         stock: Number(stock) || 0,
         min_stock: Number(minStock) ?? 5,
         category: category.trim(),
+        barcode: barcode.trim() || null,
         attributes: attributesObj,
       };
 
@@ -115,92 +120,128 @@ export function ProductDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{product ? t("edit") : t("add_product")}</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <label className="flex items-center justify-center gap-2 border border-dashed border-border rounded-xl py-5 cursor-pointer hover:bg-secondary/50 transition">
-            <ImagePlus className="size-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">{file ? file.name : t("upload_image")}</span>
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
-          <Field label={t("product_name")}><Input required placeholder={t("product_name")} value={name} onChange={e => setName(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("buy_price")}><Input inputMode="decimal" placeholder={t("buy_price")} value={buy} onChange={e => setBuy(e.target.value)} /></Field>
-            <Field label={t("sell_price") || "Selling Price"}><Input inputMode="decimal" placeholder={t("sell_price") || "Selling Price"} value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t("category")}>
-              <div className="relative flex items-center">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{product ? t("edit") : t("add_product")}</DialogTitle></DialogHeader>
+          <form onSubmit={submit} className="space-y-3">
+            <label className="flex items-center justify-center gap-2 border border-dashed border-border rounded-xl py-5 cursor-pointer hover:bg-secondary/50 transition">
+              <ImagePlus className="size-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{file ? file.name : t("upload_image")}</span>
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            <Field label={t("product_name")}><Input required placeholder={t("product_name")} value={name} onChange={e => setName(e.target.value)} /></Field>
+            
+            {/* Barcode Field with Scan Button */}
+            <Field label={lang === "bn" ? "বারকোড (ঐচ্ছিক)" : "Barcode (Optional)"}>
+              <div className="flex gap-1.5">
                 <Input
-                  placeholder={t("category")}
-                  value={category}
-                  onChange={e => setCategory(e.target.value)}
-                  className="pr-8"
+                  className="font-mono text-xs"
+                  placeholder={lang === "bn" ? "বারকোড লিখুন..." : "Enter barcode number..."}
+                  value={barcode}
+                  onChange={e => setBarcode(e.target.value)}
                 />
-                {categories.length > 0 && (
-                  <select
-                    value=""
-                    onChange={e => {
-                      if (e.target.value) setCategory(e.target.value);
-                    }}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-0 text-[10px] text-muted-foreground w-6 h-6 focus:outline-none cursor-pointer"
-                    title="Select existing category"
-                  >
-                    <option value="">▼</option>
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 w-9 p-0 shrink-0 flex items-center justify-center"
+                  onClick={() => setScannerOpen(true)}
+                  title={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
+                  aria-label={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
+                >
+                  <Scan className="size-4 text-primary" />
+                </Button>
               </div>
             </Field>
-            <Field label={t("min_stock")}><Input inputMode="numeric" placeholder="5" value={minStock} onChange={e => setMinStock(e.target.value)} /></Field>
-          </div>
-          <div className="grid grid-cols-1">
-            <Field label={t("stock")}><Input inputMode="numeric" placeholder={t("stock")} value={stock} onChange={e => setStock(e.target.value)} /></Field>
-          </div>
 
-          <div className="space-y-1.5 border-t border-border pt-2.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">{t("attributes")}</Label>
-              <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] px-1.5" onClick={addAttribute}>
-                <Plus className="size-3 mr-1" /> {t("add_attribute")}
-              </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("buy_price")}><Input inputMode="decimal" placeholder={t("buy_price")} value={buy} onChange={e => setBuy(e.target.value)} /></Field>
+              <Field label={t("sell_price") || "Selling Price"}><Input inputMode="decimal" placeholder={t("sell_price") || "Selling Price"} value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></Field>
             </div>
-            {attrs.length === 0 && (
-              <p className="text-[10px] text-muted-foreground italic">{t("no_results")}</p>
-            )}
-            <div className="space-y-1.5">
-              {attrs.map((attr, i) => (
-                <div key={i} className="flex items-center gap-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("category")}>
+                <div className="relative flex items-center">
                   <Input
-                    className="h-8 text-xs flex-1"
-                    placeholder={t("key")}
-                    value={attr.key}
-                    onChange={e => updateAttribute(i, { key: e.target.value })}
+                    placeholder={t("category")}
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    className="pr-8"
                   />
-                  <Input
-                    className="h-8 text-xs flex-1"
-                    placeholder={t("value")}
-                    value={attr.val}
-                    onChange={e => updateAttribute(i, { val: e.target.value })}
-                  />
-                  <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive shrink-0" onClick={() => removeAttribute(i)}>
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {categories.length > 0 && (
+                    <select
+                      value=""
+                      onChange={e => {
+                        if (e.target.value) setCategory(e.target.value);
+                      }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-0 text-[10px] text-muted-foreground w-6 h-6 focus:outline-none cursor-pointer"
+                      title="Select existing category"
+                    >
+                      <option value="">▼</option>
+                      {categories.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              ))}
+              </Field>
+              <Field label={t("min_stock")}><Input inputMode="numeric" placeholder="5" value={minStock} onChange={e => setMinStock(e.target.value)} /></Field>
             </div>
-          </div>
+            <div className="grid grid-cols-1">
+              <Field label={t("stock")}><Input inputMode="numeric" placeholder={t("stock")} value={stock} onChange={e => setStock(e.target.value)} /></Field>
+            </div>
 
-          <DialogFooter className="gap-2 border-t border-border pt-2.5">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-            <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <div className="space-y-1.5 border-t border-border pt-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">{t("attributes")}</Label>
+                <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] px-1.5" onClick={addAttribute}>
+                  <Plus className="size-3 mr-1" /> {t("add_attribute")}
+                </Button>
+              </div>
+              {attrs.length === 0 && (
+                <p className="text-[10px] text-muted-foreground italic">{t("no_results")}</p>
+              )}
+              <div className="space-y-1.5">
+                {attrs.map((attr, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <Input
+                      className="h-8 text-xs flex-1"
+                      placeholder={t("key")}
+                      value={attr.key}
+                      onChange={e => updateAttribute(i, { key: e.target.value })}
+                    />
+                    <Input
+                      className="h-8 text-xs flex-1"
+                      placeholder={t("value")}
+                      value={attr.val}
+                      onChange={e => updateAttribute(i, { val: e.target.value })}
+                    />
+                    <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive shrink-0" onClick={() => removeAttribute(i)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 border-t border-border pt-2.5">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+              <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onScan={(code) => {
+          setBarcode(code);
+          toast.success(lang === "bn" ? `বারকোড যোগ করা হয়েছে: ${code}` : `Barcode set: ${code}`);
+        }}
+        title={lang === "bn" ? "পণ্য বারকোড স্ক্যান করুন" : "Scan Product Barcode"}
+      />
+    </>
   );
 }
 

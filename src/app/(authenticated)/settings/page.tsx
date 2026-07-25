@@ -18,7 +18,7 @@ import {
   updateEmployeePermissionsFn,
   deleteLicenseFn,
 } from "@/lib/rpc-admin";
-import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle } from "lucide-react";
+import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid } from "lucide-react";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
 import {
@@ -53,13 +53,43 @@ import {
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
 export default function SettingsPage() {
-  const { t } = useT();
+  const { lang, t } = useT();
   const { user, refresh, updateUser } = useAuth();
   const { theme, setTheme, accentColor, setAccentColor, bgStyle, setBgStyle } = useTheme();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const [busy, setBusy] = useState(false);
+
+  // KPI Configuration state
+  const [kpiConfig, setKpiConfig] = useState({
+    align: "left",
+    size: "small",
+    columns: 2,
+    variant: "glass",
+    shadow: "glow",
+    borderStyle: "subtle",
+    curve: "none",
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem("hz_kpi_config");
+    if (saved) {
+      try {
+        setKpiConfig(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
+
+  const updateKpiConfig = (newSettings: Partial<typeof kpiConfig>) => {
+    setKpiConfig(prev => {
+      const updated = { ...prev, ...newSettings };
+      localStorage.setItem("hz_kpi_config", JSON.stringify(updated));
+      window.dispatchEvent(new Event("hz-kpi-config-updated"));
+      toast.success(t("save") || "Saved!");
+      return updated;
+    });
+  };
 
   // Safety settings states
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -515,8 +545,136 @@ export default function SettingsPage() {
                 </select>
               </div>
             </div>
-            <Button type="submit" disabled={busy} className="w-full sm:w-auto">{busy ? "…" : t("save")}</Button>
+            <Button type="submit" disabled={busy} className="w-full sm:w-auto mt-4">{busy ? "…" : t("save")}</Button>
           </form>
+        </Card>
+
+        {/* ── KPI & DASHBOARD CUSTOMIZER ──────────────────────── */}
+        <Card className="glass-card p-5 space-y-4 border border-primary/20">
+          <div className="flex items-center gap-2.5">
+            <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              <LayoutGrid className="size-4" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-sm sm:text-base">{lang === "bn" ? "কেপিআই এবং ড্যাশবোর্ড কাস্টমাইজেশন" : "KPI & Dashboard Box Customizer"}</h2>
+              <p className="text-xs text-muted-foreground">{lang === "bn" ? "ড্যাশবোর্ডের কেপিআই বক্সের আকার (উচ্চতা), শার্পনেস এবং বর্ডার শৈলী পরিবর্তন করুন" : "Customize KPI box heights, corner sharpness, borders, and layouts"}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {/* Box Size */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">{lang === "bn" ? "কেপিআই বক্সের সাইজ (উচ্চতা)" : "KPI Box Height & Size"}</Label>
+              <div className="grid grid-cols-6 gap-1 bg-muted rounded-xl p-1 text-xs">
+                {[
+                  { id: "xxs", label: "XXS" },
+                  { id: "xs", label: "XS" },
+                  { id: "small", label: "Small" },
+                  { id: "standard", label: "Med" },
+                  { id: "large", label: "Large" },
+                  { id: "xl", label: "XL" },
+                ].map(sz => (
+                  <button
+                    key={sz.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ size: sz.id as any })}
+                    className={`py-1.5 rounded-lg text-center text-[11px] font-bold transition-all ${
+                      kpiConfig.size === sz.id
+                        ? "bg-background text-primary shadow-sm ring-1 ring-primary/40"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {sz.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Box Sharpness / Corner Curve */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">{lang === "bn" ? "কর্নার শার্পনেস (Sharpness / Curve)" : "Corner Sharpness & Curve"}</Label>
+              <div className="grid grid-cols-6 gap-1 bg-muted rounded-xl p-1 text-xs">
+                {[
+                  { id: "none", label: "Sharp" },
+                  { id: "sm", label: "Small" },
+                  { id: "md", label: "Med" },
+                  { id: "lg", label: "Round" },
+                  { id: "xl", label: "XL" },
+                  { id: "full", label: "Pill" },
+                ].map(cr => (
+                  <button
+                    key={cr.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ curve: cr.id as any })}
+                    className={`py-1.5 rounded-lg text-center text-[10px] font-bold transition-all ${
+                      (kpiConfig.curve || "none") === cr.id
+                        ? "bg-background text-primary shadow-sm ring-1 ring-primary/40"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Border Style */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">{lang === "bn" ? "বর্ডার স্টাইল" : "Border Style"}</Label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { id: "subtle", label: "Subtle" },
+                  { id: "bold", label: "Bold" },
+                  { id: "pink", label: "Pink" },
+                  { id: "emerald", label: "Emerald" },
+                  { id: "amber", label: "Gold" },
+                  { id: "indigo", label: "Indigo" },
+                  { id: "dashed", label: "Dashed" },
+                  { id: "none", label: "None" },
+                ].map(b => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ borderStyle: b.id as any })}
+                    className={`p-1.5 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                      kpiConfig.borderStyle === b.id
+                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
+                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Card Design Variant */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">{lang === "bn" ? "কার্ড ভ্যারিয়েন্ট" : "Card Theme Variant"}</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                {[
+                  { id: "glass", label: "Glass" },
+                  { id: "flat", label: "Flat" },
+                  { id: "bordered", label: "Bordered" },
+                  { id: "neon", label: "Neon" },
+                  { id: "gradient", label: "Gradient" },
+                ].map(v => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ variant: v.id as any })}
+                    className={`p-1.5 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                      kpiConfig.variant === v.id
+                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
+                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </Card>
 
           {!isUnlocked ? (
@@ -628,7 +786,7 @@ export default function SettingsPage() {
                   {(settings.data?.employeeLicenses ?? []).length === 0 ? (
                     <div className="p-3 text-center text-xs text-muted-foreground">No license keys generated yet.</div>
                   ) : (
-                    (settings.data?.employeeLicenses ?? []).map(l => (
+                    (settings.data?.employeeLicenses ?? []).map((l: any) => (
                       <div key={l.id} className="p-2 flex items-center justify-between gap-2 text-xs">
                         <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px] truncate">{l.id}</code>
                         <div className="flex items-center gap-2 shrink-0">
@@ -670,7 +828,7 @@ export default function SettingsPage() {
         <Card className="glass-card p-5 space-y-4">
           <h2 className="font-semibold">Team & Privileges</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {(settings.data?.employees ?? []).map(emp => (
+          {(settings.data?.employees ?? []).map((emp: any) => (
             <EmployeePermissions
               key={emp.id}
               employee={emp}

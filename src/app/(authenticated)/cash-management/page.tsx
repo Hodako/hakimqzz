@@ -44,14 +44,14 @@ function KPI({ label, value, icon: Icon, color, sub }: {
   label: string; value: string; icon: React.ElementType; color: string; sub?: string;
 }) {
   return (
-    <Card className="p-4 sm:p-5 flex items-center gap-4">
-      <div className={`size-10 sm:size-11 rounded-xl ${color} flex items-center justify-center shrink-0`}>
-        <Icon className="size-5 text-white" />
+    <Card className="p-3 sm:p-4 flex items-center gap-3 rounded-none">
+      <div className={`size-8 sm:size-9 rounded-none ${color} flex items-center justify-center shrink-0`}>
+        <Icon className="size-4 text-white" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-muted-foreground truncate" title={label}>{label}</div>
-        <div className="text-lg sm:text-xl font-bold mt-0.5 truncate" title={value}>{value}</div>
-        {sub && <div className="text-xs text-muted-foreground truncate" title={sub}>{sub}</div>}
+        <div className="text-[11px] text-muted-foreground truncate" title={label}>{label}</div>
+        <div className="text-sm sm:text-base font-bold mt-0.5 truncate" title={value}>{value}</div>
+        {sub && <div className="text-[10px] text-muted-foreground truncate" title={sub}>{sub}</div>}
       </div>
     </Card>
   );

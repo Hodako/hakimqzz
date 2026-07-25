@@ -1,101 +1,112 @@
-const CACHE_NAME = "dreamfashion-v5";
-const ASSETS_TO_CACHE = [
-  "/",
+const CACHE_NAME = "dreamfashion-v6";
+
+// Only static assets that definitely exist — no page routes
+// Page routes are handled by network-first at runtime
+const PRECACHE_ASSETS = [
   "/manifest.json",
   "/logo.png",
   "/apple-touch-icon.png",
   "/icon-512.png",
-  "/login_illustration.jpg",
-  "/dashboard",
-  "/sales",
-  "/purchases",
-  "/expenses",
-  "/customers",
-  "/more",
-  "/cash-management",
-  "/somiti",
-  "/reports",
-  "/dues",
-  "/trackback"
 ];
 
+// ── Install: pre-cache static assets individually (never crash the SW) ──────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      const requests = ASSETS_TO_CACHE.map(url => new Request(url, { cache: "reload" }));
-      return cache.addAll(requests);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const results = await Promise.allSettled(
+        PRECACHE_ASSETS.map(async (url) => {
+          try {
+            const response = await fetch(url, { cache: "reload" });
+            if (response && response.status === 200) {
+              await cache.put(url, response);
+            }
+          } catch (err) {
+            // Silently skip assets that fail (network offline, 404, etc.)
+            console.warn("[SW] Pre-cache skipped:", url, err);
+          }
+        })
+      );
+      return results;
     })
   );
   self.skipWaiting();
 });
 
+// ── Activate: delete ALL old caches (removes stale main-app.js etc.) ────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
+    caches.keys().then((keys) =>
+      Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log("[SW] Deleting old cache:", key);
             return caches.delete(key);
           }
         })
-      );
-    })
+      )
+    )
   );
   self.clients.claim();
 });
 
+// ── Fetch: safe cache.put() — only store valid 200 responses ─────────────────
 self.addEventListener("fetch", (event) => {
+  // Only handle GET requests
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
 
-  // Exclude Next.js hot-reloads, API calls, and chrome extensions
+  // Skip: non-http, Next.js HMR, API routes, chrome-extension, cross-origin fonts
   if (
+    !url.protocol.startsWith("http") ||
     url.pathname.includes("/_next/webpack-hmr") ||
-    url.pathname.includes("/api/") ||
-    !url.protocol.startsWith("http")
+    url.pathname.startsWith("/api/") ||
+    url.hostname !== self.location.hostname
   ) {
     return;
   }
 
-  const isHashedAsset = url.pathname.includes("/_next/static/");
+  const isHashedAsset = url.pathname.startsWith("/_next/static/");
 
   if (isHashedAsset) {
-    // Cache-First strategy for Next.js hashed static assets (JS, CSS, fonts)
+    // Cache-First: hashed JS/CSS/font chunks never change filename
     event.respondWith(
-      caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
-        return fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
+      caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response && response.status === 200 && response.type !== "opaque") {
+            const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(event.request, clone).catch(() => {});
             });
           }
-          return networkResponse;
-        });
+          return response;
+        }).catch(() => caches.match(event.request, { ignoreSearch: true }));
       })
     );
   } else {
-    // Network-First strategy for pages, images, logo, manifest
+    // Network-First: pages & other assets — serve fresh, fall back to cache
     event.respondWith(
       fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
+        .then((response) => {
+          // Only cache valid, same-origin, non-opaque successful responses
+          if (
+            response &&
+            response.status === 200 &&
+            response.type === "basic"
+          ) {
+            const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
+              cache.put(event.request, clone).catch(() => {});
             });
           }
-          return networkResponse;
+          return response;
         })
-        .catch((err) => {
-          // If offline and network request fails, fall back to cached version
-          return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            throw err;
-          });
-        })
+        .catch(() =>
+          caches.match(event.request, { ignoreSearch: true }).then(
+            (cached) => cached || new Response("Offline", { status: 503 })
+          )
+        )
     );
   }
 });

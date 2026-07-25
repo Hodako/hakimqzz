@@ -34,6 +34,8 @@ import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/permission-guard";
 import { FloatingAiChat } from "@/components/floating-ai-chat";
 
+import { CustomHomeIcon } from "@/components/custom-home-icon";
+
 type NavItem = {
   to: string;
   labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits" | "customers";
@@ -47,7 +49,7 @@ const desktopNavGroups: NavGroup[] = [
   {
     labelKey: "navigation",
     items: [
-      { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
+      { to: "/dashboard", labelKey: "home", icon: CustomHomeIcon, perm: "dashboard" },
       { to: "/products", labelKey: "products", icon: Package, perm: "products" },
       { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
       { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },
@@ -81,7 +83,7 @@ const desktopNavGroups: NavGroup[] = [
 ];
 
 const mobileNav: NavItem[] = [
-  { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
+  { to: "/dashboard", labelKey: "home", icon: CustomHomeIcon, perm: "dashboard" },
   { to: "/products", labelKey: "products", icon: Package, perm: "products" },
   { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
   { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },

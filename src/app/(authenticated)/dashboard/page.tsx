@@ -7,10 +7,11 @@ import {
   TrendingUp, Wallet, AlertCircle, Receipt, ShoppingBag,
   Package, PlusCircle, ArrowUpRight, ArrowDownRight,
   DollarSign, Banknote, Users, Search, ChevronDown, ChevronUp, ArrowUpDown,
-  Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square
+  Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square,
+  Palette, Sparkles, LayoutGrid, SlidersHorizontal, Layers
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements } from "@/lib/queries";
+import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements, getPurchases, getSomiti } from "@/lib/queries";
 import type { Reminder } from "@/lib/queries";
 import { cashboxBalance } from "@/lib/cashbox-utils";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -87,87 +88,171 @@ function groupAllDataByDay(sales: any[], expenses: any[], days: number) {
   return Object.values(result);
 }
 
-// ── stat card ─────────────────────────────────────────────────────────────
+// ── Bento Grid KPICard ─────────────────────────────────────────────────────────────
 function KPICard({
-  label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName, align = "left", size = "standard",
+  label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName,
+  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false,
 }: {
   label: string; value: string; sub?: string;
   icon?: React.ElementType; imageUrl?: string; trend?: string; trendUp?: boolean; color: string;
   onClick?: () => void; className?: string; imageClassName?: string;
   align?: "left" | "center" | "right";
-  size?: "small" | "standard" | "large";
+  size?: "xxs" | "xs" | "small" | "standard" | "large" | "xl";
+  variant?: "glass" | "flat" | "bordered" | "neon" | "gradient";
+  shadowStyle?: "none" | "soft" | "deep" | "glow" | "neon";
+  borderStyle?: "subtle" | "bold" | "pink" | "emerald" | "amber" | "indigo" | "dashed" | "none";
+  curve?: "none" | "sm" | "md" | "lg" | "xl" | "full";
+  isBentoHero?: boolean;
 }) {
   const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
   
-  // Reduced Padding & Text Sizes to make it compact
-  const sizePadding = "p-2.5 sm:p-3 gap-1 sm:gap-1.5";
-  const labelSize = "text-[10px] sm:text-[11px]";
-  const valSize = "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg md:text-xl font-bold truncate w-full";
-  const subSize = "text-[8px] sm:text-[9px]";
+  const sizePadding =
+    size === "xxs"
+      ? "px-1.5 py-1 min-h-[36px] gap-0.5"
+      : size === "xs"
+        ? "px-2 py-1 min-h-[42px] gap-0.5"
+        : size === "small"
+          ? "px-2 py-1 min-h-[48px] gap-1"
+          : size === "large"
+            ? "px-3 py-1.5 min-h-[70px] gap-1.5"
+            : size === "xl"
+              ? "px-3.5 py-2 min-h-[85px] gap-2"
+              : "px-2.5 py-1.5 min-h-[56px] gap-1";
 
-  // Dynamic Theme Mapping for soft light gradients and beautiful shadows
+  const labelSize =
+    size === "xxs"
+      ? "text-[8px]"
+      : size === "xs"
+        ? "text-[9px]"
+        : size === "small"
+          ? "text-[10px]"
+          : size === "large"
+            ? "text-xs sm:text-sm font-semibold"
+            : size === "xl"
+              ? "text-xs sm:text-sm font-bold"
+              : "text-[10px] sm:text-[11px]";
+
+  const valSize =
+    size === "xxs"
+      ? "text-[11px] font-bold truncate w-full"
+      : size === "xs"
+        ? "text-xs font-bold truncate w-full"
+        : size === "small"
+          ? "text-xs min-[360px]:text-sm font-bold truncate w-full"
+          : size === "large"
+            ? "text-base min-[360px]:text-lg sm:text-xl font-extrabold truncate w-full"
+            : size === "xl"
+              ? "text-lg min-[360px]:text-xl sm:text-2xl font-black truncate w-full"
+              : "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg font-bold truncate w-full";
+
+  const iconImgSize =
+    size === "xxs"
+      ? "size-4 sm:size-5"
+      : size === "xs"
+        ? "size-5 sm:size-6"
+        : size === "small"
+          ? "size-6 sm:size-7 md:size-8"
+          : size === "large"
+            ? "size-10 sm:size-12"
+            : size === "xl"
+              ? "size-12 sm:size-14"
+              : "size-7 sm:size-8 md:size-9";
+
+  const subSize = size === "xxs" || size === "xs" || size === "small" ? "text-[8px]" : "text-[8px] sm:text-[9px]";
+
+  const getCurveClass = () => {
+    switch (curve) {
+      case "none": return "rounded-none";
+      case "sm": return "rounded-sm";
+      case "md": return "rounded-md";
+      case "lg": return "rounded-lg";
+      case "xl": return "rounded-xl";
+      case "full": return "rounded-2xl";
+      default: return "rounded-none";
+    }
+  };
+
+  // PC version high-contrast outline & custom border style
+  const getBorderClass = () => {
+    switch (borderStyle) {
+      case "bold": return "border-2 border-primary md:border-2 md:border-primary shadow-sm";
+      case "pink": return "border-2 border-[#E2136E] shadow-[0_0_15px_rgba(226,19,110,0.22)]";
+      case "emerald": return "border-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.22)]";
+      case "amber": return "border-2 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.22)]";
+      case "indigo": return "border-2 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.22)]";
+      case "dashed": return "border-2 border-dashed border-primary/70";
+      case "none": return "border-0";
+      default: return "border border-border/80 md:border-2 md:border-border/90";
+    }
+  };
+
   const getCardTheme = () => {
+    let shadowClass = "";
+    if (shadowStyle === "none") shadowClass = "shadow-none";
+    else if (shadowStyle === "soft") shadowClass = "shadow-sm hover:shadow-md";
+    else if (shadowStyle === "deep") shadowClass = "shadow-lg hover:shadow-2xl";
+    else if (shadowStyle === "glow") shadowClass = "shadow-[0_8px_25px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_25px_rgba(0,0,0,0.35)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.15)]";
+    else if (shadowStyle === "neon") shadowClass = "shadow-[0_0_20px_rgba(59,130,246,0.25)] hover:shadow-[0_0_30px_rgba(59,130,246,0.45)]";
+
+    const customBorder = getBorderClass();
+
+    if (variant === "flat") {
+      return {
+        bg: `bg-card ${customBorder}`,
+        shadow: shadowClass,
+      };
+    }
+    if (variant === "bordered") {
+      return {
+        bg: `bg-card/95 backdrop-blur-md ${customBorder}`,
+        shadow: shadowClass,
+      };
+    }
+    if (variant === "neon") {
+      return {
+        bg: `bg-zinc-950/90 dark:bg-zinc-950/95 backdrop-blur-xl ${customBorder} text-white`,
+        shadow: "shadow-[0_0_25px_rgba(16,185,129,0.22)] hover:shadow-[0_0_35px_rgba(16,185,129,0.42)]",
+      };
+    }
+    if (variant === "gradient") {
+      return {
+        bg: `bg-gradient-to-br from-primary/10 via-card to-primary/5 ${customBorder}`,
+        shadow: shadowClass,
+      };
+    }
+    // Default: Glassmorphic Fintech Bento
     switch (color) {
       case "bg-emerald-500":
         return {
-          gradient: "bg-gradient-to-br from-white via-emerald-50/20 to-emerald-500/5 dark:from-zinc-900 dark:via-emerald-950/10 dark:to-emerald-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(16,185,129,0.06)] dark:shadow-[0_6px_20px_rgba(16,185,129,0.03)] hover:shadow-[0_10px_25px_rgba(16,185,129,0.15)]",
-          border: "border-emerald-500/20 hover:border-emerald-500/40"
+          bg: `bg-gradient-to-br from-white/95 via-emerald-50/40 to-emerald-500/10 dark:from-zinc-900/95 dark:via-emerald-950/30 dark:to-emerald-500/10 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_22px_rgba(16,185,129,0.12)] hover:shadow-[0_10px_30px_rgba(16,185,129,0.22)]",
         };
       case "bg-rose-500":
         return {
-          gradient: "bg-gradient-to-br from-white via-rose-50/20 to-rose-500/5 dark:from-zinc-900 dark:via-rose-950/10 dark:to-rose-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(244,63,94,0.06)] dark:shadow-[0_6px_20px_rgba(244,63,94,0.03)] hover:shadow-[0_10px_25px_rgba(244,63,94,0.15)]",
-          border: "border-rose-500/20 hover:border-rose-500/40"
+          bg: `bg-gradient-to-br from-white/95 via-rose-50/40 to-rose-500/10 dark:from-zinc-900/95 dark:via-rose-950/30 dark:to-rose-500/10 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_22px_rgba(244,63,94,0.12)] hover:shadow-[0_10px_30px_rgba(244,63,94,0.22)]",
         };
       case "bg-indigo-500":
       case "bg-indigo-600":
         return {
-          gradient: "bg-gradient-to-br from-white via-indigo-50/20 to-indigo-500/5 dark:from-zinc-900 dark:via-indigo-950/10 dark:to-indigo-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(99,102,241,0.06)] dark:shadow-[0_6px_20px_rgba(99,102,241,0.03)] hover:shadow-[0_10px_25px_rgba(99,102,241,0.15)]",
-          border: "border-indigo-500/20 hover:border-indigo-500/40"
+          bg: `bg-gradient-to-br from-white/95 via-indigo-50/40 to-indigo-500/10 dark:from-zinc-900/95 dark:via-indigo-950/30 dark:to-indigo-500/10 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_22px_rgba(99,102,241,0.12)] hover:shadow-[0_10px_30px_rgba(99,102,241,0.22)]",
         };
       case "bg-amber-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-amber-50/20 to-amber-500/5 dark:from-zinc-900 dark:via-amber-950/10 dark:to-amber-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(245,158,11,0.06)] dark:shadow-[0_6px_20px_rgba(245,158,11,0.03)] hover:shadow-[0_10px_25px_rgba(245,158,11,0.15)]",
-          border: "border-amber-500/20 hover:border-amber-500/40"
-        };
       case "bg-amber-600":
         return {
-          gradient: "bg-gradient-to-br from-white via-amber-50/25 to-amber-600/5 dark:from-zinc-900 dark:via-amber-950/15 dark:to-amber-600/5",
-          shadow: "shadow-[0_6px_20px_rgba(217,119,6,0.06)] dark:shadow-[0_6px_20px_rgba(217,119,6,0.03)] hover:shadow-[0_10px_25px_rgba(217,119,6,0.15)]",
-          border: "border-amber-600/20 hover:border-amber-600/40"
+          bg: `bg-gradient-to-br from-white/95 via-amber-50/40 to-amber-500/10 dark:from-zinc-900/95 dark:via-amber-950/30 dark:to-amber-500/10 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_22px_rgba(245,158,11,0.12)] hover:shadow-[0_10px_30px_rgba(245,158,11,0.22)]",
         };
       case "bg-sky-500":
         return {
-          gradient: "bg-gradient-to-br from-white via-sky-50/20 to-sky-500/5 dark:from-zinc-900 dark:via-sky-950/10 dark:to-sky-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(14,165,233,0.06)] dark:shadow-[0_6px_20px_rgba(14,165,233,0.03)] hover:shadow-[0_10px_25px_rgba(14,165,233,0.15)]",
-          border: "border-sky-500/20 hover:border-sky-500/40"
-        };
-      case "bg-teal-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(20,184,166,0.06)] dark:shadow-[0_6px_20px_rgba(20,184,166,0.03)] hover:shadow-[0_10px_25px_rgba(20,184,166,0.15)]",
-          border: "border-teal-500/20 hover:border-teal-500/40"
-        };
-      case "bg-pink-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-pink-50/20 to-pink-500/5 dark:from-zinc-900 dark:via-pink-950/10 dark:to-pink-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(236,72,153,0.06)] dark:shadow-[0_6px_20px_rgba(236,72,153,0.03)] hover:shadow-[0_10px_25px_rgba(236,72,153,0.15)]",
-          border: "border-pink-500/20 hover:border-pink-500/40"
-        };
-      case "bg-orange-500":
-        return {
-          gradient: "bg-gradient-to-br from-white via-orange-50/20 to-orange-500/5 dark:from-zinc-900 dark:via-orange-950/10 dark:to-orange-500/5",
-          shadow: "shadow-[0_6px_20px_rgba(249,115,22,0.06)] dark:shadow-[0_6px_20px_rgba(249,115,22,0.03)] hover:shadow-[0_10px_25px_rgba(249,115,22,0.15)]",
-          border: "border-orange-500/20 hover:border-orange-500/40"
+          bg: `bg-gradient-to-br from-white/95 via-sky-50/40 to-sky-500/10 dark:from-zinc-900/95 dark:via-sky-950/30 dark:to-sky-500/10 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_22px_rgba(14,165,233,0.12)] hover:shadow-[0_10px_30px_rgba(14,165,233,0.22)]",
         };
       default:
         return {
-          gradient: "bg-gradient-to-br from-white to-zinc-50/50 dark:from-zinc-900 dark:to-zinc-950/50",
-          shadow: "shadow-[0_6px_20px_rgba(0,0,0,0.04)]",
-          border: "border-border/80 hover:border-primary/20"
+          bg: `bg-gradient-to-br from-white/95 to-zinc-100/60 dark:from-zinc-900/95 dark:to-zinc-950/85 backdrop-blur-md ${customBorder}`,
+          shadow: shadowStyle === "none" ? "shadow-none" : "shadow-[0_6px_20px_rgba(0,0,0,0.05)]",
         };
     }
   };
@@ -177,32 +262,33 @@ function KPICard({
   return (
     <Card
       onClick={onClick}
-      className={`flex flex-col transition-all duration-300 ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.gradient} ${themeStyle.shadow} ${themeStyle.border} border rounded-[16px] beveled-card ${
-        onClick
-          ? "cursor-pointer hover:border-primary/45 active:scale-[0.985]"
-          : ""
+      className={`group flex flex-col justify-between transition-colors duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${themeStyle.shadow} ${getCurveClass()} md:outline md:outline-1 md:outline-border/70 md:hover:outline-primary/60 ${
+        onClick ? "cursor-pointer hover:border-primary/40 active:opacity-90" : ""
       }`}
     >
+
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
-        <span className={`${labelSize} font-medium text-muted-foreground truncate mr-2`}>{label}</span>
+        <span className={`${labelSize} font-bold text-muted-foreground truncate mr-2 tracking-tight`}>{label}</span>
         {imageUrl ? (
-          <div className="size-6 sm:size-7 flex items-center justify-center shrink-0">
-            <img src={imageUrl} className={`size-5 sm:size-6 object-contain ${imageClassName || ""}`} alt={label} />
+          <div className="flex items-center justify-center shrink-0">
+            <img src={imageUrl} className={`${iconImgSize} object-contain ${imageClassName || ""}`} alt={label} />
           </div>
         ) : Icon ? (
-          <div className={`size-6 sm:size-7 rounded-lg ${color} flex items-center justify-center shrink-0`}>
-            <Icon className="size-3.5 sm:size-4 text-white" />
+          <div className="flex items-center justify-center shrink-0">
+            <Icon className={`${iconImgSize} text-primary`} />
           </div>
         ) : null}
       </div>
-      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"} mt-1 min-w-0`}>
+
+      <div className={`flex flex-col w-full ${align === "center" ? "items-center" : align === "right" ? "items-end" : "items-start"} mt-1 min-w-0 z-10`}>
         <div className={`${valSize} font-bold tracking-tight text-foreground`} title={value}>{value}</div>
         {sub && <div className={`${subSize} text-muted-foreground mt-0.5 truncate w-full`} title={sub}>{sub}</div>}
       </div>
+
       {trend && (
-        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600" : "text-red-500"} mt-0.5 truncate w-full`} title={trend}>
+        <div className={`flex items-center gap-1 ${subSize} font-medium ${trendUp ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"} mt-0.5 truncate w-full z-10`} title={trend}>
           {trendUp ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-          {trend}
+          <span>{trend}</span>
         </div>
       )}
     </Card>
@@ -241,6 +327,8 @@ export default function Dashboard() {
   const cashbox = useCashboxQuery();
   const products = useCachedQuery(["products"], getProducts);
   const parties = useCachedQuery(["parties"], getParties);
+  const purchases = useCachedQuery(["purchases"], getPurchases);
+  const somiti = useCachedQuery(["somiti"], getSomiti);
   const allPayments = useCachedQuery(["all-payments"], getAllPayments);
   const allReceivables = useCachedQuery(["all-party-receivables"], getAllPartyReceivables);
   const allPayables = useCachedQuery(["all-party-payables"], getAllPartyPayables);
@@ -308,19 +396,72 @@ export default function Dashboard() {
   // Best Selling Limit state
   const [bestSellingLimit, setBestSellingLimit] = useState(5);
 
+  // Helper to ensure purchases and somiti exist in kpi order
+  const normalizeKpiOrder = (order?: string[]) => {
+    const defaultList = ["credit_sale", "cash_sale", "online_sell", "purchases", "profit", "loss", "expense", "due", "cashbox", "somiti"];
+    if (!order || !Array.isArray(order)) return defaultList;
+    const list = [...order];
+    if (!list.includes("purchases")) {
+      const idx = list.indexOf("online_sell");
+      if (idx !== -1) list.splice(idx + 1, 0, "purchases");
+      else list.push("purchases");
+    }
+    if (!list.includes("somiti")) {
+      const idx = list.indexOf("cashbox");
+      if (idx !== -1) list.splice(idx + 1, 0, "somiti");
+      else list.push("somiti");
+    }
+    return list;
+  };
+
   // KPI Configuration state
   const [kpiConfig, setKpiConfig] = useState({
     align: "left",
-    size: "standard",
+    size: "small",
     columns: 2,
-    order: ["credit_sale", "cash_sale", "online_sell", "profit", "loss", "expense", "due", "cashbox"]
+    variant: "glass",
+    shadow: "glow",
+    borderStyle: "subtle",
+    curve: "none",
+    bentoGrid: true,
+    order: ["credit_sale", "cash_sale", "online_sell", "purchases", "profit", "loss", "expense", "due", "cashbox", "somiti"]
   });
+
+  const [bentoCustomizerOpen, setBentoCustomizerOpen] = useState(false);
+
+  const updateKpiConfig = (newSettings: Partial<typeof kpiConfig>) => {
+    setKpiConfig(prev => {
+      const updated = { ...prev, ...newSettings };
+      localStorage.setItem("hz_kpi_config", JSON.stringify(updated));
+      window.dispatchEvent(new Event("hz-kpi-config-updated"));
+      return updated;
+    });
+  };
+
+  const sizesList = ["xxs", "xs", "small", "standard", "large", "xl"] as const;
+  const increaseKpiSize = () => {
+    const currentIdx = sizesList.indexOf((kpiConfig.size as any) || "standard");
+    if (currentIdx < sizesList.length - 1) {
+      updateKpiConfig({ size: sizesList[currentIdx + 1] });
+    }
+  };
+  const decreaseKpiSize = () => {
+    const currentIdx = sizesList.indexOf((kpiConfig.size as any) || "standard");
+    if (currentIdx > 0) {
+      updateKpiConfig({ size: sizesList[currentIdx - 1] });
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem("hz_kpi_config");
     if (saved) {
       try {
-        setKpiConfig(prev => ({ ...prev, ...JSON.parse(saved) }));
+        const parsed = JSON.parse(saved);
+        setKpiConfig(prev => ({
+          ...prev,
+          ...parsed,
+          order: normalizeKpiOrder(parsed.order)
+        }));
       } catch (e) {
         console.error("Failed to parse kpi config", e);
       }
@@ -329,7 +470,12 @@ export default function Dashboard() {
       const savedNew = localStorage.getItem("hz_kpi_config");
       if (savedNew) {
         try {
-          setKpiConfig(prev => ({ ...prev, ...JSON.parse(savedNew) }));
+          const parsed = JSON.parse(savedNew);
+          setKpiConfig(prev => ({
+            ...prev,
+            ...parsed,
+            order: normalizeKpiOrder(parsed.order)
+          }));
         } catch (e) {
           console.error(e);
         }
@@ -471,6 +617,19 @@ export default function Dashboard() {
   const creditToday  = filteredSales.filter(s => s.type === "credit").reduce((a, s) => a + Number(s.due_amount), 0);
   const onlineToday  = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
   
+  const filteredPurchases = (purchases.data ?? []).filter(p => {
+    const d = new Date(p.created_at);
+    const showToday = !dateFilter.from && !dateFilter.to;
+    const fromOk = showToday
+      ? d >= today
+      : !dateFilter.from || d >= new Date(dateFilter.from);
+    const toOk = showToday
+      ? d < tomorrow
+      : !dateFilter.to || d <= new Date(dateFilter.to + "T23:59:59");
+    return fromOk && toOk;
+  });
+  const purchasesToday = filteredPurchases.reduce((a, p) => a + Number(p.total), 0);
+
   // profit today
   const profitToday  = filteredSales.reduce((a, s) => a + Number(s.profit), 0);
   
@@ -493,6 +652,16 @@ export default function Dashboard() {
     }
     return cashboxBalance(allCashbox);
   }, [allCashbox, dateFilter]);
+
+  const somitiTotal = useMemo(() => {
+    const allS = somiti.data ?? [];
+    if (dateFilter.to || dateFilter.from) {
+      const maxDate = dateFilter.to ? new Date(dateFilter.to + "T23:59:59") : new Date(dateFilter.from + "T23:59:59");
+      const filtered = allS.filter(s => new Date(s.created_at) <= maxDate);
+      return filtered.reduce((sum, s) => sum + (s.kind === "deposit" ? Number(s.amount) : -Number(s.amount)), 0);
+    }
+    return allS.reduce((sum, s) => sum + (s.kind === "deposit" ? Number(s.amount) : -Number(s.amount)), 0);
+  }, [somiti.data, dateFilter]);
 
   // Stock Valuation
   const totalStockCostValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + (p.buy_price * p.stock), 0);
@@ -809,7 +978,11 @@ export default function Dashboard() {
   const renderWidget = (widgetId: string) => {
     switch (widgetId) {
       case "kpis":
-        // Define all cards dynamically in a map
+        const isHeroCard = (id: string) => kpiConfig.bentoGrid && (id === "cash_sale" || id === "profit" || id === "cashbox");
+        const allowPurchases = perms ? canAccess(perms, "purchases") : true;
+        const allowSomiti = perms ? canAccess(perms, "expenses") : true;
+
+        // Define all cards dynamically in a map with Bento Grid & Custom Style options
         const kpiCardsMap: Record<string, React.ReactNode> = {
           credit_sale: (
             <KPICard
@@ -817,7 +990,7 @@ export default function Dashboard() {
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="https://img.icons8.com/?size=100&id=T2sWX12Ltrlf&format=png&color=000000"
               color="bg-amber-500"
               onClick={() => {
                 playTapSound();
@@ -826,6 +999,11 @@ export default function Dashboard() {
               }}
               align={kpiConfig.align as any}
               size={kpiConfig.size as any}
+              variant={(kpiConfig.variant || "glass") as any}
+              shadowStyle={(kpiConfig.shadow || "glow") as any}
+              borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+              curve={(kpiConfig.curve || "none") as any}
+              isBentoHero={isHeroCard("credit_sale")}
             />
           ),
           cash_sale: (
@@ -834,7 +1012,7 @@ export default function Dashboard() {
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="https://img.icons8.com/?size=100&id=G7q7tdQNp8Df&format=png&color=000000"
               color="bg-indigo-500"
               onClick={() => {
                 playTapSound();
@@ -843,6 +1021,11 @@ export default function Dashboard() {
               }}
               align={kpiConfig.align as any}
               size={kpiConfig.size as any}
+              variant={(kpiConfig.variant || "glass") as any}
+              shadowStyle={(kpiConfig.shadow || "glow") as any}
+              borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+              curve={(kpiConfig.curve || "none") as any}
+              isBentoHero={isHeroCard("cash_sale")}
             />
           ),
           online_sell: (
@@ -851,100 +1034,171 @@ export default function Dashboard() {
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="https://img.icons8.com/?size=100&id=orBFqOEXlyRY&format=png&color=000000"
               color="bg-sky-500"
               onClick={() => {
                 playTapSound();
                 setSalePresetType("online");
                 setSaleOpen(true);
               }}
-              className={kpiConfig.columns > 1 ? "col-span-2" : ""}
               align={kpiConfig.align as any}
               size={kpiConfig.size as any}
+              variant={(kpiConfig.variant || "glass") as any}
+              shadowStyle={(kpiConfig.shadow || "glow") as any}
+              borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+              curve={(kpiConfig.curve || "none") as any}
+              isBentoHero={isHeroCard("online_sell")}
             />
           ),
+          purchases: allowPurchases ? (
+            <Link href="/purchases" className={`block ${isHeroCard("purchases") ? "sm:col-span-2" : ""}`} key="purchases" onClick={() => playTapSound()}>
+              <KPICard
+                label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
+                value={fmtMoney(purchasesToday)}
+                sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/fluency/48/buy.png"
+                color="bg-teal-500"
+                className="h-full w-full"
+                align={kpiConfig.align as any}
+                size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={isHeroCard("purchases")}
+              />
+            </Link>
+          ) : <div key="purchases" className="hidden" />,
           profit: (
-            <Link href="/profits" className="block" key="profit" onClick={() => playTapSound()}>
+            <Link href="/profits" className={`block ${isHeroCard("profit") ? "sm:col-span-2" : ""}`} key="profit" onClick={() => playTapSound()}>
               <KPICard
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
+                imageUrl="https://img.icons8.com/?size=100&id=2WTPiYe1pxGL&format=png&color=000000"
                 color="bg-emerald-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={isHeroCard("profit")}
               />
             </Link>
           ),
           loss: (
-            <Link href="/losses" className="block" key="loss" onClick={() => playTapSound()}>
+            <Link href="/losses" className={`block ${isHeroCard("loss") ? "sm:col-span-2" : ""}`} key="loss" onClick={() => playTapSound()}>
               <KPICard
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/external-flaticons-lineal-color-flat-icons/64/external-loss-casino-flaticons-lineal-color-flat-icons.png"
+                imageUrl="https://img.icons8.com/color/48/depreciation.png"
                 color="bg-rose-500"
                 className="h-full w-full"
-                imageClassName="dark:invert"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={isHeroCard("loss")}
               />
             </Link>
           ),
           expense: canAccess(perms, "expenses") ? (
-            <Link href="/expenses" className="block" key="expense" onClick={() => playTapSound()}>
+            <Link href="/expenses" className={`block ${isHeroCard("expense") ? "sm:col-span-2" : ""}`} key="expense" onClick={() => playTapSound()}>
               <KPICard
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/tax.png"
+                imageUrl="https://img.icons8.com/?size=100&id=HlwD8zZo3kq2&format=png&color=000000"
                 color="bg-rose-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={isHeroCard("expense")}
               />
             </Link>
           ) : <div key="expense" className="hidden" />,
           due: canAccess(perms, "parties") ? (
-            <Link href="/dues" className="block" key="due" onClick={() => playTapSound()}>
+            <Link href="/dues" className={`block ${isHeroCard("due") ? "sm:col-span-2" : ""}`} key="due" onClick={() => playTapSound()}>
               <KPICard
                 label={t("due")}
                 value={fmtMoney(totalDues)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/loan.png"
+                imageUrl="https://img.icons8.com/?size=100&id=1UkUBpLuCw8p&format=png&color=000000"
                 color="bg-amber-600"
                 trendUp={false}
                 className="h-full w-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={isHeroCard("due")}
               />
             </Link>
           ) : <div key="due" className="hidden" />,
           cashbox: canAccess(perms, "cashbox") ? (
-            <Link href="/cash-management/cashbox" className={`block ${kpiConfig.columns > 1 ? "col-span-2 h-24 sm:h-36" : "h-full"}`} key="cashbox" onClick={() => playTapSound()}>
+            <Link href="/cash-management/cashbox" className="block w-full" key="cashbox" onClick={() => playTapSound()}>
               <KPICard
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
-                color="bg-indigo-600"
+                imageUrl="https://img.icons8.com/?size=100&id=ZChZIFRa544N&format=png&color=000000"
+                color="bg-emerald-600"
                 trendUp={cashboxTotal >= 0}
                 trend={t("balance")}
-                className="h-full w-full justify-between"
+                className="w-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={false}
               />
             </Link>
           ) : <div key="cashbox" className="hidden" />,
+          somiti: allowSomiti ? (
+            <Link href="/somiti" className="block w-full" key="somiti" onClick={() => playTapSound()}>
+              <KPICard
+                label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
+                value={fmtMoney(somitiTotal)}
+                sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/?size=100&id=a0UZZQ8i2NIo&format=png&color=000000"
+                color="bg-purple-600"
+                trendUp={somitiTotal >= 0}
+                trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
+                className="w-full"
+                align={kpiConfig.align as any}
+                size={kpiConfig.size as any}
+                variant={(kpiConfig.variant || "glass") as any}
+                shadowStyle={(kpiConfig.shadow || "glow") as any}
+                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+                curve={(kpiConfig.curve || "none") as any}
+                isBentoHero={false}
+              />
+            </Link>
+          ) : <div key="somiti" className="hidden" />,
         };
 
-        const gridColsClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : "grid-cols-2";
+        const gridColsClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : kpiConfig.columns === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2";
 
         return (
-          <Card key="kpis" className="p-3.5 border border-border space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+          <Card key="kpis" className="p-3.5 border border-border space-y-3 bg-card/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition-all">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("key_metrics")}</span>
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <LayoutGrid className="size-4 text-primary animate-pulse" />
+                {t("key_metrics")}
+              </span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => { playTapSound(); setCollapsed(prev => ({ ...prev, kpis: !prev.kpis })); }}>
                 {collapsed.kpis ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
               </Button>
@@ -952,7 +1206,7 @@ export default function Dashboard() {
 
             {!collapsed.kpis && (
               <div className="space-y-2.5">
-                <div className={`grid gap-2 ${gridColsClass}`}>
+                <div className={`grid gap-2.5 ${gridColsClass}`}>
                   {kpiConfig.order.map(key => kpiCardsMap[key])}
                 </div>
               </div>
@@ -1271,6 +1525,20 @@ export default function Dashboard() {
               size={kpiConfig.size as any}
             />
           ),
+          purchases: canAccess(perms, "purchases") ? (
+            <Link href="/purchases" className="block" key="purchases" onClick={() => playTapSound()}>
+              <KPICard
+                label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
+                value={fmtMoney(purchasesToday)}
+                sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/bubbles/100/buy.png"
+                color="bg-teal-500"
+                className="h-full"
+                align={kpiConfig.align as any}
+                size={kpiConfig.size as any}
+              />
+            </Link>
+          ) : <div key="purchases" className="hidden" />,
           profit: (
             <Link href="/profits" className="block" key="profit" onClick={() => playTapSound()}>
               <KPICard
@@ -1291,10 +1559,9 @@ export default function Dashboard() {
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/external-flaticons-lineal-color-flat-icons/64/external-loss-casino-flaticons-lineal-color-flat-icons.png"
+                imageUrl="https://img.icons8.com/color/48/depreciation.png"
                 color="bg-rose-500"
                 className="h-full"
-                imageClassName="dark:invert"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
               />
@@ -1345,6 +1612,22 @@ export default function Dashboard() {
               />
             </Link>
           ) : <div key="cashbox" className="hidden" />,
+          somiti: canAccess(perms, "expenses") ? (
+            <Link href="/somiti" className="block" key="somiti" onClick={() => playTapSound()}>
+              <KPICard
+                label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
+                value={fmtMoney(somitiTotal)}
+                sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/fluency/48/piggy-bank.png"
+                color="bg-purple-600"
+                trendUp={somitiTotal >= 0}
+                trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
+                className="h-full justify-between"
+                align={kpiConfig.align as any}
+                size={kpiConfig.size as any}
+              />
+            </Link>
+          ) : <div key="somiti" className="hidden" />,
         };
 
         return (
@@ -1810,6 +2093,248 @@ export default function Dashboard() {
         onOpenChange={setSaleOpen}
         presetType={salePresetType}
       />
+
+      {/* ── KPI STYLE CUSTOMIZER MODAL ───────────────────────── */}
+      <Dialog open={bentoCustomizerOpen} onOpenChange={setBentoCustomizerOpen}>
+        <DialogContent className="max-w-md bg-card border-border rounded-3xl p-5 shadow-2xl space-y-4">
+          <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/50">
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Palette className="size-4" />
+              </div>
+              <span>{lang === "bn" ? "কেপিআই ডিজাইন কাস্টমাইজেশন" : "KPI Design Customizer"}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1 max-h-[70vh] overflow-y-auto pr-1">
+            {/* Bento Grid Mode Toggle */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-primary" />
+                  <span>{lang === "bn" ? "হিরো কার্ড লেআউট" : "Hero Card Spans"}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {lang === "bn" ? "প্রধান কেপিআই কার্ডগুলি বড় আকৃতি ও বিশেষ হাইলাইট পাবে" : "Enlarge primary metrics with hero card spans"}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant={kpiConfig.bentoGrid ? "default" : "outline"}
+                className="h-7 px-3 text-xs font-bold"
+                onClick={() => updateKpiConfig({ bentoGrid: !kpiConfig.bentoGrid })}
+              >
+                {kpiConfig.bentoGrid ? (lang === "bn" ? "চালু 🟢" : "ON 🟢") : (lang === "bn" ? "বন্ধ" : "OFF")}
+              </Button>
+            </div>
+
+            {/* Card Style Variant */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "কার্ড ডিজাইন স্টাইল" : "Card Design Style"}</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { id: "glass", label: lang === "bn" ? "গ্লাস (Glass)" : "Glassmorphic" },
+                  { id: "neon", label: lang === "bn" ? "নিয়ন (Neon)" : "Neon Glow" },
+                  { id: "gradient", label: lang === "bn" ? "গ্রেডিয়েন্ট" : "Gradient" },
+                  { id: "bordered", label: lang === "bn" ? "বর্ডার" : "Bordered" },
+                  { id: "flat", label: lang === "bn" ? "ফ্ল্যাট (Flat)" : "Minimal Flat" },
+                ].map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => updateKpiConfig({ variant: v.id })}
+                    className={`p-2 rounded-xl border text-[11px] font-bold text-center transition-all ${
+                      (kpiConfig.variant || "glass") === v.id
+                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
+                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Shadows & Effects */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "শ্যাডো ও গ্লো ইফেক্ট" : "Shadow & Glow Effects"}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "glow", label: lang === "bn" ? "অ্যাম্বিয়েন্ট গ্লো" : "Ambient Glow" },
+                  { id: "neon", label: lang === "bn" ? "নিয়ন শ্যাডো" : "Neon Shadow" },
+                  { id: "deep", label: lang === "bn" ? "ডিপ শ্যাডো" : "Deep Elevation" },
+                  { id: "soft", label: lang === "bn" ? "সফট শ্যাডো" : "Soft Shadow" },
+                  { id: "none", label: lang === "bn" ? "কোন শ্যাডো না" : "No Shadow" },
+                ].map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => updateKpiConfig({ shadow: s.id })}
+                    className={`p-2 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                      (kpiConfig.shadow || "glow") === s.id
+                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
+                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Border Style Selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "কেপিআই বর্ডার কাস্টমাইজ" : "KPI Border Style"}</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: "subtle", label: lang === "bn" ? "সফ্‌ট বর্ডার" : "Subtle Border" },
+                  { id: "bold", label: lang === "bn" ? "বোল্ড প্রাইমারি" : "Bold Primary" },
+                  { id: "pink", label: lang === "bn" ? "গোলাপী (Pink)" : "Pink Accent" },
+                  { id: "emerald", label: lang === "bn" ? "সবুজ (Emerald)" : "Emerald" },
+                  { id: "amber", label: lang === "bn" ? "গোল্ড (Gold)" : "Gold" },
+                  { id: "indigo", label: lang === "bn" ? "ইন্ডিগো (Indigo)" : "Indigo" },
+                  { id: "dashed", label: lang === "bn" ? "ড্যাশড বর্ডার" : "Dashed" },
+                  { id: "none", label: lang === "bn" ? "বর্ডার ছাড়া" : "No Border" },
+                ].map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => updateKpiConfig({ borderStyle: b.id as any })}
+                    className={`p-2 rounded-xl border text-[10px] font-bold text-center transition-all ${
+                      (kpiConfig.borderStyle || "subtle") === b.id
+                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
+                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Columns per Row */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "গ্রিড কলাম সংখ্যা" : "Grid Columns"}</Label>
+              <div className="flex bg-muted rounded-xl p-1 text-xs">
+                {[1, 2, 3, 4].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => updateKpiConfig({ columns: c })}
+                    className={`flex-1 py-1.5 rounded-lg text-center font-bold transition-all ${
+                      kpiConfig.columns === c
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {c} {lang === "bn" ? "কলাম" : "Cols"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Text Alignment */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "টেক্সট অ্যালাইনমেন্ট" : "Text Alignment"}</Label>
+              <div className="flex bg-muted rounded-xl p-1 text-xs">
+                {(["left", "center", "right"] as const).map(a => (
+                  <button
+                    key={a}
+                    onClick={() => updateKpiConfig({ align: a })}
+                    className={`flex-1 py-1.5 rounded-lg text-center font-bold transition-all capitalize ${
+                      kpiConfig.align === a
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* KPI Curve / Corner Roundness Selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "কেপিআই কর্নার কার্ভ (গোলাই)" : "KPI Corner Curve / Roundness"}</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-muted rounded-xl p-1 text-xs">
+                {[
+                  { id: "none", label: lang === "bn" ? "ফ্ল্যাট (0px)" : "None (0px)" },
+                  { id: "sm", label: "Small" },
+                  { id: "md", label: "Medium" },
+                  { id: "lg", label: "Large" },
+                  { id: "xl", label: "XL (28px)" },
+                  { id: "full", label: lang === "bn" ? "পিল (Pill)" : "Pill / Oval" },
+                ].map(cr => (
+                  <button
+                    key={cr.id}
+                    onClick={() => updateKpiConfig({ curve: cr.id as any })}
+                    className={`py-1.5 px-1 rounded-lg text-center text-[10px] font-bold transition-all ${
+                      (kpiConfig.curve || "none") === cr.id
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-primary/40"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Card Size with Increase/Decrease Controls */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground">{lang === "bn" ? "কেপিআই বক্স সাইজ অ্যাডজাস্ট" : "KPI Box Size Adjust"}</Label>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs font-bold gap-1"
+                    onClick={decreaseKpiSize}
+                    disabled={kpiConfig.size === "xxs"}
+                  >
+                    <span>-</span>
+                    <span>{lang === "bn" ? "ছোট করুন" : "Decrease"}</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs font-bold gap-1"
+                    onClick={increaseKpiSize}
+                    disabled={kpiConfig.size === "xl"}
+                  >
+                    <span>+</span>
+                    <span>{lang === "bn" ? "বড় করুন" : "Increase"}</span>
+                  </Button>
+                </div>
+              </div>
+              <div className="flex bg-muted rounded-xl p-1 text-xs">
+                {[
+                  { id: "xxs", label: "XXS" },
+                  { id: "xs", label: "XS" },
+                  { id: "small", label: lang === "bn" ? "ছোট (S)" : "Small" },
+                  { id: "standard", label: lang === "bn" ? "মাঝারি (M)" : "Medium" },
+                  { id: "large", label: lang === "bn" ? "বড় (L)" : "Large" },
+                  { id: "xl", label: "XL" },
+                ].map(sz => (
+                  <button
+                    key={sz.id}
+                    onClick={() => updateKpiConfig({ size: sz.id as any })}
+                    className={`flex-1 py-1.5 rounded-lg text-center font-bold transition-all ${
+                      kpiConfig.size === sz.id
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-primary/30"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {sz.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-border/50">
+            <Button className="w-full font-bold rounded-xl" onClick={() => setBentoCustomizerOpen(false)}>
+              {lang === "bn" ? "সংরক্ষণ করুন" : "Save & Close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

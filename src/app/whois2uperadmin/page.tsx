@@ -169,21 +169,21 @@ export default function SuperAdminPage() {
   }
 
   // Filter lists based on search query
-  const filteredBiz = (businesses.data ?? []).filter(b => {
+  const filteredBiz = (businesses.data ?? []).filter((b: any) => {
     const name = String(b.name || "").toLowerCase();
     const email = String(b.owner_email || "").toLowerCase();
     const query = searchQuery.toLowerCase();
     return name.includes(query) || email.includes(query);
   });
 
-  const filteredLicenses = (licenses.data ?? []).filter(l => {
+  const filteredLicenses = (licenses.data ?? []).filter((l: any) => {
     const id = String(l.id || "").toLowerCase();
     const note = String(l.note || "").toLowerCase();
     const query = searchQuery.toLowerCase();
     return id.includes(query) || note.includes(query);
   });
 
-  const filteredUsers = (users.data ?? []).filter(u => {
+  const filteredUsers = (users.data ?? []).filter((u: any) => {
     const name = String(u.full_name || "").toLowerCase();
     const email = String(u.email || "").toLowerCase();
     const role = String(u.role || "").toLowerCase();
@@ -193,7 +193,7 @@ export default function SuperAdminPage() {
     return name.includes(query) || email.includes(query) || role.includes(query) || biz.includes(query) || id.includes(query);
   });
 
-  const selectedBizToDelete = (businesses.data ?? []).find(b => b.id === bizToDelete);
+  const selectedBizToDelete = (businesses.data ?? []).find((b: any) => b.id === bizToDelete);
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto space-y-6">
@@ -411,7 +411,7 @@ export default function SuperAdminPage() {
               </div>
             ) : (
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {(activities.data ?? []).map(event => {
+                {(activities.data ?? []).map((event: any) => {
                   let badgeColor = "bg-primary/10 text-primary border-primary/20";
                   if (event.type === "sale") badgeColor = "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
                   if (event.type === "product") badgeColor = "bg-blue-500/10 text-blue-500 border-blue-500/20";
@@ -496,7 +496,7 @@ export default function SuperAdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {filteredBiz.map(b => {
+                      {(filteredBiz as any[]).map((b: any) => {
                         const isSuspended = b.status === "suspended";
                         return (
                           <tr key={b.id} className="hover:bg-muted/10 transition-colors">
@@ -641,7 +641,7 @@ export default function SuperAdminPage() {
 
                 {/* Mobile Card List View */}
                 <div className="block md:hidden divide-y divide-border/40">
-                  {filteredBiz.map(b => {
+                  {(filteredBiz as any[]).map((b: any) => {
                     const isSuspended = b.status === "suspended";
                     return (
                       <div key={b.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
@@ -811,7 +811,7 @@ export default function SuperAdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {filteredUsers.map(u => {
+                      {(filteredUsers as any[]).map((u: any) => {
                         const isOwner = u.role === "owner";
                         const isActivated = u.activated;
                         return (
@@ -923,7 +923,7 @@ export default function SuperAdminPage() {
 
                 {/* Mobile Card List View */}
                 <div className="block md:hidden divide-y divide-border/40">
-                  {filteredUsers.map(u => {
+                  {(filteredUsers as any[]).map((u: any) => {
                     const isOwner = u.role === "owner";
                     const isActivated = u.activated;
                     return (
@@ -1120,7 +1120,7 @@ export default function SuperAdminPage() {
                 </div>
               ) : (
                 <div className="max-h-[500px] overflow-y-auto divide-y divide-border/40">
-                  {filteredLicenses.map(l => (
+                  {(filteredLicenses as any[]).map((l: any) => (
                     <div key={l.id} className="p-3.5 flex items-center justify-between text-sm gap-4 hover:bg-muted/10 transition-colors">
                       <div className="space-y-0.5">
                         <code className="font-mono font-bold text-xs select-all bg-muted/65 px-2 py-0.5 rounded border border-border/80 text-foreground">

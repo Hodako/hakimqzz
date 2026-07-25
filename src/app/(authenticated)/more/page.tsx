@@ -668,12 +668,31 @@ export default function MorePage() {
     kpiStyle: "default",
   });
 
+  // Helper to ensure purchases and somiti exist in kpi order
+  const normalizeKpiOrder = (order?: string[]) => {
+    const defaultList = ["credit_sale", "cash_sale", "online_sell", "purchases", "profit", "loss", "expense", "due", "cashbox", "somiti"];
+    if (!order || !Array.isArray(order)) return defaultList;
+    const list = [...order];
+    if (!list.includes("purchases")) {
+      const idx = list.indexOf("online_sell");
+      if (idx !== -1) list.splice(idx + 1, 0, "purchases");
+      else list.push("purchases");
+    }
+    if (!list.includes("somiti")) {
+      const idx = list.indexOf("cashbox");
+      if (idx !== -1) list.splice(idx + 1, 0, "somiti");
+      else list.push("somiti");
+    }
+    return list;
+  };
+
   // KPI config state
   const [kpiConfig, setKpiConfig] = useState({
     align: "left",
-    size: "standard",
+    size: "small",
     columns: 2,
-    order: ["credit_sale", "cash_sale", "online_sell", "profit", "loss", "expense", "due", "cashbox"]
+    curve: "none",
+    order: ["credit_sale", "cash_sale", "online_sell", "purchases", "profit", "loss", "expense", "due", "cashbox", "somiti"]
   });
   const [kpiDraggedIndex, setKpiDraggedIndex] = useState<number | null>(null);
 
@@ -681,11 +700,13 @@ export default function MorePage() {
     credit_sale: lang === "bn" ? "বাকি বিক্রয়" : "Credit Sale",
     cash_sale: lang === "bn" ? "নগদ বিক্রয়" : "Cash Sale",
     online_sell: lang === "bn" ? "অনলাইন বিক্রয়" : "Online Sale",
+    purchases: lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY",
     profit: lang === "bn" ? "মোট মুনাফা" : "Total Profit",
     loss: lang === "bn" ? "মোট ক্ষতি" : "Total Loss",
     expense: lang === "bn" ? "মোট খরচ" : "Total Expenses",
     due: lang === "bn" ? "মোট বাকি" : "Total Due",
     cashbox: lang === "bn" ? "ক্যাশবক্স" : "Cashbox",
+    somiti: lang === "bn" ? "সমিতি (Samity)" : "Samity",
   };
 
   const updateKpiConfig = (patch: Partial<typeof kpiConfig>) => {
@@ -731,7 +752,12 @@ export default function MorePage() {
     const savedKpi = localStorage.getItem("hz_kpi_config");
     if (savedKpi) {
       try {
-        setKpiConfig(prev => ({ ...prev, ...JSON.parse(savedKpi) }));
+        const parsed = JSON.parse(savedKpi);
+        setKpiConfig(prev => ({
+          ...prev,
+          ...parsed,
+          order: normalizeKpiOrder(parsed.order)
+        }));
       } catch (e) {
         console.error(e);
       }
@@ -1659,19 +1685,55 @@ export default function MorePage() {
 
             {/* KPI Card Size */}
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ড সাইজ" : "Card Size"}</Label>
-              <div className="flex bg-muted rounded-lg p-0.5 text-xs w-full">
-                {(["small", "standard", "large"] as const).map(s => (
+              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কার্ড সাইজ (KPI Box Size)" : "Card Size (KPI Height)"}</Label>
+              <div className="grid grid-cols-6 gap-1 bg-muted rounded-lg p-1 text-xs w-full">
+                {[
+                  { id: "xxs", label: "XXS" },
+                  { id: "xs", label: "XS" },
+                  { id: "small", label: lang === "bn" ? "ছোট" : "Small" },
+                  { id: "standard", label: lang === "bn" ? "মাঝারি" : "Med" },
+                  { id: "large", label: lang === "bn" ? "বড়" : "Large" },
+                  { id: "xl", label: "XL" },
+                ].map(s => (
                   <button
-                    key={s}
-                    onClick={() => updateKpiConfig({ size: s })}
-                    className={`flex-1 py-1.5 rounded-md text-center font-medium transition-all capitalize ${
-                      kpiConfig.size === s
-                        ? "bg-background text-foreground shadow font-semibold"
-                        : "text-muted-foreground"
+                    key={s.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ size: s.id as any })}
+                    className={`py-1.5 rounded-md text-center text-[10px] font-bold transition-all ${
+                      kpiConfig.size === s.id
+                        ? "bg-background text-primary shadow font-extrabold ring-1 ring-primary/40"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {lang === "bn" ? (s === "small" ? "ছোট" : s === "standard" ? "স্ট্যান্ডার্ড" : "বড়") : s.charAt(0).toUpperCase() + s.slice(1)}
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* KPI Corner Sharpness / Edges */}
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">{lang === "bn" ? "কেপিআই কর্নার শার্পনেস (Sharp Edges)" : "KPI Edge Sharpness & Curve"}</Label>
+              <div className="grid grid-cols-6 gap-1 bg-muted rounded-lg p-1 text-xs w-full">
+                {[
+                  { id: "none", label: lang === "bn" ? "শার্প (Sharp)" : "Sharp" },
+                  { id: "sm", label: "Small" },
+                  { id: "md", label: "Med" },
+                  { id: "lg", label: "Round" },
+                  { id: "xl", label: "XL" },
+                  { id: "full", label: "Pill" },
+                ].map(cr => (
+                  <button
+                    key={cr.id}
+                    type="button"
+                    onClick={() => updateKpiConfig({ curve: cr.id as any })}
+                    className={`py-1.5 rounded-md text-center text-[10px] font-bold transition-all ${
+                      (kpiConfig.curve || "none") === cr.id
+                        ? "bg-background text-primary shadow font-extrabold ring-1 ring-primary/40"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cr.label}
                   </button>
                 ))}
               </div>

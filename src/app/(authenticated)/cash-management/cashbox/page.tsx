@@ -142,7 +142,7 @@ export default function CashboxDetailsPage() {
     setDeleteBusy(true);
     try {
       await deleteCashboxFn({ data: { id: deleteTarget.id } });
-      toast.success(t("deleted"));
+      toast.success(t("deleted" as any) || "Deleted");
       setDeleteConfirmOpen(false);
       setDeleteTarget(null);
       await refreshQueries(qc, ["cashbox"]);
@@ -493,7 +493,7 @@ function CashboxDialog({
           {isEdit ? (
             <Tabs value={kind} onValueChange={v => setKind(v as any)}>
               <TabsList className="grid grid-cols-4 w-full">
-                <TabsTrigger value="sale" className="text-[10px] sm:text-xs">{t("sale") || "Sale"}</TabsTrigger>
+                <TabsTrigger value="sale" className="text-[10px] sm:text-xs">{t("sale" as any) || "Sale"}</TabsTrigger>
                 <TabsTrigger value="deposit" className="text-[10px] sm:text-xs">{t("deposit") || "Deposit"}</TabsTrigger>
                 <TabsTrigger value="withdraw" className="text-[10px] sm:text-xs">{t("withdraw") || "Withdraw"}</TabsTrigger>
                 <TabsTrigger value="expense" className="text-[10px] sm:text-xs">{t("expense") || "Expense"}</TabsTrigger>

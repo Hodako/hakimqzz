@@ -18,8 +18,10 @@ import type { PermissionSet } from "@/lib/permissions";
 import { resolvePermissions } from "@/lib/permissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+import { CustomHomeIcon } from "@/components/custom-home-icon";
+
 const PAGES: { to: string; labelKey: DictKey; icon: React.ElementType; perm?: keyof PermissionSet }[] = [
-  { to: "/dashboard", labelKey: "home", icon: Home, perm: "dashboard" },
+  { to: "/dashboard", labelKey: "home", icon: CustomHomeIcon, perm: "dashboard" },
   { to: "/products", labelKey: "products", icon: Package, perm: "products" },
   { to: "/sales", labelKey: "sales", icon: ShoppingBag, perm: "sales" },
   { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },

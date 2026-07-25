@@ -6,7 +6,7 @@ import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { FAB } from "@/components/ui/fab";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -15,6 +15,7 @@ import { ProductImage } from "@/components/product-image";
 import { ProductDialog } from "@/components/product-dialog";
 import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
+import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -57,6 +58,7 @@ export default function ProductsPage() {
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
   const [searchVisible, setSearchVisible] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -184,6 +186,7 @@ export default function ProductsPage() {
   // Filters
   const searchFiltered = allProducts.filter(p =>
     (p.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (p.barcode || "").toLowerCase().includes(search.toLowerCase()) ||
     Object.values(p.attributes || {}).some(val => val.toLowerCase().includes(search.toLowerCase())) ||
     (p.category || "").toLowerCase().includes(search.toLowerCase())
   );
@@ -308,6 +311,15 @@ export default function ProductsPage() {
             onClick={() => setSearchVisible(prev => !prev)}
           >
             <Search className="size-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0 shrink-0"
+            title={lang === "bn" ? "বারকোড স্ক্যান" : "Scan Barcode"}
+            onClick={() => setScannerOpen(true)}
+          >
+            <Scan className="size-3.5 text-primary" />
           </Button>
           <Button
             size="sm"
@@ -661,7 +673,36 @@ export default function ProductsPage() {
         product={returnProduct}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ["products"] });
+          qc.invalidateQueries({ queryKey: ["sales"] });
         }}
+      />
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onScan={(scannedCode) => {
+          setSearch(scannedCode);
+          setSearchVisible(true);
+          const found = allProducts.find(p => p.barcode?.toLowerCase() === scannedCode.toLowerCase() || p.id === scannedCode);
+          if (found) {
+            toast.success(lang === "bn" ? `পণ্য পাওয়া গেছে: ${found.name}` : `Product found: ${found.name}`);
+            setSellCart(prev => {
+              const idx = prev.findIndex(item => item.product.id === found.id);
+              if (idx !== -1) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], qty: updated[idx].qty + 1 };
+                return updated;
+              } else {
+                return [...prev, { product: found, qty: 1, sellPrice: found.sell_price }];
+              }
+            });
+            setShowCartPanel(true);
+          } else {
+            toast.error(lang === "bn" ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for barcode: ${scannedCode}`);
+          }
+        }}
+        title={lang === "bn" ? "বারকোড স্ক্যান করুন" : "Scan Barcode"}
       />
 
       <ConfirmDeleteDialog

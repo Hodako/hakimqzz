@@ -28,7 +28,14 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") || "*";
   try {
-    const { actionName, args, token, activeProfile } = await req.json();
+    let bodyText = "";
+    try {
+      bodyText = await req.text();
+    } catch (e) {}
+    if (!bodyText || !bodyText.trim()) {
+      return NextResponse.json({ error: "Empty request body" }, { status: 400 });
+    }
+    const { actionName, args, token, activeProfile } = JSON.parse(bodyText);
 
     return await requestStore.run({ token, activeProfile }, async () => {
       if (token) {

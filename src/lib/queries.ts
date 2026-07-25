@@ -27,6 +27,7 @@ import {
 export type Product = {
   id: string; name: string; image_url: string | null;
   buy_price: number; sell_price: number; stock: number; created_at: string;
+  barcode?: string | null;
   attributes?: Record<string, string>;
   archived?: boolean;
   min_stock?: number;
@@ -53,6 +54,7 @@ export type Return = {
 export type Purchase = {
   id: string; product_id: string | null; product_name: string;
   qty: number; unit_cost: number; total: number; note: string | null; created_at: string;
+  payment_type?: "cash" | "credit" | null; party_id?: string | null;
 };
 export type Expense = { id: string; title: string; amount: number; note: string | null; created_at: string };
 export type Somiti = { id: string; kind: "deposit" | "withdraw"; amount: number; note: string | null; created_at: string };

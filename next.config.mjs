@@ -9,12 +9,29 @@ const isStatic = process.env.EXPORT_STATIC === "true";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  ...(isStatic ? {
-    output: "export",
-    images: {
-      unoptimized: true,
-    },
-  } : {}),
+  ...(isStatic
+    ? {
+        output: "export",
+        images: {
+          unoptimized: true,
+        },
+      }
+    : {
+        // Allow camera access via HTTP headers for mobile WebView + browsers
+        async headers() {
+          return [
+            {
+              source: "/:path*",
+              headers: [
+                {
+                  key: "Permissions-Policy",
+                  value: "camera=*, microphone=(), geolocation=()",
+                },
+              ],
+            },
+          ];
+        },
+      }),
   // Allow MongoDB server-side code to build properly
   serverExternalPackages: ["mongodb"],
   eslint: {

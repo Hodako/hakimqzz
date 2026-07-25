@@ -11,5 +11,13 @@
     "Keyboard": {
       "resize": "none"
     }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "automatic"
   }
 }

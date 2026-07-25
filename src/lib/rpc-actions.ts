@@ -219,26 +219,27 @@ export async function getProductsFn() {
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
-export async function createProductFn(input: { data: { name: string; image_url?: string | null; buy_price?: number; sell_price?: number; stock?: number; attributes?: Record<string, string>; min_stock?: number; category?: string } }) {
+export async function createProductFn(input: { data: { name: string; image_url?: string | null; buy_price?: number; sell_price?: number; stock?: number; attributes?: Record<string, string>; min_stock?: number; category?: string; barcode?: string | null } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
   const name = sanitizeInput(data.name);
   if (!name) throw new Error("Product name cannot be blank");
-  const doc = { _id: id, owner_id: session.ownerId, name, image_url: data.image_url ? sanitizeInput(data.image_url) : null, buy_price: data.buy_price || 0, sell_price: data.sell_price || 0, stock: data.stock || 0, attributes: data.attributes || {}, min_stock: data.min_stock ?? 5, category: data.category ? sanitizeInput(data.category) : "", archived: false, created_at: new Date().toISOString() };
+  const barcode = data.barcode ? sanitizeInput(data.barcode) : null;
+  const doc = { _id: id, owner_id: session.ownerId, name, image_url: data.image_url ? sanitizeInput(data.image_url) : null, buy_price: data.buy_price || 0, sell_price: data.sell_price || 0, stock: data.stock || 0, barcode, attributes: data.attributes || {}, min_stock: data.min_stock ?? 5, category: data.category ? sanitizeInput(data.category) : "", archived: false, created_at: new Date().toISOString() };
   await db.collection("products").insertOne(doc as any);
 
   // Sheets Sync
   appendRowToGoogleSheet(session.ownerId, "Products",
-    ["ID", "Name", "Buy Price", "Sell Price", "Stock", "Min Stock", "Category", "Created At"],
-    [id, name, data.buy_price || 0, data.sell_price || 0, data.stock || 0, data.min_stock ?? 5, data.category || "", doc.created_at]
+    ["ID", "Name", "Buy Price", "Sell Price", "Stock", "Min Stock", "Category", "Barcode", "Created At"],
+    [id, name, data.buy_price || 0, data.sell_price || 0, data.stock || 0, data.min_stock ?? 5, data.category || "", barcode || "", doc.created_at]
   );
 
   return { ...doc, id };
 }
 
-export async function updateProductFn(input: { data: { id: string; name?: string; image_url?: string | null; buy_price?: number; sell_price?: number; stock?: number; attributes?: Record<string, string>; min_stock?: number; category?: string; archived?: boolean } }) {
+export async function updateProductFn(input: { data: { id: string; name?: string; image_url?: string | null; buy_price?: number; sell_price?: number; stock?: number; attributes?: Record<string, string>; min_stock?: number; category?: string; barcode?: string | null; archived?: boolean } }) {
   const { data } = input;
   const session = await requireSession();
   const { id, ...updates } = data;
@@ -247,6 +248,7 @@ export async function updateProductFn(input: { data: { id: string; name?: string
   if (sanitizedUpdates.name !== undefined) sanitizedUpdates.name = sanitizeInput(sanitizedUpdates.name);
   if (sanitizedUpdates.image_url !== undefined && sanitizedUpdates.image_url !== null) sanitizedUpdates.image_url = sanitizeInput(sanitizedUpdates.image_url);
   if (sanitizedUpdates.category !== undefined) sanitizedUpdates.category = sanitizeInput(sanitizedUpdates.category);
+  if (sanitizedUpdates.barcode !== undefined) sanitizedUpdates.barcode = sanitizedUpdates.barcode ? sanitizeInput(sanitizedUpdates.barcode) : null;
   
   const db = await getDb();
   await db.collection("products").updateOne({ _id: id as any, owner_id: session.ownerId }, { $set: sanitizedUpdates });
@@ -798,7 +800,7 @@ export async function createPartyReturnFn(input: { data: { party_id: string; pro
     if (data.deduct_type === "payable") {
       const payableId = crypto.randomUUID();
       await db.collection("party_payables").insertOne({
-        _id: payableId,
+        _id: payableId as any,
         owner_id: session.ownerId,
         party_id: data.party_id,
         amount: -refundAmt,
@@ -809,7 +811,7 @@ export async function createPartyReturnFn(input: { data: { party_id: string; pro
     } else if (data.deduct_type === "receivable") {
       const receivableId = crypto.randomUUID();
       await db.collection("party_receivables").insertOne({
-        _id: receivableId,
+        _id: receivableId as any,
         owner_id: session.ownerId,
         party_id: data.party_id,
         amount: -refundAmt,
