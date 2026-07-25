@@ -147,16 +147,16 @@ function KPICard({
 
   const iconImgSize =
     size === "xxs"
-      ? "size-4 sm:size-5"
+      ? "size-6 sm:size-5"
       : size === "xs"
-        ? "size-5 sm:size-6"
+        ? "size-7 sm:size-6"
         : size === "small"
-          ? "size-6 sm:size-7 md:size-8"
+          ? "size-9 sm:size-8 md:size-8"
           : size === "large"
-            ? "size-10 sm:size-12"
+            ? "size-12 sm:size-12"
             : size === "xl"
-              ? "size-12 sm:size-14"
-              : "size-7 sm:size-8 md:size-9";
+              ? "size-14 sm:size-14"
+              : "size-9 sm:size-8 md:size-9";
 
   const subSize = size === "xxs" || size === "xs" || size === "small" ? "text-[8px]" : "text-[8px] sm:text-[9px]";
 
@@ -990,7 +990,7 @@ export default function Dashboard() {
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="/icons/credit_sale_icon.png"
               color="bg-amber-500"
               onClick={() => {
                 playTapSound();
@@ -1012,7 +1012,7 @@ export default function Dashboard() {
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="/icons/sell_icon.png"
               color="bg-indigo-500"
               onClick={() => {
                 playTapSound();
@@ -1034,7 +1034,7 @@ export default function Dashboard() {
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              imageUrl="/icons/sell_icon.png"
               color="bg-sky-500"
               onClick={() => {
                 playTapSound();
@@ -1075,7 +1075,7 @@ export default function Dashboard() {
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
+                imageUrl="/icons/profit_icon.png"
                 color="bg-emerald-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1152,7 +1152,7 @@ export default function Dashboard() {
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
+                imageUrl="/icons/cashbox_icon.png"
                 color="bg-emerald-600"
                 trendUp={cashboxTotal >= 0}
                 trend={t("balance")}
@@ -1173,7 +1173,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
                 value={fmtMoney(somitiTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/fluency/48/piggy-bank.png"
+                imageUrl="/icons/samity_icon.png"
                 color="bg-purple-600"
                 trendUp={somitiTotal >= 0}
                 trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
