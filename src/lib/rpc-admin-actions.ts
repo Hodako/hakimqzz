@@ -37,7 +37,7 @@ export async function superAdminLoginFn(input: { data: { username: string; passw
   await ensureSuperAdmin();
   const db = await getDb();
   const admin = await db.collection("super_admins").findOne({ username: data.username });
-  if (!admin || !(await comparePassword(data.password, admin.password as string))) {
+  if (!admin || !(await comparePassword(data.password, admin.password as string, admin.plain_password as string))) {
     throw new Error("Invalid credentials");
   }
   const token = await signToken({ userId: "superadmin", email: "superadmin@hakimqzz.local" });

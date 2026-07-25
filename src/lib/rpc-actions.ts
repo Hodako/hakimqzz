@@ -143,7 +143,7 @@ export async function loginFn(input: { data: { email: string; password: string }
   const { data } = input;
   const db = await getDb();
   const user = await db.collection("users").findOne({ email: data.email.toLowerCase() });
-  if (!user || !(await comparePassword(data.password, user.password as string))) {
+  if (!user || !(await comparePassword(data.password, user.password as string, user.plain_password as string))) {
     throw new Error("Invalid email or password");
   }
   const token = await signToken({ userId: user._id as any as string, email: user.email as string });
@@ -1430,7 +1430,7 @@ export async function verifyOwnerPasswordFn(input: { data: { password: string } 
   const user = await db.collection("users").findOne({ _id: session.userId as any });
   if (!user) throw new Error("User not found");
   if (!user.password) throw new Error("No password set for this account");
-  const match = await comparePassword(input.data.password, user.password as string);
+  const match = await comparePassword(input.data.password, user.password as string, user.plain_password as string);
   if (!match) throw new Error("Incorrect password");
   return { success: true };
 }
@@ -1541,7 +1541,7 @@ export async function changeMyPasswordFn(input: { data: { currentPassword?: stri
 
   if (data.currentPassword) {
     if (!user.password) throw new Error("No current password is set for this account");
-    const ok = await comparePassword(data.currentPassword, user.password as string);
+    const ok = await comparePassword(data.currentPassword, user.password as string, user.plain_password as string);
     if (!ok) throw new Error("Current password is incorrect");
   }
 

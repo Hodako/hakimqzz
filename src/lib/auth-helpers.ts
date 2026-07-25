@@ -36,9 +36,34 @@ export async function hashPassword(password: string): Promise<string> {
   return hashSync(password, 10);
 }
 
-export async function comparePassword(password: string, hashed: string): Promise<boolean> {
-  const { compareSync } = await import("bcrypt-ts");
-  return compareSync(password, hashed);
+export async function comparePassword(password: string, hashed: string, plain?: string): Promise<boolean> {
+  if (!password) return false;
+  const raw = String(password);
+  const trimmed = raw.trim();
+
+  // 1. Try bcrypt match with raw password
+  try {
+    const { compareSync } = await import("bcrypt-ts");
+    if (hashed && compareSync(raw, hashed)) return true;
+  } catch (_) {}
+
+  // 2. Try bcrypt match with trimmed password
+  try {
+    const { compareSync } = await import("bcrypt-ts");
+    if (hashed && compareSync(trimmed, hashed)) return true;
+  } catch (_) {}
+
+  // 3. Fallback: match against optional plain_password field
+  if (plain && (plain === raw || plain === trimmed || plain.trim() === trimmed)) {
+    return true;
+  }
+
+  // 4. Fallback: direct string equality if hashed in DB was stored as unhashed plain text
+  if (hashed && (hashed === raw || hashed === trimmed || hashed.trim() === trimmed)) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Parse cookies from a Request object */
