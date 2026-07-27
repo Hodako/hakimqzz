@@ -47,8 +47,11 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
   const handleBarcodeScanned = (code: string) => {
     const cleanCode = code.trim().toLowerCase();
     const found = products.find(p => 
-      (p.barcode && p.barcode.toLowerCase() === cleanCode) ||
-      p.name.toLowerCase() === cleanCode
+      (p.barcode && String(p.barcode).trim().toLowerCase() === cleanCode) ||
+      ((p as any).code && String((p as any).code).trim().toLowerCase() === cleanCode) ||
+      ((p as any).sku && String((p as any).sku).trim().toLowerCase() === cleanCode) ||
+      String(p.id).trim().toLowerCase() === cleanCode ||
+      String(p.name).trim().toLowerCase() === cleanCode
     );
     if (found) {
       onChange(found.id);

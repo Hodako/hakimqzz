@@ -77,6 +77,12 @@ export default function SuperAdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
 
+  // Super Admin Password Change modal state
+  const [superAdminPassOpen, setSuperAdminPassOpen] = useState(false);
+  const [superAdminCurrentPass, setSuperAdminCurrentPass] = useState("");
+  const [superAdminNewPass, setSuperAdminNewPass] = useState("");
+  const [superAdminPassBusy, setSuperAdminPassBusy] = useState(false);
+
   // Reset Business data modal state
   const [bizForReset, setBizForReset] = useState<{ id: string; name: string } | null>(null);
   const [resetType, setResetType] = useState<"sales" | "somiti" | "expenses" | null>(null);
@@ -210,7 +216,20 @@ export default function SuperAdminPage() {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <span className="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mr-1">
+            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Live Surveillance Syncing
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSuperAdminPassOpen(true)}
+            className="beveled-button border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+            title="Change Super Admin Password"
+          >
+            <Lock className="size-3.5 mr-1.5" />
+            Admin PW
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1622,6 +1641,99 @@ export default function SuperAdminPage() {
                 Execute Reset
               </Button>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ═══════════ SUPER ADMIN PASSWORD CHANGE MODAL ═══════════ */}
+      {superAdminPassOpen && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setSuperAdminPassOpen(false); setSuperAdminCurrentPass(""); setSuperAdminNewPass(""); }} />
+          <Card className="relative z-10 glass-card w-full max-w-sm p-6 space-y-4 border-amber-500/20 shadow-2xl bg-card">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
+                <Lock className="size-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-lg text-foreground tracking-tight">Super Admin Credentials</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Update Super Admin Console access password.</p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                if (superAdminNewPass.trim().length < 6) {
+                  return toast.error("New password must be at least 6 characters long");
+                }
+                setSuperAdminPassBusy(true);
+                try {
+                  await changeSuperAdminPasswordFn({
+                    data: {
+                      currentPassword: superAdminCurrentPass || undefined,
+                      newPassword: superAdminNewPass.trim(),
+                    },
+                  });
+                  toast.success("Super Admin password updated & synchronized!");
+                  setSuperAdminPassOpen(false);
+                  setSuperAdminCurrentPass("");
+                  setSuperAdminNewPass("");
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to update password");
+                } finally {
+                  setSuperAdminPassBusy(false);
+                }
+              }}
+              className="space-y-3 pt-1"
+            >
+              <div className="space-y-1.5">
+                <label className="text-xs text-foreground font-semibold">Current Password (optional):</label>
+                <Input
+                  type="password"
+                  className="beveled-card bg-muted/20"
+                  placeholder="Enter current password"
+                  value={superAdminCurrentPass}
+                  onChange={e => setSuperAdminCurrentPass(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-foreground font-semibold">New Password (min 6 chars):</label>
+                <Input
+                  type="password"
+                  className="beveled-card bg-muted/20"
+                  placeholder="Enter new password"
+                  value={superAdminNewPass}
+                  onChange={e => setSuperAdminNewPass(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-lg text-[11px] flex items-center gap-2">
+                <CheckCircle className="size-4 shrink-0" />
+                <span>Password will be permanently saved and updated in database.</span>
+              </div>
+
+              <div className="flex gap-2.5 justify-end pt-2 text-xs border-t border-border/40">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setSuperAdminPassOpen(false); setSuperAdminCurrentPass(""); setSuperAdminNewPass(""); }}
+                  className="beveled-button h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={superAdminPassBusy || superAdminNewPass.trim().length < 6}
+                  className="h-9 font-semibold shadow-inner bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {superAdminPassBusy ? "Updating…" : "Save Super Admin PW"}
+                </Button>
+              </div>
+            </form>
           </Card>
         </div>
       )}

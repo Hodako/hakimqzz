@@ -134,6 +134,7 @@ export async function listAllUsersFn(): Promise<any[]> {
     business_name: u.business_id ? (bizMap.get(u.business_id as string) || "Unknown Business") : "Pending Activation",
     created_at: (u.created_at as string) || (u.activated_at as string) || "",
     plain_password: (u.plain_password as string) || "(Hashed in DB)",
+    password_updated_at: (u.password_updated_at as string) || (u.updated_at as string) || null,
   }));
 }
 
@@ -579,17 +580,19 @@ export async function deleteUserFn(input: { data: { userId: string } }) {
 export async function changeUserPasswordFn(input: { data: { userId: string; newPassword: string } }) {
   const { data } = input;
   await requireSuperAdminSession();
-  if (!data.newPassword || data.newPassword.trim().length < 6) {
+  const cleanPass = data.newPassword.trim();
+  if (!cleanPass || cleanPass.length < 6) {
     throw new Error("Password must be at least 6 characters long");
   }
   const db = await getDb();
   const user = await db.collection("users").findOne({ _id: data.userId as any });
   if (!user) throw new Error("User not found");
 
-  const hashedPassword = await hashPassword(data.newPassword.trim());
+  const hashedPassword = await hashPassword(cleanPass);
+  const now = new Date().toISOString();
   await db.collection("users").updateOne(
     { _id: data.userId as any },
-    { $set: { password: hashedPassword, plain_password: data.newPassword.trim() } }
+    { $set: { password: hashedPassword, plain_password: cleanPass, password_updated_at: now, updated_at: now } }
   );
 
   return { success: true };
@@ -598,7 +601,8 @@ export async function changeUserPasswordFn(input: { data: { userId: string; newP
 export async function changeSuperAdminPasswordFn(input: { data: { currentPassword?: string; newPassword: string } }) {
   const { data } = input;
   await requireSuperAdminSession();
-  if (!data.newPassword || data.newPassword.trim().length < 6) {
+  const cleanPass = data.newPassword.trim();
+  if (!cleanPass || cleanPass.length < 6) {
     throw new Error("New password must be at least 6 characters long");
   }
   const db = await getDb();
@@ -606,14 +610,15 @@ export async function changeSuperAdminPasswordFn(input: { data: { currentPasswor
   if (!admin) throw new Error("Super admin account not found");
 
   if (data.currentPassword) {
-    const ok = await comparePassword(data.currentPassword, admin.password as string);
+    const ok = await comparePassword(data.currentPassword, admin.password as string, admin.plain_password as string);
     if (!ok) throw new Error("Current password is incorrect");
   }
 
-  const hashedPassword = await hashPassword(data.newPassword.trim());
+  const hashedPassword = await hashPassword(cleanPass);
+  const now = new Date().toISOString();
   await db.collection("super_admins").updateOne(
     { username: "superadmin" },
-    { $set: { password: hashedPassword } }
+    { $set: { password: hashedPassword, plain_password: cleanPass, updated_at: now } }
   );
 
   return { success: true };

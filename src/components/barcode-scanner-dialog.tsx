@@ -64,6 +64,8 @@ export function BarcodeScannerDialog({
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [torchSupported, setTorchSupported] = useState<boolean>(false);
 
+  const PERM_KEY = "dreamfashion_camera_permission_granted";
+
   // ── Stop camera stream & cancel decode loop ─────────────────────────────
   const stopScanner = useCallback(() => {
     if (animFrameRef.current) {
@@ -71,7 +73,11 @@ export function BarcodeScannerDialog({
       animFrameRef.current = 0;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch (_) {}
+      });
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -115,9 +121,9 @@ export function BarcodeScannerDialog({
     [continuous, lang, onOpenChange, onScan, stopScanner]
   );
 
-  // ── Ultra-Fast Live Detection Loop (Hardware BarcodeDetector + Single-Flight Lock) ─────
+  // ── Ultra-Fast Real-Time Live Detection Loop (Hardware BarcodeDetector + Canvas ZXing) ─────
   const startDecodeLoop = useCallback(() => {
-    // 1. Initialize native BarcodeDetector API if available (Instant 60fps GPU detection)
+    // 1. Initialize native BarcodeDetector API if available (Instant GPU detection)
     if (typeof window !== "undefined" && "BarcodeDetector" in window) {
       try {
         detectorRef.current = new (window as any).BarcodeDetector({
@@ -128,68 +134,95 @@ export function BarcodeScannerDialog({
       }
     }
 
+    let lastTickTime = 0;
+
     const tick = async () => {
+      if (!streamRef.current) return;
+
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.paused || video.ended) {
-        animFrameRef.current = requestAnimationFrame(tick);
+        if (streamRef.current) {
+          animFrameRef.current = requestAnimationFrame(tick);
+        }
         return;
       }
 
-      // Single-flight lock: skip if previous decode frame is still processing
+      const now = Date.now();
+      if (now - lastTickTime < 30) { // ~33 FPS throttle for instant scan without CPU lag
+        if (streamRef.current) {
+          animFrameRef.current = requestAnimationFrame(tick);
+        }
+        return;
+      }
+      lastTickTime = now;
+
       if (!isDecodingRef.current) {
         isDecodingRef.current = true;
         try {
+          let foundCode: string | null = null;
+
           // Layer 1: Hardware-accelerated native BarcodeDetector (Sub-5ms detection)
           if (detectorRef.current) {
-            const barcodes = await detectorRef.current.detect(video);
-            if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
-              handleDecodedCode(barcodes[0].rawValue);
-            }
-          } 
-          // Layer 2: ZXing fallback with cropped Viewfinder sampling
-          else if (readerRef.current) {
-            let decodedText: string | null = null;
-
-            // Attempt 1: Direct Video Element decode
             try {
-              const res = await readerRef.current.decodeFromVideoElement(video);
-              if (res) decodedText = res.getText();
+              const barcodes = await detectorRef.current.detect(video);
+              if (barcodes && barcodes.length > 0 && barcodes[0]?.rawValue) {
+                foundCode = barcodes[0].rawValue;
+              }
             } catch (_) {}
+          }
 
-            // Attempt 2: If direct decode fails, sample center 70% cropped canvas for high-density 1D barcodes
-            if (!decodedText && canvasRef.current) {
+          // Layer 2: Ultra-fast static Canvas ZXing Fallback
+          if (!foundCode && readerRef.current && canvasRef.current && video.videoWidth > 0 && video.videoHeight > 0) {
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (ctx) {
+              canvas.width = Math.min(video.videoWidth, 1280);
+              canvas.height = Math.min(video.videoHeight, 720);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
               try {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
-                  // Crop center 70% viewfinder
-                  const cropW = Math.floor(video.videoWidth * 0.75);
-                  const cropH = Math.floor(video.videoHeight * 0.55);
-                  const cropX = Math.floor((video.videoWidth - cropW) / 2);
-                  const cropY = Math.floor((video.videoHeight - cropH) / 2);
-
-                  canvas.width = cropW;
-                  canvas.height = cropH;
-                  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-                  const res = await readerRef.current.decodeFromCanvas(canvas);
-                  if (res) decodedText = res.getText();
+                const res = await readerRef.current.decodeFromCanvas(canvas);
+                if (res) {
+                  foundCode = res.getText();
                 }
               } catch (_) {}
-            }
 
-            if (decodedText) {
-              handleDecodedCode(decodedText);
+              // Try center cropped viewfinder if full frame missed
+              if (!foundCode) {
+                try {
+                  const cropW = Math.floor(canvas.width * 0.8);
+                  const cropH = Math.floor(canvas.height * 0.55);
+                  const cropX = Math.floor((canvas.width - cropW) / 2);
+                  const cropY = Math.floor((canvas.height - cropH) / 2);
+
+                  const cropCanvas = document.createElement("canvas");
+                  cropCanvas.width = cropW;
+                  cropCanvas.height = cropH;
+                  const cropCtx = cropCanvas.getContext("2d");
+                  if (cropCtx) {
+                    cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                    const res = await readerRef.current.decodeFromCanvas(cropCanvas);
+                    if (res) {
+                      foundCode = res.getText();
+                    }
+                  }
+                } catch (_) {}
+              }
             }
           }
+
+          if (foundCode) {
+            handleDecodedCode(foundCode);
+          }
         } catch (_) {
-          // Normal frame with no barcode
         } finally {
           isDecodingRef.current = false;
         }
       }
 
-      animFrameRef.current = requestAnimationFrame(tick);
+      if (streamRef.current) {
+        animFrameRef.current = requestAnimationFrame(tick);
+      }
     };
 
     animFrameRef.current = requestAnimationFrame(tick);
@@ -216,7 +249,11 @@ export function BarcodeScannerDialog({
     async (cameraId?: string, facing: "environment" | "user" = "environment") => {
       stopScanner();
       setCameraError(null);
-      setPermissionState("requesting");
+
+      const isPrevGranted = typeof window !== "undefined" && localStorage.getItem(PERM_KEY) === "true";
+      if (!isPrevGranted) {
+        setPermissionState("requesting");
+      }
 
       if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
         setPermissionState("denied");
@@ -231,52 +268,23 @@ export function BarcodeScannerDialog({
       try {
         let stream: MediaStream | null = null;
 
-        // 1. Prefer back/rear camera for fast 1D barcode focus on phones
-        if (!cameraId && facing === "environment") {
+        const videoConstraints: MediaTrackConstraints = cameraId
+          ? { deviceId: { exact: cameraId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          : { facingMode: facing === "environment" ? { ideal: "environment" } : "user", width: { ideal: 1280 }, height: { ideal: 720 } };
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: videoConstraints,
+            audio: false,
+          });
+        } catch (_) {
           try {
             stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode: { exact: "environment" },
-                width: { ideal: 1920, min: 1280 },
-                height: { ideal: 1080, min: 720 },
-                frameRate: { ideal: 60, min: 30 },
-              },
+              video: true,
               audio: false,
             });
-          } catch (_) {
-            try {
-              stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                  facingMode: { ideal: "environment" },
-                  width: { ideal: 1280 },
-                  height: { ideal: 720 },
-                  frameRate: { ideal: 60, min: 30 },
-                },
-                audio: false,
-              });
-            } catch (_) {}
-          }
-        }
-
-        if (!stream) {
-          const videoConstraints: MediaTrackConstraints = cameraId
-            ? { deviceId: { exact: cameraId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            : { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } };
-
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: videoConstraints,
-              audio: false,
-            });
-          } catch (_) {
-            try {
-              stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: false,
-              });
-            } catch (finalErr) {
-              throw finalErr;
-            }
+          } catch (finalErr) {
+            throw finalErr;
           }
         }
 
@@ -327,12 +335,15 @@ export function BarcodeScannerDialog({
               BarcodeFormat.DATA_MATRIX,
               BarcodeFormat.ITF,
             ]);
-            // Avoid TRY_HARDER = true because it severely degrades live FPS performance
           }
         } catch (_) {}
 
         const reader = hints ? new BrowserMultiFormatReader(hints) : new BrowserMultiFormatReader();
         readerRef.current = reader;
+
+        try {
+          localStorage.setItem(PERM_KEY, "true");
+        } catch (_) {}
 
         setPermissionState("granted");
         startDecodeLoop();

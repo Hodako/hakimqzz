@@ -76,9 +76,11 @@ export function SaleDialog({
   const handleBarcodeScan = (scannedCode: string) => {
     const clean = scannedCode.trim().toLowerCase();
     const prod = products.find(p => 
-      (p.barcode && p.barcode.toLowerCase() === clean) ||
-      p.id.toLowerCase() === clean ||
-      p.name.toLowerCase() === clean
+      (p.barcode && String(p.barcode).trim().toLowerCase() === clean) ||
+      ((p as any).code && String((p as any).code).trim().toLowerCase() === clean) ||
+      ((p as any).sku && String((p as any).sku).trim().toLowerCase() === clean) ||
+      String(p.id).trim().toLowerCase() === clean ||
+      String(p.name).trim().toLowerCase() === clean
     );
     if (!prod) {
       toast.error(lang === "bn" ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for barcode: ${scannedCode}`);
