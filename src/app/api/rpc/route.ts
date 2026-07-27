@@ -68,9 +68,19 @@ export async function POST(req: NextRequest) {
       });
     });
   } catch (error: any) {
-    console.error(`RPC API error during POST:`, error);
+    const status = error?.statusCode || (
+      error?.message === "Invalid email or password" || error?.message?.includes("Unauthorized") ? 401 :
+      error?.message?.includes("not found") || error?.message?.includes("required") || error?.message?.includes("balance") ? 400 : 500
+    );
+
+    if (status >= 500) {
+      console.error(`RPC API error during POST:`, error);
+    } else {
+      console.warn(`RPC API client error [${status}]: ${error?.message || "Bad Request"}`);
+    }
+
     return new NextResponse(error?.message || "Internal Server Error", {
-      status: 500,
+      status,
       headers: {
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Credentials": "true",

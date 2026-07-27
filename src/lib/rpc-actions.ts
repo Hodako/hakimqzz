@@ -72,7 +72,7 @@ async function insertCashboxEntry(
 
 function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
   if (data.type === "credit") return Number(data.paid_amount) || 0;
-  if (data.type === "cash") return Number(data.sell_price) * data.qty;
+  if (data.type === "cash") return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
   // Online sales: admin does not receive money immediately, so not added to cashbox
   return 0;
 }
@@ -142,9 +142,12 @@ export async function getMeFn() {
 export async function loginFn(input: { data: { email: string; password: string } }) {
   const { data } = input;
   const db = await getDb();
-  const user = await db.collection("users").findOne({ email: data.email.toLowerCase() });
+  const cleanEmail = (data.email || "").trim().toLowerCase();
+  const user = await db.collection("users").findOne({ email: cleanEmail });
   if (!user || !(await comparePassword(data.password, user.password as string, user.plain_password as string))) {
-    throw new Error("Invalid email or password");
+    const err = new Error("Invalid email or password");
+    (err as any).statusCode = 401;
+    throw err;
   }
   const token = await signToken({ userId: user._id as any as string, email: user.email as string });
   const cookieStore = await cookies();
@@ -1877,45 +1880,6 @@ export async function updateCustomerFn(input: { data: { id: string; name: string
   return { success: true, customer: updated ? { ...updated, id: updated._id as any as string } : null };
 }
 
-export async function deleteCustomerFn(input: { data: { id: string } }) {
-  const { data } = input;
-  const session = await requireSession();
-  const db = await getDb();
-  await db.collection("customers").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
-  return { success: true };
-}
-
-export async function archiveCustomerFn(input: { data: { id: string; archived: boolean } }) {
-  const { data } = input;
-  const session = await requireSession();
-  const db = await getDb();
-  await db.collection("customers").updateOne({ _id: data.id as any, owner_id: session.ownerId }, { $set: { archived: data.archived } });
-  return { success: true };
-}
-
-export async function getStorefrontBySlug(input: any) {
-  let slugStr = "";
-  if (typeof input === "string") {
-    slugStr = input;
-  } else if (input && typeof input === "object") {
-    if (typeof input.slug === "string") {
-      slugStr = input.slug;
-    } else if (input.data && typeof input.data.slug === "string") {
-      slugStr = input.data.slug;
-    } else if (typeof input.data === "string") {
-      slugStr = input.data;
-    }
-  }
-
-  const db = await getDb();
-  const cleanSlug = (slugStr || "").toLowerCase().trim();
-  const business = await db.collection("businesses").findOne({ slug: cleanSlug });
-  if (!business && slugStr) {
-    return await db.collection("businesses").findOne({ name: slugStr });
-  }
-  return business;
-}
-
 export async function repairCashboxDbFn() {
   const session = await requireSession();
   if (session.role !== "owner" && session.role !== "superadmin") {
@@ -1939,8 +1903,8 @@ export async function repairCashboxDbFn() {
   for (const sale of sales) {
     const saleId = sale._id.toString();
     const expectedAmount = saleCashboxAmount(sale as any);
+    const match = cashboxEntries.find(e => e.ref_id === saleId);
     if (expectedAmount > 0) {
-      const match = cashboxEntries.find(e => e.ref_id === saleId);
       if (!match) {
         await insertCashboxEntry(db, session.ownerId, {
           kind: "sale",
@@ -1957,6 +1921,9 @@ export async function repairCashboxDbFn() {
         );
         repairedCount++;
       }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
+      repairedCount++;
     }
   }
 
@@ -1975,7 +1942,6 @@ export async function repairCashboxDbFn() {
           const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
           expectedAmount = paidPerUnit * returnQty;
         }
-        // online: no cashbox impact — admin does not receive money immediately
       }
     } else if (ret.return_price) {
       expectedAmount = Number(ret.qty) * (Number(ret.return_price) || 0);
@@ -1983,8 +1949,8 @@ export async function repairCashboxDbFn() {
       expectedAmount = Number(ret.amount) || 0;
     }
 
+    const match = cashboxEntries.find(e => e.ref_id === retId);
     if (expectedAmount > 0) {
-      const match = cashboxEntries.find(e => e.ref_id === retId);
       if (!match) {
         await insertCashboxEntry(db, session.ownerId, {
           kind: "withdraw",
@@ -2001,6 +1967,9 @@ export async function repairCashboxDbFn() {
         );
         repairedCount++;
       }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
+      repairedCount++;
     }
   }
 
@@ -2028,20 +1997,26 @@ export async function repairCashboxDbFn() {
     if (purchaseLinkedExpenseIds.has(expId)) continue;
 
     const match = cashboxEntries.find(e => e.ref_id === expId);
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "expense",
-        amount: Number(exp.amount) || 0,
-        note: exp.title,
-        ref_id: expId,
-        created_at: exp.created_at,
-      }, true);
-      repairedCount++;
-    } else if (match.kind !== "expense" || Number(match.amount) !== Number(exp.amount) || match.created_at !== exp.created_at) {
-      await db.collection("cashbox_entries").updateOne(
-        { _id: match._id },
-        { $set: { kind: "expense", amount: Number(exp.amount) || 0, created_at: exp.created_at } }
-      );
+    const expAmt = Number(exp.amount) || 0;
+    if (expAmt > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "expense",
+          amount: expAmt,
+          note: exp.title,
+          ref_id: expId,
+          created_at: exp.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "expense" || Number(match.amount) !== expAmt || match.created_at !== exp.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "expense", amount: expAmt, created_at: exp.created_at } }
+        );
+        repairedCount++;
+      }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
       repairedCount++;
     }
   }
@@ -2057,23 +2032,27 @@ export async function repairCashboxDbFn() {
     const expId = linkedExp ? linkedExp._id.toString() : (fallbackExp ? fallbackExp._id.toString() : null);
 
     const match = cashboxEntries.find(e => e.ref_id === pId || (expId && e.ref_id === expId));
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "expense",
-        amount: Number(p.total) || 0,
-        note: `Product Purchase: ${p.product_name}`,
-        ref_id: pId,
-        created_at: p.created_at,
-      }, true);
-      repairedCount++;
-    } else {
-      if (match.kind !== "expense" || Number(match.amount) !== Number(p.total) || match.created_at !== p.created_at || match.ref_id !== pId) {
+    const pTotal = Number(p.total) || 0;
+    if (pTotal > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "expense",
+          amount: pTotal,
+          note: `Product Purchase: ${p.product_name}`,
+          ref_id: pId,
+          created_at: p.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "expense" || Number(match.amount) !== pTotal || match.created_at !== p.created_at || match.ref_id !== pId) {
         await db.collection("cashbox_entries").updateOne(
           { _id: match._id },
-          { $set: { kind: "expense", amount: Number(p.total) || 0, ref_id: pId, created_at: p.created_at } }
+          { $set: { kind: "expense", amount: pTotal, ref_id: pId, created_at: p.created_at } }
         );
         repairedCount++;
       }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
+      repairedCount++;
     }
   }
 
@@ -2081,20 +2060,26 @@ export async function repairCashboxDbFn() {
   for (const som of somitiEntries) {
     const somId = som._id.toString();
     const match = cashboxEntries.find(e => e.ref_id === somId);
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "withdraw",
-        amount: Number(som.amount) || 0,
-        note: som.note || "Samity payment",
-        ref_id: somId,
-        created_at: som.created_at,
-      }, true);
-      repairedCount++;
-    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(som.amount) || match.created_at !== som.created_at) {
-      await db.collection("cashbox_entries").updateOne(
-        { _id: match._id },
-        { $set: { kind: "withdraw", amount: Number(som.amount) || 0, created_at: som.created_at } }
-      );
+    const somAmt = Number(som.amount) || 0;
+    if (somAmt > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "withdraw",
+          amount: somAmt,
+          note: som.note || "Samity payment",
+          ref_id: somId,
+          created_at: som.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "withdraw" || Number(match.amount) !== somAmt || match.created_at !== som.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "withdraw", amount: somAmt, created_at: som.created_at } }
+        );
+        repairedCount++;
+      }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
       repairedCount++;
     }
   }
@@ -2103,20 +2088,26 @@ export async function repairCashboxDbFn() {
   for (const w of ownerWithdrawals) {
     const wId = w._id.toString();
     const match = cashboxEntries.find(e => e.ref_id === wId);
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "withdraw",
-        amount: Number(w.amount) || 0,
-        note: w.note || "Owner Withdrawal",
-        ref_id: wId,
-        created_at: w.created_at,
-      }, true);
-      repairedCount++;
-    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(w.amount) || match.created_at !== w.created_at) {
-      await db.collection("cashbox_entries").updateOne(
-        { _id: match._id },
-        { $set: { kind: "withdraw", amount: Number(w.amount) || 0, created_at: w.created_at } }
-      );
+    const wAmt = Number(w.amount) || 0;
+    if (wAmt > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "withdraw",
+          amount: wAmt,
+          note: w.note || "Owner Withdrawal",
+          ref_id: wId,
+          created_at: w.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "withdraw" || Number(match.amount) !== wAmt || match.created_at !== w.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "withdraw", amount: wAmt, created_at: w.created_at } }
+        );
+        repairedCount++;
+      }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
       repairedCount++;
     }
   }
@@ -2125,20 +2116,26 @@ export async function repairCashboxDbFn() {
   for (const pay of payments) {
     const payId = pay._id.toString();
     const match = cashboxEntries.find(e => e.ref_id === payId);
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "deposit",
-        amount: Number(pay.amount) || 0,
-        note: pay.note || "Collected dues",
-        ref_id: payId,
-        created_at: pay.created_at,
-      }, true);
-      repairedCount++;
-    } else if (match.kind !== "deposit" || Number(match.amount) !== Number(pay.amount) || match.created_at !== pay.created_at) {
-      await db.collection("cashbox_entries").updateOne(
-        { _id: match._id },
-        { $set: { kind: "deposit", amount: Number(pay.amount) || 0, created_at: pay.created_at } }
-      );
+    const payAmt = Number(pay.amount) || 0;
+    if (payAmt > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "deposit",
+          amount: payAmt,
+          note: pay.note || "Collected dues",
+          ref_id: payId,
+          created_at: pay.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "deposit" || Number(match.amount) !== payAmt || match.created_at !== pay.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "deposit", amount: payAmt, created_at: pay.created_at } }
+        );
+        repairedCount++;
+      }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
       repairedCount++;
     }
   }
@@ -2147,34 +2144,40 @@ export async function repairCashboxDbFn() {
   for (const set of payableSettlements) {
     const setId = set._id.toString();
     const match = cashboxEntries.find(e => e.ref_id === setId);
-    if (!match) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "withdraw",
-        amount: Number(set.amount) || 0,
-        note: set.note || "Paid to Supplier",
-        ref_id: setId,
-        created_at: set.created_at,
-      }, true);
-      repairedCount++;
-    } else if (match.kind !== "withdraw" || Number(match.amount) !== Number(set.amount) || match.created_at !== set.created_at) {
-      await db.collection("cashbox_entries").updateOne(
-        { _id: match._id },
-        { $set: { kind: "withdraw", amount: Number(set.amount) || 0, created_at: set.created_at } }
-      );
+    const setAmt = Number(set.amount) || 0;
+    if (setAmt > 0) {
+      if (!match) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "withdraw",
+          amount: setAmt,
+          note: set.note || "Paid to Supplier",
+          ref_id: setId,
+          created_at: set.created_at,
+        }, true);
+        repairedCount++;
+      } else if (match.kind !== "withdraw" || Number(match.amount) !== setAmt || match.created_at !== set.created_at) {
+        await db.collection("cashbox_entries").updateOne(
+          { _id: match._id },
+          { $set: { kind: "withdraw", amount: setAmt, created_at: set.created_at } }
+        );
+        repairedCount++;
+      }
+    } else if (match) {
+      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
       repairedCount++;
     }
   }
 
   // 10. Orphan Cleanup
   const validRefIds = new Set<string>();
-  sales.forEach(s => validRefIds.add(s._id.toString()));
+  sales.filter(s => saleCashboxAmount(s as any) > 0).forEach(s => validRefIds.add(s._id.toString()));
   returns.forEach(r => validRefIds.add(r._id.toString()));
-  expenses.forEach(e => validRefIds.add(e._id.toString()));
-  purchases.forEach(p => validRefIds.add(p._id.toString()));
-  somitiEntries.forEach(s => validRefIds.add(s._id.toString()));
-  ownerWithdrawals.forEach(w => validRefIds.add(w._id.toString()));
-  payments.forEach(p => validRefIds.add(p._id.toString()));
-  payableSettlements.forEach(s => validRefIds.add(s._id.toString()));
+  expenses.filter(e => (Number(e.amount) || 0) > 0).forEach(e => validRefIds.add(e._id.toString()));
+  purchases.filter(p => (Number(p.total) || 0) > 0).forEach(p => validRefIds.add(p._id.toString()));
+  somitiEntries.filter(s => (Number(s.amount) || 0) > 0).forEach(s => validRefIds.add(s._id.toString()));
+  ownerWithdrawals.filter(w => (Number(w.amount) || 0) > 0).forEach(w => validRefIds.add(w._id.toString()));
+  payments.filter(p => (Number(p.amount) || 0) > 0).forEach(p => validRefIds.add(p._id.toString()));
+  payableSettlements.filter(s => (Number(s.amount) || 0) > 0).forEach(s => validRefIds.add(s._id.toString()));
 
   const toDelete = cashboxEntries.filter(e => e.ref_id && !validRefIds.has(e.ref_id.toString()));
   if (toDelete.length > 0) {

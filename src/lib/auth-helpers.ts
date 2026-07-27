@@ -40,6 +40,7 @@ export async function comparePassword(password: string, hashed: string, plain?: 
   if (!password) return false;
   const raw = String(password);
   const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
 
   // 1. Try bcrypt match with raw password
   try {
@@ -53,14 +54,20 @@ export async function comparePassword(password: string, hashed: string, plain?: 
     if (hashed && compareSync(trimmed, hashed)) return true;
   } catch (_) {}
 
-  // 3. Fallback: match against optional plain_password field
-  if (plain && (plain === raw || plain === trimmed || plain.trim() === trimmed)) {
-    return true;
+  // 3. Fallback: match against optional plain_password field (raw, trimmed, or lowercase)
+  if (plain) {
+    const pRaw = String(plain);
+    const pTrim = pRaw.trim();
+    const pLower = pTrim.toLowerCase();
+    if (pRaw === raw || pTrim === trimmed || pLower === lower) return true;
   }
 
   // 4. Fallback: direct string equality if hashed in DB was stored as unhashed plain text
-  if (hashed && (hashed === raw || hashed === trimmed || hashed.trim() === trimmed)) {
-    return true;
+  if (hashed) {
+    const hRaw = String(hashed);
+    const hTrim = hRaw.trim();
+    const hLower = hTrim.toLowerCase();
+    if (hRaw === raw || hTrim === trimmed || hLower === lower) return true;
   }
 
   return false;

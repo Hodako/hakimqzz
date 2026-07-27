@@ -218,6 +218,18 @@ export default function CashboxDetailsPage() {
           <p className="text-xs text-muted-foreground mt-0.5">{t("cashbox_ledger")}</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={repairing}
+              onClick={runRepair}
+              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/20"
+            >
+              <Wrench className={`size-3.5 mr-1 ${repairing ? "animate-spin" : ""}`} />
+              {repairing ? "..." : (lang === "bn" ? "ডাটা সংস্কার" : "Reconcile Data")}
+            </Button>
+          )}
           <Button size="sm" onClick={() => { setDialogKind("deposit"); setEditEntry(null); setDialogOpen(true); }}>
             <Plus className="size-3.5 mr-1" />{t("add_money")}
           </Button>
