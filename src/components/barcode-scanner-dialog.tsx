@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Camera, RefreshCw, Scan, CheckCircle2, AlertTriangle, FlipHorizontal, Zap, Flashlight, ZoomIn, Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
+import {
+  MultiFormatReader,
+  HTMLCanvasElementLuminanceSource,
+  HybridBinarizer,
+  BinaryBitmap,
+  DecodeHintType,
+  BarcodeFormat,
+} from "@zxing/library";
 
 // Play audio beep on barcode scan
 export function playBarcodeBeep() {
@@ -24,61 +32,38 @@ export function playBarcodeBeep() {
   } catch (e) {}
 }
 
-// ── Ultra-Advanced Micro-Barcode Image Processing Engine ─────────────────────
-
-// 1. High-contrast adaptive thresholding for tiny/faded barcodes
-function applyAdaptiveThreshold(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  try {
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const d = imgData.data;
-    const len = d.length;
-
-    // Calculate mean brightness
-    let totalBright = 0;
-    for (let i = 0; i < len; i += 4) {
-      totalBright += (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
-    }
-    const mean = totalBright / (len / 4);
-
-    // Apply strict binarization around local mean
-    for (let i = 0; i < len; i += 4) {
-      const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-      const val = gray < mean - 5 ? 0 : 255;
-      d[i] = val;
-      d[i + 1] = val;
-      d[i + 2] = val;
-    }
-    ctx.putImageData(imgData, 0, 0);
-  } catch (_) {}
+// ── Ultra-Fast ZXing Synchronous Canvas Luminance Decoder ────────────────────
+function createZxingReader() {
+  const reader = new MultiFormatReader();
+  const hints = new Map();
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_39,
+    BarcodeFormat.CODE_93,
+    BarcodeFormat.EAN_13,
+    BarcodeFormat.EAN_8,
+    BarcodeFormat.UPC_A,
+    BarcodeFormat.UPC_E,
+    BarcodeFormat.QR_CODE,
+    BarcodeFormat.DATA_MATRIX,
+    BarcodeFormat.ITF,
+    BarcodeFormat.PDF_417,
+  ]);
+  hints.set(DecodeHintType.TRY_HARDER, true);
+  reader.setHints(hints);
+  return reader;
 }
 
-// 2. High-pass Laplacian edge sharpening kernel for micro 1D bars
-function applyLaplacianSharpen(ctx: CanvasRenderingContext2D, width: number, height: number) {
+function decodeCanvasSync(reader: MultiFormatReader, canvas: HTMLCanvasElement): string | null {
   try {
-    const src = ctx.getImageData(0, 0, width, height);
-    const dst = ctx.createImageData(width, height);
-    const s = src.data;
-    const d = dst.data;
-    const w = width;
-
-    // 3x3 Sharpen Kernel: [0, -1, 0, -1, 5, -1, 0, -1, 0]
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = (y * w + x) * 4;
-        const top = ((y - 1) * w + x) * 4;
-        const bot = ((y + 1) * w + x) * 4;
-        const left = (y * w + (x - 1)) * 4;
-        const right = (y * w + (x + 1)) * 4;
-
-        for (let c = 0; c < 3; c++) {
-          const val = 5 * s[idx + c] - s[top + c] - s[bot + c] - s[left + c] - s[right + c];
-          d[idx + c] = val < 0 ? 0 : val > 255 ? 255 : val;
-        }
-        d[idx + 3] = 255;
-      }
-    }
-    ctx.putImageData(dst, 0, 0);
-  } catch (_) {}
+    if (canvas.width <= 0 || canvas.height <= 0) return null;
+    const luminanceSource = new HTMLCanvasElementLuminanceSource(canvas);
+    const binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
+    const result = reader.decode(binaryBitmap);
+    return result ? result.getText() : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 interface BarcodeScannerDialogProps {
@@ -106,7 +91,7 @@ export function BarcodeScannerDialog({
   const animFrameRef = useRef<number>(0);
   const lastScanTimeRef = useRef<number>(0);
   const lastCodeRef = useRef<string>("");
-  const readerRef = useRef<any>(null);
+  const zxingReaderRef = useRef<MultiFormatReader | null>(null);
   const isDecodingRef = useRef<boolean>(false);
   const detectorRef = useRef<any>(null);
 
@@ -142,7 +127,7 @@ export function BarcodeScannerDialog({
     }
     isDecodingRef.current = false;
     detectorRef.current = null;
-    readerRef.current = null;
+    zxingReaderRef.current = null;
     setTorchOn(false);
     setIsZoomed(false);
     setPermissionState("idle");
@@ -178,7 +163,7 @@ export function BarcodeScannerDialog({
     [continuous, lang, onOpenChange, onScan, stopScanner]
   );
 
-  // ── Ultra-Advanced Multi-Pass Micro-Barcode Decoding Engine ─────────────
+  // ── Ultra-Fast Multi-Engine Barcode Decoding Loop ───────────────────────
   const startDecodeLoop = useCallback(() => {
     // 1. Initialize native BarcodeDetector API if available (Instant GPU detection)
     if (typeof window !== "undefined" && "BarcodeDetector" in window) {
@@ -205,6 +190,9 @@ export function BarcodeScannerDialog({
       }
     }
 
+    // 2. Initialize ZXing Synchronous MultiFormatReader
+    zxingReaderRef.current = createZxingReader();
+
     let lastTickTime = 0;
 
     const tick = async () => {
@@ -219,8 +207,8 @@ export function BarcodeScannerDialog({
       }
 
       const now = Date.now();
-      // Sub-10ms loop throttle (~100 FPS check rate) for ultra-aggressive scan response
-      if (now - lastTickTime < 10) {
+      // Throttle ~40 FPS (25ms) to give camera time to focus without overheating CPU
+      if (now - lastTickTime < 25) {
         if (streamRef.current) {
           animFrameRef.current = requestAnimationFrame(tick);
         }
@@ -233,7 +221,7 @@ export function BarcodeScannerDialog({
         try {
           let foundCode: string | null = null;
 
-          // Pass 1: Hardware-accelerated native BarcodeDetector (GPU level)
+          // Layer 1: Hardware-Accelerated Native BarcodeDetector (GPU Level, <3ms)
           if (detectorRef.current) {
             try {
               const barcodes = await detectorRef.current.detect(video);
@@ -243,86 +231,55 @@ export function BarcodeScannerDialog({
             } catch (_) {}
           }
 
-          // Pass 2: ZXing Multi-Layer Multi-Scale Pyramid for Micro Barcodes
-          if (!foundCode && readerRef.current && canvasRef.current && video.videoWidth > 0 && video.videoHeight > 0) {
+          // Layer 2: ZXing Multi-Pass Synchronous Luminance Decoding
+          if (!foundCode && zxingReaderRef.current && canvasRef.current && video.videoWidth > 0 && video.videoHeight > 0) {
+            const zReader = zxingReaderRef.current;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
             if (ctx) {
               const vw = video.videoWidth;
               const vh = video.videoHeight;
-              canvas.width = Math.min(vw, 1920);
-              canvas.height = Math.min(vh, 1080);
+              canvas.width = Math.min(vw, 1280);
+              canvas.height = Math.min(vh, 720);
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-              // Pass 2A: Full-frame raw scan
-              try {
-                const res = await readerRef.current.decodeFromCanvas(canvas);
-                if (res) {
-                  foundCode = res.getText();
-                }
-              } catch (_) {}
+              // Pass 2A: Full-frame ZXing decode
+              foundCode = decodeCanvasSync(zReader, canvas);
 
-              // Pass 2B: Center Crop 2.5x Upscaling Pyramid (Magnifies micro barcodes)
+              // Pass 2B: Viewfinder Target Box Crop (80% x 50% center region)
               if (!foundCode) {
-                try {
-                  const cropW = Math.floor(canvas.width * 0.70);
-                  const cropH = Math.floor(canvas.height * 0.45);
-                  const cropX = Math.floor((canvas.width - cropW) / 2);
-                  const cropY = Math.floor((canvas.height - cropH) / 2);
+                const cropW = Math.floor(canvas.width * 0.80);
+                const cropH = Math.floor(canvas.height * 0.50);
+                const cropX = Math.floor((canvas.width - cropW) / 2);
+                const cropY = Math.floor((canvas.height - cropH) / 2);
 
-                  const scaledW = Math.floor(cropW * 2.2);
-                  const scaledH = Math.floor(cropH * 2.2);
-
-                  const pyCanvas = document.createElement("canvas");
-                  pyCanvas.width = scaledW;
-                  pyCanvas.height = scaledH;
-                  const pyCtx = pyCanvas.getContext("2d", { willReadFrequently: true });
-                  if (pyCtx) {
-                    pyCtx.imageSmoothingEnabled = true;
-                    pyCtx.imageSmoothingQuality = "high";
-                    pyCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, scaledW, scaledH);
-
-                    // Decode upscaled pyramid
-                    const resPy = await readerRef.current.decodeFromCanvas(pyCanvas);
-                    if (resPy) {
-                      foundCode = resPy.getText();
-                    }
-
-                    // Pass 2C: Sharpened & Adaptive Thresholded Micro-Pass
-                    if (!foundCode) {
-                      applyLaplacianSharpen(pyCtx, scaledW, scaledH);
-                      applyAdaptiveThreshold(pyCtx, scaledW, scaledH);
-                      const resSharp = await readerRef.current.decodeFromCanvas(pyCanvas);
-                      if (resSharp) {
-                        foundCode = resSharp.getText();
-                      }
-                    }
-                  }
-                } catch (_) {}
+                const cropCanvas = document.createElement("canvas");
+                cropCanvas.width = cropW;
+                cropCanvas.height = cropH;
+                const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true });
+                if (cropCtx) {
+                  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                  foundCode = decodeCanvasSync(zReader, cropCanvas);
+                }
               }
 
-              // Pass 2D: Micro Target Box (30% x 25% ultra-center scan for tiny jewelry/apparel barcodes)
+              // Pass 2C: Micro-Barcode Magnifier Crop (40% x 30% center zone upscaled 2.5x for tiny 0.5cm barcodes)
               if (!foundCode) {
-                try {
-                  const microW = Math.floor(canvas.width * 0.35);
-                  const microH = Math.floor(canvas.height * 0.30);
-                  const microX = Math.floor((canvas.width - microW) / 2);
-                  const microY = Math.floor((canvas.height - microH) / 2);
+                const microW = Math.floor(canvas.width * 0.40);
+                const microH = Math.floor(canvas.height * 0.30);
+                const microX = Math.floor((canvas.width - microW) / 2);
+                const microY = Math.floor((canvas.height - microH) / 2);
 
-                  const microCanvas = document.createElement("canvas");
-                  microCanvas.width = microW * 3;
-                  microCanvas.height = microH * 3;
-                  const microCtx = microCanvas.getContext("2d", { willReadFrequently: true });
-                  if (microCtx) {
-                    microCtx.imageSmoothingEnabled = false;
-                    microCtx.drawImage(canvas, microX, microY, microW, microH, 0, 0, microW * 3, microH * 3);
-                    applyAdaptiveThreshold(microCtx, microW * 3, microH * 3);
-                    const resMicro = await readerRef.current.decodeFromCanvas(microCanvas);
-                    if (resMicro) {
-                      foundCode = resMicro.getText();
-                    }
-                  }
-                } catch (_) {}
+                const microCanvas = document.createElement("canvas");
+                microCanvas.width = Math.floor(microW * 2.5);
+                microCanvas.height = Math.floor(microH * 2.5);
+                const microCtx = microCanvas.getContext("2d", { willReadFrequently: true });
+                if (microCtx) {
+                  microCtx.imageSmoothingEnabled = false;
+                  microCtx.drawImage(canvas, microX, microY, microW, microH, 0, 0, microCanvas.width, microCanvas.height);
+                  foundCode = decodeCanvasSync(zReader, microCanvas);
+                }
               }
             }
           }
@@ -356,7 +313,7 @@ export function BarcodeScannerDialog({
     const nextTorch = !torchOn;
     let applied = false;
 
-    // Standard W3C Advanced constraints
+    // Method 1: Advanced W3C constraint
     try {
       await track.applyConstraints({
         advanced: [{ torch: nextTorch } as any],
@@ -364,6 +321,7 @@ export function BarcodeScannerDialog({
       applied = true;
     } catch (_) {}
 
+    // Method 2: Direct track constraint fallback
     if (!applied) {
       try {
         await track.applyConstraints({
@@ -392,7 +350,7 @@ export function BarcodeScannerDialog({
 
     if (capabilities.zoom) {
       try {
-        const targetZoom = nextZoom ? Math.min(3.0, capabilities.zoom.max || 2.5) : capabilities.zoom.min || 1;
+        const targetZoom = nextZoom ? Math.min(2.5, capabilities.zoom.max || 2) : capabilities.zoom.min || 1;
         await track.applyConstraints({
           advanced: [{ zoom: targetZoom } as any],
         });
@@ -401,12 +359,12 @@ export function BarcodeScannerDialog({
     setIsZoomed(nextZoom);
     toast.info(
       nextZoom
-        ? (lang === "bn" ? "মাইক্রো বারকোড ম্যাগনিফায়ার সচল 🔍" : "Micro Barcode Magnifier 2.5x 🔍")
+        ? (lang === "bn" ? "মাইক্রো বারকোড ম্যাগনিফায়ার ২x 🔍" : "Micro Barcode Zoom 2x 🔍")
         : (lang === "bn" ? "সাধারণ ভিউ ১x 📷" : "Standard View 1x 📷")
     );
   }, [isZoomed, lang]);
 
-  // ── Start camera scan with Ultra-High Accuracy HD Video Stream ──────────
+  // ── Start camera scan with High-Accuracy HD Video Stream ────────────────
   const startCameraScan = useCallback(
     async (cameraId?: string, facing: "environment" | "user" = "environment") => {
       stopScanner();
@@ -430,66 +388,42 @@ export function BarcodeScannerDialog({
       try {
         let stream: MediaStream | null = null;
 
-        // Ultra HD camera constraints for maximum sharp pixel density
-        const highResConstraints: MediaTrackConstraints = cameraId
+        const videoConstraints: MediaTrackConstraints = cameraId
           ? {
               deviceId: { exact: cameraId },
-              width: { ideal: 1920, min: 1280 },
-              height: { ideal: 1080, min: 720 },
-              frameRate: { ideal: 60, min: 30 },
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              frameRate: { ideal: 30 },
             }
           : {
               facingMode: facing === "environment" ? { ideal: "environment" } : "user",
-              width: { ideal: 1920, min: 1280 },
-              height: { ideal: 1080, min: 720 },
-              frameRate: { ideal: 60, min: 30 },
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              frameRate: { ideal: 30 },
             };
 
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: highResConstraints,
+            video: videoConstraints,
             audio: false,
           });
         } catch (_) {
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode: facing === "environment" ? "environment" : "user",
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-              },
-              audio: false,
-            });
-          } catch (_) {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false,
-            });
-          }
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
         }
 
         streamRef.current = stream;
 
-        // Apply Macro Focus & Continuous Camera Track Capabilities
+        // Continuous Autofocus mode for barcode camera track
         const track = stream.getVideoTracks()[0];
         if (track && "applyConstraints" in track) {
           try {
             const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
-            const advancedConstraints: any = {};
-
             if (capabilities.focusMode?.includes("continuous")) {
-              advancedConstraints.focusMode = "continuous";
-            }
-            if (capabilities.exposureMode?.includes("continuous")) {
-              advancedConstraints.exposureMode = "continuous";
-            }
-            if (capabilities.whiteBalanceMode?.includes("continuous")) {
-              advancedConstraints.whiteBalanceMode = "continuous";
-            }
-
-            if (Object.keys(advancedConstraints).length > 0) {
               await track.applyConstraints({
-                advanced: [advancedConstraints],
+                advanced: [{ focusMode: "continuous" } as any],
               });
             }
           } catch (_) {}
@@ -503,36 +437,6 @@ export function BarcodeScannerDialog({
           videoRef.current.muted = true;
           await videoRef.current.play().catch(() => {});
         }
-
-        // Prepare ZXing reader with max hints
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        let hints: Map<any, any> | undefined;
-        try {
-          const zxingLib = await import("@zxing/library");
-          const DecodeHintType = zxingLib?.DecodeHintType;
-          const BarcodeFormat = zxingLib?.BarcodeFormat;
-          if (DecodeHintType?.POSSIBLE_FORMATS && BarcodeFormat) {
-            hints = new Map();
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-              BarcodeFormat.CODE_128,
-              BarcodeFormat.CODE_39,
-              BarcodeFormat.CODE_93,
-              BarcodeFormat.EAN_13,
-              BarcodeFormat.EAN_8,
-              BarcodeFormat.UPC_A,
-              BarcodeFormat.UPC_E,
-              BarcodeFormat.QR_CODE,
-              BarcodeFormat.DATA_MATRIX,
-              BarcodeFormat.ITF,
-              BarcodeFormat.PDF_417,
-              BarcodeFormat.AZTEC,
-            ]);
-            hints.set(DecodeHintType.TRY_HARDER, true);
-          }
-        } catch (_) {}
-
-        const reader = hints ? new BrowserMultiFormatReader(hints) : new BrowserMultiFormatReader();
-        readerRef.current = reader;
 
         try {
           localStorage.setItem(PERM_KEY, "true");
@@ -613,7 +517,7 @@ export function BarcodeScannerDialog({
             <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
               <Scan className="size-4 text-primary animate-pulse" />
             </div>
-            <span>{title ?? (lang === "bn" ? "লাইভ মাইক্রো বারকোড স্ক্যানার" : "Live Ultra-Micro Barcode Scanner")}</span>
+            <span>{title ?? (lang === "bn" ? "লাইভ বারকোড স্ক্যানার" : "Live Barcode Scanner")}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -663,7 +567,7 @@ export function BarcodeScannerDialog({
               <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-2 z-20">
                 <Camera className="size-8 animate-bounce text-primary" />
                 <p className="text-xs font-medium text-muted-foreground animate-pulse">
-                  {lang === "bn" ? "মাইক্রো-ফোকাস এইচডি ক্যামেরা চালুকরণ..." : "Starting Micro-Focus HD Camera..."}
+                  {lang === "bn" ? "ক্যামেরা চালু করা হচ্ছে..." : "Starting Camera Stream..."}
                 </p>
               </div>
             )}
@@ -690,7 +594,7 @@ export function BarcodeScannerDialog({
             {permissionState === "granted" && (
               <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-[10px] font-bold flex items-center gap-1.5 z-20 shadow-md">
                 <Sparkles className="size-3 text-amber-400 animate-spin" />
-                <span>{lang === "bn" ? "মাইক্রো ট্র্যাকিং সচল 🟢" : "Micro Scan Active 🟢"}</span>
+                <span>{lang === "bn" ? "লাইভ স্ক্যানার সচল 🟢" : "Live Scanner Active 🟢"}</span>
               </div>
             )}
 
@@ -709,7 +613,7 @@ export function BarcodeScannerDialog({
                   title={lang === "bn" ? "ফ্ল্যাশলাইট অন/অফ করুন" : "Toggle Flashlight"}
                 >
                   <Flashlight className={`size-3.5 ${torchOn ? "fill-black" : ""}`} />
-                  <span>{torchOn ? "Flashlight ON" : "Flashlight OFF"}</span>
+                  <span>{torchOn ? "Torch ON" : "Torch OFF"}</span>
                 </button>
 
                 {/* Macro Zoom Magnifier */}
@@ -721,7 +625,7 @@ export function BarcodeScannerDialog({
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-black/80 text-white border-white/20 hover:bg-black/95"
                   }`}
-                  title={lang === "bn" ? "মাইক্রো বারকোড ম্যাগনিফায়ার" : "Micro Barcode Magnifier"}
+                  title={lang === "bn" ? "মাইক্রো বারকোড জুম" : "Micro Barcode Zoom"}
                 >
                   <ZoomIn className="size-4" />
                 </button>
@@ -766,7 +670,7 @@ export function BarcodeScannerDialog({
                   {lang === "bn" ? "সর্বশেষ স্ক্যানকৃত বারকোড" : "Last Scanned Barcode"}
                 </div>
                 <div className="font-mono text-xs sm:text-sm font-bold text-foreground truncate" title={lastScanned || "—"}>
-                  {lastScanned || (lang === "bn" ? "যেকোনো ক্ষুদ্র বারকোড বা ট্যাগের দিকে ক্যামেরা ধরুন..." : "Point at any micro or tiny product barcode...")}
+                  {lastScanned || (lang === "bn" ? "বারকোড বা ট্যাগের দিকে ফোকাস করুন..." : "Point camera at product barcode...")}
                 </div>
               </div>
             </div>

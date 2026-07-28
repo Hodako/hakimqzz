@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getDb } from "@/lib/db";
 
-const AI_BASE_URL = "https://api.tokenrouter.com/v1";
-const AI_API_KEY = "sk-wbNyUKEzeR81I36DHsOA8gEaCO5iKz7uksedde5pkhsLbbiw";
-const AI_MODEL = "MiniMax-M3";
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "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";
+const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
+
+// OpenRouter Free Models Fallback Array
+const FREE_MODELS = [
+  DEFAULT_MODEL,
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "deepseek/deepseek-r1:free",
+  "google/gemini-2.0-flash-lite-preview-02-05:free",
+  "qwen/qwen-2.5-coder-32b-instruct:free",
+];
 
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") || "*";
@@ -15,13 +24,12 @@ export async function POST(req: NextRequest) {
     const ownerId = session.ownerId;
 
     // 2. Fetch business context data
-    const [products, sales, purchases, expenses, parties, cashbox] = await Promise.all([
+    const [products, sales, purchases, expenses, parties] = await Promise.all([
       db.collection("products").find({ owner_id: ownerId }).toArray(),
       db.collection("sales").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(200).toArray(),
       db.collection("purchases").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray(),
       db.collection("expenses").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray(),
       db.collection("parties").find({ owner_id: ownerId }).toArray(),
-      db.collection("cashbox_entries").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray(),
     ]);
 
     // 3. Compute key business metrics
@@ -29,18 +37,16 @@ export async function POST(req: NextRequest) {
     const totalProfit = sales.reduce((s, x) => s + (x.profit || 0), 0);
     const totalExpenses = expenses.reduce((s, x) => s + (x.amount || 0), 0);
     const totalPurchases = purchases.reduce((s, x) => s + (x.total || 0), 0);
-    const cashSales = sales.filter(s => s.type === "cash").reduce((a, x) => a + (x.sell_price * x.qty), 0);
-    const creditSales = sales.filter(s => s.type === "credit").reduce((a, x) => a + (x.sell_price * x.qty), 0);
-    const onlineSales = sales.filter(s => s.type === "online").reduce((a, x) => a + (x.sell_price * x.qty), 0);
-    const totalDue = sales.filter(s => s.type === "credit").reduce((a, x) => a + (x.due_amount || 0), 0);
+    const cashSales = sales.filter((s) => s.type === "cash").reduce((a, x) => a + (x.sell_price * x.qty), 0);
+    const creditSales = sales.filter((s) => s.type === "credit").reduce((a, x) => a + (x.sell_price * x.qty), 0);
+    const onlineSales = sales.filter((s) => s.type === "online").reduce((a, x) => a + (x.sell_price * x.qty), 0);
+    const totalDue = sales.filter((s) => s.type === "credit").reduce((a, x) => a + (x.due_amount || 0), 0);
 
-    // Low stock products (stock <= min_stock or stock <= 5)
     const lowStockProducts = products
-      .filter(p => !p.archived && p.stock <= (p.min_stock || 5))
-      .map(p => ({ name: p.name, stock: p.stock, min_stock: p.min_stock || 5 }))
+      .filter((p) => !p.archived && p.stock <= (p.min_stock || 5))
+      .map((p) => ({ name: p.name, stock: p.stock, min_stock: p.min_stock || 5 }))
       .slice(0, 20);
 
-    // Best selling products
     const productSalesMap: Record<string, { name: string; qty: number; revenue: number }> = {};
     for (const s of sales) {
       const key = s.product_name || "Unknown";
@@ -52,137 +58,114 @@ export async function POST(req: NextRequest) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
 
-    // Recent sales (last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const recentSales = sales.filter(s => s.created_at >= sevenDaysAgo);
+    const recentSales = sales.filter((s) => s.created_at >= sevenDaysAgo);
     const recentSalesTotal = recentSales.reduce((a, x) => a + (x.sell_price * x.qty), 0);
 
-    // Top parties by due
-    const partyDueMap: Record<string, { name: string; due: number }> = {};
-    for (const p of parties) {
-      partyDueMap[String(p._id)] = { name: p.name, due: 0 };
-    }
-    for (const s of sales.filter(x => x.type === "credit" && x.party_id)) {
-      if (partyDueMap[s.party_id]) partyDueMap[s.party_id].due += (s.due_amount || 0);
-    }
-    const topDueParties = Object.values(partyDueMap)
-      .filter(x => x.due > 0)
-      .sort((a, b) => b.due - a.due)
-      .slice(0, 5);
-
-    // Expense breakdown
-    const expenseMap: Record<string, number> = {};
-    for (const e of expenses) {
-      expenseMap[e.title] = (expenseMap[e.title] || 0) + e.amount;
-    }
-    const topExpenses = Object.entries(expenseMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([title, amount]) => ({ title, amount }));
-
     // 4. Build system prompt with real business data
-    const systemPrompt = `You are an expert AI business analyst for a retail fashion business management app called HakimQzz (also called DreamFashion). You have access to the business's real-time data and you are a trusted advisor.
+    const systemPrompt = `You are an expert AI business advisor for a retail fashion management platform called HakimQzz (DreamFashion). You have access to real-time shop performance metrics.
 
-## REAL BUSINESS DATA (Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })})
-
-### Financial Overview
+## REAL BUSINESS METRICS (Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })})
 - Total Sales Revenue: ৳${totalSales.toLocaleString()}
 - Total Profit: ৳${totalProfit.toLocaleString()}
 - Total Expenses: ৳${totalExpenses.toLocaleString()}
-- Total Purchases (inventory cost): ৳${totalPurchases.toLocaleString()}
-- Net Position: ৳${(totalProfit - totalExpenses).toLocaleString()}
+- Inventory Purchases: ৳${totalPurchases.toLocaleString()}
+- Net Income: ৳${(totalProfit - totalExpenses).toLocaleString()}
 - Cash Sales: ৳${cashSales.toLocaleString()}
-- Credit Sales: ৳${creditSales.toLocaleString()}
+- Credit Dues Outstanding: ৳${totalDue.toLocaleString()}
 - Online Sales: ৳${onlineSales.toLocaleString()}
-- Total Outstanding Dues: ৳${totalDue.toLocaleString()}
 - Sales Last 7 Days: ৳${recentSalesTotal.toLocaleString()}
+- Total Active Catalog Products: ${products.filter((p) => !p.archived).length}
+- Low Stock Items: ${lowStockProducts.length}
+${lowStockProducts.map((p) => `  • ${p.name}: ${p.stock} left (min: ${p.min_stock})`).join("\n") || "  None"}
 
-### Inventory
-- Total Products: ${products.filter(p => !p.archived).length}
-- Low Stock Products (stock ≤ reorder level): ${lowStockProducts.length}
-${lowStockProducts.map(p => `  • ${p.name}: ${p.stock} units (min: ${p.min_stock})`).join("\n") || "  None"}
+### Top Selling Items:
+${bestSelling.map((p, i) => `${i + 1}. ${p.name} — ${p.qty} sold, ৳${p.revenue.toLocaleString()}`).join("\n") || "No sales recorded yet"}
 
-### Best Selling Products
-${bestSelling.map((p, i) => `${i + 1}. ${p.name} — ${p.qty} units sold, ৳${p.revenue.toLocaleString()} revenue`).join("\n") || "No sales yet"}
+## RESPONSE INSTRUCTIONS:
+- Be concise, direct, and actionable (MAXIMUM 150-200 words).
+- Provide structured headings and clear bullet points.
+- If user writes in Bangla, answer ENTIRELY in clear Bengali.
+- Use ৳ symbol for all monetary figures.`;
 
-### Top Customers by Outstanding Due
-${topDueParties.map(p => `• ${p.name}: ৳${p.due.toLocaleString()}`).join("\n") || "No outstanding dues"}
-
-### Top Expense Categories
-${topExpenses.map(e => `• ${e.title}: ৳${e.amount.toLocaleString()}`).join("\n") || "No expenses recorded"}
-
-### Business Counts
-- Total Transactions: ${sales.length}
-- Total Customers/Parties: ${parties.length}
-- Total Expense Entries: ${expenses.length}
-- Total Purchase Records: ${purchases.length}
-
-## YOUR ROLE
-You are a professional business advisor. Analyze the data above and give structured, actionable insights.
-
-## RESPONSE RULES
-- Be extremely brief and concise — STRICT MAXIMUM 150-200 words. Avoid long paragraphs.
-- Keep the language simple and direct.
-- Give structured responses with clear headings, bullet points, and bold key numbers.
-- Group the response into 3 quick sections: 1. Overview (সংক্ষিপ্ত বিবরণ), 2. Critical Issues/Trends (⚠️/✅), 3. Actionable Advice (পরামর্শ).
-- Use ৳ symbol for amounts (Bangladeshi Taka).
-- If the user asks in Bangla (Bengali), respond ENTIRELY in Bangla with proper Bengali numerals where appropriate.
-- If the user asks in English, respond in English.
-- Highlight critical issues with ⚠️ and positive trends with ✅.
-- Always end with 1 actionable recommendation.`;
-
-    // 5. Parse request body
     const body = await req.json();
-    const { messages, lang } = body as { messages: { role: string; content: string }[]; lang: string };
+    const { messages } = body as { messages: { role: string; content: string }[] };
 
-    // 6. Call tokenrouter AI
-    const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${AI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages.slice(-12), // keep last 12 messages for context
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-        stream: false,
-      }),
-    });
+    let reply = "";
+    let lastError = "";
 
-    if (!response.ok) {
-      const errText = await response.text();
-      return NextResponse.json({ error: `AI error: ${response.status} — ${errText}` }, {
+    // 5. Try OpenRouter free models with automatic failover
+    const modelsToTry = Array.from(new Set(FREE_MODELS));
+    for (const modelCandidate of modelsToTry) {
+      try {
+        const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io",
+            "X-Title": "HakimQzz Fashion POS",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelCandidate,
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...messages.slice(-10),
+            ],
+            temperature: 0.7,
+            max_tokens: 800,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const candidateReply = data.choices?.[0]?.message?.content;
+          if (candidateReply && candidateReply.trim()) {
+            reply = candidateReply;
+            break;
+          }
+        } else {
+          lastError = `Model ${modelCandidate} failed with HTTP ${response.status}`;
+        }
+      } catch (err: any) {
+        lastError = err?.message || String(err);
+      }
+    }
+
+    if (!reply) {
+      return NextResponse.json(
+        { error: `OpenRouter AI service error: ${lastError || "All free models failed"}` },
+        {
+          status: 500,
+          headers: {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+          },
+        }
+      );
+    }
+
+    return NextResponse.json(
+      { reply },
+      {
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
+        },
+      }
+    );
+  } catch (err: any) {
+    console.error("[ai-chat]", err);
+    return NextResponse.json(
+      { error: err.message || "Internal server error" },
+      {
         status: 500,
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Credentials": "true",
         },
-      });
-    }
-
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content ?? "No response from AI.";
-
-    return NextResponse.json({ reply }, {
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
-    });
-  } catch (err: any) {
-    console.error("[ai-chat]", err);
-    return NextResponse.json({ error: err.message || "Internal server error" }, {
-      status: 500,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
-    });
+      }
+    );
   }
 }
 
