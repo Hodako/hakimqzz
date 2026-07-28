@@ -389,3 +389,48 @@
   justify-content: center;
   background: var(--background);
 }
+
+/* ── Printable Invoice & Single Page A4 Print Rules ────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print,
+  nav,
+  header,
+  aside,
+  footer,
+  .mobile-tab-bar,
+  .app-shell > header,
+  .app-shell > nav {
+    display: none !important;
+  }
+
+  .invoice-print-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .invoice-print-page {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
