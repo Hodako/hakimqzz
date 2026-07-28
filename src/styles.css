@@ -390,28 +390,47 @@
   background: var(--background);
 }
 
-/* ── Printable Invoice & Single Page A4 Print Rules ────────────────── */
+/* ── Printable Invoice & Single Page A4 Print Rules (PWA & Web Safe) ── */
 @media print {
   @page {
     size: A4 portrait;
     margin: 8mm 10mm;
   }
 
-  body {
+  html, body {
     background: #ffffff !important;
     color: #000000 !important;
+    color-scheme: light !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
+  /* Force light theme colors on all text inside printable invoice */
+  .dark .invoice-print-container,
+  .dark .invoice-print-page,
+  .invoice-print-container,
+  .invoice-print-page {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .dark .invoice-print-container *,
+  .dark .invoice-print-page * {
+    color: inherit;
+  }
+
+  /* Hide PWA app shell navigation, bars, dialog overlays and controls */
   .no-print,
   nav,
   header,
   aside,
   footer,
   .mobile-tab-bar,
+  .bkash-bottom-nav,
   .app-shell > header,
-  .app-shell > nav {
+  .app-shell > nav,
+  .app-shell > footer,
+  div[role="dialog"] > button:last-child {
     display: none !important;
   }
 
@@ -429,8 +448,10 @@
   }
 
   .invoice-print-page {
+    display: block !important;
     page-break-inside: avoid;
     break-inside: avoid;
   }
 }
+
 
