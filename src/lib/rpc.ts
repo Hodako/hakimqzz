@@ -31,7 +31,12 @@ async function callRemoteRpc(actionName: string, args: any) {
 
   const txt = await res.text();
   if (!res.ok) {
-    throw new Error(txt || `RPC Request failed with status ${res.status}`);
+    let errorMsg = txt;
+    try {
+      const parsed = JSON.parse(txt);
+      if (parsed?.error) errorMsg = parsed.error;
+    } catch (_) {}
+    throw new Error(errorMsg || `RPC Request failed with status ${res.status}`);
   }
 
   try {
