@@ -8,8 +8,7 @@ const isCapacitor = typeof window !== "undefined" && (
 );
 
 // For Capacitor/native apps use the absolute public URL, for web use relative path
-const NEXT_PUBLIC_APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io";
-const API_BASE = (typeof window === "undefined" || isCapacitor) ? NEXT_PUBLIC_APP_URL : "";
+const API_BASE = (typeof window !== "undefined" && isCapacitor) ? (process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io") : "";
 
 async function callRemoteRpc(actionName: string, args: any) {
   const url = `${API_BASE}/api/rpc`;
@@ -26,6 +25,7 @@ async function callRemoteRpc(actionName: string, args: any) {
   const res = await fetch(url, {
     method: "POST",
     headers,
+    credentials: "include",
     body: JSON.stringify({ actionName, args, token, activeProfile }),
   });
 
@@ -232,6 +232,7 @@ export async function callAiChat(messages: any[], lang: string) {
   return await fetch(url, {
     method: "POST",
     headers,
+    credentials: "include",
     body: JSON.stringify({
       messages: messages.map(m => ({ role: m.role, content: m.content })),
       lang,
