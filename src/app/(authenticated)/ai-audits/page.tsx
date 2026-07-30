@@ -25,6 +25,23 @@ export default function AiAuditsPage() {
   const [loading, setLoading] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  // Suggested questions in English and Bangla
+  const suggestions = lang === "bn"
+    ? [
+        { label: "আজকের লাভ বা মুনাফা কত?", text: "আজকের লাভ বা মুনাফা কত?" },
+        { label: "কোথায় আমাদের ব্যবসার সমস্যা আছে?", text: "ব্যবসায়ের আর্থিক বা অপারেশনাল সমস্যা কোথায় কোথায় আছে?" },
+        { label: "কোন পণ্যের স্টক সংকটজনক?", text: "কোন পণ্যগুলির স্টক সংকটজনক বা কম আছে এবং কখন নতুন পণ্য ক্রয় করতে হবে?" },
+        { label: "কোথায় আমাদের ব্যবসার ডেটা আপডেট করতে হবে?", text: "উন্নতির জন্য ব্যবসায়ের কার্যক্রম এবং ইনভেন্টরি কোথায় আপডেট করা প্রয়োজন?" },
+        { label: "ব্যবসার সার্বিক বিশ্লেষণ দিন", text: "দয়া করে আমার ব্যবসার সার্বিক আর্থিক স্বাস্থ্য, সেলস ট্রেন্ড এবং পারফরমেন্সের একটি সামগ্রিক বিশ্লেষণ দিন।" },
+      ]
+    : [
+        { label: "What is the profits?", text: "What is the profits?" },
+        { label: "Where is the business problems?", text: "Where is the business problems?" },
+        { label: "What is the critical stocks?", text: "What is the critical stocks and which products have less number in stocks?" },
+        { label: "Where have to update?", text: "Where do we have to update or make changes for the business?" },
+        { label: "Total analyzation of the business", text: "Provide a total analyzation and health check of the business." },
+      ];
+
   useEffect(() => {
     setMounted(true);
   }, []);
