@@ -33,7 +33,7 @@ export function playBarcodeBeep() {
   } catch (e) {}
 }
 
-// ── Superfast Multi-Format Reader with Dual Binarization (Hybrid + Global Histogram) ──────
+// ── Superfast Multi-Format Reader with Multi-Pass Contrast & Dual Binarization ──────
 function createZxingReader() {
   const reader = new MultiFormatReader();
   const hints = new Map();
@@ -66,18 +66,26 @@ function decodeCanvasSync(reader: MultiFormatReader, canvas: HTMLCanvasElement):
     if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
     const luminanceSource = new HTMLCanvasElementLuminanceSource(canvas);
 
-    // Pass A: Hybrid Binarizer (Primary Fast Engine)
+    // Pass A: Hybrid Binarizer (Primary Fast Engine for clean QR & 1D barcodes)
     try {
       const bitmapHybrid = new BinaryBitmap(new HybridBinarizer(luminanceSource));
       const resA = reader.decode(bitmapHybrid);
-      if (resA) return resA.getText();
+      if (resA && resA.getText()) return resA.getText();
     } catch (_) {}
 
-    // Pass B: Global Histogram Binarizer (Fallback for low-contrast/shiny/glossy QR & Barcodes)
+    // Pass B: Global Histogram Binarizer (Fallback for low-contrast/shiny/glossy packaging)
     try {
       const bitmapGlobal = new BinaryBitmap(new GlobalHistogramBinarizer(luminanceSource));
       const resB = reader.decode(bitmapGlobal);
-      if (resB) return resB.getText();
+      if (resB && resB.getText()) return resB.getText();
+    } catch (_) {}
+
+    // Pass C: Inverted Binarization (For light-on-dark barcodes/QR)
+    try {
+      const invertedSource = luminanceSource.invert();
+      const bitmapInverted = new BinaryBitmap(new HybridBinarizer(invertedSource));
+      const resC = reader.decode(bitmapInverted);
+      if (resC && resC.getText()) return resC.getText();
     } catch (_) {}
 
     return null;

@@ -19,10 +19,15 @@ export default function AiAuditsPage() {
   const { lang, t } = useT();
   const { user } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -38,9 +43,9 @@ export default function AiAuditsPage() {
   };
 
   const handleSend = async (textToSend: string) => {
-    if (!textToSend.trim() || loading) return;
+    if (!textToSend || !textToSend.trim() || loading) return;
 
-    const userMessage: Message = { role: "user", content: textToSend };
+    const userMessage: Message = { role: "user", content: textToSend.trim() };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
@@ -49,15 +54,21 @@ export default function AiAuditsPage() {
     try {
       const { callAiChat } = await import("@/lib/rpc");
       const res = await callAiChat(newMessages, lang);
-      const data = await res.json().catch(() => ({ error: "AI service failed to respond" }));
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || (lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI"));
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        data = { error: lang === "bn" ? "সার্ভার রেসপন্স প্রসেস করা যায়নি" : "Failed to parse AI server response" };
       }
 
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || (lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI"));
+      }
+
+      const replyText = data?.reply ? String(data.reply) : (lang === "bn" ? "কোন তথ্য পাওয়া যায়নি" : "No response generated");
+      setMessages(prev => [...prev, { role: "assistant", content: replyText }]);
     } catch (err: any) {
-      toast.error(err.message || String(err));
+      toast.error(err?.message || String(err));
       // Remove last user message on failure so they can retry
       setMessages(prev => prev.slice(0, -1));
     } finally {
@@ -67,6 +78,7 @@ export default function AiAuditsPage() {
 
   // Helper to parse both markdown **bold** and standard HTML tags in AI responses
   const parseBold = (text: string) => {
+    if (!text) return "";
     let converted = text.replace(/\*\*(?!\s)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>");
     converted = converted.replace(/\*(?!\s)([\s\S]*?\S)\*/g, "<em>$1</em>");
     const tagRegex = /(<[^>]+>)/g;
@@ -117,12 +129,12 @@ export default function AiAuditsPage() {
         if (textColor) style.color = textColor;
         
         let el: React.ReactNode = part;
-        if (isBold) el = <strong key={i} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
-        if (isItalic) el = <em key={i} className="italic text-zinc-800 dark:text-zinc-200">{el}</em>;
-        if (isUnderline) el = <u key={i}>{el}</u>;
-        if (textColor) el = <span key={i} style={style}>{el}</span>;
+        if (isBold) el = <strong key={`b-${i}`} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
+        if (isItalic) el = <em key={`i-${i}`} className="italic text-zinc-800 dark:text-zinc-200">{el}</em>;
+        if (isUnderline) el = <u key={`u-${i}`}>{el}</u>;
+        if (textColor) el = <span key={`s-${i}`} style={style}>{el}</span>;
         
-        elements.push(el);
+        elements.push(<React.Fragment key={`frag-${i}`}>{el}</React.Fragment>);
       }
     }
     
@@ -131,6 +143,7 @@ export default function AiAuditsPage() {
 
   // Structured renderer helper for formatting the AI's response
   const renderMessageContent = (content: string) => {
+    if (!content) return null;
     // Extract think tags and contents
     const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/i;
     const thinkMatch = content.match(thinkRegex);
@@ -161,28 +174,28 @@ export default function AiAuditsPage() {
     
     let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
     
-    const flushList = (key: string | number) => {
+    const flushList = (keySuffix: string | number) => {
       if (!currentList) return null;
       const list = currentList;
       currentList = null;
       
       if (list.type === "bullet") {
         return (
-          <div key={`list-${key}`} className="space-y-1.5 my-2">
+          <div key={`list-bullet-${keySuffix}`} className="space-y-1.5 my-2">
             {list.items.map((item, i) => {
               const colonIndex = item.indexOf(":");
               if (colonIndex > 0 && colonIndex < 35) {
                 const keyText = item.substring(0, colonIndex).trim();
                 const valText = item.substring(colonIndex + 1).trim();
                 return (
-                  <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div key={`b-kv-${keySuffix}-${i}`} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                     <span className="text-muted-foreground font-medium">{parseBold(keyText)}</span>
                     <span className="font-semibold text-foreground">{parseBold(valText)}</span>
                   </div>
                 );
               }
               return (
-                <div key={i} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
+                <div key={`b-item-${keySuffix}-${i}`} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
                   <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary/80 shrink-0 shadow-sm" />
                   <span className="text-foreground/90">{parseBold(item)}</span>
                 </div>
@@ -192,9 +205,9 @@ export default function AiAuditsPage() {
         );
       } else {
         return (
-          <ol key={`list-${key}`} className="space-y-1.5 my-2 list-decimal pl-5">
+          <ol key={`list-num-${keySuffix}`} className="space-y-1.5 my-2 list-decimal pl-5">
             {list.items.map((item, i) => (
-              <li key={i} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
+              <li key={`n-item-${keySuffix}-${i}`} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
                 {parseBold(item)}
               </li>
             ))}
@@ -220,19 +233,19 @@ export default function AiAuditsPage() {
         const text = trimmed.replace(/^#+\s*/, "");
         if (level === 1) {
           elements.push(
-            <h2 key={i} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
+            <h2 key={`h1-${i}`} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
               {parseBold(text)}
             </h2>
           );
         } else if (level === 2) {
           elements.push(
-            <h3 key={i} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
+            <h3 key={`h2-${i}`} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
               {parseBold(text)}
             </h3>
           );
         } else {
           elements.push(
-            <h4 key={i} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
+            <h4 key={`h3-${i}`} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
               {parseBold(text)}
             </h4>
           );
@@ -270,7 +283,7 @@ export default function AiAuditsPage() {
       if (trimmed.includes("⚠️")) {
         const text = trimmed.replace("⚠️", "").trim();
         elements.push(
-          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border-l-4 border-amber-500 text-amber-800 dark:text-amber-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+          <div key={`warn-${i}`} className="my-2.5 p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border-l-4 border-amber-500 text-amber-800 dark:text-amber-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
             <span className="text-base mt-0.5 shrink-0">⚠️</span>
             <div className="text-xs leading-relaxed font-medium">
               {parseBold(text)}
@@ -283,7 +296,7 @@ export default function AiAuditsPage() {
       if (trimmed.includes("✅")) {
         const text = trimmed.replace("✅", "").trim();
         elements.push(
-          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border-l-4 border-emerald-500 text-emerald-800 dark:text-emerald-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+          <div key={`success-${i}`} className="my-2.5 p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border-l-4 border-emerald-500 text-emerald-800 dark:text-emerald-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
             <span className="text-base mt-0.5 shrink-0">✅</span>
             <div className="text-xs leading-relaxed font-medium">
               {parseBold(text)}
@@ -296,7 +309,7 @@ export default function AiAuditsPage() {
       if (trimmed.includes("💡") || trimmed.toLowerCase().includes("recommendation")) {
         const text = trimmed.replace("💡", "").trim();
         elements.push(
-          <div key={i} className="my-2.5 p-3.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-950/20 border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
+          <div key={`idea-${i}`} className="my-2.5 p-3.5 rounded-xl bg-indigo-500/10 dark:bg-indigo-950/20 border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-300 backdrop-blur-md shadow-sm flex items-start gap-2.5">
             <span className="text-base mt-0.5 shrink-0">💡</span>
             <div className="text-xs leading-relaxed font-medium">
               {parseBold(text)}
@@ -307,7 +320,7 @@ export default function AiAuditsPage() {
       }
       
       elements.push(
-        <p key={i} className="text-xs leading-relaxed my-2 text-foreground/80">
+        <p key={`p-${i}`} className="text-xs leading-relaxed my-2 text-foreground/80">
           {parseBold(trimmed)}
         </p>
       );
@@ -320,10 +333,17 @@ export default function AiAuditsPage() {
     return <div className="space-y-1">{elements}</div>;
   };
 
-  if (!user) return null;
+  // Prevent SSR/hydration mismatch during initial mount
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="size-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   // Render access denied page for employees
-  if (user.role !== "owner") {
+  if (!user || user.role !== "owner") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
         <Bot className="size-16 text-muted-foreground animate-pulse" />

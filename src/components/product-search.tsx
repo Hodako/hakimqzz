@@ -45,9 +45,13 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
   };
 
   const handleBarcodeScanned = (code: string) => {
-    const cleanCode = String(code || "").trim().toLowerCase();
+    const rawCode = String(code || "").trim();
+    const cleanCode = rawCode.toLowerCase();
+    const strippedCode = cleanCode.replace(/^0+/, "");
+
     const found = products.find(p => {
       const pBarcode = (p.barcode || "").trim().toLowerCase();
+      const pStripped = pBarcode.replace(/^0+/, "");
       const pQr = ((p as any).qr_code || "").trim().toLowerCase();
       const pCode = ((p as any).code || "").trim().toLowerCase();
       const pSku = ((p as any).sku || "").trim().toLowerCase();
@@ -55,7 +59,7 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
       const pName = (p.name || "").trim().toLowerCase();
 
       return (
-        (pBarcode && (pBarcode === cleanCode || cleanCode.includes(pBarcode))) ||
+        (pBarcode && (pBarcode === cleanCode || cleanCode.includes(pBarcode) || (strippedCode && pStripped === strippedCode))) ||
         (pQr && (pQr === cleanCode || cleanCode.includes(pQr))) ||
         (pCode && (pCode === cleanCode || cleanCode.includes(pCode))) ||
         (pSku && (pSku === cleanCode || cleanCode.includes(pSku))) ||
