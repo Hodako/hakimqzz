@@ -132,15 +132,13 @@ export function ProductDialog({
             </label>
             <Field label={t("product_name")}><Input required placeholder={t("product_name")} value={name} onChange={e => setName(e.target.value)} /></Field>
             
-            {/* Barcode Field with Scan Button */}
-            <Field label={lang === "bn" ? "বারকোড (ঐচ্ছিক)" : "Barcode (Optional)"}>
+            {/* Barcode & QR Code Field with Scan Button */}
+            <Field label={lang === "bn" ? "বারকোড / QR কোড (ঐচ্ছিক)" : "Barcode / QR Code (Optional)"}>
               <div className="flex gap-1.5">
                 <Input
+                  type="text"
                   className="font-mono text-xs"
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder={lang === "bn" ? "বারকোড লিখুন..." : "Enter barcode number..."}
+                  placeholder={lang === "bn" ? "বারকোড বা QR কোড লিখুন..." : "Enter barcode or QR code..."}
                   value={barcode}
                   onChange={e => setBarcode(e.target.value)}
                 />
@@ -150,8 +148,8 @@ export function ProductDialog({
                   size="sm"
                   className="h-9 w-9 p-0 shrink-0 flex items-center justify-center"
                   onClick={() => setScannerOpen(true)}
-                  title={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
-                  aria-label={lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}
+                  title={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
+                  aria-label={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
                 >
                   <Scan className="size-4 text-primary" />
                 </Button>

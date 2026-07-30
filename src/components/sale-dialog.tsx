@@ -74,16 +74,26 @@ export function SaleDialog({
   }
 
   const handleBarcodeScan = (scannedCode: string) => {
-    const clean = scannedCode.trim().toLowerCase();
-    const prod = products.find(p => 
-      (p.barcode && String(p.barcode).trim().toLowerCase() === clean) ||
-      ((p as any).code && String((p as any).code).trim().toLowerCase() === clean) ||
-      ((p as any).sku && String((p as any).sku).trim().toLowerCase() === clean) ||
-      String(p.id).trim().toLowerCase() === clean ||
-      String(p.name).trim().toLowerCase() === clean
-    );
+    const clean = String(scannedCode || "").trim().toLowerCase();
+    const prod = products.find(p => {
+      const pBarcode = (p.barcode || "").trim().toLowerCase();
+      const pQr = ((p as any).qr_code || "").trim().toLowerCase();
+      const pCode = ((p as any).code || "").trim().toLowerCase();
+      const pSku = ((p as any).sku || "").trim().toLowerCase();
+      const pId = String(p.id || "").trim().toLowerCase();
+      const pName = (p.name || "").trim().toLowerCase();
+
+      return (
+        (pBarcode && (pBarcode === clean || clean.includes(pBarcode))) ||
+        (pQr && (pQr === clean || clean.includes(pQr))) ||
+        (pCode && (pCode === clean || clean.includes(pCode))) ||
+        (pSku && (pSku === clean || clean.includes(pSku))) ||
+        (pId && (pId === clean || clean.includes(pId))) ||
+        (pName && pName === clean)
+      );
+    });
     if (!prod) {
-      toast.error(lang === "bn" ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for barcode: ${scannedCode}`);
+      toast.error(lang === "bn" ? `বারকোড/QR কোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for Barcode/QR: ${scannedCode}`);
       return;
     }
 

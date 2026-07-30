@@ -45,21 +45,31 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
   };
 
   const handleBarcodeScanned = (code: string) => {
-    const cleanCode = code.trim().toLowerCase();
-    const found = products.find(p => 
-      (p.barcode && String(p.barcode).trim().toLowerCase() === cleanCode) ||
-      ((p as any).code && String((p as any).code).trim().toLowerCase() === cleanCode) ||
-      ((p as any).sku && String((p as any).sku).trim().toLowerCase() === cleanCode) ||
-      String(p.id).trim().toLowerCase() === cleanCode ||
-      String(p.name).trim().toLowerCase() === cleanCode
-    );
+    const cleanCode = String(code || "").trim().toLowerCase();
+    const found = products.find(p => {
+      const pBarcode = (p.barcode || "").trim().toLowerCase();
+      const pQr = ((p as any).qr_code || "").trim().toLowerCase();
+      const pCode = ((p as any).code || "").trim().toLowerCase();
+      const pSku = ((p as any).sku || "").trim().toLowerCase();
+      const pId = String(p.id || "").trim().toLowerCase();
+      const pName = (p.name || "").trim().toLowerCase();
+
+      return (
+        (pBarcode && (pBarcode === cleanCode || cleanCode.includes(pBarcode))) ||
+        (pQr && (pQr === cleanCode || cleanCode.includes(pQr))) ||
+        (pCode && (pCode === cleanCode || cleanCode.includes(pCode))) ||
+        (pSku && (pSku === cleanCode || cleanCode.includes(pSku))) ||
+        (pId && (pId === cleanCode || cleanCode.includes(pId))) ||
+        (pName && pName === cleanCode)
+      );
+    });
     if (found) {
       onChange(found.id);
       setIsOpen(false);
       setSearchQuery("");
       toast.success(lang === "bn" ? `পণ্য নির্বাচিত: ${found.name}` : `Selected product: ${found.name}`);
     } else {
-      toast.error(lang === "bn" ? `বারকোড (${code}) পাওয়া যায়নি` : `No product found for barcode: ${code}`);
+      toast.error(lang === "bn" ? `বারকোড/QR কোড (${code}) পাওয়া যায়নি` : `No product found for Barcode/QR: ${code}`);
     }
   };
 

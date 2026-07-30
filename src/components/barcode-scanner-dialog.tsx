@@ -517,7 +517,7 @@ export function BarcodeScannerDialog({
             <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
               <Scan className="size-4 text-primary animate-pulse" />
             </div>
-            <span>{title ?? (lang === "bn" ? "লাইভ বারকোড স্ক্যানার" : "Live Barcode Scanner")}</span>
+            <span>{title ?? (lang === "bn" ? "লাইভ বারকোড ও QR স্ক্যানার" : "Live Barcode & QR Scanner")}</span>
           </DialogTitle>
         </DialogHeader>
 
