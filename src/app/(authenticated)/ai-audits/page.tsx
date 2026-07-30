@@ -351,60 +351,68 @@ export default function AiAuditsPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[calc(100vh-7rem)] max-w-4xl mx-auto space-y-4">
-      {/* Header Panel */}
-      <div className="flex items-center justify-between bg-card p-4 rounded-xl border border-border/50 shrink-0">
-        <div className="flex items-center gap-3">
-          <Link href="/more" className="md:hidden">
-            <Button variant="ghost" size="icon" className="size-8">
+    <div className="flex flex-col h-[calc(100dvh-4.5rem)] md:h-[calc(100vh-6rem)] w-full max-w-4xl mx-auto p-1.5 sm:p-3 space-y-2 sm:space-y-3.5 overflow-hidden">
+      {/* Financial Banking Header Panel */}
+      <div className="flex items-center justify-between bg-card/90 dark:bg-zinc-950/90 p-2.5 sm:p-3.5 rounded-2xl border border-border/80 shadow-md shrink-0 backdrop-blur-md">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Link href="/more">
+            <Button variant="ghost" size="icon" className="size-8 rounded-xl shrink-0 hover:bg-muted">
               <ArrowLeft className="size-4" />
             </Button>
           </Link>
-          <div className="size-10 rounded-xl bg-gradient-to-tr from-primary via-indigo-500 to-indigo-600 text-white flex items-center justify-center shadow-md border border-primary/20">
+          <div className="size-9 sm:size-10 rounded-xl bg-gradient-to-tr from-amber-600 via-indigo-600 to-emerald-600 text-white flex items-center justify-center shadow-md border border-white/20 shrink-0">
             <Bot className="size-5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold leading-none">{lang === "bn" ? "এআই অডিট এজেন্ট" : "AI Audits Agent"}</h1>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {lang === "bn" ? "আপনার রিয়েল-টাইম ব্যবসায়িক ডেটার অটোমেটেড বিশ্লেষণ" : "Automated analysis of your real-time business metrics"}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xs sm:text-sm font-extrabold tracking-tight text-foreground truncate">
+                {lang === "bn" ? "হাকিম ফাইন্যান্সিয়াল অডিট এজেন্ট" : "Hakim Financial Audit AI"}
+              </h1>
+              <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest shrink-0">
+                PRO-BANKING
+              </span>
+            </div>
+            <p className="text-[9.5px] sm:text-[10.5px] text-muted-foreground truncate mt-0.5 font-medium">
+              {lang === "bn" ? "রিয়েল-টাইম ক্যাশফ্লো, স্টক ও লাভ-ক্ষতি বিশ্লেষণ" : "Real-time Cashflow, Inventory & Profit Analytics"}
             </p>
           </div>
         </div>
-        <div className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 select-none border border-emerald-500/20">
+        
+        <div className="hidden min-[420px]:flex items-center gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider select-none border border-emerald-500/20 shrink-0">
           <span className="size-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-          {lang === "bn" ? "সক্রিয়" : "Active"}
+          {lang === "bn" ? "লাইভ অডিট" : "Live Audit"}
         </div>
       </div>
 
-      {/* Main Chat Interface */}
-      <Card className="flex-1 min-h-0 bg-card/45 backdrop-blur-sm border border-border/60 rounded-xl flex flex-col overflow-hidden shadow-sm">
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+      {/* Main Financial Audit Chat Interface */}
+      <Card className="flex-1 min-h-0 bg-card/80 dark:bg-zinc-950/80 backdrop-blur-xl border border-border/80 rounded-2xl flex flex-col overflow-hidden shadow-lg">
+        {/* Messages scrollable area */}
+        <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-3 sm:space-y-4 no-scrollbar">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col justify-center items-center text-center max-w-md mx-auto space-y-6">
-              <div className="size-16 rounded-full bg-gradient-to-br from-primary/10 via-indigo-500/5 to-indigo-600/10 text-primary flex items-center justify-center shadow-inner border border-primary/10">
-                <Sparkles className="size-8 text-primary" />
+            <div className="h-full flex flex-col justify-center items-center text-center max-w-md mx-auto space-y-4 p-2">
+              <div className="size-14 sm:size-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 via-emerald-500/10 to-amber-500/10 text-primary flex items-center justify-center shadow-inner border border-primary/20">
+                <Sparkles className="size-7 sm:size-8 text-primary" />
               </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-sm text-foreground">
-                  {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের চ্যাটবক্সে আপনাকে স্বাগতম!" : "Welcome to the HakimQzz Audit Agent Chatbox!"}
+              <div className="space-y-1.5">
+                <h3 className="font-extrabold text-xs sm:text-sm text-foreground tracking-tight">
+                  {lang === "bn" ? "স্মার্ট ফাইন্যান্সিয়াল অডিটর-এ আপনাকে স্বাগতম!" : "Welcome to Smart Financial Auditor!"}
                 </h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
                   {lang === "bn"
-                    ? "আমি আপনার ব্যবসার পণ্য স্টক, লাভ-ক্ষতি, ব্যয়, এবং ক্যাশবক্স ডেটা বিশ্লেষণ করে তাৎক্ষণিক সিদ্ধান্ত নিতে সহায়তা করতে পারি। নিচে থেকে একটি প্রশ্ন বেছে নিন অথবা নিচে লিখে পাঠান।"
-                    : "I can analyze your sales revenue, profit margin, critical stock valuation, expenses, and cashflow in real-time. Choose a suggestion or write your question below."}
+                    ? "আমি আপনার ব্যবসায়ের ক্যাশবক্স, লাভ-ক্ষতি, ব্যয় এবং পণ্য স্টক বিশ্লেষণ করতে প্রস্তুত। নিচে থেকে প্রশ্ন বেছে নিন অথবা লিখুন।"
+                    : "I am ready to audit your cashbox, margins, inventory, and net profits. Select a quick prompt below or type your inquiry."}
                 </p>
               </div>
 
-              {/* Suggestions Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full text-left pt-2">
+              {/* Banking Suggestions Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full text-left pt-1">
                 {suggestions.map((s, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSend(s.text)}
-                    className="p-3 text-xs font-semibold bg-background hover:bg-primary/5 hover:border-primary/30 border border-border/60 rounded-xl text-foreground text-left transition-all active:scale-[0.98] flex items-center gap-2 cursor-pointer shadow-sm"
+                    className="p-2.5 sm:p-3 text-[10px] sm:text-xs font-semibold bg-background/90 hover:bg-primary/5 hover:border-primary/40 border border-border/70 rounded-xl text-foreground text-left transition-all active:scale-[0.98] flex items-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <HelpCircle className="size-4 text-primary shrink-0" />
+                    <HelpCircle className="size-3.5 sm:size-4 text-primary shrink-0" />
                     <span className="truncate">{s.label}</span>
                   </button>
                 ))}
@@ -415,23 +423,23 @@ export default function AiAuditsPage() {
               {messages.map((m, idx) => {
                 const isUser = m.role === "user";
                 return (
-                  <div key={idx} className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+                  <div key={idx} className={`flex items-start gap-2 sm:gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
                     {/* Avatar */}
-                    <div className={`size-8 rounded-xl flex items-center justify-center border shrink-0 shadow-sm ${
+                    <div className={`size-7 sm:size-8 rounded-xl flex items-center justify-center border shrink-0 shadow-sm ${
                       isUser 
                         ? "bg-primary text-white border-primary/20" 
                         : "bg-secondary text-foreground border-border/80"
                     }`}>
-                      {isUser ? <HelpCircle className="size-4.5" /> : <Bot className="size-4.5" />}
+                      {isUser ? <HelpCircle className="size-3.5 sm:size-4" /> : <Bot className="size-3.5 sm:size-4" />}
                     </div>
 
-                    {/* Bubble */}
-                    <Card className={`p-4 max-w-[85%] rounded-2xl ${
+                    {/* Financial Chat Bubble */}
+                    <Card className={`p-3 sm:p-4 max-w-[88%] sm:max-w-[82%] rounded-2xl ${
                       isUser 
-                        ? "bg-primary text-primary-foreground rounded-tr-none border-0" 
-                        : "bg-muted/60 text-foreground rounded-tl-none border-border/40 shadow-sm"
+                        ? "bg-primary text-primary-foreground rounded-tr-none border-0 shadow-md" 
+                        : "bg-muted/70 text-foreground rounded-tl-none border-border/50 shadow-sm"
                     }`}>
-                      {isUser ? <p className="leading-relaxed text-xs whitespace-pre-wrap">{m.content}</p> : renderMessageContent(m.content)}
+                      {isUser ? <p className="leading-relaxed text-[11px] sm:text-xs whitespace-pre-wrap">{m.content}</p> : renderMessageContent(m.content)}
                     </Card>
                   </div>
                 );
@@ -439,14 +447,14 @@ export default function AiAuditsPage() {
 
               {/* Loading indicator */}
               {loading && (
-                <div className="flex items-start gap-3">
-                  <div className="size-8 rounded-xl bg-secondary text-foreground border border-border/80 flex items-center justify-center shrink-0">
-                    <Bot className="size-4.5" />
+                <div className="flex items-start gap-2.5">
+                  <div className="size-7 sm:size-8 rounded-xl bg-secondary text-foreground border border-border/80 flex items-center justify-center shrink-0">
+                    <Bot className="size-3.5 sm:size-4" />
                   </div>
-                  <Card className="p-3.5 rounded-2xl rounded-tl-none bg-muted/60 border border-border/40 flex items-center gap-2 shrink-0">
-                    <span className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }}></span>
-                    <span className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }}></span>
-                    <span className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                  <Card className="p-3 rounded-2xl rounded-tl-none bg-muted/70 border border-border/50 flex items-center gap-1.5 shrink-0">
+                    <span className="size-1.5 sm:size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                    <span className="size-1.5 sm:size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                    <span className="size-1.5 sm:size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }}></span>
                   </Card>
                 </div>
               )}
@@ -455,14 +463,14 @@ export default function AiAuditsPage() {
           )}
         </div>
 
-        {/* Suggestion pills above input */}
+        {/* Banking Quick Suggestion Pills */}
         {messages.length > 0 && (
-          <div className="px-4 py-2 border-t border-border/30 bg-muted/20 flex gap-2 overflow-x-auto shrink-0 select-none no-scrollbar">
+          <div className="px-2.5 py-1.5 border-t border-border/50 bg-muted/30 flex gap-1.5 overflow-x-auto shrink-0 select-none no-scrollbar">
             {suggestions.map((s, idx) => (
               <button
                 key={idx}
                 onClick={() => handleSend(s.text)}
-                className="px-3 py-1.5 text-[10px] font-semibold bg-background hover:bg-primary/5 hover:border-primary/30 border border-border/60 rounded-full text-foreground whitespace-nowrap transition-all active:scale-95 cursor-pointer shrink-0 shadow-sm"
+                className="px-2.5 py-1 text-[9px] sm:text-[10px] font-semibold bg-background hover:bg-primary/5 hover:border-primary/30 border border-border/60 rounded-full text-foreground whitespace-nowrap transition-all active:scale-95 cursor-pointer shrink-0 shadow-sm"
               >
                 {s.label}
               </button>
@@ -470,28 +478,28 @@ export default function AiAuditsPage() {
           </div>
         )}
 
-        {/* Input panel */}
+        {/* Banking Input panel */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSend(input);
           }}
-          className="p-4 border-t border-border bg-background flex gap-2.5 shrink-0 items-center"
+          className="p-2.5 sm:p-3 border-t border-border bg-background flex gap-2 shrink-0 items-center"
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
-            placeholder={lang === "bn" ? "ড্যাশবোর্ড, লাভ-ক্ষতি বা স্টক নিয়ে প্রশ্ন করুন..." : "Ask about profits, problems, stocks, analytics..."}
-            className="flex-1 h-10 rounded-xl border border-border bg-muted/30 px-4 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
+            placeholder={lang === "bn" ? "ড্যাশবোর্ড, ক্যাশবক্স, লাভ বা স্টক নিয়ে প্রশ্ন লিখুন..." : "Ask about cashflow, margins, inventory..."}
+            className="flex-1 h-9 sm:h-10 rounded-xl border border-border bg-muted/40 px-3 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-50"
           />
           <Button
             type="submit"
             disabled={loading || !input.trim()}
-            className="h-10 px-4 rounded-xl shrink-0 cursor-pointer flex gap-1.5"
+            className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl shrink-0 cursor-pointer flex gap-1.5 font-bold"
           >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-3.5 sm:size-4" />}
             <span className="hidden sm:inline text-xs">{lang === "bn" ? "পাঠান" : "Send"}</span>
           </Button>
         </form>
