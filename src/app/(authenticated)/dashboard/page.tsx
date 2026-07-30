@@ -4,8 +4,8 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  TrendingUp, Wallet, AlertCircle, Receipt, ShoppingBag,
-  Package, PlusCircle, ArrowUpRight, ArrowDownRight,
+  TrendingUp, TrendingDown, Wallet, AlertCircle, Receipt, ShoppingBag, ShoppingCart,
+  Package, PlusCircle, ArrowUpRight, ArrowDownRight, CreditCard, PiggyBank,
   DollarSign, Banknote, Users, Search, ChevronDown, ChevronUp, ArrowUpDown,
   Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square,
   Palette, Sparkles, LayoutGrid, SlidersHorizontal, Layers
@@ -259,6 +259,8 @@ function KPICard({
 
   const themeStyle = getCardTheme();
 
+  const [imgFailed, setImgFailed] = useState(false);
+
   return (
     <Card
       onClick={onClick}
@@ -269,12 +271,17 @@ function KPICard({
 
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
         <span className={`${labelSize} font-bold text-muted-foreground truncate mr-2 tracking-tight`}>{label}</span>
-        {imageUrl ? (
+        {imageUrl && !imgFailed ? (
           <div className="flex items-center justify-center shrink-0">
-            <img src={imageUrl} className={`${iconImgSize} object-contain ${imageClassName || ""}`} alt={label} />
+            <img
+              src={imageUrl}
+              onError={() => setImgFailed(true)}
+              className={`${iconImgSize} object-contain ${imageClassName || ""}`}
+              alt={label}
+            />
           </div>
         ) : Icon ? (
-          <div className="flex items-center justify-center shrink-0">
+          <div className="flex items-center justify-center shrink-0 p-1 rounded-xl bg-primary/10 border border-primary/20">
             <Icon className={`${iconImgSize} text-primary`} />
           </div>
         ) : null}
@@ -991,6 +998,7 @@ export default function Dashboard() {
               value={fmtMoney(creditToday)}
               sub={dateRangeLabel}
               imageUrl="/icons/credit_sale_icon.png"
+              icon={CreditCard}
               color="bg-amber-500"
               onClick={() => {
                 playTapSound();
@@ -1013,6 +1021,7 @@ export default function Dashboard() {
               value={fmtMoney(cashToday)}
               sub={dateRangeLabel}
               imageUrl="/icons/sell_icon.png"
+              icon={ShoppingBag}
               color="bg-indigo-500"
               onClick={() => {
                 playTapSound();
@@ -1035,6 +1044,7 @@ export default function Dashboard() {
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
               imageUrl="/icons/sell_icon.png"
+              icon={DollarSign}
               color="bg-sky-500"
               onClick={() => {
                 playTapSound();
@@ -1056,7 +1066,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/fluency/48/buy.png"
+                icon={ShoppingCart}
                 color="bg-teal-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1076,6 +1086,7 @@ export default function Dashboard() {
                 value={fmtMoney(profitToday)}
                 sub={dateRangeLabel}
                 imageUrl="/icons/profit_icon.png"
+                icon={TrendingUp}
                 color="bg-emerald-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1094,7 +1105,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/depreciation.png"
+                icon={TrendingDown}
                 color="bg-rose-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1113,7 +1124,7 @@ export default function Dashboard() {
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/tax.png"
+                icon={Receipt}
                 color="bg-orange-500"
                 className="h-full w-full"
                 align={kpiConfig.align as any}
@@ -1132,7 +1143,7 @@ export default function Dashboard() {
                 label={t("due")}
                 value={fmtMoney(totalDues)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/loan.png"
+                icon={Banknote}
                 color="bg-amber-600"
                 trendUp={false}
                 className="h-full w-full"
@@ -1153,6 +1164,7 @@ export default function Dashboard() {
                 value={fmtMoney(cashboxTotal)}
                 sub={dateRangeLabel}
                 imageUrl="/icons/cashbox_icon.png"
+                icon={Banknote}
                 color="bg-emerald-600"
                 trendUp={cashboxTotal >= 0}
                 trend={t("balance")}
@@ -1174,6 +1186,7 @@ export default function Dashboard() {
                 value={fmtMoney(somitiTotal)}
                 sub={dateRangeLabel}
                 imageUrl="/icons/samity_icon.png"
+                icon={PiggyBank}
                 color="bg-purple-600"
                 trendUp={somitiTotal >= 0}
                 trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
