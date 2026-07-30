@@ -50,8 +50,12 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className="antialiased" suppressHydrationWarning>
-        <Providers>{children}</Providers>
+      <body className="antialiased site-bg text-foreground min-h-screen relative overflow-x-hidden" suppressHydrationWarning>
+        <div className="gear-ghost" />
+        <div className="thread-rule" />
+        <div className="content relative z-10 w-full min-h-screen">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );
