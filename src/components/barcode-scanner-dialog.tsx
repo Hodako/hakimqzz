@@ -63,7 +63,7 @@ function createZxingReader() {
 
 function decodeCanvasSync(reader: MultiFormatReader, canvas: HTMLCanvasElement): string | null {
   try {
-    if (canvas.width <= 0 || canvas.height <= 0) return null;
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
     const luminanceSource = new HTMLCanvasElementLuminanceSource(canvas);
 
     // Pass A: Hybrid Binarizer (Primary Fast Engine)
@@ -183,34 +183,34 @@ export function BarcodeScannerDialog({
     [continuous, lang, onOpenChange, onScan, stopScanner]
   );
 
-  // ── Ultra-Fast Multi-Engine Barcode & QR Decoding Loop ───────────────────
+  // ── Ultra-Fast Multi-Engine Barcode & QR Decoding Loop (Android & iOS Compatible) ──
   const startDecodeLoop = useCallback(() => {
-    // 1. Initialize native W3C BarcodeDetector API (GPU / Metal / Neural Engine Level, sub-2ms)
+    // 1. Safe Native W3C BarcodeDetector Initialization
     if (typeof window !== "undefined" && "BarcodeDetector" in window) {
-      try {
-        detectorRef.current = new (window as any).BarcodeDetector({
-          formats: [
-            "code_128",
-            "code_39",
-            "code_93",
-            "codabar",
-            "ean_13",
-            "ean_8",
-            "upc_a",
-            "upc_e",
-            "itf",
-            "qr_code",
-            "data_matrix",
-            "pdf417",
-            "aztec",
-          ],
-        });
-      } catch (_) {
-        detectorRef.current = null;
-      }
+      (async () => {
+        try {
+          const BarcodeDetectorClass = (window as any).BarcodeDetector;
+          let formats = [
+            "code_128", "code_39", "code_93", "codabar",
+            "ean_13", "ean_8", "upc_a", "upc_e", "itf",
+            "qr_code", "data_matrix", "pdf417", "aztec",
+          ];
+          if (typeof BarcodeDetectorClass.getSupportedFormats === "function") {
+            const supported = await BarcodeDetectorClass.getSupportedFormats().catch(() => []);
+            if (supported && Array.isArray(supported) && supported.length > 0) {
+              formats = formats.filter((f) => supported.includes(f));
+            }
+          }
+          if (formats.length > 0) {
+            detectorRef.current = new BarcodeDetectorClass({ formats });
+          }
+        } catch (_) {
+          detectorRef.current = null;
+        }
+      })();
     }
 
-    // 2. Initialize Synchronous WASM-Speed MultiFormatReader
+    // 2. Initialize Synchronous MultiFormatReader
     zxingReaderRef.current = createZxingReader();
 
     let lastTickTime = 0;
@@ -227,7 +227,7 @@ export function BarcodeScannerDialog({
       }
 
       const now = Date.now();
-      // High-speed frame processing (~60 FPS on iOS / WebKit, 16ms interval)
+      // ~60 FPS frame sampling (~16ms)
       if (now - lastTickTime < 16) {
         if (streamRef.current) {
           animFrameRef.current = requestAnimationFrame(tick);
@@ -241,7 +241,7 @@ export function BarcodeScannerDialog({
         try {
           let foundCode: string | null = null;
 
-          // Layer 1: Native GPU Hardware BarcodeDetector (iOS 17+ Safari & Android Chrome, <2ms)
+          // Layer 1: Native GPU Hardware BarcodeDetector (Sub-2ms)
           if (detectorRef.current) {
             try {
               const barcodes = await detectorRef.current.detect(video);
@@ -284,7 +284,7 @@ export function BarcodeScannerDialog({
                 }
               }
 
-              // Pass 2C: Micro-Barcode Magnifier Crop (40% x 30% center zone upscaled 2.5x for tiny 0.5cm barcodes)
+              // Pass 2C: Micro-Barcode Magnifier Crop (40% x 30% center zone upscaled 2.5x)
               if (!foundCode) {
                 const microW = Math.floor(canvas.width * 0.40);
                 const microH = Math.floor(canvas.height * 0.30);
@@ -333,7 +333,6 @@ export function BarcodeScannerDialog({
     const nextTorch = !torchOn;
     let applied = false;
 
-    // Method 1: Advanced W3C constraint
     try {
       await track.applyConstraints({
         advanced: [{ torch: nextTorch } as any],
@@ -341,7 +340,6 @@ export function BarcodeScannerDialog({
       applied = true;
     } catch (_) {}
 
-    // Method 2: Direct track constraint fallback
     if (!applied) {
       try {
         await track.applyConstraints({
@@ -384,7 +382,7 @@ export function BarcodeScannerDialog({
     );
   }, [isZoomed, lang]);
 
-  // ── Start camera scan with High-Accuracy HD Video Stream (iOS WebKit & Android Optimized) ──
+  // ── Start camera scan with 4-Tier Android & iOS Robust Fallback Chain ──
   const startCameraScan = useCallback(
     async (cameraId?: string, facing: "environment" | "user" = "environment") => {
       stopScanner();
@@ -405,94 +403,110 @@ export function BarcodeScannerDialog({
         return;
       }
 
+      let stream: MediaStream | null = null;
+
+      // Tier 1: Selected Device ID or Rear Facing Camera HD (Ideal constraints)
       try {
-        let stream: MediaStream | null = null;
+        const constraints1: MediaStreamConstraints = {
+          video: cameraId
+            ? { deviceId: { exact: cameraId } }
+            : { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints1);
+      } catch (_) {}
 
-        const videoConstraints: MediaTrackConstraints = cameraId
-          ? {
-              deviceId: { exact: cameraId },
-              width: { ideal: 1920, min: 1280 },
-              height: { ideal: 1080, min: 720 },
-              frameRate: { ideal: 60, min: 30 },
-            }
-          : {
-              facingMode: facing === "environment" ? { ideal: "environment" } : "user",
-              width: { ideal: 1920, min: 1280 },
-              height: { ideal: 1080, min: 720 },
-              frameRate: { ideal: 60, min: 30 },
-            };
-
+      // Tier 2: Rear Facing Camera Simple (Ideal environment)
+      if (!stream) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: videoConstraints,
-            audio: false,
-          });
-        } catch (_) {
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: "environment" },
             audio: false,
           });
-        }
-
-        streamRef.current = stream;
-
-        // Continuous Autofocus mode for camera track
-        const track = stream.getVideoTracks()[0];
-        if (track && "applyConstraints" in track) {
-          try {
-            const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
-            if (capabilities.focusMode?.includes("continuous")) {
-              await track.applyConstraints({
-                advanced: [{ focusMode: "continuous" } as any],
-              });
-            }
-          } catch (_) {}
-        }
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", "true");
-          videoRef.current.setAttribute("webkit-playsinline", "true");
-          videoRef.current.setAttribute("muted", "true");
-          videoRef.current.muted = true;
-          await videoRef.current.play().catch(() => {});
-        }
-
-        try {
-          localStorage.setItem(PERM_KEY, "true");
         } catch (_) {}
+      }
 
-        setPermissionState("granted");
-        startDecodeLoop();
+      // Tier 3: User Facing / Front Camera Simple
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false,
+          });
+        } catch (_) {}
+      }
 
-        if (navigator?.mediaDevices?.enumerateDevices) {
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices
-              .filter((d) => d.kind === "videoinput")
-              .map((d, i) => ({ id: d.deviceId, label: d.label || (lang === "bn" ? `ক্যামেরা ${i + 1}` : `Camera ${i + 1}`) }));
-
-            if (videoDevices.length > 0) {
-              setCameras(videoDevices);
-              const backCam = videoDevices.find((d) => /back|rear|environment|main/i.test(d.label));
-              if (backCam && !selectedCameraId) {
-                setSelectedCameraId(backCam.id);
-              }
-            }
-          } catch (_) {}
+      // Tier 4: Universal Fallback (100% Android & Mobile Web Compatible)
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        } catch (err: any) {
+          console.error("POS Camera getUserMedia fatal error:", err);
+          setPermissionState("denied");
+          setCameraError(
+            err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError"
+              ? lang === "bn"
+                ? "ক্যামেরার অনুমতি প্রয়োজন। ডিভাইসের Settings > Apps > Dream Fashion এ গিয়ে ক্যামেরা পারমিশন এলাউ করুন।"
+                : "Camera permission denied. Enable Camera access in app settings."
+              : lang === "bn"
+                ? "ক্যামেরা স্ক্যানার চালু করা যায়নি (HTTPS বা সিকিউর কানেকশন প্রয়োজন)। পিকচার আপলোড বা ম্যানুয়াল কোড এন্ট্রি ব্যবহার করুন।"
+                : "Camera scanner unavailable (HTTPS required). Please use Image Upload or Manual Entry."
+          );
+          return;
         }
-      } catch (err: any) {
-        console.error("POS Camera start error:", err);
-        setPermissionState("denied");
-        setCameraError(
-          err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError"
-            ? lang === "bn"
-              ? "ক্যামেরার অনুমতি প্রয়োজন। ডিভাইসের Settings > Apps > Dream Fashion এ গিয়ে ক্যামেরা পারমিশন এলাউ করুন।"
-              : "Camera permission denied. Enable Camera access in app settings."
-            : lang === "bn"
-              ? "ক্যামেরা স্ক্যানার চালু করা যায়নি (HTTPS বা সিকিউর কানেকশন প্রয়োজন)। পিকচার আপলোড বা ম্যানুয়াল কোড এন্ট্রি ব্যবহার করুন।"
-              : "Camera scanner unavailable (HTTPS required). Please use Image Upload or Manual Entry."
-        );
+      }
+
+      if (!stream) return;
+
+      streamRef.current = stream;
+
+      // Continuous Autofocus mode for camera track
+      const track = stream.getVideoTracks()[0];
+      if (track && "applyConstraints" in track) {
+        try {
+          const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
+          if (capabilities.focusMode?.includes("continuous")) {
+            await track.applyConstraints({
+              advanced: [{ focusMode: "continuous" } as any],
+            });
+          }
+        } catch (_) {}
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.setAttribute("webkit-playsinline", "true");
+        videoRef.current.setAttribute("muted", "true");
+        videoRef.current.muted = true;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      try {
+        localStorage.setItem(PERM_KEY, "true");
+      } catch (_) {}
+
+      setPermissionState("granted");
+      startDecodeLoop();
+
+      if (navigator?.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices
+            .filter((d) => d.kind === "videoinput")
+            .map((d, i) => ({ id: d.deviceId, label: d.label || (lang === "bn" ? `ক্যামেরা ${i + 1}` : `Camera ${i + 1}`) }));
+
+          if (videoDevices.length > 0) {
+            setCameras(videoDevices);
+            const backCam = videoDevices.find((d) => /back|rear|environment|main/i.test(d.label));
+            if (backCam && !selectedCameraId) {
+              setSelectedCameraId(backCam.id);
+            }
+          }
+        } catch (_) {}
       }
     },
     [lang, selectedCameraId, startDecodeLoop, stopScanner]
