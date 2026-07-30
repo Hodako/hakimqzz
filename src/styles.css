@@ -529,4 +529,26 @@
   .site-bg::after, .gear-ghost { animation: none; }
 }
 
+/* ============================================================
+   MOBILE PHONE SMOOTH PERFORMANCE OPTIMIZATIONS
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Fast touch interactions without 300ms delay */
+  button, a, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* GPU hardware acceleration for smooth 60 FPS scrolling on mobile */
+  .site-bg, body, main {
+    -webkit-overflow-scrolling: touch;
+    transform: translate3d(0, 0, 0);
+  }
+
+  /* Optimize backdrop-blur filters for low-end mobile GPUs */
+  .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-3xl {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+}
+
 

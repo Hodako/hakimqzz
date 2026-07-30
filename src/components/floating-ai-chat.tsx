@@ -51,8 +51,8 @@ export function FloatingAiChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Only show for owner (admin) role
-  if (!user || user.role !== "owner") {
+  // Only show for owner (admin) role on desktop/PC — hide AI overlay on mobile phones
+  if (!user || user.role !== "owner" || isMobile) {
     return null;
   }
 
