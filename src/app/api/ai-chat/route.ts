@@ -2,17 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getDb } from "@/lib/db";
 
-const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "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";
-const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
+const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-// OpenRouter Free Models Fallback Array
-const FREE_MODELS = [
+// Groq High-Speed Free Models Fallback Array
+const GROQ_MODELS = [
   DEFAULT_MODEL,
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "deepseek/deepseek-r1:free",
-  "google/gemini-2.0-flash-lite-preview-02-05:free",
-  "qwen/qwen-2.5-coder-32b-instruct:free",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "deepseek-r1-distill-llama-70b",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it",
 ];
 
 export async function POST(req: NextRequest) {
@@ -94,16 +95,14 @@ ${bestSelling.map((p, i) => `${i + 1}. ${p.name} — ${p.qty} sold, ৳${p.reven
     let reply = "";
     let lastError = "";
 
-    // 5. Try OpenRouter free models with automatic failover
-    const modelsToTry = Array.from(new Set(FREE_MODELS));
+    // 5. Try Groq free models with automatic failover
+    const modelsToTry = Array.from(new Set(GROQ_MODELS));
     for (const modelCandidate of modelsToTry) {
       try {
-        const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io",
-            "X-Title": "HakimQzz Fashion POS",
+            "Authorization": `Bearer ${GROQ_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -113,7 +112,7 @@ ${bestSelling.map((p, i) => `${i + 1}. ${p.name} — ${p.qty} sold, ৳${p.reven
               ...messages.slice(-10),
             ],
             temperature: 0.7,
-            max_tokens: 800,
+            max_tokens: 1024,
           }),
         });
 
@@ -134,7 +133,7 @@ ${bestSelling.map((p, i) => `${i + 1}. ${p.name} — ${p.qty} sold, ৳${p.reven
 
     if (!reply) {
       return NextResponse.json(
-        { error: `OpenRouter AI service error: ${lastError || "All free models failed"}` },
+        { error: `Groq AI service error: ${lastError || "All free models failed"}` },
         {
           status: 500,
           headers: {
