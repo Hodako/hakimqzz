@@ -342,12 +342,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </PermissionGuard>
           </div>
-          {isMobile && <div className="mobile-bottom-spacer" aria-hidden />}
+          <div className="md:hidden mobile-bottom-spacer" aria-hidden />
         </main>
       </div>
 
-      {isMobile && bottomNav.length > 0 && (
-        <nav className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border/50 safe-area-pb mobile-tab-bar" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}>
+      {bottomNav.length > 0 && (
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}>
           <div
             className="grid h-14 max-w-lg mx-auto min-h-[3.5rem]"
             style={{ gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))` }}
