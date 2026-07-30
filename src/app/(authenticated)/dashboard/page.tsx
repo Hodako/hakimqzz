@@ -147,28 +147,28 @@ function KPICard({
 
   const iconImgSize =
     size === "xxs"
-      ? "size-6 sm:size-5"
+      ? "size-6 sm:size-7"
       : size === "xs"
-        ? "size-7 sm:size-6"
+        ? "size-7.5 sm:size-8.5"
         : size === "small"
-          ? "size-9 sm:size-8 md:size-8"
+          ? "size-10.5 sm:size-11.5"
           : size === "large"
-            ? "size-12 sm:size-12"
+            ? "size-14 sm:size-15"
             : size === "xl"
-              ? "size-14 sm:size-14"
-              : "size-9 sm:size-8 md:size-9";
+              ? "size-16 sm:size-18"
+              : "size-10.5 sm:size-11.5";
 
   const subSize = size === "xxs" || size === "xs" || size === "small" ? "text-[8px]" : "text-[8px] sm:text-[9px]";
 
   const getCurveClass = () => {
     switch (curve) {
       case "none": return "rounded-none";
-      case "sm": return "rounded-sm";
-      case "md": return "rounded-md";
-      case "lg": return "rounded-lg";
-      case "xl": return "rounded-xl";
-      case "full": return "rounded-2xl";
-      default: return "rounded-none";
+      case "sm": return "rounded-t-none rounded-b-sm";
+      case "md": return "rounded-t-none rounded-b-md";
+      case "lg": return "rounded-t-none rounded-b-lg";
+      case "xl": return "rounded-t-none rounded-b-xl";
+      case "full": return "rounded-t-none rounded-b-2xl";
+      default: return "rounded-t-none rounded-b-2xl";
     }
   };
 

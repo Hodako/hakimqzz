@@ -51,8 +51,8 @@ export function FloatingAiChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Only show for owner (admin) role on desktop/PC
-  if (!user || user.role !== "owner" || isMobile) {
+  // Only show for owner (admin) role
+  if (!user || user.role !== "owner") {
     return null;
   }
 
@@ -344,7 +344,7 @@ export function FloatingAiChat() {
       {/* Floating Launcher Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-40 size-12 rounded-full bg-gradient-to-tr from-primary via-indigo-500 to-indigo-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 transition-all flex items-center justify-center cursor-pointer border border-primary/20"
+        className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 size-11 sm:size-12 rounded-full bg-gradient-to-tr from-primary via-indigo-500 to-indigo-600 text-white shadow-2xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer border border-primary/20"
         title={t("ai_audits")}
       >
         {isOpen ? <X className="size-5" /> : <Sparkles className="size-5" />}
@@ -358,7 +358,7 @@ export function FloatingAiChat() {
 
       {/* Floating Chat Panel */}
       {isOpen && (
-        <Card className="fixed bottom-20 right-6 w-96 h-[550px] bg-card/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl flex flex-col z-50 overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
+        <Card className="fixed inset-x-2 bottom-16 sm:inset-auto sm:bottom-20 sm:right-6 w-[calc(100%-1rem)] sm:w-96 h-[82vh] max-h-[640px] sm:h-[550px] bg-card/95 backdrop-blur-xl border border-border/80 shadow-2xl rounded-3xl flex flex-col z-50 overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
           {/* Header */}
           <div className="p-3 bg-gradient-to-r from-primary/10 via-indigo-500/5 to-background border-b border-border/60 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">

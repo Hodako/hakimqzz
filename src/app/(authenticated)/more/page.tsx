@@ -1975,21 +1975,21 @@ export default function MorePage() {
     const otherProfiles = user?.profiles?.filter(p => p.id !== (user?.activeProfile || "default")) || [];
 
     return (
-      <Card className="p-4 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-background border-indigo-500/25 beveled-card relative overflow-hidden space-y-3.5">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+      <Card className="p-2.5 sm:p-4 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-background border-indigo-500/25 beveled-card relative overflow-hidden space-y-2 sm:space-y-3.5">
+        <div className="absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="size-8.5 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 grid place-items-center border border-indigo-500/20 shadow-sm shrink-0">
-              <RefreshCw className={`size-4.5 ${isProcessingProfile ? 'animate-spin' : ''}`} />
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="size-6.5 sm:size-8.5 rounded-lg sm:rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 grid place-items-center border border-indigo-500/20 shadow-sm shrink-0">
+              <RefreshCw className={`size-3.5 sm:size-4.5 ${isProcessingProfile ? 'animate-spin' : ''}`} />
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                 {lang === "bn" ? "প্রোফাইল সুইচার" : "Profile Switcher"}
               </div>
-              <div className="text-sm font-bold text-zinc-950 dark:text-zinc-50 flex items-center gap-1.5 mt-0.5">
-                <span>{currentProfileName}</span>
-                <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wide">
+              <div className="text-xs sm:text-sm font-bold text-zinc-950 dark:text-zinc-50 flex items-center gap-1 mt-0.5">
+                <span className="truncate max-w-[110px] sm:max-w-none">{currentProfileName}</span>
+                <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[7px] sm:text-[8px] font-bold px-1 sm:px-1.5 py-0.2 rounded border border-emerald-500/20 uppercase tracking-wide">
                   {lang === "bn" ? "সক্রিয়" : "Active"}
                 </span>
               </div>
@@ -1999,19 +1999,19 @@ export default function MorePage() {
           <Button
             size="sm"
             onClick={() => setCreateProfileOpen(true)}
-            className="h-8 text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white beveled-button"
+            className="h-6.5 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white beveled-button"
           >
-            <Plus className="size-3.5 mr-1" />
+            <Plus className="size-3 sm:size-3.5 mr-1" />
             {lang === "bn" ? "নতুন প্রোফাইল" : "New Profile"}
           </Button>
         </div>
 
         {/* Profiles Dropdown / Swapper */}
-        <div className="flex items-center gap-2 pt-1 border-t border-dashed border-border/70">
-          <div className="text-xs text-muted-foreground shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 pt-1 border-t border-dashed border-border/70">
+          <div className="text-[10px] sm:text-xs text-muted-foreground shrink-0">
             {lang === "bn" ? "প্রোফাইল পরিবর্তন:" : "Switch Profile:"}
           </div>
-          <div className="flex-1 flex gap-1.5 flex-wrap">
+          <div className="flex-1 flex gap-1 sm:gap-1.5 flex-wrap">
             {user?.profiles?.map(p => {
               const isActive = p.id === (user?.activeProfile || "default");
               return (
@@ -2021,7 +2021,7 @@ export default function MorePage() {
                   variant={isActive ? "default" : "outline"}
                   onClick={() => !isActive && handleSwitchProfile(p.id)}
                   disabled={isProcessingProfile}
-                  className={`h-7 px-2.5 text-[10px] rounded-lg transition-all ${
+                  className={`h-5.5 sm:h-7 px-2 sm:px-2.5 text-[9px] sm:text-[10px] rounded-md sm:rounded-lg transition-all ${
                     isActive
                       ? "bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
                       : "text-zinc-700 dark:text-zinc-300 hover:bg-muted font-medium"
