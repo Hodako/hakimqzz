@@ -68,14 +68,10 @@ export function FloatingAiChat() {
     try {
       const { callAiChat } = await import("@/lib/rpc");
       const res = await callAiChat(newMessages, lang);
+      const data = await res.json().catch(() => ({ error: "AI service failed to respond" }));
 
-      if (!res.ok) {
-        throw new Error(lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI");
-      }
-
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
+      if (!res.ok || data.error) {
+        throw new Error(data.error || (lang === "bn" ? "এআই সার্ভার থেকে সাড়া পাওয়া যায়নি" : "Failed to get response from AI"));
       }
 
       setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
