@@ -111,7 +111,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <I18nProvider>
           <AuthProvider>
             <CustomThemeManager />
-            <AutoCameraTrigger />
             {children}
             <Toaster richColors position="top-center" />
           </AuthProvider>
