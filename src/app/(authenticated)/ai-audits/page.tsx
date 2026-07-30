@@ -483,7 +483,7 @@ export default function AiAuditsPage() {
                   </Card>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              <div className="h-1" />
             </>
           )}
         </div>
