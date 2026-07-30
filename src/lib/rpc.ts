@@ -213,14 +213,12 @@ if (typeof window !== "undefined") {
 }
 
 export async function callAiChat(messages: any[], lang: string) {
-  const isCap = typeof window !== "undefined" && (
+  const isNativeApp = typeof window !== "undefined" && (
     !!(window as any).Capacitor ||
-    window.location.hostname === "localhost" ||
-    window.location.origin.includes("localhost") ||
     window.location.origin.startsWith("capacitor:") ||
     window.location.origin.startsWith("file:")
   );
-  const base = isCap ? "https://hakim.qzz.io" : "";
+  const base = isNativeApp ? (process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io") : "";
   const url = `${base}/api/ai-chat`;
   
   const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
