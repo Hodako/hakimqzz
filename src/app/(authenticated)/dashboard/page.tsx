@@ -1193,7 +1193,7 @@ export default function Dashboard() {
         const gridColsClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : kpiConfig.columns === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2";
 
         return (
-          <Card key="kpis" className="p-3.5 border-t-2 border-t-primary border-x border-b border-border/80 space-y-3 bg-card/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-t-none rounded-b-3xl shadow-[0_8px_30px_rgba(184,144,46,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all">
+          <Card key="kpis" className="p-3.5 border-t-2 border-t-primary border-x border-b border-border/80 space-y-3 bg-card/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-none shadow-[0_8px_30px_rgba(184,144,46,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <LayoutGrid className="size-4 text-primary animate-pulse" />
