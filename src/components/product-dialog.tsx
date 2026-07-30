@@ -137,6 +137,9 @@ export function ProductDialog({
               <div className="flex gap-1.5">
                 <Input
                   className="font-mono text-xs"
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder={lang === "bn" ? "বারকোড লিখুন..." : "Enter barcode number..."}
                   value={barcode}
                   onChange={e => setBarcode(e.target.value)}

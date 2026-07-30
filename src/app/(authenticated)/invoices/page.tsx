@@ -795,11 +795,13 @@ export default function InvoicePage() {
                   <div className="space-y-1">
                     <Label className="text-[11px] text-muted-foreground">{t("phone")}</Label>
                     <Input
+                      type="tel"
                       placeholder="017..."
                       value={customPhone}
                       onChange={(e) => setCustomPhone(e.target.value)}
                       className="h-8.5 text-xs"
                       inputMode="tel"
+                      pattern="[0-9]*"
                     />
                   </div>
                 </div>
