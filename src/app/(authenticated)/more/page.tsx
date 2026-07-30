@@ -141,6 +141,7 @@ export default function MorePage() {
 
   // Helper to parse both markdown **bold** and standard HTML tags in AI responses
   const parseBold = (text: string) => {
+    if (!text) return "";
     let converted = text.replace(/\*\*(?!\s)([\s\S]*?\S)\*\*/g, "<strong>$1</strong>");
     converted = converted.replace(/\*(?!\s)([\s\S]*?\S)\*/g, "<em>$1</em>");
     const tagRegex = /(<[^>]+>)/g;
@@ -191,12 +192,12 @@ export default function MorePage() {
         if (textColor) style.color = textColor;
         
         let el: React.ReactNode = part;
-        if (isBold) el = <strong key={i} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
-        if (isItalic) el = <em key={i} className="italic text-zinc-800 dark:text-zinc-200">{el}</em>;
-        if (isUnderline) el = <u key={i}>{el}</u>;
-        if (textColor) el = <span key={i} style={style}>{el}</span>;
+        if (isBold) el = <strong key={`mb-${i}`} className="font-bold text-zinc-950 dark:text-white">{el}</strong>;
+        if (isItalic) el = <em key={`mi-${i}`} className="italic text-zinc-800 dark:text-zinc-200">{el}</em>;
+        if (isUnderline) el = <u key={`mu-${i}`}>{el}</u>;
+        if (textColor) el = <span key={`ms-${i}`} style={style}>{el}</span>;
         
-        elements.push(el);
+        elements.push(<React.Fragment key={`mfrag-${i}`}>{el}</React.Fragment>);
       }
     }
     
@@ -204,6 +205,7 @@ export default function MorePage() {
   };
 
   const renderStructuredContent = (content: string) => {
+    if (!content) return null;
     // Extract think tags and contents
     const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/i;
     const thinkMatch = content.match(thinkRegex);
@@ -234,28 +236,28 @@ export default function MorePage() {
     
     let currentList: { type: "bullet" | "number"; items: string[] } | null = null;
     
-    const flushList = (key: string | number) => {
+    const flushList = (keySuffix: string | number) => {
       if (!currentList) return null;
       const list = currentList;
       currentList = null;
       
       if (list.type === "bullet") {
         return (
-          <div key={`list-${key}`} className="space-y-1.5 my-2">
+          <div key={`mlist-bullet-${keySuffix}`} className="space-y-1.5 my-2">
             {list.items.map((item, i) => {
               const colonIndex = item.indexOf(":");
               if (colonIndex > 0 && colonIndex < 35) {
                 const keyText = item.substring(0, colonIndex).trim();
                 const valText = item.substring(colonIndex + 1).trim();
                 return (
-                  <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div key={`mb-kv-${keySuffix}-${i}`} className="flex justify-between items-center text-xs py-1.5 border-b border-border/10 bg-white/5 dark:bg-zinc-950/20 px-2.5 rounded-lg backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                     <span className="text-muted-foreground font-medium">{parseBold(keyText)}</span>
                     <span className="font-semibold text-foreground">{parseBold(valText)}</span>
                   </div>
                 );
               }
               return (
-                <div key={i} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
+                <div key={`mb-item-${keySuffix}-${i}`} className="flex items-start gap-2 text-xs leading-relaxed pl-1 py-0.5">
                   <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary/80 shrink-0 shadow-sm" />
                   <span className="text-foreground/90">{parseBold(item)}</span>
                 </div>
@@ -265,9 +267,9 @@ export default function MorePage() {
         );
       } else {
         return (
-          <ol key={`list-${key}`} className="space-y-1.5 my-2 list-decimal pl-5">
+          <ol key={`mlist-num-${keySuffix}`} className="space-y-1.5 my-2 list-decimal pl-5">
             {list.items.map((item, i) => (
-              <li key={i} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
+              <li key={`mn-item-${keySuffix}-${i}`} className="text-xs leading-relaxed text-foreground/90 pl-0.5">
                 {parseBold(item)}
               </li>
             ))}
@@ -293,19 +295,19 @@ export default function MorePage() {
         const text = trimmed.replace(/^#+\s*/, "");
         if (level === 1) {
           elements.push(
-            <h2 key={i} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
+            <h2 key={`mh1-${i}`} className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-4 mb-2 border-b border-indigo-500/20 pb-1 flex items-center gap-1.5 uppercase tracking-wider">
               {parseBold(text)}
             </h2>
           );
         } else if (level === 2) {
           elements.push(
-            <h3 key={i} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
+            <h3 key={`mh2-${i}`} className="text-xs font-bold text-zinc-950 dark:text-zinc-50 mt-3.5 mb-1.5 flex items-center gap-1.5">
               {parseBold(text)}
             </h3>
           );
         } else {
           elements.push(
-            <h4 key={i} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
+            <h4 key={`mh3-${i}`} className="text-[11px] font-bold text-primary mt-2.5 mb-1 flex items-center gap-1.5">
               {parseBold(text)}
             </h4>
           );
