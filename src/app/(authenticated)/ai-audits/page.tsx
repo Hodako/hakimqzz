@@ -22,31 +22,19 @@ export default function AiAuditsPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Suggested questions in English and Bangla
-  const suggestions = lang === "bn"
-    ? [
-        { label: "আজকের লাভ বা মুনাফা কত?", text: "আজকের লাভ বা মুনাফা কত?" },
-        { label: "কোথায় আমাদের ব্যবসার সমস্যা আছে?", text: "ব্যবসায়ের আর্থিক বা অপারেশনাল সমস্যা কোথায় কোথায় আছে?" },
-        { label: "কোন পণ্যের স্টক সংকটজনক?", text: "কোন পণ্যগুলির স্টক সংকটজনক বা কম আছে এবং কখন নতুন পণ্য ক্রয় করতে হবে?" },
-        { label: "কোথায় আমাদের ব্যবসার ডেটা আপডেট করতে হবে?", text: "উন্নতির জন্য ব্যবসায়ের কার্যক্রম এবং ইনভেন্টরি কোথায় আপডেট করা প্রয়োজন?" },
-        { label: "ব্যবসার সার্বিক বিশ্লেষণ দিন", text: "দয়া করে আমার ব্যবসার সার্বিক আর্থিক স্বাস্থ্য, সেলস ট্রেন্ড এবং পারফরমেন্সের একটি সামগ্রিক বিশ্লেষণ দিন।" },
-      ]
-    : [
-        { label: "What is the profits?", text: "What is the profits?" },
-        { label: "Where is the business problems?", text: "Where is the business problems?" },
-        { label: "What is the critical stocks?", text: "What is the critical stocks and which products have less number in stocks?" },
-        { label: "Where have to update?", text: "Where do we have to update or make changes for the business?" },
-        { label: "Total analyzation of the business", text: "Provide a total analyzation and health check of the business." },
-      ];
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTo({
+        top: chatScrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   };
 
   const handleSend = async (textToSend: string) => {
@@ -387,7 +375,7 @@ export default function AiAuditsPage() {
       {/* Main Financial Audit Chat Interface */}
       <Card className="flex-1 min-h-0 bg-card/80 dark:bg-zinc-950/80 backdrop-blur-xl border border-border/80 rounded-2xl flex flex-col overflow-hidden shadow-lg">
         {/* Messages scrollable area */}
-        <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-3 sm:space-y-4 no-scrollbar">
+        <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-3 sm:space-y-4 no-scrollbar">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col justify-center items-center text-center max-w-md mx-auto space-y-4 p-2">
               <div className="size-14 sm:size-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 via-emerald-500/10 to-amber-500/10 text-primary flex items-center justify-center shadow-inner border border-primary/20">

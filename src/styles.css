@@ -530,7 +530,7 @@
 }
 
 /* ============================================================
-   MOBILE PHONE SMOOTH PERFORMANCE OPTIMIZATIONS
+   MOBILE PHONE SMOOTH PERFORMANCE & TAB BAR OPTIMIZATIONS
    ============================================================ */
 @media (max-width: 768px) {
   /* Fast touch interactions without 300ms delay */
@@ -538,10 +538,25 @@
     touch-action: manipulation;
   }
 
-  /* GPU hardware acceleration for smooth 60 FPS scrolling on mobile */
-  .site-bg, body, main {
+  /* Smooth touch scrolling */
+  .site-bg, body {
     -webkit-overflow-scrolling: touch;
-    transform: translate3d(0, 0, 0);
+  }
+
+  /* Mobile bottom tab bar elevated z-index and safe-area padding above gesture bars */
+  .mobile-tab-bar {
+    z-index: 99999 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15) !important;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px) !important;
+  }
+
+  .mobile-bottom-spacer {
+    height: 4.5rem !important;
+    min-height: 4.5rem !important;
   }
 
   /* Optimize backdrop-blur filters for low-end mobile GPUs */

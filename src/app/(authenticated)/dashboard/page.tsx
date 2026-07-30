@@ -264,7 +264,7 @@ function KPICard({
   return (
     <Card
       onClick={onClick}
-      className={`group flex flex-col justify-between transition-colors duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${themeStyle.shadow} ${getCurveClass()} md:outline md:outline-1 md:outline-border/70 md:hover:outline-primary/60 ${
+      className={`group flex flex-col justify-between transition-all duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${themeStyle.shadow} ${getCurveClass()} shadow-[0_3px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_18px_rgba(0,0,0,0.12)] dark:shadow-[0_3px_12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.5)] border border-border/70 ${
         onClick ? "cursor-pointer hover:border-primary/40 active:opacity-90" : ""
       }`}
     >
@@ -1066,6 +1066,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/fluency/48/buy.png"
                 icon={ShoppingCart}
                 color="bg-teal-500"
                 className="h-full w-full"
@@ -1105,6 +1106,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
                 sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/color/48/depreciation.png"
                 icon={TrendingDown}
                 color="bg-rose-500"
                 className="h-full w-full"
@@ -1124,6 +1126,7 @@ export default function Dashboard() {
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
                 sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/color/48/tax.png"
                 icon={Receipt}
                 color="bg-orange-500"
                 className="h-full w-full"
@@ -1143,6 +1146,7 @@ export default function Dashboard() {
                 label={t("due")}
                 value={fmtMoney(totalDues)}
                 sub={dateRangeLabel}
+                imageUrl="https://img.icons8.com/color/48/loan.png"
                 icon={Banknote}
                 color="bg-amber-600"
                 trendUp={false}
