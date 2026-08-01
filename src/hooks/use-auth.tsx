@@ -82,27 +82,27 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const cached = typeof window !== "undefined" ? readAuthProfile() : null;
-  
-  // Robust Capacitor detection
-  const isCap = typeof window !== "undefined" && (
-    !!(window as any).Capacitor ||
-    window.location.hostname === "localhost" ||
-    window.location.origin.includes("localhost") ||
-    window.location.origin.startsWith("capacitor:") ||
-    window.location.origin.startsWith("file:")
-  );
-  
-  const tokenExists = typeof window !== "undefined" ? !!window.localStorage.getItem("auth_token") : false;
-  
-  // If in Capacitor and token is missing, we must log out to acquire a token via login
-  const initialUser = (cached && (!isCap || tokenExists)) ? profileToUser(cached) : null;
-
-  const [user, setUser] = useState<AuthUser | null>(initialUser);
-  const [loading, setLoading] = useState(initialUser ? false : true);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { lang } = useT();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cached = readAuthProfile();
+    const isCap = !!(window as any).Capacitor ||
+      window.location.hostname === "localhost" ||
+      window.location.origin.includes("localhost") ||
+      window.location.origin.startsWith("capacitor:") ||
+      window.location.origin.startsWith("file:");
+    const tokenExists = !!window.localStorage.getItem("auth_token");
+    const initUser = (cached && (!isCap || tokenExists)) ? profileToUser(cached) : null;
+    if (initUser) {
+      setUser(initUser);
+      setLoading(false);
+    }
+  }, []);
 
   async function checkUser() {
     try {

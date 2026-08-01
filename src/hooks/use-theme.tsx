@@ -45,23 +45,25 @@ function applyTheme(resolved: "light" | "dark") {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
-    const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    return saved === "light" || saved === "dark" || saved === "system" ? saved : "light";
-  });
+  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [accentColor, setAccentColorState] = useState<AccentColor>("mechanix");
+  const [bgStyle, setBgStyleState] = useState<BgStyle>("default");
 
-  const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
-    if (typeof window === "undefined") return "mechanix";
-    const saved = localStorage.getItem(ACCENT_KEY) as AccentColor | null;
-    return saved && saved in ACCENTS ? saved : "mechanix";
-  });
-
-  const [bgStyle, setBgStyleState] = useState<BgStyle>(() => {
-    if (typeof window === "undefined") return "default";
-    const saved = localStorage.getItem(BG_STYLE_KEY) as BgStyle | null;
-    return saved ? saved : "default";
-  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedTheme = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
+    if (savedTheme === "light" || savedTheme === "dark" || savedTheme === "system") {
+      setThemeState(savedTheme);
+    }
+    const savedAccent = localStorage.getItem(ACCENT_KEY) as AccentColor | null;
+    if (savedAccent && savedAccent in ACCENTS) {
+      setAccentColorState(savedAccent);
+    }
+    const savedBg = localStorage.getItem(BG_STYLE_KEY) as BgStyle | null;
+    if (savedBg) {
+      setBgStyleState(savedBg);
+    }
+  }, []);
 
   const resolved = resolveTheme(theme);
 
