@@ -561,8 +561,14 @@
 
   /* Optimize backdrop-blur filters for low-end mobile GPUs */
   .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-3xl {
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+  }
+
+  /* GPU Hardware acceleration for lightweight mobile scrolling */
+  body, main, .glass-card {
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 }
 
