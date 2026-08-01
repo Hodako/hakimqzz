@@ -56,15 +56,27 @@ export default function RootLayout({
                 try {
                   var mode = localStorage.getItem('hz-theme') || 'dark';
                   var accent = localStorage.getItem('hz-accent') || 'mechanix';
-                  var bg = localStorage.getItem('hz-bg-style') || 'glass';
                   var doc = document.documentElement;
                   if (mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                     doc.classList.add('dark');
                   } else {
                     doc.classList.remove('dark');
                   }
-                  doc.setAttribute('data-accent', accent);
-                  doc.setAttribute('data-bg', bg);
+                  var accents = {
+                    mechanix: { light: '#B8902E', dark: '#DFBB63' },
+                    emerald: { light: 'oklch(0.38 0.12 155)', dark: 'oklch(0.65 0.14 155)' },
+                    indigo: { light: 'oklch(0.5 0.2 264)', dark: 'oklch(0.68 0.18 264)' },
+                    violet: { light: 'oklch(0.55 0.22 290)', dark: 'oklch(0.7 0.2 290)' },
+                    blue: { light: 'oklch(0.5 0.18 245)', dark: 'oklch(0.68 0.16 245)' },
+                    rose: { light: 'oklch(0.55 0.22 15)', dark: 'oklch(0.7 0.18 15)' }
+                  };
+                  var isDark = doc.classList.contains('dark');
+                  var cfg = accents[accent] || accents.mechanix;
+                  var val = isDark ? cfg.dark : cfg.light;
+                  doc.style.setProperty('--primary', val);
+                  doc.style.setProperty('--ring', val);
+                  doc.style.setProperty('--loader-color', val);
+                  doc.style.setProperty('--sidebar-primary', val);
                 } catch (e) {}
               })();
             `,

@@ -564,12 +564,6 @@
     backdrop-filter: blur(8px) !important;
     -webkit-backdrop-filter: blur(8px) !important;
   }
-
-  /* Lightweight rendering optimizations for low-end phones */
-  main section, .glass-card, .table-container {
-    content-visibility: auto;
-    contain-intrinsic-size: 1px 120px;
-  }
 }
 
 /* POS Thermal Printer 58mm / 82mm Print Engine Rules */
