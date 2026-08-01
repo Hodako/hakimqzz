@@ -19,7 +19,7 @@ import { createSaleFn, createCustomerFn } from "@/lib/rpc";
 import { Plus, Trash2, Scan, Printer } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
-import { printPwaPosReceipt } from "@/lib/pos-print";
+import { printCustomPosInvoice } from "@/lib/custom-invoice-generator";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 
@@ -251,7 +251,7 @@ export function SaleDialog({
 
       if (shouldPrint) {
         const cust = customers.find(c => c.id === partyId);
-        printPwaPosReceipt({
+        printCustomPosInvoice({
           businessName: user.name || "Dream Fashion POS",
           invoiceNo: cartId.slice(-6).toUpperCase(),
           date: new Date().toLocaleDateString(),
