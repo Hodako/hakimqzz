@@ -362,7 +362,7 @@ export function SaleDialog({
                     {cart.map((line, i) => {
                       const p = products.find(x => x.id === line.productId);
                       return (
-                        <div key={i} className="flex flex-col gap-1 border border-border rounded-md p-2 text-xs bg-muted/10">
+                        <div key={`${line.productId}-${i}`} className="flex flex-col gap-1 border border-border rounded-md p-2 text-xs bg-muted/10">
                           <div className="flex items-center justify-between font-semibold">
                             <span className="truncate flex-1 text-zinc-800 dark:text-zinc-200">{p?.name}</span>
                             <Button type="button" variant="ghost" size="icon" className="size-6 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}>

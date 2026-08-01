@@ -204,7 +204,7 @@ export function ProductDialog({
               )}
               <div className="space-y-1.5">
                 {attrs.map((attr, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
+                  <div key={`attr-${i}`} className="flex items-center gap-1.5">
                     <Input
                       className="h-8 text-xs flex-1"
                       placeholder={t("key")}

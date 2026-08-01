@@ -111,7 +111,7 @@ export function PurchaseDialog({ open, onOpenChange, presetPartyId }: { open: bo
         <DialogHeader><DialogTitle>{t("new_purchase")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           {lines.map((line, i) => (
-            <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+            <div key={`p-line-${i}`} className="border border-border rounded-lg p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground">#{i + 1}</span>
                 {lines.length > 1 && (
