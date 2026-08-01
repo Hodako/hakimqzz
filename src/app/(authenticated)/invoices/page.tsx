@@ -83,15 +83,15 @@ function printPwaInvoice(data: {
     .join("");
 
   const html = `<!DOCTYPE html>
-<html>
+<html lang="en" style="color-scheme: light !important;">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${data.invoiceNo}</title>
   <style>
     @page { size: A4 portrait; margin: 8mm 10mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #ffffff !important; color: #000000 !important; padding: 20px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
+    html, body { background: #ffffff !important; color: #000000 !important; padding: 20px; }
     .card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 24px; border: 1px solid #e4e4e7; border-radius: 12px; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.main}; padding-bottom: 16px; margin-bottom: 20px; }
     .biz-name { font-size: 22px; font-weight: bold; text-transform: uppercase; color: ${colors.main}; }

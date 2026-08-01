@@ -49,6 +49,27 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Dream Fashion" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var mode = localStorage.getItem('hz-theme') || 'dark';
+                  var accent = localStorage.getItem('hz-accent') || 'mechanix';
+                  var bg = localStorage.getItem('hz-bg-style') || 'glass';
+                  var doc = document.documentElement;
+                  if (mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    doc.classList.add('dark');
+                  } else {
+                    doc.classList.remove('dark');
+                  }
+                  doc.setAttribute('data-accent', accent);
+                  doc.setAttribute('data-bg', bg);
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body className="antialiased site-bg text-foreground min-h-screen relative overflow-x-hidden" suppressHydrationWarning>
         <div className="gear-ghost" />
