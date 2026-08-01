@@ -1043,7 +1043,7 @@ export default function Dashboard() {
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
-              imageUrl="/icons/sell_icon.png"
+              imageUrl="/icons/online_sale_icon.png"
               icon={DollarSign}
               color="bg-sky-500"
               onClick={() => {

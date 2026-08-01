@@ -18,7 +18,8 @@ import {
   updateEmployeePermissionsFn,
   deleteLicenseFn,
 } from "@/lib/rpc-admin";
-import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid } from "lucide-react";
+import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer } from "lucide-react";
+import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
 import {
@@ -80,6 +81,19 @@ export default function SettingsPage() {
       } catch (e) {}
     }
   }, []);
+
+  // POS Thermal Printer Paper Configuration state
+  const [posConfig, setPosConfig] = useState<PosPaperSettings>(DEFAULT_POS_CONFIG);
+
+  useEffect(() => {
+    setPosConfig(getPosPaperConfig());
+  }, []);
+
+  const updatePosConfig = (updates: Partial<PosPaperSettings>) => {
+    const updated = savePosPaperConfig(updates);
+    setPosConfig(updated);
+    toast.success(lang === "bn" ? "প্রিন্টার পেপার সাইজ সংরক্ষিত হয়েছে!" : "POS Printer Paper Settings Saved!");
+  };
 
   const updateKpiConfig = (newSettings: Partial<typeof kpiConfig>) => {
     setKpiConfig(prev => {
@@ -543,6 +557,66 @@ export default function SettingsPage() {
                   <option value="indigo">indigo</option>
                   <option value="rose">rose (red)</option>
                 </select>
+              </div>
+
+              {/* POS Thermal Printer Paper & Canvas Customizer */}
+              <div className="border-t border-border pt-3 mt-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Printer className="size-4 text-primary" />
+                  <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider">
+                    {lang === "bn" ? "পিওএস থার্মাল প্রিন্টার পেপার সাইজ (POS Paper Settings)" : "POS Thermal Printer & Paper Settings"}
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "পেপার প্রস্থ (Paper Width)" : "Paper Width (mm)"}</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-xs mt-1"
+                      value={posConfig.widthMm}
+                      onChange={(e) => updatePosConfig({ widthMm: Number(e.target.value) || 58 })}
+                      placeholder="58"
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 58 mm (POS রুল)" : "Default: 58 mm"}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "পেপার উচ্চতা (Paper Height)" : "Paper Height (mm)"}</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-xs mt-1"
+                      value={posConfig.heightMm === "auto" ? 40 : posConfig.heightMm}
+                      onChange={(e) => updatePosConfig({ heightMm: Number(e.target.value) || 40 })}
+                      placeholder="40"
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 40 mm" : "Default: 40 mm"}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "ক্যানভাস সাইজ (Canvas Width)" : "Canvas Width (mm)"}</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-xs mt-1"
+                      value={posConfig.canvasWidthMm}
+                      onChange={(e) => updatePosConfig({ canvasWidthMm: Number(e.target.value) || 82 })}
+                      placeholder="82"
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 82 mm ক্যানভাস" : "Default: 82 mm"}</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "দুই পাশের মার্জিন (Side Margin)" : "Side Margin (mm)"}</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-xs mt-1"
+                      value={posConfig.marginMm}
+                      onChange={(e) => updatePosConfig({ marginMm: Number(e.target.value) ?? 1 })}
+                      placeholder="1"
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 1 mm উভয় পাশে" : "Default: 1 mm margin"}</p>
+                  </div>
+                </div>
               </div>
             </div>
             <Button type="submit" disabled={busy} className="w-full sm:w-auto mt-4">{busy ? "…" : t("save")}</Button>

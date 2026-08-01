@@ -16,9 +16,10 @@ import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney } from "@/lib/format";
 import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Trash2, Scan } from "lucide-react";
+import { Plus, Trash2, Scan, Printer } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
+import { printPwaPosReceipt } from "@/lib/pos-print";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 
@@ -205,7 +206,7 @@ export function SaleDialog({
     setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
   }
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent, shouldPrint = false) {
     e.preventDefault();
     if (!user || cart.length === 0) return toast.error(t("select_product"));
     if (type === "credit" && !partyId) return toast.error((lang === "bn" ? "কাস্টমার" : "Customer") + " " + t("required"));
@@ -247,6 +248,31 @@ export function SaleDialog({
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["party-detail"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
+
+      if (shouldPrint) {
+        const cust = customers.find(c => c.id === partyId);
+        printPwaPosReceipt({
+          businessName: user.name || "Dream Fashion POS",
+          invoiceNo: cartId.slice(-6).toUpperCase(),
+          date: new Date().toLocaleDateString(),
+          customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
+          customerPhone: cust?.phone || "",
+          items: cart.map(c => {
+            const prod = products.find(p => p.id === c.productId);
+            return {
+              name: prod?.name || "Product",
+              qty: Number(c.qty) || 1,
+              price: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
+            };
+          }),
+          subtotal: sellTotal,
+          discount: cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0),
+          total: sellTotal,
+          paid: type === "credit" ? paidNum : sellTotal,
+          due: type === "credit" ? due : 0,
+        });
+      }
+
       onOpenChange(false);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -417,7 +443,17 @@ export function SaleDialog({
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || cart.length === 0}
+                onClick={(e) => submit(e, true)}
+                className="gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+              >
+                <Printer className="size-3.5" />
+                {lang === "bn" ? "ইনভয়েস প্রিন্ট" : "Print Invoice"}
+              </Button>
               <Button type="submit" form="sale-form" size="sm" disabled={busy || cart.length === 0}>
                 {busy ? "…" : t("record_sale")}
               </Button>
