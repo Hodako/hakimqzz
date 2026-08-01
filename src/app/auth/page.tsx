@@ -15,6 +15,7 @@ export default function AuthPage() {
   const { user, loading, login } = useAuth();
   const { t, lang, setLang } = useT();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -22,16 +23,20 @@ export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
 
   useEffect(() => {
-    if (!loading) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !loading) {
       if (user?.activated) {
         router.replace("/dashboard");
       } else if (user && !user.activated) {
         router.replace("/activate");
       }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, mounted]);
 
-  if (loading || user) return <SpeedLoader />;
+  if (!mounted || loading || user) return <SpeedLoader />;
 
   function afterAuth(u: AuthUser | null) {
     if (!u) return;

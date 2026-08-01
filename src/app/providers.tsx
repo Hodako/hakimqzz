@@ -27,6 +27,34 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
+
+    // Global Auto-Recovery for Stale Chunk / Service Worker Load Errors
+    const handleGlobalError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const msg = (event as ErrorEvent).message || String((event as PromiseRejectionEvent).reason || "");
+      if (
+        msg.includes("ChunkLoadError") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("400") ||
+        msg.includes("503")
+      ) {
+        console.warn("[AutoRecovery] Stale chunk/cache detected. Clearing ServiceWorker caches...");
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then((regs) => {
+            regs.forEach((reg) => reg.unregister());
+          });
+        }
+        if (typeof caches !== "undefined") {
+          caches.keys().then((keys) => {
+            keys.forEach((key) => caches.delete(key));
+          });
+        }
+      }
+    };
+
+    window.addEventListener("error", handleGlobalError);
+    window.addEventListener("unhandledrejection", handleGlobalError);
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")

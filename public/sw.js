@@ -1,7 +1,6 @@
-const CACHE_NAME = "dreamfashion-v6";
+const CACHE_NAME = "dreamfashion-v7";
 
 // Only static assets that definitely exist — no page routes
-// Page routes are handled by network-first at runtime
 const PRECACHE_ASSETS = [
   "/manifest.json",
   "/logo.png",
@@ -9,7 +8,7 @@ const PRECACHE_ASSETS = [
   "/icon-512.png",
 ];
 
-// ── Install: pre-cache static assets individually (never crash the SW) ──────
+// ── Install: pre-cache static assets individually ───────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
@@ -21,7 +20,6 @@ self.addEventListener("install", (event) => {
               await cache.put(url, response);
             }
           } catch (err) {
-            // Silently skip assets that fail (network offline, 404, etc.)
             console.warn("[SW] Pre-cache skipped:", url, err);
           }
         })
@@ -32,7 +30,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ── Activate: delete ALL old caches (removes stale main-app.js etc.) ────────
+// ── Activate: delete ALL old caches ─────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -49,14 +47,12 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch: safe cache.put() — only store valid 200 responses ─────────────────
+// ── Fetch: Network-First with safe fallback for static chunks ───────────────
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
 
-  // Skip: non-http, Next.js HMR, API routes, chrome-extension, cross-origin fonts
   if (
     !url.protocol.startsWith("http") ||
     url.pathname.includes("/_next/webpack-hmr") ||
@@ -69,32 +65,30 @@ self.addEventListener("fetch", (event) => {
   const isHashedAsset = url.pathname.startsWith("/_next/static/");
 
   if (isHashedAsset) {
-    // Cache-First: hashed JS/CSS/font chunks never change filename
+    // Try network first for static chunks to ensure fresh builds post-deploy
     event.respondWith(
-      caches.match(event.request, { ignoreSearch: true }).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
+      fetch(event.request)
+        .then((response) => {
           if (response && response.status === 200 && response.type !== "opaque") {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, clone).catch(() => {});
             });
+            return response;
           }
-          return response;
-        }).catch(() => caches.match(event.request, { ignoreSearch: true }));
-      })
+          // If server returns 400/404/503 (stale chunk hash), try cached version or fallback
+          return caches.match(event.request).then((cached) => cached || response);
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
     );
   } else {
-    // Network-First: pages & other assets — serve fresh, fall back to cache
+    // Network-First for pages
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Only cache valid, same-origin, non-opaque successful responses
-          if (
-            response &&
-            response.status === 200 &&
-            response.type === "basic"
-          ) {
+          if (response && response.status === 200 && response.type === "basic") {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, clone).catch(() => {});
@@ -102,11 +96,7 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() =>
-          caches.match(event.request, { ignoreSearch: true }).then(
-            (cached) => cached || new Response("Offline", { status: 503 })
-          )
-        )
+        .catch(() => caches.match(event.request))
     );
   }
 });
