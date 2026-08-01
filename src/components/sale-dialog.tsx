@@ -19,7 +19,7 @@ import { createSaleFn, createCustomerFn } from "@/lib/rpc";
 import { Plus, Trash2, Scan, Printer } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
-import { printCustomPosInvoice } from "@/lib/custom-invoice-generator";
+import { printPwaInvoice } from "@/lib/invoice-printer";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 
@@ -251,24 +251,26 @@ export function SaleDialog({
 
       if (shouldPrint) {
         const cust = customers.find(c => c.id === partyId);
-        printCustomPosInvoice({
+        const discTotal = cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0);
+        printPwaInvoice({
           businessName: user.name || "Dream Fashion POS",
+          userEmail: user.email || "",
           invoiceNo: cartId.slice(-6).toUpperCase(),
-          date: new Date().toLocaleDateString(),
+          invoiceDate: new Date().toLocaleDateString(),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
           customerPhone: cust?.phone || "",
           items: cart.map(c => {
             const prod = products.find(p => p.id === c.productId);
             return {
-              name: prod?.name || "Product",
+              product: { id: prod?.id, name: prod?.name || "Product" },
               qty: Number(c.qty) || 1,
-              price: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
+              sellPrice: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
             };
           }),
-          subtotal: sellTotal,
-          discount: cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0),
+          subtotal: sellTotal + discTotal,
+          discountAmount: discTotal,
           total: sellTotal,
-          paid: type === "credit" ? paidNum : sellTotal,
+          paidAmount: type === "credit" ? paidNum : sellTotal,
           due: type === "credit" ? due : 0,
         });
       }
