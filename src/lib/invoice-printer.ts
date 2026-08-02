@@ -63,10 +63,10 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${data.invoiceNo}</title>
   <style>
-    @page { size: A4 portrait; margin: 8mm 10mm; }
+    @page { size: A4 portrait; margin: 0; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
-    html, body { background: #ffffff !important; color: #000000 !important; padding: 20px; }
-    .card { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e4e4e7; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    html, body { background: #ffffff !important; color: #000000 !important; padding: 12mm 16mm; width: 100%; margin: 0; }
+    .card { width: 100%; max-width: 100%; margin: 0 auto; background: #ffffff; padding: 0; border: none !important; box-shadow: none !important; border-radius: 0; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.main}; padding-bottom: 16px; margin-bottom: 20px; }
     .biz-name { font-size: 24px; font-weight: 800; text-transform: uppercase; color: ${colors.main}; letter-spacing: 0.5px; }
     .tagline { font-size: 12px; color: #71717a; margin-top: 2px; }

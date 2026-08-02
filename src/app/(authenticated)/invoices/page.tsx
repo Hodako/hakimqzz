@@ -87,8 +87,8 @@ function InvoiceDocumentView({
 }: InvoiceDocumentViewProps) {
   return (
     <div
-      className={`invoice-print-container bg-white text-zinc-900 rounded-xl border border-zinc-200 shadow-md font-sans text-xs space-y-5 relative overflow-hidden min-h-[580px] flex flex-col justify-between ${
-        isPrintOnly ? "p-4 border-none shadow-none" : "p-6 sm:p-8"
+      className={`invoice-print-container bg-white text-zinc-900 font-sans text-xs space-y-5 relative overflow-hidden min-h-[580px] flex flex-col justify-between ${
+        isPrintOnly ? "p-0 border-none shadow-none rounded-none" : "p-6 sm:p-8 rounded-xl border border-zinc-200 shadow-md"
       }`}
     >
       {/* Optional Watermark */}
