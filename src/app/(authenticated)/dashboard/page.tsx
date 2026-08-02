@@ -91,7 +91,7 @@ function groupAllDataByDay(sales: any[], expenses: any[], days: number) {
 // ── Bento Grid KPICard ─────────────────────────────────────────────────────────────
 function KPICard({
   label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName,
-  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false,
+  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false,
 }: {
   label: string; value: string; sub?: string;
   icon?: React.ElementType; imageUrl?: string; trend?: string; trendUp?: boolean; color: string;
@@ -103,72 +103,73 @@ function KPICard({
   borderStyle?: "subtle" | "bold" | "pink" | "emerald" | "amber" | "indigo" | "dashed" | "none";
   curve?: "none" | "sm" | "md" | "lg" | "xl" | "full";
   isBentoHero?: boolean;
+  isDesktop?: boolean;
 }) {
   const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
   
   const sizePadding =
     size === "xxs"
-      ? "px-1.5 py-1 min-h-[36px] gap-0.5"
+      ? "px-2 py-1.5 min-h-[44px] gap-1"
       : size === "xs"
-        ? "px-2 py-1 min-h-[42px] gap-0.5"
+        ? "px-2.5 py-2 min-h-[52px] gap-1"
         : size === "small"
-          ? "px-2 py-1 min-h-[48px] gap-1"
+          ? "px-3 py-2.5 min-h-[64px] gap-1.5"
           : size === "large"
-            ? "px-3 py-1.5 min-h-[70px] gap-1.5"
+            ? "px-4 py-3 min-h-[84px] gap-2"
             : size === "xl"
-              ? "px-3.5 py-2 min-h-[85px] gap-2"
-              : "px-2.5 py-1.5 min-h-[56px] gap-1";
+              ? "px-5 py-4 min-h-[100px] gap-2.5"
+              : "px-3.5 py-2.5 min-h-[70px] gap-1.5";
 
   const labelSize =
     size === "xxs"
-      ? "text-[8px]"
+      ? "text-[9px]"
       : size === "xs"
-        ? "text-[9px]"
+        ? "text-[10px]"
         : size === "small"
-          ? "text-[10px]"
+          ? "text-[11px] sm:text-xs"
           : size === "large"
             ? "text-xs sm:text-sm font-semibold"
             : size === "xl"
               ? "text-xs sm:text-sm font-bold"
-              : "text-[10px] sm:text-[11px]";
+              : "text-[11px] sm:text-xs";
 
   const valSize =
     size === "xxs"
-      ? "text-[11px] font-bold truncate w-full"
+      ? "text-xs font-bold truncate w-full"
       : size === "xs"
-        ? "text-xs font-bold truncate w-full"
+        ? "text-xs sm:text-sm font-bold truncate w-full"
         : size === "small"
-          ? "text-xs min-[360px]:text-sm font-bold truncate w-full"
+          ? "text-sm sm:text-base font-bold truncate w-full"
           : size === "large"
             ? "text-base min-[360px]:text-lg sm:text-xl font-extrabold truncate w-full"
             : size === "xl"
               ? "text-lg min-[360px]:text-xl sm:text-2xl font-black truncate w-full"
-              : "text-xs min-[360px]:text-sm min-[400px]:text-base sm:text-lg font-bold truncate w-full";
+              : "text-sm sm:text-base font-bold truncate w-full";
 
   const iconImgSize =
     size === "xxs"
-      ? "size-6 sm:size-7"
+      ? "size-4 sm:size-5"
       : size === "xs"
-        ? "size-7.5 sm:size-8.5"
+        ? "size-5 sm:size-6"
         : size === "small"
-          ? "size-10.5 sm:size-11.5"
+          ? "size-6 sm:size-7"
           : size === "large"
-            ? "size-14 sm:size-15"
+            ? "size-8 sm:size-9"
             : size === "xl"
-              ? "size-16 sm:size-18"
-              : "size-10.5 sm:size-11.5";
+              ? "size-10 sm:size-11"
+              : "size-6 sm:size-7";
 
-  const subSize = size === "xxs" || size === "xs" || size === "small" ? "text-[8px]" : "text-[8px] sm:text-[9px]";
+  const subSize = size === "xxs" || size === "xs" || size === "small" ? "text-[9px]" : "text-[9px] sm:text-[10px]";
 
   const getCurveClass = () => {
     switch (curve) {
-      case "none": return "rounded-none";
-      case "sm": return "rounded-t-none rounded-b-sm";
-      case "md": return "rounded-t-none rounded-b-md";
-      case "lg": return "rounded-t-none rounded-b-lg";
-      case "xl": return "rounded-t-none rounded-b-xl";
-      case "full": return "rounded-t-none rounded-b-2xl";
-      default: return "rounded-t-none rounded-b-2xl";
+      case "none": return "rounded-lg";
+      case "sm": return "rounded-xl";
+      case "md": return "rounded-xl";
+      case "lg": return "rounded-2xl";
+      case "xl": return "rounded-2xl";
+      case "full": return "rounded-3xl";
+      default: return "rounded-2xl";
     }
   };
 
@@ -264,10 +265,17 @@ function KPICard({
   return (
     <Card
       onClick={onClick}
-      className={`group flex flex-col justify-between transition-all duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${themeStyle.shadow} ${getCurveClass()} shadow-[0_3px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_18px_rgba(0,0,0,0.12)] dark:shadow-[0_3px_12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.5)] border border-border/70 ${
-        onClick ? "cursor-pointer hover:border-primary/40 active:opacity-90" : ""
+      className={`group flex flex-col justify-between transition-all duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${
+        isDesktop
+          ? "beveled-card shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 border-t border-l border-white/60 dark:border-white/20 border-b border-r border-black/10 dark:border-black/40 ring-1 ring-black/5"
+          : `${themeStyle.shadow} shadow-[0_3px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_18px_rgba(0,0,0,0.12)] dark:shadow-[0_3px_12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.5)] border border-border/70`
+      } ${getCurveClass()} ${
+        onClick ? "cursor-pointer hover:border-primary/50 active:opacity-90" : ""
       }`}
     >
+      {isDesktop && (
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-white/80 dark:via-white/30 to-transparent pointer-events-none z-20" />
+      )}
 
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
         <span className={`${labelSize} font-bold text-muted-foreground truncate mr-2 tracking-tight`}>{label}</span>
@@ -1210,7 +1218,7 @@ export default function Dashboard() {
         const gridColsClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : kpiConfig.columns === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2";
 
         return (
-          <Card key="kpis" className="p-3.5 border-t-2 border-t-primary border-x border-b border-border/80 space-y-3 bg-card/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-none shadow-[0_8px_30px_rgba(184,144,46,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all">
+          <Card key="kpis" className="p-4 border border-border/80 space-y-3 bg-card/90 dark:bg-zinc-900/90 backdrop-blur-xl rounded-2xl shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <LayoutGrid className="size-4 text-primary animate-pulse" />
@@ -1233,7 +1241,7 @@ export default function Dashboard() {
 
       case "valuations":
         return (
-          <Card key="valuations" className="p-3.5 border border-border space-y-2 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-t-none rounded-b-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+          <Card key="valuations" className="p-3.5 border border-border space-y-2 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{lang === "bn" ? "পণ্য স্টক মূল্য (ইনভেন্টরি)" : "Stock & Inventory Valuation"}</div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 bg-gradient-to-br from-white via-teal-50/20 to-teal-500/5 dark:from-zinc-900 dark:via-teal-950/10 dark:to-teal-500/5 border border-teal-500/15 rounded-lg flex items-center justify-between gap-1.5 shadow-[0_2px_8px_rgba(20,184,166,0.04)]">
@@ -1256,7 +1264,7 @@ export default function Dashboard() {
 
       case "graphs":
         return (
-          <Card key="graphs" id="analytics-chart-mobile" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-t-none rounded-b-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+          <Card key="graphs" id="analytics-chart-mobile" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("custom_graphs")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setCollapsed(prev => ({ ...prev, graphs: !prev.graphs }))}>
@@ -1314,7 +1322,7 @@ export default function Dashboard() {
 
       case "pie":
         return (
-          <Card key="pie" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-t-none rounded-b-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+          <Card key="pie" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("payment_method_breakdown")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => { playTapSound(); setCollapsed(prev => ({ ...prev, pie: !prev.pie })); }}>
@@ -1356,7 +1364,7 @@ export default function Dashboard() {
 
       case "reminders":
         return (
-          <Card key="reminders" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-t-none rounded-b-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
+          <Card key="reminders" className="p-3.5 space-y-3 bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-2xl shadow-[0_6px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.25)] hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("reminders")}</span>
               <Button variant="ghost" size="icon" className="size-7" onClick={() => setCollapsed(prev => ({ ...prev, reminders: !prev.reminders }))}>
@@ -1497,8 +1505,9 @@ export default function Dashboard() {
               label={t("credit_sale")}
               value={fmtMoney(creditToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              icon={CreditCard}
               color="bg-amber-500"
+              isDesktop={true}
               onClick={() => {
                 playTapSound();
                 setSalePresetType("credit");
@@ -1514,8 +1523,9 @@ export default function Dashboard() {
               label={t("cash_sale")}
               value={fmtMoney(cashToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              icon={ShoppingBag}
               color="bg-indigo-500"
+              isDesktop={true}
               onClick={() => {
                 playTapSound();
                 setSalePresetType("cash");
@@ -1531,8 +1541,9 @@ export default function Dashboard() {
               label={t("online_sell")}
               value={fmtMoney(onlineToday)}
               sub={dateRangeLabel}
-              imageUrl="https://img.icons8.com/fluency/48/sell.png"
+              icon={DollarSign}
               color="bg-sky-500"
+              isDesktop={true}
               onClick={() => {
                 playTapSound();
                 setSalePresetType("online");
@@ -1548,8 +1559,9 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/fluency/48/buy.png"
+                icon={ShoppingCart}
                 color="bg-teal-500"
+                isDesktop={true}
                 className="h-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
@@ -1562,8 +1574,9 @@ export default function Dashboard() {
                 label={t("profit")}
                 value={fmtMoney(profitToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/clouds/100/economic-improvement--v2.png"
+                icon={TrendingUp}
                 color="bg-emerald-500"
+                isDesktop={true}
                 className="h-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
@@ -1576,8 +1589,9 @@ export default function Dashboard() {
                 label={lang === "bn" ? "লোকসান" : "Loss"}
                 value={fmtMoney(lossToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/depreciation.png"
+                icon={TrendingDown}
                 color="bg-rose-500"
+                isDesktop={true}
                 className="h-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
@@ -1590,8 +1604,9 @@ export default function Dashboard() {
                 label={t("expense")}
                 value={fmtMoney(expenseToday)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/tax.png"
+                icon={Receipt}
                 color="bg-orange-500"
+                isDesktop={true}
                 className="h-full"
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
@@ -1604,8 +1619,9 @@ export default function Dashboard() {
                 label={t("due")}
                 value={fmtMoney(totalDues)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/color/48/loan.png"
+                icon={Banknote}
                 color="bg-amber-600"
+                isDesktop={true}
                 trendUp={false}
                 className="h-full"
                 align={kpiConfig.align as any}
@@ -1619,8 +1635,9 @@ export default function Dashboard() {
                 label={t("cashbox")}
                 value={fmtMoney(cashboxTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/plasticine/100/cash--v1.png"
+                icon={Wallet}
                 color="bg-indigo-600"
+                isDesktop={true}
                 trendUp={cashboxTotal >= 0}
                 trend={t("balance")}
                 className="h-full justify-between"
@@ -1635,8 +1652,9 @@ export default function Dashboard() {
                 label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
                 value={fmtMoney(somitiTotal)}
                 sub={dateRangeLabel}
-                imageUrl="https://img.icons8.com/fluency/48/piggy-bank.png"
+                icon={PiggyBank}
                 color="bg-purple-600"
+                isDesktop={true}
                 trendUp={somitiTotal >= 0}
                 trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
                 className="h-full justify-between"
@@ -1658,8 +1676,9 @@ export default function Dashboard() {
                 label={t("inventory_val_cost")}
                 value={fmtMoney(totalStockCostValuation)}
                 sub={lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock"}
-                imageUrl="https://img.icons8.com/bubbles/100/buy.png"
+                icon={Package}
                 color="bg-teal-500"
+                isDesktop={true}
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
               />
@@ -1667,8 +1686,9 @@ export default function Dashboard() {
                 label={t("inventory_val_sale")}
                 value={fmtMoney(totalStockSaleValuation)}
                 sub={lang === "bn" ? "বিক্রি মূল্যের হিসাব" : "Selling Worth of Stock"}
-                imageUrl="https://img.icons8.com/fluency/48/sell.png"
+                icon={ShoppingBag}
                 color="bg-pink-500"
+                isDesktop={true}
                 align={kpiConfig.align as any}
                 size={kpiConfig.size as any}
               />

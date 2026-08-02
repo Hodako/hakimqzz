@@ -12,6 +12,11 @@ export interface InvoiceItemData {
 export interface PrintInvoiceParams {
   businessName: string;
   userEmail?: string;
+  shopAddress?: string;
+  shopPhoneNumbers?: string;
+  pageSize?: string;
+  pageWidth?: string;
+  pageHeight?: string;
   tagline?: string;
   invoiceNo: string;
   invoiceDate: string;
@@ -43,6 +48,23 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   const colors = colorMap[data.colorTheme || "black"] || colorMap.black;
   const status = data.paymentStatus || (data.due > 0 ? (data.paidAmount > 0 ? "PARTIAL" : "DUE") : "PAID");
 
+  let pageSizeRule = "A4 portrait";
+  let bodyPadding = "12mm 16mm";
+  if (data.pageSize === "80mm") {
+    pageSizeRule = "80mm auto";
+    bodyPadding = "4mm 5mm";
+  } else if (data.pageSize === "A5") {
+    pageSizeRule = "A5 portrait";
+    bodyPadding = "8mm 10mm";
+  } else if (data.pageSize === "custom" && (data.pageWidth || data.pageHeight)) {
+    const w = data.pageWidth || "80mm";
+    const h = data.pageHeight || "auto";
+    pageSizeRule = `${w} ${h}`;
+    bodyPadding = "4mm 5mm";
+  } else if (data.pageWidth && data.pageHeight) {
+    pageSizeRule = `${data.pageWidth} ${data.pageHeight}`;
+  }
+
   const itemsHtml = data.items
     .map(
       (item, i) => `
@@ -63,9 +85,9 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${data.invoiceNo}</title>
   <style>
-    @page { size: A4 portrait; margin: 0; }
+    @page { size: ${pageSizeRule}; margin: 0; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
-    html, body { background: #ffffff !important; color: #000000 !important; padding: 12mm 16mm; width: 100%; margin: 0; }
+    html, body { background: #ffffff !important; color: #000000 !important; padding: ${bodyPadding}; width: 100%; margin: 0; }
     .card { width: 100%; max-width: 100%; margin: 0 auto; background: #ffffff; padding: 0; border: none !important; box-shadow: none !important; border-radius: 0; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.main}; padding-bottom: 16px; margin-bottom: 20px; }
     .biz-name { font-size: 24px; font-weight: 800; text-transform: uppercase; color: ${colors.main}; letter-spacing: 0.5px; }
@@ -95,7 +117,9 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       <div>
         <div class="biz-name">${data.businessName}</div>
         ${data.tagline ? `<div class="tagline">${data.tagline}</div>` : ""}
-        ${data.userEmail ? `<div style="font-size: 11px; color: #71717a; margin-top: 2px;">${data.userEmail}</div>` : ""}
+        ${data.shopAddress ? `<div style="font-size: 11px; color: #3f3f46; margin-top: 3px;">📍 ${data.shopAddress}</div>` : ""}
+        ${data.shopPhoneNumbers ? `<div style="font-size: 11px; color: #3f3f46; margin-top: 2px; font-family: monospace;">📞 ${data.shopPhoneNumbers}</div>` : ""}
+        ${data.userEmail ? `<div style="font-size: 11px; color: #71717a; margin-top: 2px;">✉️ ${data.userEmail}</div>` : ""}
       </div>
       <div style="text-align: right;">
         <div class="inv-title">INVOICE</div>

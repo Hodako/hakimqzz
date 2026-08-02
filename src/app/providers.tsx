@@ -49,6 +49,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             keys.forEach((key) => caches.delete(key));
           });
         }
+        const lastReload = sessionStorage.getItem("last_chunk_reload");
+        const now = Date.now();
+        if (!lastReload || now - Number(lastReload) > 8000) {
+          sessionStorage.setItem("last_chunk_reload", String(now));
+          window.location.reload();
+        }
       }
     };
 

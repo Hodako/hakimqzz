@@ -13,6 +13,12 @@ export type AuthUser = {
   role: string;
   business_id: string | null;
   business_name: string;
+  business_address?: string;
+  business_phone_numbers?: string;
+  business_emails?: string;
+  invoice_page_size?: string;
+  invoice_page_width?: string;
+  invoice_page_height?: string;
   logo_url: string;
   avatar_url?: string;
   permissions?: PermissionSet;

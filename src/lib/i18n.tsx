@@ -127,6 +127,7 @@ const dict = {
   // common
   language: { bn: "ভাষা", en: "Language" },
   settings: { bn: "সেটিংস", en: "Settings" },
+  theme_settings: { bn: "থিম ও লুক সেটিংস", en: "Theme & UI Settings" },
   taka: { bn: "৳", en: "৳" },
   loading: { bn: "লোড হচ্ছে...", en: "Loading…" },
   required: { bn: "আবশ্যক", en: "Required" },

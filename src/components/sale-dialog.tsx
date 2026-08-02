@@ -253,8 +253,10 @@ export function SaleDialog({
         const cust = customers.find(c => c.id === partyId);
         const discTotal = cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0);
         printPwaInvoice({
-          businessName: user.name || "Dream Fashion POS",
+          businessName: user.business_name || user.full_name || "Dream Fashion POS",
           userEmail: user.email || "",
+          shopAddress: user.business_address || "",
+          shopPhoneNumbers: user.business_phone_numbers || "",
           invoiceNo: cartId.slice(-6).toUpperCase(),
           invoiceDate: new Date().toLocaleDateString(),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),

@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v8";
+const CACHE_NAME = "dreamfashion-v10";
 
 // Only static assets that definitely exist — no page routes
 const PRECACHE_ASSETS = [
@@ -47,7 +47,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch: Guaranteed Response fallback to avoid "Failed to convert value to 'Response'" ──
+// ── Fetch: Robust asset & route fetch handler ──────────────────────────────
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -76,11 +76,14 @@ self.addEventListener("fetch", (event) => {
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(event.request, clone).catch(() => {});
               });
+            } else if (response && (response.status === 404 || response.status === 400 || response.status === 503)) {
+              // Stale chunk requested from an outdated HTML page. Clear cache to force clean reload.
+              caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
             }
             return response;
           })
           .catch(() => {
-            // Return fallback 404 Response instead of undefined to satisfy event.respondWith
+            caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
             return new Response("Asset not found", {
               status: 404,
               statusText: "Not Found",
@@ -106,9 +109,9 @@ self.addEventListener("fetch", (event) => {
           const cached = await caches.match(event.request);
           if (cached) return cached;
           return new Response("Offline", {
-            status: 503,
-            statusText: "Service Unavailable",
-            headers: { "Content-Type": "text/plain" },
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": "text/html" },
           });
         })
     );

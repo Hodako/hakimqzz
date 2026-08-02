@@ -44,6 +44,7 @@ export type Sale = {
   parties?: { name: string } | null;
   note?: string | null;
   cart_id?: string | null;
+  discount?: number;
 };
 export type Payment = { id: string; party_id: string; amount: number; note: string | null; created_at: string };
 export type PartyLedger = { id: string; party_id: string; amount: number; note: string | null; created_at: string };

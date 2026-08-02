@@ -417,6 +417,12 @@ export async function getBusinessSettingsFn() {
     business: business ? {
       id: business._id as any as string,
       name: business.name as string,
+      address: (business.address as string) || "",
+      phone_numbers: (business.phone_numbers as string) || (business.phone as string) || "",
+      emails: (business.emails as string) || (business.email as string) || "",
+      invoice_page_size: (business.invoice_page_size as string) || "80mm",
+      invoice_page_width: (business.invoice_page_width as string) || "",
+      invoice_page_height: (business.invoice_page_height as string) || "",
       logo_url: (business.logo_url as string) || "/logo.png",
       business_type: (business.business_type as string) || "retail",
       theme: (business.theme as string) || "green",
@@ -449,6 +455,12 @@ export async function getBusinessSettingsFn() {
 export async function updateBusinessSettingsFn(input: {
   data: {
     name?: string;
+    address?: string;
+    phone_numbers?: string;
+    emails?: string;
+    invoice_page_size?: string;
+    invoice_page_width?: string;
+    invoice_page_height?: string;
     logo_url?: string;
     business_type?: string;
     theme?: string;

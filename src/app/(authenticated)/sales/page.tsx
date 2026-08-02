@@ -18,10 +18,14 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
-import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { printPwaInvoice } from "@/lib/invoice-printer";
+import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
+import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 
 interface GroupedSale {
   id: string;
@@ -234,6 +238,40 @@ function SalesTab({
     setSaleToDelete(id);
   }
 
+  const { user } = useAuth();
+  const { data: bizData } = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
+  const biz = bizData?.business;
+
+  function handlePrintSale(s: GroupedSale) {
+    const custName = s.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer");
+    const invNo = s.cart_id ? `INV-${s.cart_id.slice(-6).toUpperCase()}` : `INV-${s.id.slice(-6).toUpperCase()}`;
+    const discTotal = s.items.reduce((acc, x) => acc + (Number(x.discount) || 0) * (Number(x.qty) || 1), 0);
+    const sub = s.sell_price + discTotal;
+
+    printPwaInvoice({
+      businessName: user?.business_name || biz?.name || "Dream Fashion POS",
+      userEmail: biz?.emails || user?.business_emails || user?.email || "",
+      shopAddress: biz?.address || user?.business_address || "",
+      shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+      pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+      pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
+      pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
+      invoiceNo: invNo,
+      invoiceDate: fmtDateTime(s.created_at),
+      customerName: custName,
+      items: s.items.map(item => ({
+        product: { id: item.product_id || undefined, name: item.product_name },
+        qty: Number(item.qty) || 1,
+        sellPrice: Number(item.sell_price) || 0,
+      })),
+      subtotal: sub,
+      discountAmount: discTotal,
+      total: s.sell_price,
+      paidAmount: s.paid_amount,
+      due: s.due_amount,
+    });
+  }
+
   if (items.length === 0) {
     return <Card className="p-8 text-center text-sm text-muted-foreground">{t("no_sales")}</Card>;
   }
@@ -244,7 +282,12 @@ function SalesTab({
         {paged.map(s => {
           const isExpanded = !!expandedGroups[s.id];
           return (
-            <div key={s.id} className="p-3 flex flex-col gap-2 hover:bg-muted/5 transition-colors">
+            <div
+              key={s.id}
+              className="p-3 flex flex-col gap-2 hover:bg-muted/5 transition-colors cursor-pointer select-none"
+              onDoubleClick={() => handlePrintSale(s)}
+              title={lang === "bn" ? "ডাবল ট্যাপ বা ক্লিক করে ইনভয়েস জেনারেট করুন" : "Double-tap to generate invoice"}
+            >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate text-sm flex items-center gap-1.5 flex-wrap">
@@ -279,7 +322,17 @@ function SalesTab({
                     ? <div className="text-xs text-warning font-semibold">{t("due")}: {fmtMoney(s.due_amount)}</div>
                     : <div className="text-xs text-success font-semibold">+{fmtMoney(s.profit)}</div>}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 cursor-pointer text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    onClick={() => handlePrintSale(s)}
+                    title={lang === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print Invoice"}
+                  >
+                    <Printer className="size-3.5" />
+                  </Button>
                   {s.isGroup && (
                     <Button
                       type="button"

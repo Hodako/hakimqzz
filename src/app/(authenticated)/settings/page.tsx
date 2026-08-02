@@ -360,6 +360,12 @@ export default function SettingsPage() {
       await updateBusinessSettingsFn({
         data: {
           name: String(fd.get("name") || "HakimQzz"),
+          address: String(fd.get("address") || ""),
+          phone_numbers: String(fd.get("phone_numbers") || ""),
+          emails: String(fd.get("emails") || ""),
+          invoice_page_size: String(fd.get("invoice_page_size") || "80mm"),
+          invoice_page_width: String(fd.get("invoice_page_width") || ""),
+          invoice_page_height: String(fd.get("invoice_page_height") || ""),
           logo_url: logoUrl || "/logo.png",
           business_type: String(fd.get("business_type") || "retail"),
           theme: "green",
@@ -474,6 +480,20 @@ export default function SettingsPage() {
               <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" />
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "দোকানের ঠিকানা (Shop Address)" : "Shop Address"}</Label>
+              <Textarea name="address" defaultValue={biz.address || ""} placeholder={lang === "bn" ? "দোকানের ঠিকানা লিখুন..." : "e.g., House 12, Road 4, Dhanmondi, Dhaka"} className="text-xs min-h-[60px]" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "দোকানের ফোন নম্বরসমূহ (Phone Numbers)" : "Shop Phone Numbers (Multiple)"}</Label>
+              <Input name="phone_numbers" defaultValue={biz.phone_numbers || ""} placeholder={lang === "bn" ? "যেমন: +8801700000000, +8801800000000" : "e.g. +8801700000000, +8801800000000"} className="text-xs" />
+              <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "একাধিক নম্বর কমা (,) দিয়ে সেপারেট করুন" : "Separate multiple numbers with comma (,)"}</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "দোকানের ইমেইলসমূহ (Emails)" : "Shop Emails (Multiple)"}</Label>
+              <Input name="emails" defaultValue={biz.emails || user?.email || ""} placeholder={lang === "bn" ? "যেমন: info@shop.com, support@shop.com" : "e.g. info@shop.com, support@shop.com"} className="text-xs" />
+              <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসে দেখানোর জন্য কমা (,) দিয়ে সেপারেট করুন" : "Separate multiple emails with comma (,)"}</p>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">Logo URL</Label>
               <Input name="logo_url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="/logo.png" />
             </div>
@@ -519,6 +539,49 @@ export default function SettingsPage() {
               </select>
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "ইউআই থিম ও ডিজাইন সিস্টেম (UI Design System Preset)" : "UI Design System Preset"}</Label>
+              <select
+                onChange={e => {
+                  const val = e.target.value;
+                  const saved = localStorage.getItem("hz_custom_theme");
+                  const current = saved ? JSON.parse(saved) : {};
+                  let isMat = false;
+                  let styleVal = val;
+                  if (val === "material") {
+                    isMat = true;
+                    styleVal = "default";
+                  }
+                  const updated = { ...current, uiStyle: styleVal, isMaterialUI: isMat };
+                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
+                  window.dispatchEvent(new Event("hz-theme-updated"));
+                  toast.success(lang === "bn" ? "থিম ডিজাইন আপডেট হয়েছে!" : "UI Theme preset applied!");
+                }}
+                defaultValue={(() => {
+                  if (typeof window === "undefined") return "default";
+                  try {
+                    const saved = localStorage.getItem("hz_custom_theme");
+                    const cfg = saved ? JSON.parse(saved) : {};
+                    if (cfg.isMaterialUI) return "material";
+                    return cfg.uiStyle || "default";
+                  } catch (e) { return "default"; }
+                })()}
+                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
+              >
+                <option value="default">✨ Default Modern Fintech</option>
+                <option value="material">🎨 Material UI Mode (Raised & Elevation)</option>
+                <option value="glassmorphism">💎 Glassmorphism (Translucent Blur)</option>
+                <option value="morphism">⚪ Neumorphism (Soft Morphism)</option>
+                <option value="brutalism">⬛ Brutalism (High Contrast & Hard Borders)</option>
+                <option value="new-brutalism">🟡 Neo-Brutalism (Modern Pop Art)</option>
+                <option value="cyberpunk">⚡ Cyberpunk Neon</option>
+                <option value="flowerism">🌸 Flowerism (Blossom Pastel)</option>
+                <option value="minimalist">▫️ Minimalist Clean</option>
+                <option value="forest">🌲 Nature Forest</option>
+                <option value="luxury">👑 Luxury Gold</option>
+                <option value="feather">🪶 Feather UI</option>
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">{t("bg_style")}</Label>
               <select
                 value={bgStyle}
@@ -557,6 +620,25 @@ export default function SettingsPage() {
                   <option value="indigo">indigo</option>
                   <option value="rose">rose (red)</option>
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস পেপার সাইজ (Invoice Page Size)" : "Invoice Paper Size / Document Format"}</Label>
+                <select name="invoice_page_size" defaultValue={biz.invoice_page_size || "80mm"} className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize">
+                  <option value="80mm">80mm POS Thermal Receipt (Receipt Printer)</option>
+                  <option value="A4">A4 Full Page Document</option>
+                  <option value="A5">A5 Half Sheet</option>
+                  <option value="custom">Custom Width & Height</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "কাস্টম প্রস্থ (Width mm/px)" : "Custom Page Width"}</Label>
+                  <Input name="invoice_page_width" defaultValue={biz.invoice_page_width || ""} placeholder="e.g. 80mm or 210mm" className="h-8 text-xs mt-1" />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "কাস্টম উচ্চতা (Height mm/px)" : "Custom Page Height"}</Label>
+                  <Input name="invoice_page_height" defaultValue={biz.invoice_page_height || ""} placeholder="e.g. auto or 297mm" className="h-8 text-xs mt-1" />
+                </div>
               </div>
 
               {/* POS Thermal Printer Paper & Canvas Customizer */}

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
+import { createSaleFn } from "@/lib/rpc";
 import { printPwaInvoice } from "@/lib/invoice-printer";
 
 type InvoiceItem = {
@@ -60,7 +61,7 @@ interface InvoiceDocumentViewProps {
   paymentStatus: string;
   colorClasses: any;
   biz: any;
-  t: (key: string) => string;
+  t: (key: any) => string;
   isPrintOnly?: boolean;
 }
 
@@ -108,7 +109,17 @@ function InvoiceDocumentView({
               {businessName}
             </h1>
             <p className="text-xs text-zinc-500">{tagline}</p>
-            <p className="text-xs text-zinc-500">{userEmail}</p>
+            {biz?.address && (
+              <p className="text-xs text-zinc-700 font-medium max-w-xs leading-tight">
+                📍 {biz.address}
+              </p>
+            )}
+            {biz?.phone_numbers && (
+              <p className="text-xs text-zinc-700 font-mono font-medium">
+                📞 {biz.phone_numbers}
+              </p>
+            )}
+            <p className="text-xs text-zinc-500">✉️ {biz?.emails || userEmail}</p>
           </div>
           <div className="text-right space-y-1">
             <h2 className="text-lg font-bold uppercase text-zinc-800 tracking-wider">
@@ -428,13 +439,50 @@ export default function InvoicePage() {
   const tagline = t("tagline") || "Quality Products & Service";
   const invoiceDate = fmtDate(new Date().toISOString());
 
-  function handlePrint() {
+  async function handlePrint() {
     if (invoiceItems.length === 0) return toast.error(t("no_items_in_cart"));
 
-    // Invoke PWA-safe Print Routine
+    // Save sales record to database for all items in the invoice
+    try {
+      const cartId = crypto.randomUUID();
+      const duePerItem = due > 0 ? due / invoiceItems.length : 0;
+      const paidPerItem = due > 0 ? paidAmount / invoiceItems.length : 0;
+
+      for (const item of invoiceItems) {
+        const lineSell = item.sellPrice * item.qty;
+        const buyPrice = item.product.buy_price || 0;
+        const profit = (item.sellPrice - buyPrice) * item.qty;
+
+        await createSaleFn({
+          data: {
+            product_id: item.product.id || null,
+            product_name: item.product.name,
+            qty: item.qty,
+            buy_price: buyPrice,
+            sell_price: item.sellPrice,
+            profit,
+            type: due > 0 ? "credit" : "cash",
+            party_id: selectedPartyId !== "walk-in" ? selectedPartyId : null,
+            paid_amount: due > 0 ? paidPerItem : lineSell,
+            due_amount: due > 0 ? duePerItem : 0,
+            cart_id: cartId,
+          },
+        });
+      }
+      toast.success(t("record_sale"));
+    } catch (err) {
+      console.warn("Failed to automatically persist sale record:", err);
+    }
+
+    // Invoke PWA-safe Print Routine with custom paper sizes and contacts
     printPwaInvoice({
       businessName,
-      userEmail,
+      userEmail: biz?.emails || user?.business_emails || userEmail,
+      shopAddress: biz?.address || user?.business_address || "",
+      shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+      pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+      pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
+      pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
       tagline,
       invoiceNo,
       invoiceDate,

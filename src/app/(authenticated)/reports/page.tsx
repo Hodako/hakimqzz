@@ -192,37 +192,6 @@ export default function ReportsGeneratorPage() {
     }, 0);
   }, [filteredCashbox]);
 
-  // Index sections count builder
-  const indexItems = useMemo(() => {
-    const list: { id: string; num: number; titleBn: string; titleEn: string; count: number; active: boolean }[] = [
-      { id: "index", num: 1, titleBn: "সূচিপত্র ও রিপোর্ট পরিচিতি", titleEn: "Table of Contents & Overview", count: 1, active: true },
-      { id: "stats", num: 2, titleBn: "সার্বিক অর্থনৈতিক পরিসংখ্যান ও অ্যানালিটিক্স", titleEn: "Executive Financial Statistics & Analytics", count: 1, active: true },
-      { id: "chart", num: 3, titleBn: "রাজস্ব, ক্রয় ও ব্যয়ের ভিজ্যুয়াল চার্ট", titleEn: "Revenue vs Expenses Visual Analytics", count: chartData.length > 0 ? 1 : 0, active: showSales || showPurchases || showExpenses },
-    ];
-
-    let currentNum = 4;
-    if (showSales) {
-      list.push({ id: "sales", num: currentNum++, titleBn: "বিক্রয় ফলাফল বিবরণী শীট", titleEn: "Sales Results Sheet", count: filteredSales.length, active: true });
-    }
-    if (showPurchases) {
-      list.push({ id: "purchases", num: currentNum++, titleBn: "মাল ক্রয় ফলাফল বিবরণী শীট", titleEn: "Purchase Results Sheet", count: filteredPurchases.length, active: true });
-    }
-    if (showExpenses) {
-      list.push({ id: "expenses", num: currentNum++, titleBn: "খরচ ও পরিচালন ব্যয় ফলাফল শীট", titleEn: "Overhead Expenses Results Sheet", count: filteredExpenses.length, active: true });
-    }
-    if (showCashbox) {
-      list.push({ id: "cashbox", num: currentNum++, titleBn: "ক্যাশবক্স লেনদেন ফলাফল শীট", titleEn: "Cashbox Action Results Sheet", count: filteredCashbox.length, active: true });
-    }
-    if (showSomiti) {
-      list.push({ id: "somiti", num: currentNum++, titleBn: "সমিতি সঞ্চয় ফলাফল শীট", titleEn: "Somiti Savings Results Sheet", count: filteredSomiti.length, active: true });
-    }
-    if (showParties) {
-      list.push({ id: "parties", num: currentNum++, titleBn: "পার্টি ও গ্রাহক ডিরেক্টরি শীট", titleEn: "Parties & Customer Directory Sheet", count: filteredParties.length, active: true });
-    }
-
-    return list;
-  }, [showSales, showPurchases, showExpenses, showCashbox, showSomiti, showParties, filteredSales.length, filteredPurchases.length, filteredExpenses.length, filteredCashbox.length, filteredSomiti.length, filteredParties.length]);
-
   // Chart Data preparation
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; Sales: number; Purchases: number; Expenses: number }> = {};
@@ -256,6 +225,37 @@ export default function ReportsGeneratorPage() {
         date: item.date.slice(5) // e.g. "06-12"
       }));
   }, [filteredSales, filteredPurchases, filteredExpenses, from, to]);
+
+  // Index sections count builder
+  const indexItems = useMemo(() => {
+    const list: { id: string; num: number; titleBn: string; titleEn: string; count: number; active: boolean }[] = [
+      { id: "index", num: 1, titleBn: "সূচিপত্র ও রিপোর্ট পরিচিতি", titleEn: "Table of Contents & Overview", count: 1, active: true },
+      { id: "stats", num: 2, titleBn: "সার্বিক অর্থনৈতিক পরিসংখ্যান ও অ্যানালিটিক্স", titleEn: "Executive Financial Statistics & Analytics", count: 1, active: true },
+      { id: "chart", num: 3, titleBn: "রাজস্ব, ক্রয় ও ব্যয়ের ভিজ্যুয়াল চার্ট", titleEn: "Revenue vs Expenses Visual Analytics", count: chartData.length > 0 ? 1 : 0, active: showSales || showPurchases || showExpenses },
+    ];
+
+    let currentNum = 4;
+    if (showSales) {
+      list.push({ id: "sales", num: currentNum++, titleBn: "বিক্রয় ফলাফল বিবরণী শীট", titleEn: "Sales Results Sheet", count: filteredSales.length, active: true });
+    }
+    if (showPurchases) {
+      list.push({ id: "purchases", num: currentNum++, titleBn: "মাল ক্রয় ফলাফল বিবরণী শীট", titleEn: "Purchase Results Sheet", count: filteredPurchases.length, active: true });
+    }
+    if (showExpenses) {
+      list.push({ id: "expenses", num: currentNum++, titleBn: "খরচ ও পরিচালন ব্যয় ফলাফল শীট", titleEn: "Overhead Expenses Results Sheet", count: filteredExpenses.length, active: true });
+    }
+    if (showCashbox) {
+      list.push({ id: "cashbox", num: currentNum++, titleBn: "ক্যাশবক্স লেনদেন ফলাফল শীট", titleEn: "Cashbox Action Results Sheet", count: filteredCashbox.length, active: true });
+    }
+    if (showSomiti) {
+      list.push({ id: "somiti", num: currentNum++, titleBn: "সমিতি সঞ্চয় ফলাফল শীট", titleEn: "Somiti Savings Results Sheet", count: filteredSomiti.length, active: true });
+    }
+    if (showParties) {
+      list.push({ id: "parties", num: currentNum++, titleBn: "পার্টি ও গ্রাহক ডিরেক্টরি শীট", titleEn: "Parties & Customer Directory Sheet", count: filteredParties.length, active: true });
+    }
+
+    return list;
+  }, [showSales, showPurchases, showExpenses, showCashbox, showSomiti, showParties, filteredSales.length, filteredPurchases.length, filteredExpenses.length, filteredCashbox.length, filteredSomiti.length, filteredParties.length, chartData.length]);
 
   const handlePrint = () => {
     playTapSound();
