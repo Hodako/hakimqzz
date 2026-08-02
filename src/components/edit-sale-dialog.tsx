@@ -121,10 +121,10 @@ export function EditSaleDialog({
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label={t("qty")}>
-              <Input inputMode="numeric" value={qty} onChange={e => setQty(e.target.value)} />
+              <Input type="number" inputMode="numeric" pattern="[0-9]*" value={qty} onChange={e => setQty(e.target.value)} />
             </Field>
             <Field label={t("sell_price")}>
-              <Input inputMode="decimal" value={sellPrice} onChange={e => setSellPrice(e.target.value)} />
+              <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={sellPrice} onChange={e => setSellPrice(e.target.value)} />
             </Field>
           </div>
 

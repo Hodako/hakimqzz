@@ -124,15 +124,15 @@ export function PurchaseDialog({ open, onOpenChange, presetPartyId }: { open: bo
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
                   <Label className="text-[10px] text-muted-foreground">{t("qty")}</Label>
-                  <Input className="h-8 text-xs" inputMode="numeric" placeholder={t("qty")} value={line.qty} onChange={e => updateLine(i, { qty: e.target.value })} />
+                  <Input type="number" className="h-8 text-xs" inputMode="numeric" pattern="[0-9]*" placeholder={t("qty")} value={line.qty} onChange={e => updateLine(i, { qty: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] text-muted-foreground">{t("buy_price")}</Label>
-                  <Input className="h-8 text-xs" inputMode="decimal" placeholder={t("buy_price")} value={line.unitCost} onChange={e => updateLine(i, { unitCost: e.target.value })} />
+                  <Input type="number" step="any" className="h-8 text-xs" inputMode="decimal" pattern="[0-9.]*" placeholder={t("buy_price")} value={line.unitCost} onChange={e => updateLine(i, { unitCost: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] text-muted-foreground">{t("sell_price")}</Label>
-                  <Input className="h-8 text-xs" inputMode="decimal" placeholder={t("sell_price")} value={line.sellPrice} onChange={e => updateLine(i, { sellPrice: e.target.value })} />
+                  <Input type="number" step="any" className="h-8 text-xs" inputMode="decimal" pattern="[0-9.]*" placeholder={t("sell_price")} value={line.sellPrice} onChange={e => updateLine(i, { sellPrice: e.target.value })} />
                 </div>
               </div>
             </div>

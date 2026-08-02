@@ -961,24 +961,46 @@ export function CustomThemeManager() {
       `;
     }
 
-    // Border Radius overrides
-    if (config.borderRadius) {
-      let radiusVal = "12px";
-      if (config.borderRadius === "none") radiusVal = "0px";
-      else if (config.borderRadius === "small") radiusVal = "6px";
-      else if (config.borderRadius === "medium") radiusVal = "12px";
-      else if (config.borderRadius === "large") radiusVal = "20px";
-      else if (config.borderRadius === "full") radiusVal = "9999px";
+    // Font Size overrides (Default: 14px, supporting 11px, 12px, 13px, 14px, 15px, 16px)
+    const activeFontSize = config.fontSize || "14px";
+    css += `
+      html, body {
+        font-size: ${activeFontSize} !important;
+      }
+    `;
 
-      css += `
-        :root, .dark {
-          --radius: ${radiusVal} !important;
-        }
-        .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"], .kpi-card {
-          border-radius: ${radiusVal} !important;
-        }
-      `;
-    }
+    // Border Radius / Edges overrides (Default: Sharp 0px)
+    let radiusVal = "0px";
+    if (config.borderRadius === "small") radiusVal = "4px";
+    else if (config.borderRadius === "medium") radiusVal = "8px";
+    else if (config.borderRadius === "large") radiusVal = "16px";
+    else if (config.borderRadius === "full") radiusVal = "9999px";
+    else if (config.borderRadius === "none" || !config.borderRadius) radiusVal = "0px";
+
+    css += `
+      :root, .dark {
+        --radius: ${radiusVal} !important;
+      }
+      .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"], .kpi-card, button, input, select, textarea {
+        border-radius: ${radiusVal} !important;
+      }
+    `;
+
+    // Superfast & Smooth GPU Hardware Acceleration
+    css += `
+      * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      body, main, div, section {
+        -webkit-overflow-scrolling: touch;
+      }
+      .card, .beveled-card, button, input, select {
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+    `;
 
     // Glow Effect overrides
     if (config.glowEnabled) {

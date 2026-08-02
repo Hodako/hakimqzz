@@ -582,6 +582,65 @@ export default function SettingsPage() {
               </select>
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "ফন্ট সাইজ (UI Base Font Size)" : "UI Base Font Size"}</Label>
+              <select
+                onChange={e => {
+                  const val = e.target.value;
+                  const saved = localStorage.getItem("hz_custom_theme");
+                  const current = saved ? JSON.parse(saved) : {};
+                  const updated = { ...current, fontSize: val };
+                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
+                  window.dispatchEvent(new Event("hz-theme-updated"));
+                  toast.success(lang === "bn" ? `ফন্ট সাইজ পরিবর্তন হয়েছে (${val})` : `Font size updated to ${val}`);
+                }}
+                defaultValue={(() => {
+                  if (typeof window === "undefined") return "14px";
+                  try {
+                    const saved = localStorage.getItem("hz_custom_theme");
+                    const cfg = saved ? JSON.parse(saved) : {};
+                    return cfg.fontSize || "14px";
+                  } catch (e) { return "14px"; }
+                })()}
+                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
+              >
+                <option value="11px">11px (Extra Small / Ultra Compact)</option>
+                <option value="12px">12px (Small Compact)</option>
+                <option value="13px">13px (Medium Small)</option>
+                <option value="14px">14px (Default Standard)</option>
+                <option value="15px">15px (Large)</option>
+                <option value="16px">16px (Extra Large)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "বর্ডার ও এজ স্টাইল (Border Edges Style)" : "Border Corner Edges Style"}</Label>
+              <select
+                onChange={e => {
+                  const val = e.target.value;
+                  const saved = localStorage.getItem("hz_custom_theme");
+                  const current = saved ? JSON.parse(saved) : {};
+                  const updated = { ...current, borderRadius: val };
+                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
+                  window.dispatchEvent(new Event("hz-theme-updated"));
+                  toast.success(lang === "bn" ? `এজ বর্ডার স্টাইল আপডেট হয়েছে!` : `Border edges style updated!`);
+                }}
+                defaultValue={(() => {
+                  if (typeof window === "undefined") return "none";
+                  try {
+                    const saved = localStorage.getItem("hz_custom_theme");
+                    const cfg = saved ? JSON.parse(saved) : {};
+                    return cfg.borderRadius || "none";
+                  } catch (e) { return "none"; }
+                })()}
+                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
+              >
+                <option value="none">📐 Sharp Edges (0px Sharp Default)</option>
+                <option value="small">🔹 Small Curve (4px)</option>
+                <option value="medium">🔷 Medium Curve (8px)</option>
+                <option value="large">⚪ Rounded (16px)</option>
+                <option value="full">🔘 Full Pill (9999px)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">{t("bg_style")}</Label>
               <select
                 value={bgStyle}
