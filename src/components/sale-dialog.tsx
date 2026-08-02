@@ -343,9 +343,9 @@ export function SaleDialog({
                   }}
                 />
                 <div className="grid grid-cols-3 gap-2">
-                  <Field label={t("qty")}><Input inputMode="numeric" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
-                  <Field label={t("sell_price")}><Input inputMode="decimal" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
-                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}><Input inputMode="decimal" placeholder="0" value={draft.discount} onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))} /></Field>
+                  <Field label={t("qty")}><Input type="number" inputMode="numeric" pattern="[0-9]*" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
+                  <Field label={t("sell_price")}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
+                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder="0" value={draft.discount} onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))} /></Field>
                 </div>
                 {draft.productId && draft.sellPrice && (
                   <div className="text-[11px] text-muted-foreground text-right font-medium">
@@ -375,7 +375,9 @@ export function SaleDialog({
                             <div>
                               <Label className="text-[9px] text-muted-foreground">{t("qty")}</Label>
                               <Input
+                                type="number"
                                 inputMode="numeric"
+                                pattern="[0-9]*"
                                 className="h-7 text-xs"
                                 value={line.qty}
                                 onChange={e => {
@@ -387,7 +389,10 @@ export function SaleDialog({
                             <div>
                               <Label className="text-[9px] text-muted-foreground">{t("sell_price")}</Label>
                               <Input
+                                type="number"
+                                step="any"
                                 inputMode="decimal"
+                                pattern="[0-9.]*"
                                 className="h-7 text-xs"
                                 value={line.sellPrice}
                                 onChange={e => {
@@ -399,7 +404,10 @@ export function SaleDialog({
                             <div>
                               <Label className="text-[9px] text-muted-foreground">{lang === "bn" ? "ছাড়/ডিসকাউন্ট" : "Discount"}</Label>
                               <Input
+                                type="number"
+                                step="any"
                                 inputMode="decimal"
+                                pattern="[0-9.]*"
                                 className="h-7 text-xs"
                                 value={line.discount}
                                 onChange={e => {
@@ -422,7 +430,10 @@ export function SaleDialog({
               {type === "credit" && (
                 <Field label={lang === "bn" ? "নগদ পাওয়া টাকা (ঐচ্ছিক)" : "Received Cash Amount (Optional)"}>
                   <Input
+                    type="number"
+                    step="any"
                     inputMode="decimal"
+                    pattern="[0-9.]*"
                     placeholder={`0 (Total Due: ৳${sellTotal})`}
                     value={paid}
                     onChange={e => setPaid(e.target.value)}

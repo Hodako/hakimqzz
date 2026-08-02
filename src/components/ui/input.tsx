@@ -11,7 +11,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
 
     const computedPattern =
       pattern ||
-      (type === "number" ? "[0-9]*" : undefined);
+      (type === "number" ? "[0-9.]*" : type === "tel" ? "[0-9]*" : undefined);
 
     return (
       <input
