@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v7";
+const CACHE_NAME = "dreamfashion-v8";
 
 // Only static assets that definitely exist — no page routes
 const PRECACHE_ASSETS = [
@@ -47,7 +47,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch: Network-First with safe fallback for static chunks ───────────────
+// ── Fetch: Guaranteed Response fallback to avoid "Failed to convert value to 'Response'" ──
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -65,26 +65,32 @@ self.addEventListener("fetch", (event) => {
   const isHashedAsset = url.pathname.startsWith("/_next/static/");
 
   if (isHashedAsset) {
-    // Try network first for static chunks to ensure fresh builds post-deploy
+    // Hashed static assets (JS/CSS)
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && response.type !== "opaque") {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, clone).catch(() => {});
-            });
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request)
+          .then((response) => {
+            if (response && response.status === 200 && response.type !== "opaque") {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, clone).catch(() => {});
+              });
+            }
             return response;
-          }
-          // If server returns 400/404/503 (stale chunk hash), try cached version or fallback
-          return caches.match(event.request).then((cached) => cached || response);
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
+          })
+          .catch(() => {
+            // Return fallback 404 Response instead of undefined to satisfy event.respondWith
+            return new Response("Asset not found", {
+              status: 404,
+              statusText: "Not Found",
+              headers: { "Content-Type": "text/plain" },
+            });
+          });
+      })
     );
   } else {
-    // Network-First for pages
+    // Page routes — Network-First
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -96,7 +102,15 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          return new Response("Offline", {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: { "Content-Type": "text/plain" },
+          });
+        })
     );
   }
 });
