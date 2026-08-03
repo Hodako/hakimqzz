@@ -469,6 +469,7 @@ export async function updateBusinessSettingsFn(input: {
     invoice_watermark_enabled?: boolean;
     invoice_terms?: string;
     invoice_color?: string;
+    invoice_font_size?: string;
     google_sheets_spreadsheet_id?: string;
     google_sheets_credentials_json?: string;
   }

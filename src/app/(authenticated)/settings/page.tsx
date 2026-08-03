@@ -374,6 +374,11 @@ export default function SettingsPage() {
           invoice_watermark_enabled: fd.get("invoice_watermark_enabled") === "true",
           invoice_terms: String(fd.get("invoice_terms") || ""),
           invoice_color: String(fd.get("invoice_color") || "black"),
+          invoice_font_size: (() => {
+            const raw = String(fd.get("invoice_font_size") || "15px").trim();
+            if (!raw) return "15px";
+            return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
+          })(),
         },
       });
       await refresh();

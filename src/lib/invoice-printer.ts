@@ -105,17 +105,25 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     bodyMaxWidth = data.pageWidth;
   }
 
+  const rawFontSize = data.invoiceFontSize || "15px";
+  const numFontSize = parseInt(rawFontSize.replace(/[^0-9]/g, ""), 10) || 15;
+  const baseSize = `${numFontSize}px`;
+  const headerSize = `${Math.round(numFontSize * 1.35)}px`;
+  const subSize = `${Math.round(numFontSize * 0.85)}px`;
+  const metaSize = `${Math.round(numFontSize * 0.9)}px`;
+  const grandTotalSize = `${Math.round(numFontSize * 1.25)}px`;
+
   const itemsRowsHtml = data.items
     .map(
       (item) => `
     <tr style="border-bottom: 1px dotted #cccccc;">
-      <td style="padding: 4px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: 11px; word-break: break-word; color: #000000;">
+      <td style="padding: 4px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseSize}; word-break: break-word; color: #000000;">
         ${item.product.name}
       </td>
-      <td style="padding: 4px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: 11px; font-weight: 600; color: #000000; width: 32px;">
+      <td style="padding: 4px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseSize}; font-weight: 600; color: #000000; width: 32px;">
         ${item.qty}
       </td>
-      <td style="padding: 4px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: 11px; color: #000000; width: 68px;">
+      <td style="padding: 4px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: ${baseSize}; color: #000000; width: 68px;">
         ৳${(item.qty * item.sellPrice).toLocaleString()}
       </td>
     </tr>`
@@ -133,32 +141,32 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   <style>
     @page { size: ${pageSizeRule}; margin: 0; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
-    html, body { background: #ffffff !important; color: #000000 !important; width: 100%; margin: 0 auto; padding: 4mm 2mm; font-size: 11px !important; line-height: 1.3; }
+    html, body { background: #ffffff !important; color: #000000 !important; width: 100%; margin: 0 auto; padding: 4mm 2mm; font-size: ${baseSize} !important; line-height: 1.35; }
     .receipt-wrap { width: 100%; max-width: ${bodyMaxWidth}; margin: 0 auto; background: #ffffff; }
     .dashed-line { border-top: 1px dashed #000000; margin: 6px 0; height: 0; }
     .solid-line { border-top: 1.5px solid #000000; margin: 6px 0; height: 0; }
     .double-line { border-top: 1.5px solid #000000; border-bottom: 1.5px solid #000000; padding: 4px 0; margin: 4px 0; }
     table { width: 100%; border-collapse: collapse; margin: 4px 0; }
-    th { text-transform: uppercase; font-size: 10px; font-weight: 800; border-bottom: 1px dashed #000000; padding-bottom: 4px; color: #000000; }
+    th { text-transform: uppercase; font-size: ${subSize}; font-weight: 800; border-bottom: 1px dashed #000000; padding-bottom: 4px; color: #000000; }
   </style>
 </head>
 <body>
   <div class="receipt-wrap">
     <!-- Header -->
     <div style="text-align: center; margin-bottom: 6px;">
-      <div style="font-size: 17px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; color: #000000;">
+      <div style="font-size: ${headerSize}; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; color: #000000;">
         ${data.businessName}
       </div>
-      ${data.tagline ? `<div style="font-size: 10px; font-weight: 500; margin-top: 1px; color: #000000;">${data.tagline}</div>` : ""}
-      ${data.shopAddress ? `<div style="font-size: 10px; margin-top: 1.5px; color: #000000;">${data.shopAddress}</div>` : ""}
-      ${data.shopPhoneNumbers ? `<div style="font-size: 10px; font-family: monospace; font-weight: 600; margin-top: 1.5px; color: #000000;">Phone: ${data.shopPhoneNumbers}</div>` : ""}
-      ${data.userEmail ? `<div style="font-size: 9.5px; margin-top: 1px; color: #000000;">${data.userEmail}</div>` : ""}
+      ${data.tagline ? `<div style="font-size: ${subSize}; font-weight: 500; margin-top: 1px; color: #000000;">${data.tagline}</div>` : ""}
+      ${data.shopAddress ? `<div style="font-size: ${subSize}; margin-top: 1.5px; color: #000000;">${data.shopAddress}</div>` : ""}
+      ${data.shopPhoneNumbers ? `<div style="font-size: ${subSize}; font-family: monospace; font-weight: 600; margin-top: 1.5px; color: #000000;">Phone: ${data.shopPhoneNumbers}</div>` : ""}
+      ${data.userEmail ? `<div style="font-size: ${subSize}; margin-top: 1px; color: #000000;">${data.userEmail}</div>` : ""}
     </div>
 
     <div class="dashed-line"></div>
 
     <!-- Metadata Section -->
-    <div style="font-size: 10.5px; line-height: 1.4; color: #000000;">
+    <div style="font-size: ${metaSize}; line-height: 1.4; color: #000000;">
       <div style="display: flex; justify-content: space-between;">
         <span>Invoice No: <strong style="font-family: monospace;">${data.invoiceNo}</strong></span>
         <span style="font-family: monospace;">${dateStr}</span>
@@ -196,7 +204,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     <div class="dashed-line"></div>
 
     <!-- Financial Totals Section -->
-    <div style="font-size: 11px;">
+    <div style="font-size: ${baseSize};">
       <div style="display: flex; justify-content: space-between; margin-bottom: 2.5px;">
         <span>Subtotal</span>
         <span style="font-family: monospace; font-weight: 600;">৳${data.subtotal.toLocaleString()}</span>
@@ -212,8 +220,8 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       }
 
       <div class="double-line" style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">Grand Total</span>
-        <span style="font-size: 15px; font-weight: 900; font-family: monospace;">৳${data.total.toLocaleString()}</span>
+        <span style="font-size: ${baseSize}; font-weight: 900; text-transform: uppercase;">Grand Total</span>
+        <span style="font-size: ${grandTotalSize}; font-weight: 900; font-family: monospace;">৳${data.total.toLocaleString()}</span>
       </div>
 
       <div style="display: flex; justify-content: space-between; margin-bottom: 2.5px; margin-top: 4px;">
