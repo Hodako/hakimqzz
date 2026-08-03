@@ -63,6 +63,7 @@ export default function MorePage() {
 
   const handleRefresh = async () => {
     try {
+      toast.info(lang === "bn" ? "পুরানো ক্যাশ মুছে তাজা ভার্সন লোড করা হচ্ছে..." : "Removing old caches and loading fresh version...");
       qc.clear();
       if (typeof window !== "undefined") {
         if ("caches" in window) {
@@ -71,7 +72,12 @@ export default function MorePage() {
             await window.caches.delete(key);
           }
         }
-        window.location.reload();
+        try {
+          sessionStorage.clear();
+        } catch (_) {}
+        setTimeout(() => {
+          window.location.href = window.location.pathname + "?fresh=" + Date.now();
+        }, 300);
       }
     } catch (e) {
       window.location.reload();

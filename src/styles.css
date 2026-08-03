@@ -536,22 +536,32 @@
   /* Fast touch interactions without 300ms delay */
   button, a, input, select, textarea, [role="button"] {
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* CRITICAL iOS SAFEGUARD: Prevent iOS Safari auto-zoom on input focus when font-size < 16px */
+  input, select, textarea {
+    font-size: 16px !important;
   }
 
   /* Smooth touch scrolling */
-  .site-bg, body {
+  html, body, .site-bg {
     -webkit-overflow-scrolling: touch;
+    overflow-x: hidden !important;
   }
 
-  /* Mobile bottom tab bar elevated z-index and safe-area padding above gesture bars */
+  /* Mobile bottom tab bar permanent fixed positioning and safe-area inset */
   .mobile-tab-bar {
     z-index: 99999 !important;
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15) !important;
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px) !important;
+    background-color: var(--card) !important;
   }
 
   .mobile-bottom-spacer {
@@ -559,16 +569,24 @@
     min-height: 4.5rem !important;
   }
 
+  /* Disable heavy background SVG rotation animations on mobile GPUs for lightweight performance */
+  .site-bg::after, .gear-ghost {
+    animation: none !important;
+    display: none !important;
+  }
+
   /* Optimize backdrop-blur filters for low-end mobile GPUs */
-  .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-3xl {
-    backdrop-filter: blur(6px) !important;
-    -webkit-backdrop-filter: blur(6px) !important;
+  .backdrop-blur-lg, .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-3xl {
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
   }
 
   /* GPU Hardware acceleration for lightweight mobile scrolling */
-  body, main, .glass-card {
+  body, main, .glass-card, header {
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 }
 

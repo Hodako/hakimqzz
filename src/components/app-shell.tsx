@@ -269,7 +269,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen relative">
-        <header className="absolute top-0 inset-x-0 z-40 bg-card/95 backdrop-blur-lg border-b border-border/50 shrink-0 shadow-xs" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 0px)" }}>
+        <header className="sticky top-0 inset-x-0 z-40 bg-card/98 backdrop-blur-md border-b border-border/50 shrink-0 shadow-xs" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 0px)" }}>
           {isUploading && (
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-zinc-200 dark:bg-zinc-800 z-50">
               <div
@@ -345,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pt-14 pb-16 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}>
+        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pt-3 pb-16 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}>
           <div className={isMobile ? "w-full max-w-lg mx-auto" : "w-full max-w-screen-2xl mx-auto"}>
             <PermissionGuard>
               {children}
@@ -356,7 +356,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {bottomNav.length > 0 && (
-        <nav className="md:hidden absolute bottom-0 inset-x-0 z-50 bg-card/98 backdrop-blur-md border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar select-none" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 6px)" }}>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-card/98 backdrop-blur-md border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar select-none" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 6px)" }}>
           <div
             className="grid h-14 max-w-lg mx-auto w-full"
             style={{ gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))` }}
