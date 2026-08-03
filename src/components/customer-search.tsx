@@ -61,6 +61,7 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
         <div className="relative">
           <Input
             type="text"
+            inputMode="search"
             className="w-full pr-8 h-9 text-sm bg-background border-border/80"
             placeholder={placeholder ?? (lang === "bn" ? "গ্রাহক খুঁজুন (নাম বা ফোন)..." : "Search Customer (Name/Phone)...")}
             value={searchQuery}
@@ -71,8 +72,7 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
             }}
             onFocus={() => setIsOpen(true)}
             onBlur={() => {
-              // Delay closing the dropdown so that click event on options has time to fire
-              setTimeout(() => setIsOpen(false), 200);
+              setTimeout(() => setIsOpen(false), 250);
             }}
           />
           <ChevronsUpDown className="absolute right-2.5 top-2.5 size-4 opacity-50 pointer-events-none" />
@@ -88,8 +88,12 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
                   <button
                     key={c.id}
                     type="button"
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between gap-2 active:bg-accent/60"
-                    onMouseDown={() => handleSelect(c.id)}
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between gap-2 active:bg-accent/60 cursor-pointer min-h-[44px]"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      handleSelect(c.id);
+                    }}
+                    onClick={() => handleSelect(c.id)}
                   >
                     <span className="font-medium truncate flex-1 text-zinc-900 dark:text-zinc-100">{c.name}</span>
                     {c.phone && (

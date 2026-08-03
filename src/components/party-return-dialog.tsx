@@ -179,7 +179,9 @@ export function PartyReturnDialog({
                   <Label className="text-xs text-muted-foreground">{t("qty")}</Label>
                   <Input
                     type="number"
+                    step="1"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="1"
                     value={qty}
                     onChange={e => setQty(e.target.value)}
@@ -191,7 +193,9 @@ export function PartyReturnDialog({
                   </Label>
                   <Input
                     type="number"
+                    step="any"
                     inputMode="decimal"
+                    pattern="[0-9.]*"
                     placeholder="0"
                     value={refundAmount}
                     onChange={e => setRefundAmount(e.target.value)}
@@ -266,6 +270,7 @@ export function PartyReturnDialog({
               <Input
                 type="tel"
                 inputMode="tel"
+                pattern="[0-9+]*"
                 value={newCustPhone}
                 onChange={e => setNewCustPhone(e.target.value)}
                 placeholder="e.g. 017XXXXXXXX"

@@ -330,7 +330,7 @@ function AddCustomerDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{lang === "bn" ? "ফোন নম্বর" : "Phone number"}</Label>
-            <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} placeholder="E.g. 017xxxxxxxx" className="h-9 text-xs" />
+            <Input type="tel" inputMode="tel" pattern="[0-9+]*" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} placeholder="E.g. 017xxxxxxxx" className="h-9 text-xs" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{lang === "bn" ? "ঠিকানা" : "Address"}</Label>

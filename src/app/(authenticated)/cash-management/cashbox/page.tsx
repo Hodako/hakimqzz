@@ -521,7 +521,7 @@ function CashboxDialog({
           )}
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{t("amount")}</Label>
-            <Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} />
+            <Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{t("note")}</Label>

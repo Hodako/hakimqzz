@@ -157,7 +157,7 @@ export function EditSaleDialog({
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label={t("paid_amount")}>
-                  <Input inputMode="decimal" value={paid} onChange={e => setPaid(e.target.value)} />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={paid} onChange={e => setPaid(e.target.value)} />
                 </Field>
                 <Field label={t("due_amount")}>
                   <div className="h-9 flex items-center pl-3 bg-muted/25 border rounded-md text-sm font-semibold">

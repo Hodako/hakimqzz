@@ -452,7 +452,7 @@ function EditPartyDialog({ party, open, onOpenChange }: { party: Party | undefin
         <DialogHeader><DialogTitle>{t("edit_party")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("party_name")}</Label><Input required value={name} onChange={e => setName(e.target.value)} /></div>
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("phone")}</Label><Input inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("phone")}</Label><Input type="tel" inputMode="tel" pattern="[0-9+]*" value={phone} onChange={e => setPhone(e.target.value)} /></div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Address (ঠিকানা)</Label>
             <Input placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} />
@@ -512,7 +512,7 @@ function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: strin
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{kind === "receivable" ? t("add_money_owed") : t("add_payable")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
@@ -566,7 +566,7 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{t("collect_payment")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
@@ -620,7 +620,7 @@ function PayPartyDialog({ partyId, open, onOpenChange }: { partyId: string; open
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{t("pay_party")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>

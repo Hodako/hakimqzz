@@ -409,7 +409,7 @@ function EditCustomerDialog({ customer, open, onOpenChange }: { customer: Custom
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Phone (ফোন)</Label>
-            <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} className="h-9 text-xs" />
+            <Input type="tel" inputMode="tel" pattern="[0-9+]*" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} className="h-9 text-xs" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Address (ঠিকানা)</Label>
@@ -472,7 +472,7 @@ function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: strin
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{lang === "bn" ? "বাকী যোগ করুন" : "Add money owned"}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
@@ -526,7 +526,7 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{t("collect_payment")}</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>

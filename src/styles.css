@@ -187,8 +187,8 @@
     font-weight: 400;
     font-style: normal;
     background-color: var(--background);
-    user-select: none;
-    -webkit-user-select: none;
+    user-select: text;
+    -webkit-user-select: text;
     touch-action: manipulation;
   }
 
@@ -320,7 +320,7 @@
 
 :root {
   --mobile-tab-bar-height: 3.5rem;
-  --mobile-scroll-extra: 5.5rem;
+  --mobile-scroll-extra: 1rem;
   --mobile-footer-clearance: calc(
     var(--mobile-tab-bar-height) + var(--mobile-scroll-extra) + env(safe-area-inset-bottom, 0px)
   );
@@ -331,7 +331,7 @@
 }
 
 .mobile-bottom-spacer {
-  height: calc(var(--mobile-scroll-extra) * 0.5 + env(safe-area-inset-bottom, 0px));
+  height: calc(var(--mobile-scroll-extra) + env(safe-area-inset-bottom, 0px));
   flex-shrink: 0;
   pointer-events: none;
 }

@@ -146,7 +146,7 @@ export function ProductDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9 w-9 p-0 shrink-0 flex items-center justify-center"
+                  className="h-9 min-w-[44px] px-2.5 shrink-0 flex items-center justify-center cursor-pointer"
                   onClick={() => setScannerOpen(true)}
                   title={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
                   aria-label={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
@@ -157,8 +157,8 @@ export function ProductDialog({
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label={t("buy_price")}><Input inputMode="decimal" placeholder={t("buy_price")} value={buy} onChange={e => setBuy(e.target.value)} /></Field>
-              <Field label={t("sell_price") || "Selling Price"}><Input inputMode="decimal" placeholder={t("sell_price") || "Selling Price"} value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></Field>
+              <Field label={t("buy_price")}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder={t("buy_price")} value={buy} onChange={e => setBuy(e.target.value)} /></Field>
+              <Field label={t("sell_price") || "Selling Price"}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder={t("sell_price") || "Selling Price"} value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t("category")}>
@@ -186,10 +186,10 @@ export function ProductDialog({
                   )}
                 </div>
               </Field>
-              <Field label={t("min_stock")}><Input inputMode="numeric" placeholder="5" value={minStock} onChange={e => setMinStock(e.target.value)} /></Field>
+              <Field label={t("min_stock")}><Input type="number" step="1" inputMode="numeric" pattern="[0-9]*" placeholder="5" value={minStock} onChange={e => setMinStock(e.target.value)} /></Field>
             </div>
             <div className="grid grid-cols-1">
-              <Field label={t("stock")}><Input inputMode="numeric" placeholder={t("stock")} value={stock} onChange={e => setStock(e.target.value)} /></Field>
+              <Field label={t("stock")}><Input type="number" step="1" inputMode="numeric" pattern="[0-9]*" placeholder={t("stock")} value={stock} onChange={e => setStock(e.target.value)} /></Field>
             </div>
 
             <div className="space-y-1.5 border-t border-border pt-2.5">

@@ -503,6 +503,8 @@ export function SaleDialog({
               <Label className="text-[10px]">{t("phone")}</Label>
               <Input
                 type="tel"
+                inputMode="tel"
+                pattern="[0-9+]*"
                 className="h-8 text-xs"
                 placeholder={t("phone")}
                 value={newCustPhone}

@@ -2129,15 +2129,15 @@ export default function MorePage() {
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "পরিমাণ" : "Quantity *"}</Label>
-                  <Input type="number" value={saleQty} onChange={e => setSaleQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
+                  <Input type="number" step="1" inputMode="numeric" pattern="[0-9]*" value={saleQty} onChange={e => setSaleQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "কেনা দাম (প্রতি পিস)" : "Buy Price (Unit)"}</Label>
-                  <Input type="number" value={saleBuyPrice} onChange={e => setSaleBuyPrice(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={saleBuyPrice} onChange={e => setSaleBuyPrice(e.target.value)} placeholder="0" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "বিক্রি দাম (প্রতি পিস)" : "Sell Price (Unit) *"}</Label>
-                  <Input type="number" value={saleSellPrice} onChange={e => setSaleSellPrice(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={saleSellPrice} onChange={e => setSaleSellPrice(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -2153,11 +2153,11 @@ export default function MorePage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "আদায় (Paid)" : "Paid Amount"}</Label>
-                  <Input type="number" value={salePaidAmt} onChange={e => setSalePaidAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={salePaidAmt} onChange={e => setSalePaidAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "বাকী (Due)" : "Due Amount"}</Label>
-                  <Input type="number" value={saleDueAmt} onChange={e => setSaleDueAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={saleDueAmt} onChange={e => setSaleDueAmt(e.target.value)} placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
             </div>
@@ -2172,7 +2172,7 @@ export default function MorePage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "টাকার পরিমাণ" : "Amount *"}</Label>
-                  <Input type="number" value={expAmt} onChange={e => setExpAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={expAmt} onChange={e => setExpAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
               <div className="space-y-1">
@@ -2209,11 +2209,11 @@ export default function MorePage() {
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "পরিমাণ" : "Quantity *"}</Label>
-                  <Input type="number" value={purQty} onChange={e => setPurQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
+                  <Input type="number" step="1" inputMode="numeric" pattern="[0-9]*" value={purQty} onChange={e => setPurQty(e.target.value)} required placeholder="1" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "কেনা দাম (ইউনিট)" : "Unit Cost *"}</Label>
-                  <Input type="number" value={purUnitCost} onChange={e => setPurUnitCost(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={purUnitCost} onChange={e => setPurUnitCost(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
               </div>
             </div>
@@ -2224,7 +2224,7 @@ export default function MorePage() {
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "উত্তোলন পরিমাণ" : "Withdrawal Amount *"}</Label>
-                  <Input type="number" value={withAmt} onChange={e => setWithAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
+                  <Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={withAmt} onChange={e => setWithAmt(e.target.value)} required placeholder="0" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">{lang === "bn" ? "নোট/বিবরণ" : "Withdrawal Note"}</Label>
