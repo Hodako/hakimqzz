@@ -344,7 +344,7 @@ export default function ReportsGeneratorPage() {
       {/* ── SCREEN VIEW (hidden when printing) ────────────────────────────────── */}
       <div className="print:hidden space-y-6">
         {/* Screen Controls Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 no-print border-b pb-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print border-b pb-3.5">
           <div className="flex items-center gap-2">
             <Link href="/more">
               <Button size="icon" variant="ghost" className="size-8 rounded-lg">
@@ -362,13 +362,13 @@ export default function ReportsGeneratorPage() {
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2">
-            <Button onClick={handlePrint} size="sm" className="bg-primary hover:bg-primary/90 font-bold shadow-md">
-              <Printer className="size-4 mr-1.5" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button onClick={handlePrint} size="sm" className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 font-bold shadow-md h-9 text-xs">
+              <Printer className="size-4 mr-1.5 shrink-0" />
               {lang === "bn" ? "প্রিন্ট রিপোর্ট" : "Print Report"}
             </Button>
-            <Button onClick={handleDownloadPDF} size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/5 font-semibold">
-              <Download className="size-4 mr-1.5" />
+            <Button onClick={handleDownloadPDF} size="sm" variant="outline" className="flex-1 sm:flex-initial border-primary/40 text-primary hover:bg-primary/5 font-semibold h-9 text-xs">
+              <Download className="size-4 mr-1.5 shrink-0" />
               {lang === "bn" ? "ডাউনলোড পিডিএফ" : "Download PDF"}
             </Button>
           </div>
@@ -908,29 +908,6 @@ export default function ReportsGeneratorPage() {
             </div>
           )}
         </div>
-
-        {/* ── Mobile sticky action bar ── */}
-        <div className="sm:hidden fixed bottom-16 left-0 right-0 z-40 print:hidden">
-          <div className="mx-4 flex gap-2 bg-background/95 backdrop-blur-md border border-border rounded-2xl shadow-lg p-2.5">
-            <Button
-              onClick={handlePrint}
-              size="sm"
-              className="flex-1 bg-primary hover:bg-primary/90 text-xs h-10 font-bold"
-            >
-              <Printer className="size-4 mr-1.5" />
-              {lang === "bn" ? "প্রিন্ট করুন" : "Print Report"}
-            </Button>
-            <Button
-              onClick={handleDownloadPDF}
-              size="sm"
-              variant="outline"
-              className="flex-1 border-primary/40 text-primary hover:bg-primary/5 text-xs h-10 font-semibold"
-            >
-              <Download className="size-4 mr-1.5" />
-              {lang === "bn" ? "ডাউনলোড" : "Download PDF"}
-            </Button>
-          </div>
-        </div>
       </div>
 
       {/* ── DEDICATED PRINT VIEW (visible only when printing or exporting PDF) ── */}
@@ -1334,6 +1311,24 @@ export default function ReportsGeneratorPage() {
               </table>
             </div>
           )}
+          {/* Formal Executive Signature Footer */}
+          <div className="pt-8 border-t border-zinc-300 grid grid-cols-3 gap-6 text-center text-[10px] text-zinc-700 print-avoid-break mt-10">
+            <div>
+              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
+              <p className="font-bold text-zinc-900">{lang === "bn" ? "প্রস্তুতকারক" : "Prepared By"}</p>
+              <p className="text-[9px] text-zinc-500">{lang === "bn" ? "হিসাব বিভাগ" : "Accounts Executive"}</p>
+            </div>
+            <div>
+              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
+              <p className="font-bold text-zinc-900">{lang === "bn" ? "যাচাইকারী" : "Verified By"}</p>
+              <p className="text-[9px] text-zinc-500">{lang === "bn" ? "অভ্যন্তরীণ নিরীক্ষক" : "Internal Auditor"}</p>
+            </div>
+            <div>
+              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
+              <p className="font-bold text-zinc-900">{lang === "bn" ? "অনুমোদনকারী স্বাক্ষর" : "Authorized Signature"}</p>
+              <p className="text-[9px] text-zinc-500">{bizName}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
