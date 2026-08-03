@@ -282,11 +282,12 @@ export default function ReportsGeneratorPage() {
       element.style.display = "block";
 
       const opt = {
-        margin:       0.3,
+        margin:       [0.2, 0.2, 0.2, 0.2],
         filename:     `business_report_${from}_to_${to}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+        html2canvas:  { scale: 2.5, useCORS: true, logging: false, windowWidth: 1200 },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
       // @ts-ignore
@@ -911,7 +912,7 @@ export default function ReportsGeneratorPage() {
       </div>
 
       {/* ── DEDICATED PRINT VIEW (visible only when printing or exporting PDF) ── */}
-      <div id="print-report-content" className="hidden print:block print-color-exact w-full max-w-4xl mx-auto bg-white text-zinc-900 p-8 font-sans space-y-6 text-xs">
+      <div id="print-report-content" className="hidden print:block print-color-exact w-full max-w-none mx-auto bg-white text-zinc-900 p-6 font-sans space-y-6 text-sm">
         
         {/* REPORT COVER & HEADER */}
         <div className="space-y-6">
