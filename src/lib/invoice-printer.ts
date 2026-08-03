@@ -71,11 +71,11 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     .map(
       (item, i) => `
     <tr style="border-bottom: 1px solid #e4e4e7;">
-      <td style="padding: 10px 8px; font-family: monospace; color: #71717a; font-size: ${baseFontSize}px;">${i + 1}</td>
-      <td style="padding: 10px 8px; font-weight: 600; color: #18181b; font-size: ${baseFontSize}px;">${item.product.name}</td>
-      <td style="padding: 10px 8px; text-align: right; font-family: monospace; font-size: ${baseFontSize}px;">৳${item.sellPrice.toLocaleString()}</td>
-      <td style="padding: 10px 8px; text-align: center; font-family: monospace; font-weight: 600; font-size: ${baseFontSize}px;">${item.qty}</td>
-      <td style="padding: 10px 8px; text-align: right; font-family: monospace; font-weight: 700; color: #18181b; font-size: ${baseFontSize}px;">৳${(item.qty * item.sellPrice).toLocaleString()}</td>
+      <td style="padding: 6px 6px; font-family: monospace; color: #71717a; font-size: ${baseFontSize}px;">${i + 1}</td>
+      <td style="padding: 6px 6px; font-weight: 600; color: #18181b; font-size: ${baseFontSize}px;">${item.product.name}</td>
+      <td style="padding: 6px 6px; text-align: right; font-family: monospace; font-size: ${baseFontSize}px;">৳${item.sellPrice.toLocaleString()}</td>
+      <td style="padding: 6px 6px; text-align: center; font-family: monospace; font-weight: 600; font-size: ${baseFontSize}px;">${item.qty}</td>
+      <td style="padding: 6px 6px; text-align: right; font-family: monospace; font-weight: 700; color: #18181b; font-size: ${baseFontSize}px;">৳${(item.qty * item.sellPrice).toLocaleString()}</td>
     </tr>`
     )
     .join("");
@@ -89,28 +89,28 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   <style>
     @page { size: ${pageSizeRule}; margin: 0; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
-    html, body { background: #ffffff !important; color: #000000 !important; padding: ${bodyPadding}; width: 100%; margin: 0; font-size: ${baseFontSize}px !important; }
+    html, body { background: #ffffff !important; color: #000000 !important; padding: ${bodyPadding}; width: 100%; margin: 0; font-size: ${baseFontSize}px !important; line-height: 1.35; }
     .card { width: 100%; max-width: 100%; margin: 0 auto; background: #ffffff; padding: 0; border: none !important; box-shadow: none !important; border-radius: 0; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.main}; padding-bottom: 16px; margin-bottom: 20px; }
-    .biz-name { font-size: ${Math.round(baseFontSize * 1.7)}px; font-weight: 800; text-transform: uppercase; color: ${colors.main}; letter-spacing: 0.5px; }
-    .tagline { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #71717a; margin-top: 2px; }
-    .inv-title { font-size: ${Math.round(baseFontSize * 1.5)}px; font-weight: 800; text-transform: uppercase; text-align: right; color: #18181b; letter-spacing: 1px; }
-    .inv-meta { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #52525b; margin-top: 4px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-    .client-box { background: ${colors.bg}; padding: 14px 18px; border-radius: 8px; border: 1px solid ${colors.headerBg}; }
-    .client-title { font-size: ${Math.round(baseFontSize * 0.8)}px; font-weight: 700; text-transform: uppercase; color: ${colors.main}; margin-bottom: 4px; tracking: 0.5px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.main}; padding-bottom: 10px; margin-bottom: 12px; }
+    .biz-name { font-size: ${Math.round(baseFontSize * 1.6)}px; font-weight: 800; text-transform: uppercase; color: ${colors.main}; letter-spacing: 0.5px; }
+    .tagline { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #71717a; margin-top: 1px; }
+    .inv-title { font-size: ${Math.round(baseFontSize * 1.4)}px; font-weight: 800; text-transform: uppercase; text-align: right; color: #18181b; letter-spacing: 1px; }
+    .inv-meta { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #52525b; margin-top: 2px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    .client-box { background: ${colors.bg}; padding: 10px 14px; border-radius: 6px; border: 1px solid ${colors.headerBg}; }
+    .client-title { font-size: ${Math.round(baseFontSize * 0.8)}px; font-weight: 700; text-transform: uppercase; color: ${colors.main}; margin-bottom: 2px; tracking: 0.5px; }
     .client-name { font-size: ${Math.round(baseFontSize * 1.1)}px; font-weight: 700; color: #000000; }
-    .client-phone { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #52525b; font-family: monospace; margin-top: 2px; }
-    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: ${Math.round(baseFontSize * 0.8)}px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: ${baseFontSize}px; }
-    th { background: ${colors.headerBg}; color: ${colors.main}; padding: 10px 8px; text-align: left; font-weight: 700; border-bottom: 2px solid ${colors.main}; text-transform: uppercase; font-size: ${Math.round(baseFontSize * 0.85)}px; }
-    .summary-wrap { display: flex; justify-content: flex-end; margin-bottom: 32px; }
-    .summary-box { width: 300px; font-size: ${baseFontSize}px; border-top: 2px solid ${colors.main}; padding-top: 12px; }
-    .row { display: flex; justify-content: space-between; padding: 5px 0; color: #52525b; }
-    .row-total { display: flex; justify-content: space-between; padding: 8px 0; font-size: ${Math.round(baseFontSize * 1.25)}px; font-weight: 800; color: ${colors.main}; border-top: 1.5px solid ${colors.main}; border-bottom: 1.5px solid ${colors.main}; margin-top: 6px; margin-bottom: 6px; }
-    .row-paid { display: flex; justify-content: space-between; padding: 5px 0; color: #047857; font-weight: 600; }
-    .row-due { display: flex; justify-content: space-between; padding: 5px 0; color: #e11d48; font-weight: 700; border-top: 1px dashed #f43f5e; margin-top: 4px; }
-    .footer { border-top: 1px solid #e4e4e7; padding-top: 16px; text-align: center; font-size: ${Math.round(baseFontSize * 0.85)}px; color: #71717a; }
+    .client-phone { font-size: ${Math.round(baseFontSize * 0.85)}px; color: #52525b; font-family: monospace; margin-top: 1px; }
+    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: ${Math.round(baseFontSize * 0.8)}px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: ${baseFontSize}px; }
+    th { background: ${colors.headerBg}; color: ${colors.main}; padding: 6px 6px; text-align: left; font-weight: 700; border-bottom: 2px solid ${colors.main}; text-transform: uppercase; font-size: ${Math.round(baseFontSize * 0.85)}px; }
+    .summary-wrap { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+    .summary-box { width: ${baseFontSize >= 18 ? "340px" : "280px"}; font-size: ${baseFontSize}px; border-top: 2px solid ${colors.main}; padding-top: 8px; }
+    .row { display: flex; justify-content: space-between; padding: 3px 0; color: #52525b; }
+    .row-total { display: flex; justify-content: space-between; padding: 6px 0; font-size: ${Math.round(baseFontSize * 1.2)}px; font-weight: 800; color: ${colors.main}; border-top: 1.5px solid ${colors.main}; border-bottom: 1.5px solid ${colors.main}; margin-top: 4px; margin-bottom: 4px; }
+    .row-paid { display: flex; justify-content: space-between; padding: 3px 0; color: #047857; font-weight: 600; }
+    .row-due { display: flex; justify-content: space-between; padding: 3px 0; color: #e11d48; font-weight: 700; border-top: 1px dashed #f43f5e; margin-top: 2px; }
+    .footer { border-top: 1px solid #e4e4e7; padding-top: 10px; text-align: center; font-size: ${Math.round(baseFontSize * 0.85)}px; color: #71717a; }
   </style>
 </head>
 <body>
