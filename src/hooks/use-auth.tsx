@@ -19,6 +19,7 @@ export type AuthUser = {
   invoice_page_size?: string;
   invoice_page_width?: string;
   invoice_page_height?: string;
+  invoice_terms?: string;
   logo_url: string;
   avatar_url?: string;
   permissions?: PermissionSet;

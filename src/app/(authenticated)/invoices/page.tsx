@@ -244,12 +244,10 @@ function InvoiceDocumentView({
 
       {/* Invoice Footer */}
       <div className="pt-6 border-t border-zinc-200 text-center text-[10px] text-zinc-500 space-y-1 z-10 mt-auto">
-        {biz?.invoice_terms ? (
+        {biz?.invoice_terms && (
           <p className="font-medium text-zinc-700 whitespace-pre-line leading-relaxed">
             {biz.invoice_terms}
           </p>
-        ) : (
-          <p className="font-medium text-zinc-700">Thank you for your business!</p>
         )}
         <p className="text-[9px] text-zinc-400">
           Generated via {businessName} Invoice Manager.

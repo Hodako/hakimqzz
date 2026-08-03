@@ -163,7 +163,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       </div>
     </div>
     <div class="footer">
-      <p style="font-weight: 600; color: #374151;">${data.terms || "Thank you for your business!"}</p>
+      ${data.terms ? `<p style="font-weight: 600; color: #374151; white-space: pre-line;">${data.terms}</p>` : ""}
       <p style="font-size: 10px; margin-top: 4px; color: #a1a1aa;">Generated via ${data.businessName} Invoice Manager</p>
     </div>
   </div>

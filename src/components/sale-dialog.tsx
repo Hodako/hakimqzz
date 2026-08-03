@@ -274,6 +274,7 @@ export function SaleDialog({
           total: sellTotal,
           paidAmount: type === "credit" ? paidNum : sellTotal,
           due: type === "credit" ? due : 0,
+          terms: user.invoice_terms || "",
         });
       }
 
