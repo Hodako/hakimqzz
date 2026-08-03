@@ -32,7 +32,7 @@ import {
 import Link from "next/link";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { createSaleFn } from "@/lib/rpc";
-import { printPwaInvoice } from "@/lib/invoice-printer";
+import { printPwaInvoice, generateBarcodeSvg } from "@/lib/invoice-printer";
 
 type InvoiceItem = {
   product: Product;
@@ -41,7 +41,7 @@ type InvoiceItem = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Unified Pixel-Perfect Invoice Document View (Used on PC screen & Print PDF)
+// Unified Pixel-Perfect Thermal POS Receipt Document View
 // ─────────────────────────────────────────────────────────────────────────────
 interface InvoiceDocumentViewProps {
   businessName: string;
@@ -86,171 +86,159 @@ function InvoiceDocumentView({
   t,
   isPrintOnly = false,
 }: InvoiceDocumentViewProps) {
+  const barcodeSvg = generateBarcodeSvg(invoiceNo || "INV-001", 32);
+
   return (
     <div
-      className={`invoice-print-container bg-white text-zinc-900 font-sans text-xs space-y-5 relative overflow-hidden min-h-[580px] flex flex-col justify-between ${
-        isPrintOnly ? "p-0 border-none shadow-none rounded-none" : "p-6 sm:p-8 rounded-xl border border-zinc-200 shadow-md"
+      className={`invoice-print-container bg-white text-black font-sans text-xs relative overflow-hidden flex flex-col justify-between transition-all ${
+        isPrintOnly
+          ? "p-0 border-none shadow-none rounded-none w-full"
+          : "p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-lg w-full max-w-[360px] sm:max-w-[380px] mx-auto"
       }`}
     >
-      {/* Optional Watermark */}
-      {biz?.invoice_watermark_enabled && biz?.invoice_watermark && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0 opacity-[0.06]">
-          <span className="text-[100px] font-black uppercase tracking-widest -rotate-45 text-zinc-950 whitespace-nowrap">
-            {biz.invoice_watermark}
-          </span>
-        </div>
-      )}
-
-      <div className="space-y-5 z-10">
-        {/* Invoice Header & Branding */}
-        <div className={`flex justify-between items-start border-b-2 pb-4 ${colorClasses.border}`}>
-          <div className="space-y-1">
-            <h1 className={`text-xl font-bold uppercase tracking-wide ${colorClasses.accentText}`}>
-              {businessName}
-            </h1>
-            <p className="text-xs text-zinc-500">{tagline}</p>
-            {biz?.address && (
-              <p className="text-xs text-zinc-700 font-medium max-w-xs leading-tight">
-                📍 {biz.address}
-              </p>
-            )}
-            {biz?.phone_numbers && (
-              <p className="text-xs text-zinc-700 font-mono font-medium">
-                📞 {biz.phone_numbers}
-              </p>
-            )}
-            <p className="text-xs text-zinc-500">✉️ {biz?.emails || userEmail}</p>
-          </div>
-          <div className="text-right space-y-1">
-            <h2 className="text-lg font-bold uppercase text-zinc-800 tracking-wider">
-              {t("invoices")}
-            </h2>
-            <div className="text-xs text-zinc-600 font-mono">
-              <strong>{t("invoice_no")}:</strong> {invoiceNo}
-            </div>
-            <div className="text-xs text-zinc-600">
-              <strong>{t("date")}:</strong> {invoiceDate}
-            </div>
-            {!isPrintOnly && (
-              <div className="flex justify-end pt-1">
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                    paymentStatus === "PAID"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : paymentStatus === "DUE"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                  }`}
-                >
-                  {paymentStatus}
-                </span>
-              </div>
-            )}
-          </div>
+      <div className="space-y-3">
+        {/* Header - Centered */}
+        <div className="text-center space-y-0.5">
+          <h1 className="text-lg font-black uppercase tracking-wide text-black">
+            {businessName}
+          </h1>
+          {tagline && <p className="text-[11px] font-medium text-black">{tagline}</p>}
+          {biz?.address && (
+            <p className="text-[11px] text-black leading-tight">
+              {biz.address}
+            </p>
+          )}
+          {biz?.phone_numbers && (
+            <p className="text-[11px] font-mono font-semibold text-black">
+              Phone: {biz.phone_numbers}
+            </p>
+          )}
+          {(biz?.emails || userEmail) && (
+            <p className="text-[10px] text-zinc-700">{biz?.emails || userEmail}</p>
+          )}
         </div>
 
-        {/* Customer Details */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className={`space-y-1 p-3 rounded-lg ${colorClasses.bg}`}>
-            <h3 className={`text-[11px] font-bold uppercase tracking-wider ${colorClasses.text}`}>
-              {t("billed_to")}:
-            </h3>
-            <div className="font-semibold text-zinc-900 text-sm">{customerName}</div>
-            <div className="text-zinc-600 font-mono text-xs">{customerPhone}</div>
+        {/* Dashed Separator */}
+        <div className="border-t border-dashed border-black my-2" />
+
+        {/* Invoice Meta Section */}
+        <div className="text-[11px] leading-snug space-y-0.5 text-black">
+          <div className="flex justify-between">
+            <span>Invoice No: <strong className="font-mono">{invoiceNo}</strong></span>
+            <span className="font-mono">{invoiceDate}</span>
           </div>
-          <div className="text-right flex flex-col justify-center space-y-1">
-            <div className="text-zinc-500 text-[11px]">Payment Status</div>
-            <div className="font-bold text-zinc-800 uppercase tracking-wider">{paymentStatus}</div>
+          <div className="flex justify-between">
+            <span>Time: <span className="font-mono">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</span></span>
+            <span>Cashier: <strong>Owner</strong></span>
           </div>
+          {customerName && (
+            <div className="flex justify-between pt-0.5">
+              <span>Customer: <strong>{customerName}</strong></span>
+              <span className="font-mono">{customerPhone}</span>
+            </div>
+          )}
         </div>
+
+        {/* Dashed Separator */}
+        <div className="border-t border-dashed border-black my-2" />
 
         {/* Items Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className={`border-b-2 ${colorClasses.border} ${colorClasses.headerBg} ${colorClasses.text}`}>
-                <th className="py-2 px-2.5 font-bold">#</th>
-                <th className="py-2 px-2.5 font-bold">{t("product_name")}</th>
-                <th className="py-2 px-2.5 font-bold text-right">{t("sell_price")}</th>
-                <th className="py-2 px-2.5 font-bold text-center">{t("qty")}</th>
-                <th className="py-2 px-2.5 font-bold text-right">{t("total")}</th>
+        <table className="w-full text-left border-collapse text-[11px]">
+          <thead>
+            <tr className="border-b border-dashed border-black">
+              <th className="py-1 text-left font-bold uppercase text-[10px]">Item Name</th>
+              <th className="py-1 text-center font-bold uppercase text-[10px] w-8">Qty</th>
+              <th className="py-1 text-right font-bold uppercase text-[10px] w-16">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-6 text-center text-zinc-500 italic text-[11px]">
+                  No items added yet.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-zinc-400 italic">
-                    No items added yet. Add products to populate invoice table.
+            ) : (
+              items.map((item, index) => (
+                <tr key={`${item.product.id}-${index}`} className="border-b border-dotted border-zinc-300">
+                  <td className="py-1.5 pr-1 font-semibold text-black break-words leading-tight">
+                    {item.product.name}
+                  </td>
+                  <td className="py-1.5 px-1 text-center font-mono font-medium text-black">
+                    {item.qty}
+                  </td>
+                  <td className="py-1.5 text-right font-mono font-bold text-black">
+                    ৳{(item.qty * item.sellPrice).toLocaleString()}
                   </td>
                 </tr>
-              ) : (
-                items.map((item, index) => (
-                  <tr key={item.product.id} className={`border-b ${colorClasses.borderLight}`}>
-                    <td className="py-2 px-2.5 text-zinc-400 font-mono">{index + 1}</td>
-                    <td className="py-2 px-2.5 font-medium text-zinc-900">{item.product.name}</td>
-                    <td className="py-2 px-2.5 text-right font-mono text-zinc-700">{fmtMoney(item.sellPrice)}</td>
-                    <td className="py-2 px-2.5 text-center font-mono font-medium">{item.qty}</td>
-                    <td className="py-2 px-2.5 text-right font-mono font-bold text-zinc-900">
-                      {fmtMoney(item.qty * item.sellPrice)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Financial Summary */}
-        <div className="flex justify-end pt-2">
-          <div className={`w-64 space-y-1.5 border-t-2 pt-2.5 ${colorClasses.border} text-xs`}>
-            <div className="flex justify-between text-zinc-600">
-              <span>{t("subtotal")}</span>
-              <span className="font-mono">{fmtMoney(subtotal)}</span>
-            </div>
-
-            {discountAmount > 0 && (
-              <div className="flex justify-between text-rose-600 font-medium">
-                <span>{t("discount")}</span>
-                <span className="font-mono">-{fmtMoney(discountAmount)}</span>
-              </div>
+              ))
             )}
+          </tbody>
+        </table>
 
-            <div className={`flex justify-between border-t pt-2 font-bold text-sm ${colorClasses.border} ${colorClasses.accentText}`}>
-              <span>{t("payable_amount")}</span>
-              <span className="font-mono">{fmtMoney(total)}</span>
+        {/* Dashed Separator */}
+        <div className="border-t border-dashed border-black my-2" />
+
+        {/* Totals Section */}
+        <div className="space-y-1 text-[11px] text-black">
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span className="font-mono font-semibold">৳{subtotal.toLocaleString()}</span>
+          </div>
+
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-black">
+              <span>Discount</span>
+              <span className="font-mono">-৳{discountAmount.toLocaleString()}</span>
             </div>
+          )}
 
-            <div className="flex justify-between text-emerald-700 font-medium">
-              <span>{t("paid_amount")}</span>
-              <span className="font-mono">{fmtMoney(paidAmount)}</span>
+          {/* Grand Total with double border / bold styling */}
+          <div className="border-y-2 border-black py-1.5 my-1.5 flex justify-between items-center font-black">
+            <span className="text-xs uppercase tracking-wide">Grand Total</span>
+            <span className="text-sm font-mono">৳{total.toLocaleString()}</span>
+          </div>
+
+          <div className="flex justify-between font-medium">
+            <span>Cash Received</span>
+            <span className="font-mono font-semibold">৳{paidAmount.toLocaleString()}</span>
+          </div>
+
+          {due > 0 && (
+            <div className="flex justify-between font-bold">
+              <span>Due Amount</span>
+              <span className="font-mono">৳{due.toLocaleString()}</span>
             </div>
+          )}
 
-            {due > 0 && (
-              <div className="flex justify-between border-t border-dashed pt-1 text-rose-600 font-semibold border-rose-300">
-                <span>{t("due_amount")}</span>
-                <span className="font-mono">{fmtMoney(due)}</span>
-              </div>
-            )}
+          {changeAmount > 0 && (
+            <div className="flex justify-between">
+              <span>Change Return</span>
+              <span className="font-mono font-semibold">৳{changeAmount.toLocaleString()}</span>
+            </div>
+          )}
 
-            {changeAmount > 0 && (
-              <div className="flex justify-between border-t border-dashed pt-1 text-sky-700 font-semibold border-sky-300">
-                <span>Change Return</span>
-                <span className="font-mono">{fmtMoney(changeAmount)}</span>
-              </div>
-            )}
+          <div className="flex justify-between text-[10px] pt-1">
+            <span>Paid By:</span>
+            <span className="font-bold uppercase">{paymentStatus === "DUE" ? "Credit" : "Cash"}</span>
           </div>
         </div>
       </div>
 
-      {/* Invoice Footer */}
-      <div className="pt-6 border-t border-zinc-200 text-center text-[10px] text-zinc-500 space-y-1 z-10 mt-auto">
+      {/* Barcode & Footer */}
+      <div className="pt-3 border-t border-dashed border-black text-center text-black space-y-1.5 mt-4">
+        <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+        <div>
+          <p className="font-black text-xs uppercase tracking-wider">Thank You!</p>
+          <p className="text-[11px] font-medium">Please Visit Again</p>
+        </div>
         {biz?.invoice_terms && (
-          <p className="font-medium text-zinc-700 whitespace-pre-line leading-relaxed">
+          <p className="text-[10px] italic whitespace-pre-line leading-snug">
             {biz.invoice_terms}
           </p>
         )}
-        <p className="text-[9px] text-zinc-400">
-          Generated via {businessName} Invoice Manager.
+        <p className="text-[9px] text-zinc-600 pt-1">
+          Powered by Dream Fashion POS
         </p>
       </div>
     </div>
