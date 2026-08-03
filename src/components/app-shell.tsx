@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { getProducts, getParties, getSales } from "@/lib/queries";
+import { getProducts, getParties, getSales, getPurchases, getExpenses } from "@/lib/queries";
 import {
   Home, Package, ShoppingBag, Users, MoreHorizontal,
   LogOut, Languages, Banknote, DollarSign, Settings,
@@ -118,6 +118,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (canAccess(perms, "parties")) {
       void qc.prefetchQuery({ queryKey: ["parties"], queryFn: getParties });
     }
+    if (canAccess(perms, "purchases")) {
+      void qc.prefetchQuery({ queryKey: ["purchases"], queryFn: getPurchases });
+    }
+    if (canAccess(perms, "expenses")) {
+      void qc.prefetchQuery({ queryKey: ["expenses"], queryFn: getExpenses });
+    }
   }, [user?.activated, user?.role, user?.permissions, qc]);
 
   useEffect(() => {
@@ -210,10 +216,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <SidebarMenuButton
                           isActive={isActive(to)}
                           tooltip={t(labelKey)}
-                          onClick={() => router.push(to)}
+                          asChild
                         >
-                          <Icon className="icon-sm" />
-                          <span className="truncate text-left">{t(labelKey)}</span>
+                          <Link href={to} prefetch={true} className="flex items-center gap-2 w-full">
+                            <Icon className="icon-sm" />
+                            <span className="truncate text-left">{t(labelKey)}</span>
+                          </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
@@ -337,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-y-contain ${isMobile ? "px-3 pt-3" : "px-6 py-5"}`}>
+        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-16 md:pb-0 ${isMobile ? "px-3 pt-3" : "px-6 py-5"}`}>
           <div className={isMobile ? "w-full max-w-lg mx-auto mobile-content-pad" : "w-full max-w-screen-2xl mx-auto"}>
             <PermissionGuard>
               {children}
@@ -348,7 +356,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {bottomNav.length > 0 && (
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-md border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar select-none" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 4px)" }}>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-card/98 backdrop-blur-md border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar select-none" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 6px)" }}>
           <div
             className="grid h-14 max-w-lg mx-auto w-full"
             style={{ gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))` }}
@@ -359,6 +367,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={to}
                   href={to}
+                  prefetch={true}
                   className={`flex flex-col items-center justify-center py-1 gap-0.5 text-[10px] font-medium transition-colors active:scale-95 ${
                     active ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
                   }`}
