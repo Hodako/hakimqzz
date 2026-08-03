@@ -106,32 +106,53 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const handleFocus = (e: FocusEvent) => {
+    const handleFocus = (e: Event) => {
       const target = e.target as HTMLInputElement;
       if (target && target.tagName === "INPUT") {
         const name = (target.name || "").toLowerCase();
         const id = (target.id || "").toLowerCase();
         const type = (target.type || "").toLowerCase();
+        const placeholder = (target.placeholder || "").toLowerCase();
         
-        // If it is a number, tel, or has phone/mobile in its attributes, force correct numeric inputmode
-        if (
+        const isNumericField =
           type === "number" ||
           type === "tel" ||
           name.includes("phone") ||
           name.includes("mobile") ||
+          name.includes("qty") ||
+          name.includes("price") ||
+          name.includes("amount") ||
+          name.includes("cost") ||
+          name.includes("due") ||
+          name.includes("paid") ||
+          name.includes("discount") ||
           id.includes("phone") ||
-          id.includes("mobile")
-        ) {
-          if (!target.hasAttribute("inputmode")) {
-            const isPhone = type === "tel" || name.includes("phone") || name.includes("mobile") || id.includes("phone") || id.includes("mobile");
-            target.setAttribute("inputmode", isPhone ? "numeric" : "decimal");
-          }
+          id.includes("mobile") ||
+          id.includes("qty") ||
+          id.includes("price") ||
+          id.includes("amount") ||
+          id.includes("cost") ||
+          id.includes("due") ||
+          id.includes("paid") ||
+          id.includes("discount") ||
+          placeholder.includes("phone") ||
+          placeholder.includes("01") ||
+          placeholder.includes("qty") ||
+          placeholder.includes("price") ||
+          placeholder.includes("amount");
+
+        if (isNumericField) {
+          const isPhone = type === "tel" || name.includes("phone") || name.includes("mobile") || id.includes("phone") || id.includes("mobile");
+          target.setAttribute("inputmode", isPhone ? "numeric" : "decimal");
+          target.setAttribute("pattern", isPhone ? "[0-9]*" : "[0-9.]*");
         }
       }
     };
     document.addEventListener("focusin", handleFocus, true);
+    document.addEventListener("touchstart", handleFocus, true);
     return () => {
       document.removeEventListener("focusin", handleFocus, true);
+      document.removeEventListener("touchstart", handleFocus, true);
     };
   }, []);
 

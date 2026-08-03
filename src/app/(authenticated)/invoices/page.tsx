@@ -481,6 +481,7 @@ export default function InvoicePage() {
       pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
       pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
       pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
+      invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "15px",
       tagline,
       invoiceNo,
       invoiceDate,

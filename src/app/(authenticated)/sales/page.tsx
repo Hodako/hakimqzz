@@ -256,6 +256,8 @@ function SalesTab({
       pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
       pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
       pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
+      invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "15px",
+      terms: biz?.invoice_terms || "",
       invoiceNo: invNo,
       invoiceDate: fmtDateTime(s.created_at),
       customerName: custName,

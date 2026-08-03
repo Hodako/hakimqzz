@@ -260,6 +260,7 @@ export function SaleDialog({
           pageSize: user.invoice_page_size || "80mm",
           pageWidth: user.invoice_page_width || "",
           pageHeight: user.invoice_page_height || "",
+          invoiceFontSize: user.invoice_font_size || "15px",
           invoiceNo: `INV-${cartId.slice(-6).toUpperCase()}`,
           invoiceDate: new Date().toLocaleDateString(),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),

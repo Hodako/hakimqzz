@@ -681,6 +681,16 @@ export default function SettingsPage() {
                 </select>
               </div>
               <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস ফন্ট সাইজ (Invoice Print Font Size)" : "Invoice Print Font Size (PDF & Print)"}</Label>
+                <select name="invoice_font_size" defaultValue={biz.invoice_font_size || "15px"} className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize">
+                  <option value="12px">12px (Small Compact)</option>
+                  <option value="14px">14px (Standard Medium)</option>
+                  <option value="15px">15px (Default Recommended - Large)</option>
+                  <option value="16px">16px (Extra Large HD)</option>
+                  <option value="18px">18px (Ultra Large HD)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">{lang === "bn" ? "ইনভয়েস পেপার সাইজ (Invoice Page Size)" : "Invoice Paper Size / Document Format"}</Label>
                 <select name="invoice_page_size" defaultValue={biz.invoice_page_size || "80mm"} className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize">
                   <option value="80mm">80mm POS Thermal Receipt (Receipt Printer)</option>
