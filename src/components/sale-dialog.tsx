@@ -254,10 +254,13 @@ export function SaleDialog({
         const discTotal = cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0);
         printPwaInvoice({
           businessName: user.business_name || user.full_name || "Dream Fashion POS",
-          userEmail: user.email || "",
+          userEmail: user.business_emails || user.email || "",
           shopAddress: user.business_address || "",
           shopPhoneNumbers: user.business_phone_numbers || "",
-          invoiceNo: cartId.slice(-6).toUpperCase(),
+          pageSize: user.invoice_page_size || "80mm",
+          pageWidth: user.invoice_page_width || "",
+          pageHeight: user.invoice_page_height || "",
+          invoiceNo: `INV-${cartId.slice(-6).toUpperCase()}`,
           invoiceDate: new Date().toLocaleDateString(),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
           customerPhone: cust?.phone || "",
