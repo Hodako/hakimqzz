@@ -345,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className={`flex-1 min-h-0 overflow-y-auto overscroll-y-contain pt-14 pb-16 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}>
+        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pt-14 pb-20 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}>
           <div className={isMobile ? "w-full max-w-lg mx-auto mobile-content-pad" : "w-full max-w-screen-2xl mx-auto"}>
             <PermissionGuard>
               {children}

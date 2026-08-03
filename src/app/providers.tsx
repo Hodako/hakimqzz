@@ -156,6 +156,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handleGlobalError = () => {
+      document.body.style.pointerEvents = "auto";
+      document.body.style.overflow = "auto";
+    };
+    window.addEventListener("unhandledrejection", handleGlobalError);
+    window.addEventListener("error", handleGlobalError);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleGlobalError);
+      window.removeEventListener("error", handleGlobalError);
+    };
+  }, []);
+
   if (!mounted) {
     return <SpeedLoader />;
   }

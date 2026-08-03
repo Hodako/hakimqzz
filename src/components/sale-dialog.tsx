@@ -291,7 +291,7 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md w-full h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0">
+        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-md w-full h-[88dvh] max-h-[88dvh] flex flex-col overflow-hidden p-0 rounded-2xl">
           {/* Pinned header */}
           <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-border">
             <DialogTitle>{t("new_sale")}</DialogTitle>
