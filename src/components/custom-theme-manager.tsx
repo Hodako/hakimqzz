@@ -986,19 +986,14 @@ export function CustomThemeManager() {
       }
     `;
 
-    // Superfast & Smooth GPU Hardware Acceleration
+    // Lightweight & Smooth Mobile Optimization
     css += `
       * {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        text-rendering: optimizeLegibility;
       }
-      body, main, div, section {
+      body {
         -webkit-overflow-scrolling: touch;
-      }
-      .card, .beveled-card, button, input, select {
-        transform: translateZ(0);
-        backface-visibility: hidden;
       }
     `;
 

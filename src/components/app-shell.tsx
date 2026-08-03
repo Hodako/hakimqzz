@@ -348,9 +348,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {bottomNav.length > 0 && (
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-md border-t border-border/80 shadow-2xl safe-area-pb mobile-tab-bar select-none" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 4px)" }}>
           <div
-            className="grid h-14 max-w-lg mx-auto min-h-[3.5rem]"
+            className="grid h-14 max-w-lg mx-auto w-full"
             style={{ gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))` }}
           >
             {bottomNav.map(({ to, labelKey, icon: Icon }) => {
@@ -359,50 +359,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={to}
                   href={to}
-                  className={`flex flex-col items-center justify-center gap-1 text-[9px] transition-colors active:scale-95 ${
-                    active ? "text-primary font-semibold" : "text-muted-foreground font-medium"
+                  className={`flex flex-col items-center justify-center py-1 gap-0.5 text-[10px] font-medium transition-colors active:scale-95 ${
+                    active ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <div className={`flex items-center justify-center rounded-full transition-all duration-200 ${
-                    active ? "bg-primary/15 px-5 py-1 text-primary" : "px-5 py-1 text-muted-foreground/80 hover:text-foreground"
+                  <div className={`flex items-center justify-center px-3 py-0.5 rounded-full transition-all duration-150 ${
+                    active ? "bg-primary/15 text-primary" : "text-muted-foreground/80"
                   }`}>
                     {labelKey === "home" ? (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 64 64"
-                        className={`size-5 fill-current ${active ? "text-primary" : "text-muted-foreground"}`}
-                      >
-                        <path d="M 32 8 C 31.08875 8 30.178047 8.3091875 29.435547 8.9296875 L 8.8007812 26.171875 C 8.0357812 26.810875 7.7634844 27.925203 8.2714844 28.783203 C 8.9184844 29.875203 10.35025 30.088547 11.28125 29.310547 L 12 28.710938 L 12 47 C 12 49.761 14.239 52 17 52 L 47 52 C 49.761 52 52 49.761 52 47 L 52 28.712891 L 52.71875 29.3125 C 53.09275 29.6255 53.546047 29.777344 53.998047 29.777344 C 54.693047 29.777344 55.382672 29.416656 55.763672 28.722656 C 56.228672 27.874656 55.954891 26.803594 55.212891 26.183594 L 52 23.498047 L 52 15 C 52 13.895 51.105 13 50 13 L 48 13 C 46.895 13 46 13.895 46 15 L 46 18.484375 L 34.564453 8.9296875 C 33.821953 8.3091875 32.91125 8 32 8 z M 32 12.152344 C 32.11475 12.152344 32.228766 12.191531 32.322266 12.269531 L 48 25.369141 L 48 46 C 48 47.105 47.105 48 46 48 L 38 48 L 38 34 C 38 32.895 37.105 32 36 32 L 28 32 C 26.895 32 26 32.895 26 34 L 26 48 L 18 48 C 16.895 48 16 47.105 16 46 L 16 25.367188 L 31.677734 12.269531 C 31.771234 12.191531 31.88525 12.152344 32 12.152344 z"></path>
-                      </svg>
-                    ) : labelKey === "products" ? (
-                      <img
-                        src="https://img.icons8.com/ios-filled/50/open-box.png"
-                        alt="open-box"
-                        className={`size-5 object-contain transition-opacity ${active ? "opacity-100" : "opacity-60"} dark:invert`}
-                      />
-                    ) : labelKey === "sales" ? (
-                      <img
-                        src="https://img.icons8.com/ios-filled/50/online-shop.png"
-                        alt="online-shop"
-                        className={`size-5 object-contain transition-opacity ${active ? "opacity-100" : "opacity-60"} dark:invert`}
-                      />
-                    ) : labelKey === "parties" ? (
-                      <img
-                        src="https://img.icons8.com/sf-regular-filled/48/handshake.png"
-                        alt="handshake"
-                        className={`size-5 object-contain transition-opacity ${active ? "opacity-100" : "opacity-60"} dark:invert`}
-                      />
-                    ) : labelKey === "more" ? (
-                      <img
-                        src="https://img.icons8.com/sf-regular-filled/48/more.png"
-                        alt="more"
-                        className={`size-5 object-contain transition-opacity ${active ? "opacity-100" : "opacity-60"} dark:invert`}
-                      />
+                      <CustomHomeIcon className="size-5 shrink-0" />
                     ) : (
-                      <Icon className="icon-sm" />
+                      <Icon className="size-5 shrink-0" />
                     )}
                   </div>
-                  <span className="leading-none">{t(labelKey)}</span>
+                  <span className="leading-tight truncate max-w-[64px] text-center">{t(labelKey)}</span>
                 </Link>
               );
             })}
