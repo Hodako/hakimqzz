@@ -75,9 +75,8 @@ export function generateBarcodeSvg(text: string, height = 34): string {
     currentX += moduleWidth;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height + 14}" width="${totalWidth}" height="${height + 14}" style="display: block; margin: 0 auto; max-width: 100%; height: auto; text-align: center;">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height}" width="${totalWidth}" height="${height}" style="display: block; margin: 0 auto; max-width: 100%; height: auto; text-align: center;">
     ${rects}
-    <text x="${(totalWidth / 2).toFixed(1)}" y="${height + 11}" font-family="Courier, monospace" font-size="9.5" font-weight="bold" text-anchor="middle" fill="#000000">${text}</text>
   </svg>`;
 }
 
@@ -272,7 +271,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
           : `<div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">Thank You!</div>
              <div style="font-size: 10.5px; font-weight: 600; margin-top: 1px;">Please Visit Again</div>`
       }
-      <div style="font-size: 8.5px; margin-top: 6px; color: #444444;">Powered by Dream Fashion POS</div>
+      <div style="font-size: ${baseSize}; font-weight: 800; margin-top: 8px; color: #000000; letter-spacing: 0.5px; text-transform: uppercase;">Powered by Dream Fashion POS</div>
     </div>
   </div>
 </body>

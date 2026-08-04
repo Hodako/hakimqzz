@@ -244,7 +244,7 @@ function InvoiceDocumentView({
             <p className="text-[11px] font-medium">Please Visit Again</p>
           </div>
         )}
-        <p className="text-[9px] text-zinc-600 pt-1">
+        <p className="text-xs font-black uppercase tracking-wider text-black pt-2">
           Powered by Dream Fashion POS
         </p>
       </div>
