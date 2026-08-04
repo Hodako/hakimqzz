@@ -126,12 +126,20 @@ export default function SettingsPage() {
   const isOwner = settings.data?.role === "owner";
 
   const [logoUrl, setLogoUrl] = useState("");
+  const [fontSize, setFontSize] = useState("15px");
+  const [fontScale, setFontScale] = useState("100%");
 
   useEffect(() => {
     if (biz?.logo_url) {
       setLogoUrl(biz.logo_url);
     }
-  }, [biz?.logo_url]);
+    if (biz?.invoice_font_size) {
+      setFontSize(biz.invoice_font_size);
+    }
+    if (biz?.invoice_scale) {
+      setFontScale(biz.invoice_scale);
+    }
+  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale]);
 
   // Cropper states
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -694,40 +702,37 @@ export default function SettingsPage() {
                 <Label className="text-xs">{lang === "bn" ? "ইনভয়েস ফন্ট সাইজ (Invoice Print Font Size)" : "Invoice Print Font Size (PDF & Print)"}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <select
-                    defaultValue={biz.invoice_font_size || "15px"}
-                    onChange={(e) => {
-                      const customInput = document.getElementById("invoice_font_size_custom_input") as HTMLInputElement;
-                      if (customInput) customInput.value = e.target.value;
-                    }}
+                    value={fontSize}
+                    onChange={(e) => setFontSize(e.target.value)}
                     className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
                   >
                     <option value="12px">12px (Small Compact)</option>
                     <option value="14px">14px (Standard Medium)</option>
                     <option value="15px">15px (Default Recommended)</option>
-                    <option value="16px">16px (Extra Large HD)</option>
+                    <option value="16px">16px (Extra Large HD 16px)</option>
                     <option value="18px">18px (Ultra Large HD 18px)</option>
                     <option value="20px">20px (Super Large 20px)</option>
                     <option value="22px">22px (Max Preset 22px)</option>
+                    <option value="24px">24px (Extra Max 24px)</option>
+                    <option value="26px">26px (Max Super Size 26px)</option>
                   </select>
                   <Input
                     id="invoice_font_size_custom_input"
                     name="invoice_font_size"
-                    defaultValue={biz.invoice_font_size || "15px"}
-                    placeholder="Custom e.g. 24px"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(e.target.value)}
+                    placeholder="Custom e.g. 26px"
                     className="h-9 text-xs"
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ড্রপডাউন থেকে বা ম্যানুয়ালি পছন্দের সাইজ টাইপ করুন (যেমন: 24px, 25px, 28px)" : "Select preset or manually type any custom font size (e.g. 24px, 25px, 28px)"}</p>
+                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ড্রপডাউন থেকে বা ম্যানুয়ালি পছন্দের সাইজ টাইপ করুন (যেমন: 18px, 22px, 26px)" : "Select preset or manually type any custom font size up to 26px (e.g. 18px, 22px, 26px)"}</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">{lang === "bn" ? "ইনভয়েস জুম / স্কেল (Invoice Document Zoom & Scale)" : "Invoice Document Scale & Size Zoom"}</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <select
-                    defaultValue={biz.invoice_scale || "100%"}
-                    onChange={(e) => {
-                      const customInput = document.getElementById("invoice_scale_custom_input") as HTMLInputElement;
-                      if (customInput) customInput.value = e.target.value;
-                    }}
+                    value={fontScale}
+                    onChange={(e) => setFontScale(e.target.value)}
                     className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
                   >
                     <option value="80%">80% (Compact Small)</option>
@@ -741,7 +746,8 @@ export default function SettingsPage() {
                   <Input
                     id="invoice_scale_custom_input"
                     name="invoice_scale"
-                    defaultValue={biz.invoice_scale || "100%"}
+                    value={fontScale}
+                    onChange={(e) => setFontScale(e.target.value)}
                     placeholder="Custom e.g. 150%"
                     className="h-9 text-xs"
                   />
