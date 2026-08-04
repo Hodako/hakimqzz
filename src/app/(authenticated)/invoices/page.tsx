@@ -121,7 +121,7 @@ function InvoiceDocumentView({
             </p>
           )}
           {(biz?.emails || userEmail) && (
-            <p className="text-[10px] text-zinc-700">{biz?.emails || userEmail}</p>
+            <p className="text-[10px] text-zinc-700">Email: {biz?.emails || userEmail}</p>
           )}
         </div>
 
@@ -136,7 +136,6 @@ function InvoiceDocumentView({
           </div>
           <div className="flex justify-between">
             <span>Time: <span className="font-mono">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</span></span>
-            <span>Cashier: <strong>Owner</strong></span>
           </div>
           {customerName && (
             <div className="flex justify-between pt-0.5">
@@ -235,14 +234,15 @@ function InvoiceDocumentView({
       {/* Barcode & Footer */}
       <div className="pt-3 border-t border-dashed border-black text-center text-black space-y-1.5 mt-4">
         <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
-        <div>
-          <p className="font-black text-xs uppercase tracking-wider">Thank You!</p>
-          <p className="text-[11px] font-medium">Please Visit Again</p>
-        </div>
-        {biz?.invoice_terms && (
-          <p className="text-[10px] italic whitespace-pre-line leading-snug">
+        {biz?.invoice_terms ? (
+          <p className="text-xs font-bold whitespace-pre-line leading-snug text-black">
             {biz.invoice_terms}
           </p>
+        ) : (
+          <div>
+            <p className="font-black text-xs uppercase tracking-wider">Thank You!</p>
+            <p className="text-[11px] font-medium">Please Visit Again</p>
+          </div>
         )}
         <p className="text-[9px] text-zinc-600 pt-1">
           Powered by Dream Fashion POS

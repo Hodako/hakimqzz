@@ -165,7 +165,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       ${data.tagline ? `<div style="font-size: ${subSize}; font-weight: 500; margin-top: 1px; color: #000000;">${data.tagline}</div>` : ""}
       ${data.shopAddress ? `<div style="font-size: ${subSize}; margin-top: 1.5px; color: #000000;">${data.shopAddress}</div>` : ""}
       ${data.shopPhoneNumbers ? `<div style="font-size: ${subSize}; font-family: monospace; font-weight: 600; margin-top: 1.5px; color: #000000;">Phone: ${data.shopPhoneNumbers}</div>` : ""}
-      ${data.userEmail ? `<div style="font-size: ${subSize}; margin-top: 1px; color: #000000;">${data.userEmail}</div>` : ""}
+      ${data.userEmail ? `<div style="font-size: ${subSize}; margin-top: 1px; color: #000000;">Email: ${data.userEmail}</div>` : ""}
     </div>
 
     <div class="dashed-line"></div>
@@ -178,7 +178,6 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       </div>
       <div style="display: flex; justify-content: space-between;">
         <span>Time: <span style="font-family: monospace;">${timeStr}</span></span>
-        <span>Cashier: <strong>${cashier}</strong></span>
       </div>
       ${
         data.customerName
@@ -265,9 +264,12 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       <div style="margin-bottom: 6px;">
         ${barcodeSvg}
       </div>
-      <div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">Thank You!</div>
-      <div style="font-size: 10.5px; font-weight: 600; margin-top: 1px;">Please Visit Again</div>
-      ${data.terms ? `<div style="font-size: 9.5px; margin-top: 4px; font-style: italic; white-space: pre-line;">${data.terms}</div>` : ""}
+      ${
+        data.terms
+          ? `<div style="font-size: ${baseSize}; font-weight: 700; margin-top: 4px; white-space: pre-line; color: #000000;">${data.terms}</div>`
+          : `<div style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">Thank You!</div>
+             <div style="font-size: 10.5px; font-weight: 600; margin-top: 1px;">Please Visit Again</div>`
+      }
       <div style="font-size: 8.5px; margin-top: 6px; color: #444444;">Powered by Dream Fashion POS</div>
     </div>
   </div>
