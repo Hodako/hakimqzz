@@ -87,9 +87,16 @@ function InvoiceDocumentView({
   isPrintOnly = false,
 }: InvoiceDocumentViewProps) {
   const barcodeSvg = generateBarcodeSvg(invoiceNo || "INV-001", 32);
+  const rawScale = biz?.invoice_scale || "100%";
+  const numScale = parseInt(rawScale.replace(/[^0-9]/g, ""), 10) || 100;
+  const scaleRatio = numScale / 100;
 
   return (
     <div
+      style={{
+        transform: scaleRatio !== 1 ? `scale(${scaleRatio})` : undefined,
+        transformOrigin: "top center",
+      }}
       className={`invoice-print-container bg-white text-black font-sans text-xs relative overflow-hidden flex flex-col justify-between transition-all ${
         isPrintOnly
           ? "p-0 border-none shadow-none rounded-none w-full"
@@ -470,6 +477,7 @@ export default function InvoicePage() {
       pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
       pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
       invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "15px",
+      invoiceScale: biz?.invoice_scale || user?.invoice_scale || "100%",
       tagline,
       invoiceNo,
       invoiceDate,

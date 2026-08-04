@@ -379,6 +379,11 @@ export default function SettingsPage() {
             if (!raw) return "15px";
             return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
           })(),
+          invoice_scale: (() => {
+            const raw = String(fd.get("invoice_scale") || "100%").trim();
+            if (!raw) return "100%";
+            return raw.endsWith("%") ? raw : `${raw}%`;
+          })(),
         },
       });
       await refresh();
@@ -713,6 +718,35 @@ export default function SettingsPage() {
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ড্রপডাউন থেকে বা ম্যানুয়ালি পছন্দের সাইজ টাইপ করুন (যেমন: 24px, 25px, 28px)" : "Select preset or manually type any custom font size (e.g. 24px, 25px, 28px)"}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস জুম / স্কেল (Invoice Document Zoom & Scale)" : "Invoice Document Scale & Size Zoom"}</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    defaultValue={biz.invoice_scale || "100%"}
+                    onChange={(e) => {
+                      const customInput = document.getElementById("invoice_scale_custom_input") as HTMLInputElement;
+                      if (customInput) customInput.value = e.target.value;
+                    }}
+                    className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
+                  >
+                    <option value="80%">80% (Compact Small)</option>
+                    <option value="100%">100% (Standard Normal)</option>
+                    <option value="120%">120% (Medium 1.2x)</option>
+                    <option value="150%">150% (Big 1.5x Large)</option>
+                    <option value="180%">180% (Extra Big 1.8x)</option>
+                    <option value="200%">200% (Double Size 2.0x Giant)</option>
+                    <option value="250%">250% (Max Big 2.5x)</option>
+                  </select>
+                  <Input
+                    id="invoice_scale_custom_input"
+                    name="invoice_scale"
+                    defaultValue={biz.invoice_scale || "100%"}
+                    placeholder="Custom e.g. 150%"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসের সামগ্রিক আকার বড় বা ছোট করতে স্কেল বেছে নিন (যেমন: 120%, 150%, 200%)" : "Resize or turn invoice big according to document size (e.g. 120%, 150%, 200%)"}</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">{lang === "bn" ? "ইনভয়েস পেপার সাইজ (Invoice Page Size)" : "Invoice Paper Size / Document Format"}</Label>

@@ -36,6 +36,7 @@ export interface PrintInvoiceParams {
   colorTheme?: string;
   terms?: string;
   invoiceFontSize?: string;
+  invoiceScale?: string;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -105,8 +106,12 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     bodyMaxWidth = data.pageWidth;
   }
 
+  const rawScale = data.invoiceScale || "100%";
+  const numScale = parseInt(rawScale.replace(/[^0-9]/g, ""), 10) || 100;
+  const scaleRatio = numScale / 100;
+
   const rawFontSize = data.invoiceFontSize || "15px";
-  const numFontSize = parseInt(rawFontSize.replace(/[^0-9]/g, ""), 10) || 15;
+  const numFontSize = Math.round((parseInt(rawFontSize.replace(/[^0-9]/g, ""), 10) || 15) * scaleRatio);
   const baseSize = `${numFontSize}px`;
   const headerSize = `${Math.round(numFontSize * 1.35)}px`;
   const subSize = `${Math.round(numFontSize * 0.85)}px`;
