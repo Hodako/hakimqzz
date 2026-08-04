@@ -37,6 +37,7 @@ export interface PrintInvoiceParams {
   terms?: string;
   invoiceFontSize?: string;
   invoiceScale?: string;
+  invoiceLineSpacing?: string;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -87,7 +88,6 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   const now = new Date();
   const dateStr = data.invoiceDate || now.toLocaleDateString("en-CA");
   const timeStr = data.invoiceTime || now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  const cashier = data.cashierName || "Owner / Cashier";
 
   let pageSizeRule = "80mm auto";
   let bodyMaxWidth = "76mm";
@@ -110,25 +110,27 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   const numScale = parseInt(rawScale.replace(/[^0-9]/g, ""), 10) || 100;
   const scaleRatio = numScale / 100;
 
-  const rawFontSize = data.invoiceFontSize || "15px";
-  const numFontSize = Math.round((parseInt(rawFontSize.replace(/[^0-9]/g, ""), 10) || 15) * scaleRatio);
+  const rawFontSize = data.invoiceFontSize || "22px";
+  const numFontSize = Math.round((parseInt(rawFontSize.replace(/[^0-9]/g, ""), 10) || 22) * scaleRatio);
   const baseSize = `${numFontSize}px`;
   const headerSize = `${Math.round(numFontSize * 1.35)}px`;
   const subSize = `${Math.round(numFontSize * 0.85)}px`;
   const metaSize = `${Math.round(numFontSize * 0.9)}px`;
   const grandTotalSize = `${Math.round(numFontSize * 1.25)}px`;
 
+  const lineSpacing = data.invoiceLineSpacing || "6px";
+
   const itemsRowsHtml = data.items
     .map(
       (item) => `
     <tr style="border-bottom: 1px dotted #cccccc;">
-      <td style="padding: 4px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseSize}; word-break: break-word; color: #000000;">
+      <td style="padding: ${lineSpacing} 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseSize}; word-break: break-word; color: #000000;">
         ${item.product.name}
       </td>
-      <td style="padding: 4px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseSize}; font-weight: 600; color: #000000; width: 32px;">
+      <td style="padding: ${lineSpacing} 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseSize}; font-weight: 600; color: #000000; width: 32px;">
         ${item.qty}
       </td>
-      <td style="padding: 4px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: ${baseSize}; color: #000000; width: 68px;">
+      <td style="padding: ${lineSpacing} 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: ${baseSize}; color: #000000; width: 68px;">
         ৳${(item.qty * item.sellPrice).toLocaleString()}
       </td>
     </tr>`

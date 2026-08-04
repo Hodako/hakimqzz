@@ -12,6 +12,7 @@ import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries
 import { useT } from "@/lib/i18n";
 import { fmtMoney } from "@/lib/format";
 import { ProductImage } from "@/components/product-image";
+import { preloadAssetsToLocalStorage } from "@/lib/asset-cache";
 import { ProductDialog } from "@/components/product-dialog";
 import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
@@ -38,6 +39,12 @@ export default function ProductsPage() {
   const isMobile = useIsMobile();
   const { data: productsData } = useCachedQuery(["products"], getProducts);
   const salesQuery = useCachedQuery(["sales"], getSales);
+
+  useEffect(() => {
+    if (productsData && productsData.length > 0) {
+      preloadAssetsToLocalStorage(productsData.map(p => p.image_url));
+    }
+  }, [productsData]);
 
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);

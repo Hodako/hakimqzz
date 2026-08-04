@@ -431,6 +431,9 @@ export async function getBusinessSettingsFn() {
       invoice_watermark_enabled: Boolean(business.invoice_watermark_enabled),
       invoice_terms: (business.invoice_terms as string) || "",
       invoice_color: (business.invoice_color as string) || "black",
+      invoice_font_size: (business.invoice_font_size as string) || "22px",
+      invoice_scale: (business.invoice_scale as string) || "100%",
+      invoice_line_spacing: (business.invoice_line_spacing as string) || "6px",
       google_sheets_spreadsheet_id: (business.google_sheets_spreadsheet_id as string) || "",
       google_sheets_credentials_json: (business.google_sheets_credentials_json as string) || "",
     } : null,
@@ -471,6 +474,7 @@ export async function updateBusinessSettingsFn(input: {
     invoice_color?: string;
     invoice_font_size?: string;
     invoice_scale?: string;
+    invoice_line_spacing?: string;
     google_sheets_spreadsheet_id?: string;
     google_sheets_credentials_json?: string;
   }

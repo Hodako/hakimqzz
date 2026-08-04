@@ -126,8 +126,9 @@ export default function SettingsPage() {
   const isOwner = settings.data?.role === "owner";
 
   const [logoUrl, setLogoUrl] = useState("");
-  const [fontSize, setFontSize] = useState("15px");
+  const [fontSize, setFontSize] = useState("22px");
   const [fontScale, setFontScale] = useState("100%");
+  const [lineSpacing, setLineSpacing] = useState("6px");
 
   useEffect(() => {
     if (biz?.logo_url) {
@@ -139,7 +140,10 @@ export default function SettingsPage() {
     if (biz?.invoice_scale) {
       setFontScale(biz.invoice_scale);
     }
-  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale]);
+    if (biz?.invoice_line_spacing) {
+      setLineSpacing(biz.invoice_line_spacing);
+    }
+  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing]);
 
   // Cropper states
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -383,14 +387,19 @@ export default function SettingsPage() {
           invoice_terms: String(fd.get("invoice_terms") || ""),
           invoice_color: String(fd.get("invoice_color") || "black"),
           invoice_font_size: (() => {
-            const raw = String(fd.get("invoice_font_size") || "15px").trim();
-            if (!raw) return "15px";
+            const raw = String(fd.get("invoice_font_size") || "22px").trim();
+            if (!raw) return "22px";
             return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
           })(),
           invoice_scale: (() => {
             const raw = String(fd.get("invoice_scale") || "100%").trim();
             if (!raw) return "100%";
             return raw.endsWith("%") ? raw : `${raw}%`;
+          })(),
+          invoice_line_spacing: (() => {
+            const raw = String(fd.get("invoice_line_spacing") || "6px").trim();
+            if (!raw) return "6px";
+            return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
           })(),
         },
       });
@@ -753,6 +762,32 @@ export default function SettingsPage() {
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসের সামগ্রিক আকার বড় বা ছোট করতে স্কেল বেছে নিন (যেমন: 120%, 150%, 200%)" : "Resize or turn invoice big according to document size (e.g. 120%, 150%, 200%)"}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস ভার্টিকাল স্পেসিং (Invoice Vertical Line Spacing)" : "Invoice Vertical Line Spacing & Padding"}</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={lineSpacing}
+                    onChange={(e) => setLineSpacing(e.target.value)}
+                    className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
+                  >
+                    <option value="2px">2px (Compact Tight)</option>
+                    <option value="4px">4px (Standard 4px)</option>
+                    <option value="6px">6px (Relaxed 6px - Recommended)</option>
+                    <option value="8px">8px (Spaced 8px)</option>
+                    <option value="10px">10px (Loose 10px)</option>
+                    <option value="12px">12px (Extra Loose 12px)</option>
+                  </select>
+                  <Input
+                    id="invoice_line_spacing_custom_input"
+                    name="invoice_line_spacing"
+                    value={lineSpacing}
+                    onChange={(e) => setLineSpacing(e.target.value)}
+                    placeholder="Custom e.g. 8px"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসের প্রতিটি আইটেম ও লাইনের মাঝে উল্লম্ব ফাঁকা জায়গা পরিবর্তন করুন (যেমন: 6px, 8px, 10px)" : "Adjust vertical gap/padding between invoice items & table rows (e.g. 6px, 8px, 10px)"}</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">{lang === "bn" ? "ইনভয়েস পেপার সাইজ (Invoice Page Size)" : "Invoice Paper Size / Document Format"}</Label>
