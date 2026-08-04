@@ -75,9 +75,9 @@ export function generateBarcodeSvg(text: string, height = 34): string {
     currentX += moduleWidth;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height + 14}" width="${totalWidth}" height="${height + 14}" style="display:block;margin:0 auto;">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height + 14}" width="${totalWidth}" height="${height + 14}" style="display: block; margin: 0 auto; max-width: 100%; height: auto; text-align: center;">
     ${rects}
-    <text x="${(totalWidth / 2).toFixed(1)}" y="${height + 11}" font-family="Courier, monospace" font-size="9" font-weight="bold" text-anchor="middle" fill="#000000">${text}</text>
+    <text x="${(totalWidth / 2).toFixed(1)}" y="${height + 11}" font-family="Courier, monospace" font-size="9.5" font-weight="bold" text-anchor="middle" fill="#000000">${text}</text>
   </svg>`;
 }
 
@@ -262,8 +262,8 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     <div class="dashed-line"></div>
 
     <!-- Barcode & Footer -->
-    <div style="text-align: center; margin-top: 8px;">
-      <div style="margin-bottom: 6px;">
+    <div style="text-align: center; margin-top: 10px; width: 100%;">
+      <div style="display: flex; justify-content: center; align-items: center; width: 100%; text-align: center; margin-bottom: 6px;">
         ${barcodeSvg}
       </div>
       ${
