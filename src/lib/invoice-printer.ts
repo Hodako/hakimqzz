@@ -90,20 +90,20 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   const timeStr = data.invoiceTime || now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 
   let pageSizeRule = "80mm auto";
-  let bodyMaxWidth = "76mm";
+  let bodyMaxWidth = "100%";
 
   if (data.pageSize === "58mm") {
     pageSizeRule = "58mm auto";
-    bodyMaxWidth = "54mm";
+    bodyMaxWidth = "100%";
   } else if (data.pageSize === "A4") {
     pageSizeRule = "A4 portrait";
-    bodyMaxWidth = "80mm";
+    bodyMaxWidth = "100%";
   } else if (data.pageSize === "A5") {
     pageSizeRule = "A5 portrait";
-    bodyMaxWidth = "80mm";
+    bodyMaxWidth = "100%";
   } else if (data.pageSize === "custom" && data.pageWidth) {
     pageSizeRule = `${data.pageWidth} ${data.pageHeight || "auto"}`;
-    bodyMaxWidth = data.pageWidth;
+    bodyMaxWidth = "100%";
   }
 
   const rawScale = data.invoiceScale || "100%";
@@ -127,10 +127,10 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       <td style="padding: ${lineSpacing} 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseSize}; word-break: break-word; color: #000000;">
         ${item.product.name}
       </td>
-      <td style="padding: ${lineSpacing} 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseSize}; font-weight: 600; color: #000000; width: 32px;">
+      <td style="padding: ${lineSpacing} 4px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseSize}; font-weight: 600; color: #000000; width: 18%;">
         ${item.qty}
       </td>
-      <td style="padding: ${lineSpacing} 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: ${baseSize}; color: #000000; width: 68px;">
+      <td style="padding: ${lineSpacing} 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 700; font-size: ${baseSize}; color: #000000; width: 28%;">
         ৳${(item.qty * item.sellPrice).toLocaleString()}
       </td>
     </tr>`
@@ -146,14 +146,14 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Receipt ${data.invoiceNo}</title>
   <style>
-    @page { size: ${pageSizeRule}; margin: 0; }
+    @page { size: ${pageSizeRule}; margin: 0 !important; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
-    html, body { background: #ffffff !important; color: #000000 !important; width: 100%; margin: 0 auto; padding: 4mm 2mm; font-size: ${baseSize} !important; line-height: 1.35; }
-    .receipt-wrap { width: 100%; max-width: ${bodyMaxWidth}; margin: 0 auto; background: #ffffff; }
+    html, body { background: #ffffff !important; color: #000000 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; font-size: ${baseSize} !important; line-height: 1.4; }
+    .receipt-wrap { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 6mm 4mm; box-sizing: border-box !important; background: #ffffff; }
     .dashed-line { border-top: 1px dashed #000000; margin: 6px 0; height: 0; }
     .solid-line { border-top: 1.5px solid #000000; margin: 6px 0; height: 0; }
     .double-line { border-top: 1.5px solid #000000; border-bottom: 1.5px solid #000000; padding: 4px 0; margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    table { width: 100% !important; border-collapse: collapse; margin: 4px 0; }
     th { text-transform: uppercase; font-size: ${subSize}; font-weight: 800; border-bottom: 1px dashed #000000; padding-bottom: 4px; color: #000000; }
   </style>
 </head>
