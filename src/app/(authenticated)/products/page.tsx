@@ -168,11 +168,14 @@ export default function ProductsPage() {
 
   const allProducts = productsData ?? [];
   const salesData = salesQuery.data ?? [];
-
-  // Valuations
+  // Valuations & Total Raw Profit from sold products (Selling Price - Buying Cost)
   const totalCostValuation = allProducts.filter(p => !p.archived).reduce((sum, p) => sum + (p.buy_price * p.stock), 0);
   const totalSaleValuation = allProducts.filter(p => !p.archived).reduce((sum, p) => sum + (p.sell_price * p.stock), 0);
-  const totalExpectedProfit = Math.max(totalSaleValuation - totalCostValuation, 0);
+  const totalRawProfit = useMemo(() => {
+    return salesData
+      .filter(s => !s.returned)
+      .reduce((sum, s) => sum + (Number(s.profit) || (Number(s.sell_price) - Number(s.buy_price || 0)) * s.qty), 0);
+  }, [salesData]);
 
   // Compute popularity (quantity sold)
   const popularityMap = useMemo(() => {
@@ -190,13 +193,24 @@ export default function ProductsPage() {
     return Array.from(new Set(allProducts.map(p => p.category).filter(Boolean))) as string[];
   }, [allProducts]);
 
-  // Filters
-  const searchFiltered = allProducts.filter(p =>
-    (p.name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (p.barcode || "").toLowerCase().includes(search.toLowerCase()) ||
-    Object.values(p.attributes || {}).some(val => val.toLowerCase().includes(search.toLowerCase())) ||
-    (p.category || "").toLowerCase().includes(search.toLowerCase())
-  );
+  // Filters (Name, Barcode, Unique Product Number, Code, SKU, QR, ID, Attributes, Category)
+  const searchFiltered = allProducts.filter(p => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    const strippedQ = q.replace(/^0+/, "");
+    return (
+      (p.name || "").toLowerCase().includes(q) ||
+      (p.barcode && (p.barcode.toLowerCase().includes(q) || (strippedQ && p.barcode.replace(/^0+/, "").includes(strippedQ)))) ||
+      (p.code && (p.code.toLowerCase().includes(q) || (strippedQ && p.code.replace(/^0+/, "").includes(strippedQ)))) ||
+      (p.product_number && (p.product_number.toLowerCase().includes(q) || (strippedQ && p.product_number.replace(/^0+/, "").includes(strippedQ)))) ||
+      (p.sku && p.sku.toLowerCase().includes(q)) ||
+      (p.qr_code && p.qr_code.toLowerCase().includes(q)) ||
+      p.id.toLowerCase() === q ||
+      p.id.toLowerCase().slice(-6) === q ||
+      Object.values(p.attributes || {}).some(val => val.toLowerCase().includes(q)) ||
+      (p.category || "").toLowerCase().includes(q)
+    );
+  });
 
   const filteredProducts = searchFiltered.filter(p => {
     const matchesTab = activeTab === "archived" ? p.archived === true : p.archived !== true;
@@ -301,8 +315,8 @@ export default function ProductsPage() {
             <div className="text-xs sm:text-base font-bold font-serif text-emerald-700 dark:text-emerald-400 mt-0.5">{fmtMoney(totalSaleValuation)}</div>
           </Card>
           <Card className="p-2 sm:p-3 bg-gradient-to-br from-amber-50/50 to-amber-100/50 dark:from-amber-950/20 dark:to-amber-900/10 border-amber-200/30">
-            <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{t("profit")} (Expected)</div>
-            <div className="text-xs sm:text-base font-bold font-serif text-amber-700 dark:text-amber-400 mt-0.5">{fmtMoney(totalExpectedProfit)}</div>
+            <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{lang === "bn" ? "মোট বিক্রয় লাভ (র' প্রফিট)" : "Raw Sales Profit"}</div>
+            <div className="text-xs sm:text-base font-bold font-serif text-amber-700 dark:text-amber-400 mt-0.5">{fmtMoney(totalRawProfit)}</div>
           </Card>
         </div>
       )}

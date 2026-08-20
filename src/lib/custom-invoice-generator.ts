@@ -320,3 +320,28 @@ export function printCustomPosInvoice(data: CustomInvoiceData) {
     window.print();
   }
 }
+
+/**
+ * Direct POS Invoice PDF Downloader (Zero Web-Preview)
+ * Generates and downloads a clean, standalone .pdf file immediately.
+ */
+export async function downloadCustomInvoicePdf(data: CustomInvoiceData): Promise<void> {
+  const canvas = generateCustomPosInvoiceCanvas(data);
+  const imgData = canvas.toDataURL("image/png");
+
+  const { default: jsPDF } = await import("jspdf");
+
+  const targetWidthMm = getPosPaperConfig().widthMm || 80;
+  const canvasAspect = canvas.height / canvas.width;
+  const targetHeightMm = targetWidthMm * canvasAspect;
+
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: [targetWidthMm, Math.max(targetHeightMm, 120)],
+  });
+
+  pdf.addImage(imgData, "PNG", 0, 0, targetWidthMm, targetHeightMm);
+  pdf.save(`Invoice_${data.invoiceNo || Date.now()}.pdf`);
+}
+

@@ -67,7 +67,7 @@ export default function CashboxDetailsPage() {
   const [deleteTarget, setDeleteTarget] = useState<CashboxEntry | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [range, setRange] = useState<Range>("month");
+  const [range, setRange] = useState<Range>("today");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [filterKind, setFilterKind] = useState<FilterKind>("all");

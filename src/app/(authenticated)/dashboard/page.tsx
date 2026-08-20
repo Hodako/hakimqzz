@@ -54,35 +54,37 @@ function dayLabel(dateStr: string) {
 }
 
 function groupAllDataByDay(sales: any[], expenses: any[], days: number) {
-  const result: Record<string, { date: string; sales: number; profit: number; expenses: number }> = {};
-  const from = startOf(days);
+  const result: Record<string, { date: string; sales: number; profit: number; expenses: number; rawDate: string }> = {};
   
-  // Initialize range
+  // Initialize date buckets for each day
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const key = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    result[key] = { date: key, sales: 0, profit: 0, expenses: 0 };
+    const key = d.toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+    const displayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    result[key] = { date: displayLabel, sales: 0, profit: 0, expenses: 0, rawDate: key };
   }
 
   // Populate sales and profit
-  for (const s of sales) {
+  for (const s of sales || []) {
     if (s.returned) continue;
-    if (new Date(s.created_at) < from) continue;
-    const key = dayLabel(s.created_at);
+    if (!s.created_at) continue;
+    const sDate = new Date(s.created_at);
+    const key = sDate.toLocaleDateString("en-CA");
     if (result[key]) {
-      const saleVal = Number(s.sell_price) * s.qty;
+      const saleVal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
       result[key].sales += saleVal;
-      result[key].profit += Number(s.profit);
+      result[key].profit += Number(s.profit) || 0;
     }
   }
 
   // Populate expenses
-  for (const e of expenses) {
-    if (new Date(e.created_at) < from) continue;
-    const key = dayLabel(e.created_at);
+  for (const e of expenses || []) {
+    if (!e.created_at) continue;
+    const eDate = new Date(e.created_at);
+    const key = eDate.toLocaleDateString("en-CA");
     if (result[key]) {
-      result[key].expenses += Number(e.amount);
+      result[key].expenses += Number(e.amount) || 0;
     }
   }
 
@@ -165,13 +167,13 @@ function KPICard({
 
   const getCurveClass = () => {
     switch (curve) {
-      case "none": return "rounded-lg";
-      case "sm": return "rounded-xl";
-      case "md": return "rounded-xl";
-      case "lg": return "rounded-2xl";
-      case "xl": return "rounded-2xl";
-      case "full": return "rounded-3xl";
-      default: return "rounded-2xl";
+      case "none": return "rounded-none";
+      case "sm": return "rounded-xs";
+      case "md": return "rounded-xs";
+      case "lg": return "rounded-xs";
+      case "xl": return "rounded-xs";
+      case "full": return "rounded-sm";
+      default: return "rounded-none";
     }
   };
 
@@ -267,17 +269,15 @@ function KPICard({
   return (
     <Card
       onClick={onClick}
-      className={`group flex flex-col justify-between transition-all duration-200 relative overflow-hidden ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${
+      className={`group flex flex-col justify-between transition-all duration-200 relative overflow-hidden beveled-kpi ${sizePadding} ${alignClass} ${className || ""} ${themeStyle.bg} ${
         isDesktop
-          ? "beveled-card shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 border-t border-l border-white/60 dark:border-white/20 border-b border-r border-black/10 dark:border-black/40 ring-1 ring-black/5"
-          : `${themeStyle.shadow} shadow-[0_3px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_18px_rgba(0,0,0,0.12)] dark:shadow-[0_3px_12px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_6px_18px_rgba(0,0,0,0.5)] border border-border/70`
+          ? "hover:shadow-xl hover:-translate-y-0.5"
+          : "hover:shadow-md"
       } ${getCurveClass()} ${
-        onClick ? "cursor-pointer hover:border-primary/50 active:opacity-90" : ""
+        onClick ? "cursor-pointer hover:border-primary/60 active:opacity-90" : ""
       }`}
     >
-      {isDesktop && (
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-white/80 dark:via-white/30 to-transparent pointer-events-none z-20" />
-      )}
+      <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/90 dark:via-white/25 to-transparent pointer-events-none z-20" />
 
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
         <div className="flex items-center gap-1.5 min-w-0 mr-2">
@@ -794,13 +794,37 @@ export default function Dashboard() {
   const customGraphData = groupAllDataByDay(allSales, allExpenses, chartRange);
 
   // Payment method breakdown for pie
-  const cashTotal   = filteredSales.filter(s => s.type === "cash").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
-  const creditTotal = filteredSales.filter(s => s.type === "credit").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
-  const onlineTotal = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
+  const salesForPie = filteredSales.length > 0 ? filteredSales : allSales;
+  let pieCashTotal = 0;
+  let pieBkashTotal = 0;
+  let pieCreditTotal = 0;
+  let pieOnlineTotal = 0;
+
+  for (const s of salesForPie) {
+    if (s.returned) continue;
+    const totalVal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
+    const paid = Number(s.paid_amount) || 0;
+    const due = Number(s.due_amount) || 0;
+
+    if (s.type === "bkash") {
+      pieBkashTotal += totalVal;
+    } else if (s.type === "online") {
+      pieOnlineTotal += totalVal;
+    } else if (s.type === "credit") {
+      pieCreditTotal += due > 0 ? due : totalVal;
+      if (paid > 0) {
+        pieCashTotal += paid;
+      }
+    } else {
+      pieCashTotal += totalVal;
+    }
+  }
+
   const pieData = [
-    { name: t("cash"),        value: cashTotal,   color: "#6366f1" },
-    { name: t("credit"),      value: creditTotal, color: "#f59e0b" },
-    { name: t("online_sell"), value: onlineTotal, color: "#10b981" },
+    { name: lang === "bn" ? "নগদ (Cash)" : "Cash", value: pieCashTotal, color: "#6366f1" },
+    { name: lang === "bn" ? "বিকাশ (bKash)" : "bKash", value: pieBkashTotal, color: "#e11d48" },
+    { name: lang === "bn" ? "বাকী (Credit)" : "Credit Due", value: pieCreditTotal, color: "#f59e0b" },
+    { name: lang === "bn" ? "অনলাইন (Online)" : "Online", value: pieOnlineTotal, color: "#10b981" },
   ].filter(d => d.value > 0);
 
   // Recent sales sorted
@@ -1165,7 +1189,7 @@ export default function Dashboard() {
           purchases: allowPurchases ? (
             <Link href="/purchases" className={`block ${isHeroCard("purchases") ? "sm:col-span-2" : ""}`} key="purchases" onClick={() => playTapSound()}>
               <KPICard
-                label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
+                label={lang === "bn" ? "পণ্য ক্রয়" : "Purchases"}
                 value={fmtMoney(purchasesToday)}
                 sub={dateRangeLabel}
                 imageUrl="https://img.icons8.com/fluency/48/buy.png"
@@ -1386,29 +1410,59 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <ResponsiveContainer width="100%" height={150}>
-                  <ChartComponent data={customGraphData}>
-                    <defs>
-                      <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gExpense" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="date" tick={{ fontSize: 8 }} />
-                    <YAxis tick={{ fontSize: 8 }} tickFormatter={v => `৳${v}`} width={40} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <ChartDataElement type="monotone" dataKey={chartMetric} stroke={getMetricColor()} fill={chartType === "area" ? (chartMetric === "profit" ? "url(#gProfit)" : chartMetric === "expenses" ? "url(#gExpense)" : "url(#gSales)") : undefined} strokeWidth={2} name={t(chartMetric)} />
-                  </ChartComponent>
-                </ResponsiveContainer>
+                <div className="w-full h-[150px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ChartComponent data={customGraphData}>
+                      <defs>
+                        <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gProfit" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gExpense" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.6} />
+                      <XAxis dataKey="date" tick={{ fontSize: 8 }} />
+                      <YAxis tick={{ fontSize: 8 }} tickFormatter={v => `৳${v}`} width={40} />
+                      <Tooltip content={<ChartTooltip />} />
+                      {chartType === "area" && (
+                        <Area
+                          type="monotone"
+                          dataKey={chartMetric}
+                          stroke={getMetricColor()}
+                          fill={chartMetric === "profit" ? "url(#gProfit)" : chartMetric === "expenses" ? "url(#gExpense)" : "url(#gSales)"}
+                          strokeWidth={2}
+                          name={t(chartMetric)}
+                        />
+                      )}
+                      {chartType === "bar" && (
+                        <Bar
+                          dataKey={chartMetric}
+                          fill={getMetricColor()}
+                          radius={[4, 4, 0, 0]}
+                          name={t(chartMetric)}
+                        />
+                      )}
+                      {chartType === "line" && (
+                        <Line
+                          type="monotone"
+                          dataKey={chartMetric}
+                          stroke={getMetricColor()}
+                          strokeWidth={2}
+                          dot={{ r: 2 }}
+                          activeDot={{ r: 4 }}
+                          name={t(chartMetric)}
+                        />
+                      )}
+                    </ChartComponent>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </Card>
@@ -1430,22 +1484,24 @@ export default function Dashboard() {
                   <div className="h-32 flex items-center justify-center text-xs text-muted-foreground">{t("no_activity")}</div>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={140}>
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={55} dataKey="value" paddingAngle={3}>
-                          {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(v: any) => `৳${Number(v).toLocaleString()}`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-dashed">
+                    <div className="w-full h-[140px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={55} dataKey="value" paddingAngle={3}>
+                            {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(v: any) => `৳${Number(v).toLocaleString()}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-dashed">
                       {pieData.map(d => (
-                        <div key={d.name} className="flex flex-col items-center p-1.5 bg-secondary/30 rounded text-center min-w-0">
-                          <span className="text-[8px] text-muted-foreground truncate max-w-full flex items-center gap-1">
-                            <span className="size-1.5 rounded-full shrink-0" style={{ background: d.color }} />
+                        <div key={d.name} className="flex flex-col items-center p-1.5 bg-secondary/30 rounded-xl text-center min-w-0">
+                          <span className="text-[9px] text-muted-foreground truncate max-w-full flex items-center gap-1 font-semibold">
+                            <span className="size-2 rounded-full shrink-0" style={{ background: d.color }} />
                             {d.name}
                           </span>
-                          <span className="text-[10px] font-bold mt-0.5 text-foreground truncate max-w-full">{fmtMoney(d.value)}</span>
+                          <span className="text-xs font-bold mt-0.5 text-foreground truncate max-w-full font-serif">{fmtMoney(d.value)}</span>
                         </div>
                       ))}
                     </div>
@@ -1659,7 +1715,7 @@ export default function Dashboard() {
               return canAccess(perms, "purchases") ? (
                 <Link href="/purchases" className="block" key="purchases" onClick={() => playTapSound()}>
                   <KPICard
-                    label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
+                    label={lang === "bn" ? "পণ্য ক্রয়" : "Purchases"}
                     value={fmtMoney(purchasesToday)}
                     sub={dateRangeLabel}
                     icon={ShoppingCart}
@@ -1840,29 +1896,59 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <ResponsiveContainer width="100%" height={220}>
-                <ChartComponent data={customGraphData}>
-                  <defs>
-                    <linearGradient id="dSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="dProfit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="dExpense" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `৳${v}`} width={50} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <ChartDataElement type="monotone" dataKey={chartMetric} stroke={getMetricColor()} fill={chartType === "area" ? (chartMetric === "profit" ? "url(#dProfit)" : chartMetric === "expenses" ? "url(#dExpense)" : "url(#dSales)") : undefined} strokeWidth={2} name={t(chartMetric)} />
-                </ChartComponent>
-              </ResponsiveContainer>
+              <div className="w-full h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ChartComponent data={customGraphData}>
+                    <defs>
+                      <linearGradient id="dSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="dProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="dExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.6} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `৳${v}`} width={50} />
+                    <Tooltip content={<ChartTooltip />} />
+                    {chartType === "area" && (
+                      <Area
+                        type="monotone"
+                        dataKey={chartMetric}
+                        stroke={getMetricColor()}
+                        fill={chartMetric === "profit" ? "url(#dProfit)" : chartMetric === "expenses" ? "url(#dExpense)" : "url(#dSales)"}
+                        strokeWidth={2}
+                        name={t(chartMetric)}
+                      />
+                    )}
+                    {chartType === "bar" && (
+                      <Bar
+                        dataKey={chartMetric}
+                        fill={getMetricColor()}
+                        radius={[4, 4, 0, 0]}
+                        name={t(chartMetric)}
+                      />
+                    )}
+                    {chartType === "line" && (
+                      <Line
+                        type="monotone"
+                        dataKey={chartMetric}
+                        stroke={getMetricColor()}
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                        name={t(chartMetric)}
+                      />
+                    )}
+                  </ChartComponent>
+                </ResponsiveContainer>
+              </div>
             </Card>
 
             <Card className="p-5 flex flex-col justify-between bg-gradient-to-br from-white to-zinc-50/40 dark:from-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm beveled-card shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)] hover:shadow-lg transition-all border border-border/80">
@@ -1872,22 +1958,24 @@ export default function Dashboard() {
                   <div className="h-44 flex items-center justify-center text-sm text-muted-foreground">{t("no_activity")}</div>
                 ) : (
                   <>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={3}>
-                          {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(v: any) => `৳${Number(v).toLocaleString()}`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="space-y-1.5 mt-2">
+                    <div className="w-full h-[150px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={3}>
+                            {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(v: any) => `৳${Number(v).toLocaleString()}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-2 mt-3 pt-2 border-t border-border/60">
                       {pieData.map(d => (
-                        <div key={d.name} className="flex items-center justify-between text-[11px]">
-                          <span className="flex items-center gap-1">
-                            <span className="size-2 rounded-full" style={{ background: d.color }} />
+                        <div key={d.name} className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <span className="size-2.5 rounded-full shadow-xs" style={{ background: d.color }} />
                             {d.name}
                           </span>
-                          <span className="font-semibold">{fmtMoney(d.value)}</span>
+                          <span className="font-bold font-serif">{fmtMoney(d.value)}</span>
                         </div>
                       ))}
                     </div>
@@ -2027,21 +2115,39 @@ export default function Dashboard() {
             <h1 className="text-xl font-bold font-serif">{t("dashboard")}</h1>
             <p className="text-xs text-muted-foreground">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
           </div>
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => setShowFilter(!showFilter)} aria-label="Toggle filter">
+          <Button
+            variant={showFilter ? "default" : "outline"}
+            size="icon"
+            className="size-8"
+            onClick={() => setShowFilter(!showFilter)}
+            aria-label="Toggle filter"
+          >
             <ArrowUpDown className="size-4" />
           </Button>
         </div>
 
-        {/* Date Filter */}
+        {/* Date Filter Dropdown on Phone */}
         {showFilter && (
-          <Card className="p-3 bg-card border border-border space-y-2.5">
-            {/* Quick Preset Pills */}
+          <Card className="p-3 bg-card border border-border space-y-2.5 rounded-2xl shadow-sm">
+            {/* Quick Preset Pills in Phone Filter Dropdown */}
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {lang === "bn" ? "তারিখ ফিল্টার" : "Date Filter Presets"}
+            </div>
             <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                variant={!dateFilter.from && !dateFilter.to ? "default" : "outline"}
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded-lg font-bold"
+                onClick={() => clearFilter()}
+              >
+                {lang === "bn" ? "সব সময়" : "All Time"}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2 rounded"
+                className="h-6 text-[10px] px-2 rounded-lg font-medium"
                 onClick={() => setPresetRange("today")}
               >
                 {lang === "bn" ? "আজ" : "Today"}
@@ -2050,7 +2156,7 @@ export default function Dashboard() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2 rounded"
+                className="h-6 text-[10px] px-2 rounded-lg font-medium"
                 onClick={() => setPresetRange("yesterday")}
               >
                 {lang === "bn" ? "গতকাল" : "Yesterday"}
@@ -2059,7 +2165,7 @@ export default function Dashboard() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2 rounded"
+                className="h-6 text-[10px] px-2 rounded-lg font-medium"
                 onClick={() => setPresetRange("this_week")}
               >
                 {lang === "bn" ? "এই সপ্তাহ" : "This Week"}
@@ -2068,7 +2174,7 @@ export default function Dashboard() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2 rounded font-medium bg-primary/10 border-primary/30"
+                className="h-6 text-[10px] px-2 rounded-lg font-semibold bg-primary/10 border-primary/30 text-primary"
                 onClick={() => setPresetRange("this_month")}
               >
                 {lang === "bn" ? "এই মাস" : "This Month"}
@@ -2077,39 +2183,30 @@ export default function Dashboard() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 text-[10px] px-2 rounded"
+                className="h-6 text-[10px] px-2 rounded-lg font-medium"
                 onClick={() => setPresetRange("last_month")}
               >
                 {lang === "bn" ? "গত মাস" : "Last Month"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 text-[10px] px-2 text-muted-foreground hover:text-destructive"
-                onClick={clearFilter}
-              >
-                {lang === "bn" ? "রিসেট" : "Reset"}
               </Button>
             </div>
 
             <div className="space-y-2 pt-1 border-t border-border/60">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Date from</label>
-                  <Input type="date" className="h-8 text-xs" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">{lang === "bn" ? "শুরুর তারিখ" : "Date from"}</label>
+                  <Input type="date" className="h-8 text-xs rounded-lg" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground block mb-0.5">Date to</label>
-                  <Input type="date" className="h-8 text-xs" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">{lang === "bn" ? "শেষ তারিখ" : "Date to"}</label>
+                  <Input type="date" className="h-8 text-xs rounded-lg" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
                 </div>
               </div>
               <div className="flex gap-1.5 pt-0.5">
-                <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" size="sm" className="h-7 text-xs flex-1">
-                  Apply
+                <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" size="sm" className="h-7 text-xs flex-1 rounded-lg font-bold">
+                  {lang === "bn" ? "প্রয়োগ করুন" : "Apply"}
                 </Button>
-                <Button onClick={clearFilter} variant="outline" size="sm" className="h-7 text-xs flex-1">
-                  Clear
+                <Button onClick={clearFilter} variant="outline" size="sm" className="h-7 text-xs flex-1 rounded-lg font-medium">
+                  {lang === "bn" ? "রিসেট" : "Reset"}
                 </Button>
               </div>
             </div>
@@ -2190,107 +2287,119 @@ export default function Dashboard() {
     );
   }
 
-  // ── Desktop Layout ───────────────────────────────────────────────────
+  // ── Desktop Layout (No secondary header card, presets beside filter icon) ─────────────────
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight font-serif">{t("dashboard")}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setShowFilter(!showFilter)} aria-label="Toggle filter">
-            <ArrowUpDown className="size-4" />
-            {lang === "bn" ? "ফিল্টার" : "Filter"}
+    <div className="space-y-5">
+      {/* Top Action & Filter Bar on PC */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card/60 border border-border/80 p-2.5 rounded-2xl shadow-xs backdrop-blur-md">
+        {/* Presets directly beside the filter icon on PC */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button
+            variant={showFilter ? "default" : "outline"}
+            size="sm"
+            className="h-8 px-2.5 gap-1.5 rounded-xl font-semibold border-border cursor-pointer"
+            onClick={() => setShowFilter(!showFilter)}
+            title={lang === "bn" ? "কাস্টম তারিখ ফিল্টার" : "Custom Date Filter"}
+          >
+            <Calendar className="size-3.5 text-primary" />
+            <span className="text-xs">{lang === "bn" ? "ফিল্টার" : "Filter"}</span>
           </Button>
-          <Link href="/sales" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+
+          <div className="h-4 w-px bg-border mx-0.5 hidden sm:block" />
+
+          {/* Preset Buttons beside filter icon */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={`h-8 text-xs px-2.5 rounded-xl font-bold transition-all cursor-pointer ${!dateFilter.from && !dateFilter.to ? "bg-primary text-primary-foreground border-primary shadow-xs" : "bg-card hover:bg-muted"}`}
+            onClick={() => clearFilter()}
+          >
+            {lang === "bn" ? "সব সময়" : "All Time"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            onClick={() => setPresetRange("today")}
+          >
+            {lang === "bn" ? "আজ" : "Today"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            onClick={() => setPresetRange("yesterday")}
+          >
+            {lang === "bn" ? "গতকাল" : "Yesterday"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            onClick={() => setPresetRange("this_week")}
+          >
+            {lang === "bn" ? "এই সপ্তাহ" : "This Week"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            onClick={() => setPresetRange("this_month")}
+          >
+            {lang === "bn" ? "এই মাস" : "This Month"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            onClick={() => setPresetRange("last_month")}
+          >
+            {lang === "bn" ? "গত মাস" : "Last Month"}
+          </Button>
+        </div>
+
+        {/* Primary New Sale button */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => { playTapSound(); setSaleOpen(true); }}
+            size="sm"
+            className="h-8.5 px-4 gap-1.5 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
+          >
             <ShoppingBag className="size-4" />
-            {t("new_sale")}
-          </Link>
+            <span>{t("new_sale")}</span>
+            <span className="text-[10px] font-mono opacity-80 ml-0.5">[Space]</span>
+          </Button>
         </div>
       </div>
 
-      {/* Date Filter */}
+      {/* Expandable Custom Date Range Selector on PC */}
       {showFilter && (
-        <Card className="p-4 bg-card border border-border space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground mr-1">Presets:</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2.5 rounded-lg"
-                onClick={() => setPresetRange("today")}
-              >
-                {lang === "bn" ? "আজ (Today)" : "Today"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2.5 rounded-lg"
-                onClick={() => setPresetRange("yesterday")}
-              >
-                {lang === "bn" ? "গতকাল (Yesterday)" : "Yesterday"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2.5 rounded-lg"
-                onClick={() => setPresetRange("this_week")}
-              >
-                {lang === "bn" ? "এই সপ্তাহ (Week)" : "This Week"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2.5 rounded-lg font-medium bg-primary/10 border-primary/30 text-primary"
-                onClick={() => setPresetRange("this_month")}
-              >
-                {lang === "bn" ? "এই মাস (Month)" : "This Month"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2.5 rounded-lg"
-                onClick={() => setPresetRange("last_month")}
-              >
-                {lang === "bn" ? "গত মাস (Last Month)" : "Last Month"}
-              </Button>
+        <Card className="p-3.5 border border-border/80 bg-card rounded-2xl shadow-sm">
+          <div className="flex flex-wrap items-end gap-3 max-w-2xl">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                {lang === "bn" ? "শুরুর তারিখ" : "Start Date"}
+              </label>
+              <Input type="date" className="h-8.5 text-xs rounded-xl" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs px-2.5 text-muted-foreground hover:text-destructive"
-              onClick={clearFilter}
-            >
-              {lang === "bn" ? "রিসেট / সব (Clear)" : "Clear / All Time"}
-            </Button>
-          </div>
-
-          <div className="flex items-end gap-4 max-w-2xl">
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground block mb-1">Date from</label>
-              <Input type="date" className="h-9 text-sm" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground block mb-1">Date to</label>
-              <Input type="date" className="h-9 text-sm" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                {lang === "bn" ? "শেষ তারিখ" : "End Date"}
+              </label>
+              <Input type="date" className="h-8.5 text-xs rounded-xl" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" className="h-9 text-sm px-4">
-                Apply
+              <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" size="sm" className="h-8.5 text-xs px-3 rounded-xl font-bold">
+                {lang === "bn" ? "প্রয়োগ" : "Apply"}
               </Button>
-              <Button onClick={clearFilter} variant="outline" className="h-9 text-sm px-4">
-                Clear
+              <Button onClick={clearFilter} variant="outline" size="sm" className="h-8.5 text-xs px-3 rounded-xl font-medium">
+                {lang === "bn" ? "রিসেট" : "Reset"}
               </Button>
             </div>
           </div>

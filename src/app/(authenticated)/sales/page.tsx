@@ -18,11 +18,11 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
-import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp, Printer } from "lucide-react";
+import { RotateCcw, Search, Trash2, Pencil, ChevronDown, ChevronUp, Printer, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
-import { printPwaInvoice } from "@/lib/invoice-printer";
+import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
@@ -37,7 +37,7 @@ interface GroupedSale {
   profit: number;
   due_amount: number;
   paid_amount: number;
-  type: "cash" | "credit" | "online";
+  type: "cash" | "bkash" | "credit" | "online";
   created_at: string;
   parties?: { name: string } | null;
   items: Sale[];
@@ -130,6 +130,7 @@ export default function SalesPage() {
     );
 
   const cash = filter(allSalesGrouped.filter(s => s.type === "cash"));
+  const bkash = filter(allSalesGrouped.filter(s => s.type === "bkash"));
   const credit = filter(allSalesGrouped.filter(s => s.type === "credit"));
   const online = filter(allSalesGrouped.filter(s => s.type === "online"));
 
@@ -164,13 +165,17 @@ export default function SalesPage() {
       )}
 
       <Tabs defaultValue="cash" onValueChange={() => setPage(1)}>
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="cash">{t("cash_sale")}</TabsTrigger>
+          <TabsTrigger value="bkash">{lang === "bn" ? "বিকাশ" : "bKash"}</TabsTrigger>
           <TabsTrigger value="credit">{t("credit_sale")}</TabsTrigger>
           <TabsTrigger value="online">{t("online_sell")}</TabsTrigger>
         </TabsList>
         <TabsContent value="cash" className="pt-3 space-y-2">
           <SalesTab items={cash} page={page} pageSize={pageSize} onPageChange={setPage} onEdit={setEditSale} />
+        </TabsContent>
+        <TabsContent value="bkash" className="pt-3 space-y-2">
+          <SalesTab items={bkash} page={page} pageSize={pageSize} onPageChange={setPage} onEdit={setEditSale} />
         </TabsContent>
         <TabsContent value="credit" className="pt-3 space-y-2">
           <SalesTab items={credit} page={page} pageSize={pageSize} onPageChange={setPage} credit onEdit={setEditSale} />
@@ -242,38 +247,77 @@ function SalesTab({
   const { data: bizData } = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const biz = bizData?.business;
 
-  function handlePrintSale(s: GroupedSale) {
+  async function handlePrintSale(s: GroupedSale) {
     const custName = s.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer");
     const invNo = s.cart_id ? `INV-${s.cart_id.slice(-6).toUpperCase()}` : `INV-${s.id.slice(-6).toUpperCase()}`;
     const discTotal = s.items.reduce((acc, x) => acc + (Number(x.discount) || 0) * (Number(x.qty) || 1), 0);
     const sub = s.sell_price + discTotal;
 
-    printPwaInvoice({
-      businessName: user?.business_name || biz?.name || "Dream Fashion POS",
-      userEmail: biz?.emails || user?.business_emails || user?.email || "",
-      shopAddress: biz?.address || user?.business_address || "",
-      shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
-      pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
-      pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
-      pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
-      invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "22px",
-      invoiceScale: biz?.invoice_scale || user?.invoice_scale || "100%",
-      invoiceLineSpacing: biz?.invoice_line_spacing || user?.invoice_line_spacing || "6px",
-      terms: biz?.invoice_terms || "",
-      invoiceNo: invNo,
-      invoiceDate: fmtDateTime(s.created_at),
-      customerName: custName,
-      items: s.items.map(item => ({
-        product: { id: item.product_id || undefined, name: item.product_name },
-        qty: Number(item.qty) || 1,
-        sellPrice: Number(item.sell_price) || 0,
-      })),
-      subtotal: sub,
-      discountAmount: discTotal,
-      total: s.sell_price,
-      paidAmount: s.paid_amount,
-      due: s.due_amount,
-    });
+    try {
+      await downloadPwaInvoicePdf({
+        businessName: user?.business_name || biz?.name || "Dream Fashion POS",
+        userEmail: biz?.emails || user?.business_emails || user?.email || "",
+        shopAddress: biz?.address || user?.business_address || "",
+        shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+        pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+        pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
+        pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
+        invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "22px",
+        invoiceScale: biz?.invoice_scale || user?.invoice_scale || "100%",
+        invoiceLineSpacing: biz?.invoice_line_spacing || user?.invoice_line_spacing || "6px",
+        terms: biz?.invoice_terms || "",
+        invoiceNo: invNo,
+        invoiceDate: fmtDateTime(s.created_at),
+        customerName: custName,
+        items: s.items.map(item => ({
+          product: { id: item.product_id || undefined, name: item.product_name },
+          qty: Number(item.qty) || 1,
+          sellPrice: Number(item.sell_price) || 0,
+        })),
+        subtotal: sub,
+        discountAmount: discTotal,
+        total: s.sell_price,
+        paidAmount: s.paid_amount,
+        due: s.due_amount,
+      }, true);
+      toast.success(lang === "bn" ? "ইনভয়েস পিডিএফ ভিউ প্রস্তুত হচ্ছে!" : "Opening invoice PDF!");
+    } catch (err: any) {
+      toast.error(lang === "bn" ? "পিডিএফ ভিউ সমস্যা: " + (err?.message || "") : "Failed to open PDF: " + (err?.message || ""));
+    }
+  }
+
+  async function handleDownloadSalePdf(s: GroupedSale) {
+    const custName = s.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer");
+    const invNo = s.cart_id ? `INV-${s.cart_id.slice(-6).toUpperCase()}` : `INV-${s.id.slice(-6).toUpperCase()}`;
+    const discTotal = s.items.reduce((acc, x) => acc + (Number(x.discount) || 0) * (Number(x.qty) || 1), 0);
+    const sub = s.sell_price + discTotal;
+
+    try {
+      await downloadPwaInvoicePdf({
+        businessName: user?.business_name || biz?.name || "Dream Fashion POS",
+        userEmail: biz?.emails || user?.business_emails || user?.email || "",
+        shopAddress: biz?.address || user?.business_address || "",
+        shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+        pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+        terms: biz?.invoice_terms || "",
+        invoiceNo: invNo,
+        invoiceDate: fmtDateTime(s.created_at),
+        customerName: custName,
+        items: s.items.map(item => ({
+          product: { id: item.product_id || undefined, name: item.product_name },
+          qty: Number(item.qty) || 1,
+          sellPrice: Number(item.sell_price) || 0,
+        })),
+        subtotal: sub,
+        discountAmount: discTotal,
+        total: s.sell_price,
+        paidAmount: s.paid_amount,
+        due: s.due_amount,
+      });
+      toast.success(lang === "bn" ? "ইনভয়েস PDF সফলভাবে ডাউনলোড হয়েছে!" : "Invoice PDF downloaded successfully!");
+    } catch (err: any) {
+      toast.error(lang === "bn" ? "PDF ডাউনলোড সমস্যা: " + (err?.message || "") : "Failed to download PDF: " + (err?.message || ""));
+    }
   }
 
   if (items.length === 0) {
@@ -331,6 +375,16 @@ function SalesTab({
                     type="button"
                     size="sm"
                     variant="ghost"
+                    className="h-8 w-8 p-0 cursor-pointer text-sky-600 hover:text-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                    onClick={() => handleDownloadSalePdf(s)}
+                    title={lang === "bn" ? "ইনভয়েস PDF ডাউনলোড করুন" : "Download PDF Invoice"}
+                  >
+                    <FileDown className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
                     className="h-8 w-8 p-0 cursor-pointer text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                     onClick={() => handlePrintSale(s)}
                     title={lang === "bn" ? "ইনভয়েস প্রিন্ট করুন" : "Print Invoice"}
@@ -372,7 +426,9 @@ function SalesTab({
 
               {s.isGroup && isExpanded && (
                 <div className="pl-3 py-2 border-l-2 border-emerald-500/30 space-y-1 bg-emerald-500/5 rounded-r-lg text-xs animate-in slide-in-from-top-1 duration-150">
-                  <div className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-300 tracking-wider">Cart Items:</div>
+                  <div className="text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-300 tracking-wider">
+                    {lang === "bn" ? "কার্টের পণ্যসমূহ:" : "Cart Items:"}
+                  </div>
                   {s.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center pr-2 font-mono text-[11px] text-muted-foreground py-0.5 border-b border-border/10 last:border-b-0">
                       <span>{item.product_name} <span className="font-semibold text-foreground/90">×{item.qty}</span></span>
@@ -390,8 +446,12 @@ function SalesTab({
       <ConfirmDeleteDialog
         open={saleToDelete !== null}
         onOpenChange={(v) => { if (!v) setSaleToDelete(null); }}
-        title="Delete Sale"
-        description="Are you sure you want to delete this sale? This action is permanent and cannot be undone."
+        title={lang === "bn" ? "বিক্রি হিসেব মুছুন" : "Delete Sale"}
+        description={
+          lang === "bn"
+            ? "আপনি কি নিশ্চিত যে এই বিক্রয় রেকর্ডটি মুছে ফেলতে চান? এটি স্থায়ীভাবে মুছে যাবে।"
+            : "Are you sure you want to delete this sale? This action is permanent and cannot be undone."
+        }
         onConfirm={performDelete}
         busy={isDeleting}
       />

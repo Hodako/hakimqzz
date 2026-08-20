@@ -104,7 +104,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     @page { size: ${pageSizeRule}; margin: 0 !important; }
     *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }
     html, body { background: #ffffff !important; color: #000000 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; font-size: ${baseSize} !important; line-height: 1.25; word-break: normal; overflow-wrap: break-word; }
-    .receipt-wrap { position: relative !important; overflow: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 3mm 2mm; box-sizing: border-box !important; background: #ffffff; }
+    .receipt-wrap { position: relative !important; overflow: hidden !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 3mm 2mm 18mm 2mm; box-sizing: border-box !important; background: #ffffff; }
     .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-25deg); font-size: 18px; font-weight: 900; color: rgba(0, 0, 0, 0.07); border: 1.5px solid rgba(0, 0, 0, 0.07); padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; pointer-events: none; z-index: 0; }
     .receipt-content { position: relative; z-index: 1; }
     .dashed-line { border-top: 1px dashed #000000; margin: 3px 0; height: 0; }
@@ -211,7 +211,7 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       <div class="dashed-line"></div>
 
       <!-- Footer -->
-      <div style="text-align: center; margin-top: 4px; width: 100%;">
+      <div style="text-align: center; margin-top: 5px; margin-bottom: 8mm; width: 100%;">
         ${
           data.terms
             ? `<div style="font-size: ${subSize}; font-weight: 700; margin-top: 2px; white-space: pre-line; color: #000000;">${data.terms}</div>`
@@ -256,3 +256,329 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
     window.print();
   }
 }
+
+/**
+ * Generate and Download Standalone Clean Vector PDF Invoice (Zero Web-Preview)
+ * Supports Thermal POS formats (58mm, 80mm) and standard (A4, A5) formats.
+ */
+export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewTab = false): Promise<void> {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
+  const isThermal80 = data.pageSize === "80mm";
+  const isThermal58 = data.pageSize === "58mm";
+  const isA5 = data.pageSize === "A5";
+
+  let pdf: InstanceType<typeof jsPDF>;
+  let pageWidth = 210;
+  let margin = 14;
+
+  if (isThermal58) {
+    pageWidth = 58;
+    margin = 4;
+    const estHeight = Math.max(130, 70 + data.items.length * 8);
+    pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [58, estHeight],
+    });
+  } else if (isThermal80) {
+    pageWidth = 80;
+    margin = 5;
+    const estHeight = Math.max(140, 80 + data.items.length * 8);
+    pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [80, estHeight],
+    });
+  } else if (isA5) {
+    pageWidth = 148;
+    margin = 10;
+    pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a5",
+    });
+  } else {
+    pageWidth = 210;
+    margin = 14;
+    pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+  }
+
+  let currentY = isThermal58 || isThermal80 ? 6 : 15;
+
+  if (isThermal58 || isThermal80) {
+    // ── Thermal POS Receipt Layout (58mm / 80mm) ──────────────────────────
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(isThermal58 ? 12 : 14);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text((data.businessName || "DREAM FASHION").toUpperCase(), pageWidth / 2, currentY, { align: "center" });
+    currentY += 4.5;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(isThermal58 ? 7 : 8);
+    pdf.setTextColor(60, 60, 60);
+
+    if (data.tagline) {
+      pdf.text(data.tagline, pageWidth / 2, currentY, { align: "center" });
+      currentY += 3.5;
+    }
+    if (data.shopAddress) {
+      pdf.text(data.shopAddress, pageWidth / 2, currentY, { align: "center" });
+      currentY += 3.5;
+    }
+    if (data.shopPhoneNumbers) {
+      pdf.text(`Phone: ${data.shopPhoneNumbers}`, pageWidth / 2, currentY, { align: "center" });
+      currentY += 3.5;
+    }
+
+    // Divider
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 4;
+
+    // Meta Info
+    pdf.setFontSize(isThermal58 ? 6.5 : 7.5);
+    pdf.text(`Inv: ${data.invoiceNo}`, margin, currentY);
+    pdf.text(data.invoiceDate || new Date().toLocaleDateString(), pageWidth - margin, currentY, { align: "right" });
+    currentY += 3.5;
+
+    if (data.customerName) {
+      pdf.text(`Cust: ${data.customerName} ${data.customerPhone ? `(${data.customerPhone})` : ""}`, margin, currentY);
+      currentY += 3.5;
+    }
+
+    // Items
+    const tableRows = data.items.map((item) => [
+      item.product.name,
+      String(item.qty),
+      `Tk ${(item.qty * item.sellPrice).toLocaleString()}`,
+    ]);
+
+    autoTable(pdf, {
+      startY: currentY,
+      margin: { left: margin, right: margin },
+      head: [["Item", "Qty", "Total"]],
+      body: tableRows,
+      theme: "plain",
+      headStyles: {
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fontSize: isThermal58 ? 6.5 : 7.5,
+        cellPadding: 1,
+        lineWidth: { bottom: 0.3 },
+        lineColor: [0, 0, 0],
+      },
+      styles: {
+        fontSize: isThermal58 ? 6.5 : 7.5,
+        cellPadding: 1,
+        textColor: [0, 0, 0],
+      },
+      columnStyles: {
+        0: { cellWidth: "auto", fontStyle: "bold" },
+        1: { halign: "center", cellWidth: isThermal58 ? 10 : 14 },
+        2: { halign: "right", fontStyle: "bold", cellWidth: isThermal58 ? 16 : 22 },
+      },
+    });
+
+    // @ts-ignore
+    currentY = (pdf as any).lastAutoTable.finalY + 3;
+
+    // Divider
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 3.5;
+
+    // Totals
+    pdf.setFontSize(isThermal58 ? 7 : 8);
+    pdf.setFont("helvetica", "normal");
+    pdf.text("Subtotal:", margin, currentY);
+    pdf.text(`Tk ${data.subtotal.toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+    currentY += 3.5;
+
+    if (data.discountAmount > 0) {
+      pdf.text("Discount:", margin, currentY);
+      pdf.text(`-Tk ${data.discountAmount.toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+      currentY += 3.5;
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Total:", margin, currentY);
+    pdf.text(`Tk ${data.total.toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+    currentY += 3.5;
+
+    pdf.text("Paid:", margin, currentY);
+    pdf.text(`Tk ${data.paidAmount.toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+    currentY += 3.5;
+
+    if (data.due > 0) {
+      pdf.text("Due:", margin, currentY);
+      pdf.text(`Tk ${data.due.toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+      currentY += 3.5;
+    }
+
+    // Payment method
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(isThermal58 ? 6 : 7);
+    pdf.text(`Paid via: ${data.paymentMode || (data.due > 0 ? "Credit" : "Cash")}`, margin, currentY);
+    currentY += 5;
+
+    // Footer
+    pdf.setFont("helvetica", "bold");
+    pdf.text(data.terms || "Thank you for shopping with us!", pageWidth / 2, currentY, { align: "center" });
+
+  } else {
+    // ── Standard A4 / A5 Clean Invoice Layout ─────────────────────────────
+    pdf.setFillColor(15, 23, 42);
+    pdf.rect(0, 0, pageWidth, 4, "F");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(18);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text((data.businessName || "DREAM FASHION").toUpperCase(), margin, currentY + 4);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 116, 139);
+    const contactText = [data.shopAddress, data.shopPhoneNumbers ? `Phone: ${data.shopPhoneNumbers}` : ""].filter(Boolean).join(" | ");
+    pdf.text(contactText || "Sales Invoice & Cash Receipt", margin, currentY + 9);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(13);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text("SALES INVOICE", pageWidth - margin, currentY + 4, { align: "right" });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`Invoice No: ${data.invoiceNo}`, pageWidth - margin, currentY + 9, { align: "right" });
+    pdf.text(`Date: ${data.invoiceDate || new Date().toLocaleDateString()}`, pageWidth - margin, currentY + 13, { align: "right" });
+
+    currentY += 18;
+
+    // Customer Info Box
+    pdf.setFillColor(248, 250, 252);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.rect(margin, currentY, pageWidth - margin * 2, 14, "FD");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(`Customer: ${data.customerName || "Walk-in Customer"}`, margin + 4, currentY + 6);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    if (data.customerPhone) {
+      pdf.text(`Mobile: ${data.customerPhone}`, margin + 4, currentY + 10);
+    }
+    pdf.text(`Payment: ${data.paymentMode || "Cash"}`, pageWidth - margin - 4, currentY + 6, { align: "right" });
+
+    currentY += 18;
+
+    // Items Table
+    const tableRows = data.items.map((item, idx) => [
+      String(idx + 1),
+      item.product.name,
+      String(item.qty),
+      `Tk ${item.sellPrice.toLocaleString()}`,
+      `Tk ${(item.qty * item.sellPrice).toLocaleString()}`,
+    ]);
+
+    autoTable(pdf, {
+      startY: currentY,
+      margin: { left: margin, right: margin },
+      head: [["#", "Item Description", "Qty", "Unit Price", "Total Amount"]],
+      body: tableRows,
+      theme: "grid",
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8.5,
+        cellPadding: 2.5,
+        lineWidth: 0.35,
+        lineColor: [15, 23, 42],
+      },
+      styles: {
+        fontSize: 8,
+        cellPadding: 2.2,
+        textColor: [30, 41, 59],
+        lineColor: [203, 213, 225],
+        lineWidth: 0.35,
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { fontStyle: "bold", cellWidth: "auto" },
+        2: { halign: "center", cellWidth: 20 },
+        3: { halign: "right", cellWidth: 32 },
+        4: { halign: "right", fontStyle: "bold", cellWidth: 35 },
+      },
+    });
+
+    // @ts-ignore
+    currentY = (pdf as any).lastAutoTable.finalY + 6;
+
+    // Summary Totals
+    const rightCol = pageWidth - margin;
+    const labelCol = pageWidth - margin - 46;
+
+    pdf.setFontSize(8.5);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("Subtotal:", labelCol, currentY);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(`Tk ${data.subtotal.toLocaleString()}`, rightCol, currentY, { align: "right" });
+    currentY += 5;
+
+    if (data.discountAmount > 0) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(225, 29, 72);
+      pdf.text("Discount:", labelCol, currentY);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`-Tk ${data.discountAmount.toLocaleString()}`, rightCol, currentY, { align: "right" });
+      currentY += 5;
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(15, 23, 42);
+    pdf.text("Grand Total:", labelCol, currentY);
+    pdf.text(`Tk ${data.total.toLocaleString()}`, rightCol, currentY, { align: "right" });
+    currentY += 5;
+
+    pdf.setTextColor(5, 150, 105);
+    pdf.text("Paid Amount:", labelCol, currentY);
+    pdf.text(`Tk ${data.paidAmount.toLocaleString()}`, rightCol, currentY, { align: "right" });
+    currentY += 5;
+
+    if (data.due > 0) {
+      pdf.setTextColor(225, 29, 72);
+      pdf.text("Due Amount:", labelCol, currentY);
+      pdf.text(`Tk ${data.due.toLocaleString()}`, rightCol, currentY, { align: "right" });
+      currentY += 5;
+    }
+
+    // Footer note
+    currentY += 10;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(148, 163, 184);
+    pdf.text(data.terms || "Thank you for your business!", pageWidth / 2, currentY, { align: "center" });
+  }
+
+  const filename = `Invoice_${data.invoiceNo}.pdf`;
+  if (openInNewTab) {
+    const blobUrl = pdf.output("bloburl");
+    window.open(blobUrl, "_blank");
+  } else {
+    pdf.save(filename);
+  }
+}
+

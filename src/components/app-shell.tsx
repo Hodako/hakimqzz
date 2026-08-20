@@ -33,6 +33,7 @@ import type { PermissionSet } from "@/lib/permissions";
 import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { PermissionGuard } from "@/components/permission-guard";
 import { FloatingAiChat } from "@/components/floating-ai-chat";
+import { PWAInstallButton } from "@/components/pwa-install-button";
 
 import { CustomHomeIcon } from "@/components/custom-home-icon";
 
@@ -146,15 +147,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
       
       const key = e.key.toLowerCase();
-      if (key === "i") {
+      const isCtrlK = (e.ctrlKey || e.metaKey) && key === "k";
+      const isSlash = e.key === "/" && !e.shiftKey;
+
+      if (key === "s" || isCtrlK || isSlash) {
+        e.preventDefault();
+        // Priority 1: Search inputs or filter inputs on the active page
+        const searchInput = (
+          document.querySelector('input[type="search"]:not([disabled])') ||
+          document.querySelector('input[placeholder*="search" i]:not([disabled])') ||
+          document.querySelector('input[placeholder*="খুঁজুন" i]:not([disabled])') ||
+          document.querySelector('input[placeholder*="খুজুন" i]:not([disabled])') ||
+          document.querySelector('input[placeholder*="Search" i]:not([disabled])') ||
+          document.querySelector('#universal-search-input:not([disabled])') ||
+          document.querySelector('main input:not([type="hidden"]):not([disabled])') ||
+          document.querySelector('input:not([type="hidden"]):not([disabled])')
+        ) as HTMLInputElement | null;
+
+        if (searchInput) {
+          searchInput.focus();
+          if (typeof searchInput.select === "function") {
+            searchInput.select();
+          }
+        } else {
+          // Trigger search button or modal if present
+          const searchBtn = document.querySelector('[data-search-trigger="true"], button[aria-label*="search" i]') as HTMLButtonElement | null;
+          if (searchBtn) {
+            searchBtn.click();
+          }
+        }
+      } else if (key === "i") {
         e.preventDefault();
         router.push("/invoices");
       } else if (key === "p") {
         e.preventDefault();
         router.push("/products");
-      } else if (key === "s") {
+      } else if (key === "e") {
         e.preventDefault();
-        router.push("/sales");
+        router.push("/expenses");
+      } else if (key === "r") {
+        e.preventDefault();
+        router.push("/reports");
+      } else if (key === "b") {
+        e.preventDefault();
+        router.push("/purchases");
+      } else if (key === "u") {
+        e.preventDefault();
+        router.push("/customers");
       } else if (key === "c") {
         e.preventDefault();
         router.push("/cash-management");
@@ -299,7 +338,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              <PWAInstallButton variant="outline" className="hidden sm:inline-flex h-8 px-2.5 text-xs" />
               <UniversalSearch role={user.role} permissions={user.permissions} />
               <Button variant="ghost" size="icon" className="size-8" onClick={toggle} aria-label="Theme">
                 {resolved === "dark" ? <Sun className="icon-sm" /> : <Moon className="icon-sm" />}

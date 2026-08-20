@@ -164,13 +164,14 @@ export default function PartiesPage() {
         </div>
       </div>
 
-      <Card className="p-3 border-primary/20">
+      <Card className="p-3 beveled-kpi relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent pointer-events-none z-10" />
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-lg bg-primary grid place-items-center shrink-0">
+          <div className="size-8 rounded-xl bg-primary grid place-items-center shrink-0 shadow-xs">
             <Users className="icon-sm text-primary-foreground" />
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{lang === "bn" ? "মোট বকেয়া" : "Total Payable"}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">{lang === "bn" ? "মোট বকেয়া" : "Total Payable"}</div>
             <div className="text-xl font-bold font-serif text-primary">{fmtMoney(totalPayable)}</div>
           </div>
         </div>

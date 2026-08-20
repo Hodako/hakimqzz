@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "../styles.css";
 
 export const metadata: Metadata = {
-  title: "HakimQzz — Inventory & Sales",
-  description: "Inventory and sales management for HakimQzz.",
-  authors: [{ name: "HakimQzz" }],
+  title: "Dream Fashion — Smart POS & Accounting",
+  description: "Smart Inventory, Sales, POS & Accounting Management System.",
+  authors: [{ name: "Dream Fashion" }],
   icons: {
     icon: "/logo.png",
     apple: "/apple-touch-icon.png",
@@ -78,6 +79,13 @@ export default function RootLayout({
                   doc.style.setProperty('--loader-color', val);
                   doc.style.setProperty('--sidebar-primary', val);
                 } catch (e) {}
+
+                // Register PWA Service Worker for phone browsers & standalone mode
+                if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                  window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  });
+                }
               })();
             `,
           }}
@@ -87,7 +95,10 @@ export default function RootLayout({
         <div className="gear-ghost" />
         <div className="thread-rule" />
         <div className="content relative z-10 w-full min-h-screen">
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            <PwaInstallPrompt />
+          </Providers>
         </div>
       </body>
     </html>

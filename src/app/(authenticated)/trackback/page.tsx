@@ -45,7 +45,7 @@ function inRange(dateStr: string, range: Range, from?: string, to?: string) {
 export default function TrackbackPage() {
   const { lang, t } = useT();
   const qc = useQueryClient();
-  const [range, setRange] = useState<Range>("month");
+  const [range, setRange] = useState<Range>("today");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
@@ -287,7 +287,7 @@ export default function TrackbackPage() {
           <span className="text-[9px] text-muted-foreground block mt-0.5">{totals.spendsCount} {t("records")}</span>
         </Card>
         <Card className="p-3 shadow-sm text-center bg-amber-50/50 dark:bg-amber-950/10 border-amber-200/30">
-          <p className="text-[10px] text-muted-foreground uppercase font-medium">{t("expected_profit")}</p>
+          <p className="text-[10px] text-muted-foreground uppercase font-medium">{t("raw_profit")}</p>
           <p className="text-sm font-bold mt-0.5 text-amber-700 dark:text-amber-400">{fmtMoney(totals.profit)}</p>
         </Card>
         <Card className="p-3 shadow-sm text-center bg-emerald-50 dark:bg-emerald-950/10 border-emerald-200/30 col-span-2 md:col-span-1">

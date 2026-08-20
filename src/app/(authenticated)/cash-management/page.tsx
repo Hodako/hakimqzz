@@ -44,13 +44,14 @@ function KPI({ label, value, icon: Icon, color, sub }: {
   label: string; value: string; icon: React.ElementType; color: string; sub?: string;
 }) {
   return (
-    <Card className="p-3 sm:p-4 flex items-center gap-3 rounded-none">
-      <div className={`size-8 sm:size-9 rounded-none ${color} flex items-center justify-center shrink-0`}>
+    <Card className="p-3 sm:p-4 flex items-center gap-3 beveled-kpi relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent pointer-events-none z-10" />
+      <div className={`size-8 sm:size-9 rounded-xl ${color} flex items-center justify-center shrink-0 shadow-xs`}>
         <Icon className="size-4 text-white" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] text-muted-foreground truncate" title={label}>{label}</div>
-        <div className="text-sm sm:text-base font-bold mt-0.5 truncate" title={value}>{value}</div>
+        <div className="text-[11px] text-muted-foreground truncate font-medium" title={label}>{label}</div>
+        <div className="text-sm sm:text-base font-bold mt-0.5 truncate font-serif" title={value}>{value}</div>
         {sub && <div className="text-[10px] text-muted-foreground truncate" title={sub}>{sub}</div>}
       </div>
     </Card>
@@ -81,7 +82,7 @@ export default function CashManagementPage() {
   const balance = cashbox.isLoading ? null : cashboxBalance(cashbox.data ?? []);
 
   type Range = "today" | "week" | "month" | "custom";
-  const [range, setRange] = useState<Range>("week");
+  const [range, setRange] = useState<Range>("today");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 

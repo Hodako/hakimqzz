@@ -51,86 +51,86 @@
 }
 
 :root {
-  --loader-color: #B8902E;
-  --background: #F7F6F2;
+  --loader-color: #059669;
+  --background: #d1e2ea;
   --foreground: #201C16;
   --card: #FFFFFF;
   --card-foreground: #201C16;
   --popover: #FFFFFF;
   --popover-foreground: #201C16;
-  --primary: #B8902E;
+  --primary: #059669;
   --primary-foreground: #FFFFFF;
-  --secondary: #F4EEDD;
-  --secondary-foreground: #7A2635;
+  --secondary: #E6F4EA;
+  --secondary-foreground: #047857;
   --muted: #EFECE6;
   --muted-foreground: #8B857A;
-  --accent: #F4EEDD;
-  --accent-foreground: #B8902E;
+  --accent: #E6F4EA;
+  --accent-foreground: #059669;
   --destructive: #7A2635;
   --destructive-foreground: #FFFFFF;
-  --success: #16A34A;
+  --success: #10B981;
   --warning: #F59E0B;
   --border: #E5E2D9;
   --input: #FFFFFF;
-  --ring: #B8902E;
-  --chart-1: #B8902E;
+  --ring: #059669;
+  --chart-1: #059669;
   --chart-2: #7A2635;
   --chart-3: #4B4B4E;
   --chart-4: #8C8C90;
-  --chart-5: #DFBB63;
-  --sidebar: #F7F6F2;
+  --chart-5: #34D399;
+  --sidebar: #d1e2ea;
   --sidebar-foreground: #201C16;
-  --sidebar-primary: #B8902E;
+  --sidebar-primary: #059669;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F4EEDD;
-  --sidebar-accent-foreground: #B8902E;
+  --sidebar-accent: #E6F4EA;
+  --sidebar-accent-foreground: #059669;
   --sidebar-border: #E5E2D9;
-  --sidebar-ring: #B8902E;
+  --sidebar-ring: #059669;
   --font-sans: 'Siyam Rupali', Roboto, "Hind Siliguri", sans-serif;
   --font-serif: Lora, serif;
   --font-mono: "Fira Code", monospace;
-  --radius: 0rem;
+  --radius: 0.5rem;
 
   /* bKash Fintech Design System Tokens */
-  --bkash-primary: #E2136E;
-  --bkash-primary-dark: #C10D5B;
-  --bkash-primary-light: #FCE5EF;
-  --bkash-secondary: #F7A5C7;
+  --bkash-primary: #059669;
+  --bkash-primary-dark: #047857;
+  --bkash-primary-light: #ECFDF5;
+  --bkash-secondary: #34D399;
   --bkash-bg: #F5F6F8;
   --bkash-card: #FFFFFF;
   --bkash-card-secondary: #FAFAFB;
   --bkash-border: #ECEDEF;
   --bkash-text: #202124;
   --bkash-text-sec: #5F6368;
-  --bkash-radius-card: 0px;
-  --bkash-radius-btn: 0px;
-  --bkash-radius-modal: 0px;
-  --bkash-radius-input: 0px;
+  --bkash-radius-card: 16px;
+  --bkash-radius-btn: 14px;
+  --bkash-radius-modal: 18px;
+  --bkash-radius-input: 12px;
   --bkash-shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
   --bkash-shadow-md: 0 8px 24px rgba(0,0,0,0.06);
   --bkash-shadow-lg: 0 18px 45px rgba(0,0,0,0.10);
-  --bkash-balance-shadow: 0px 18px 40px rgba(226, 19, 110, 0.28);
+  --bkash-balance-shadow: 0px 18px 40px rgba(5, 150, 105, 0.28);
 }
 
 .dark {
-  --loader-color: #F7A5C7;
+  --loader-color: #10B981;
   --background: #121316;
   --foreground: #F5F6F8;
   --card: #1E1F24;
   --card-foreground: #F5F6F8;
   --popover: #1E1F24;
   --popover-foreground: #F5F6F8;
-  --primary: #E2136E;
+  --primary: #10B981;
   --primary-foreground: #FFFFFF;
-  --secondary: #272930;
-  --secondary-foreground: #F7A5C7;
+  --secondary: #1F3A2E;
+  --secondary-foreground: #6EE7B7;
   --muted: #22242B;
   --muted-foreground: #9AA0A6;
-  --accent: #2A2C34;
-  --accent-foreground: #F7A5C7;
+  --accent: #1F3A2E;
+  --accent-foreground: #10B981;
   --border: #2A2C32;
   --input: #1E1F24;
-  --ring: #E2136E;
+  --ring: #10B981;
 
   .text-black, 
   .text-zinc-950, .text-zinc-900, .text-zinc-800, .text-zinc-700,
@@ -294,24 +294,63 @@
 
 .beveled-button {
   box-shadow: 
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2),
-    0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-  border-radius: 16px !important;
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25),
+    0 2px 5px -1px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 14px !important;
+  transition: all 160ms cubic-bezier(.16,1,.3,1) !important;
 }
 
-.beveled-card {
-  border: 1px solid var(--border) !important;
-  border-radius: 22px !important;
+.beveled-button:active {
+  transform: translateY(1px) scale(0.985) !important;
+  box-shadow: 
+    inset 0 2px 4px 0 rgba(0, 0, 0, 0.3),
+    0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ── Crisp & Sharp Bevel Effect for KPI Cards (Zero Roundness) ────────────────── */
+.beveled-card, .beveled-kpi, .kpi-card {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.9) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.6) !important;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.2) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.15) !important;
+  border-radius: 0px !important; /* Sharp crisp edges */
   background-color: var(--card) !important;
   transition: transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms cubic-bezier(.16,1,.3,1), border-color 180ms cubic-bezier(.16,1,.3,1) !important;
-  box-shadow: 0px 1px 3px rgba(0,0,0,0.05), 0px 8px 24px rgba(0,0,0,0.04) !important;
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.08),
+    0 2px 6px -1px rgba(0, 0, 0, 0.06) !important;
 }
 
-.beveled-card:hover {
+.beveled-card:hover, .beveled-kpi:hover, .kpi-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0px 6px 20px rgba(0,0,0,0.06) !important;
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.1),
+    0 6px 16px -3px rgba(0, 0, 0, 0.1) !important;
   border-color: var(--primary) !important;
+}
+
+.dark .beveled-card, .dark .beveled-kpi, .dark .kpi-card {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.5) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.4) !important;
+  border-radius: 0px !important; /* Sharp crisp edges */
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.45),
+    0 4px 12px -2px rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark .beveled-card:hover, .dark .beveled-kpi:hover, .dark .kpi-card:hover {
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.55),
+    0 8px 20px -3px rgba(0, 0, 0, 0.6) !important;
 }
 
 .safe-area-pb {

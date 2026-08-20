@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,23 +32,35 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
     );
   }, [customers, searchQuery]);
 
+  const [highlightIndex, setHighlightIndex] = useState(0);
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [searchQuery]);
+
   const handleSelect = (id: string) => {
     onChange(id);
     setIsOpen(false);
     setSearchQuery("");
+    setHighlightIndex(0);
   };
 
   return (
-    <div className="relative w-full select-none">
+    <div className="space-y-1">
       {selectedCustomer && !isOpen ? (
-        <div className="flex items-center justify-between border border-input rounded-md px-3 h-9 bg-background text-sm">
-          <span className="truncate flex-1 font-medium text-zinc-900 dark:text-zinc-100">
-            {selectedCustomer.name} {selectedCustomer.phone ? `(${selectedCustomer.phone})` : ""}
+        <div className="flex items-center justify-between p-2 rounded-lg border border-border bg-card/60">
+          <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+            <span className="truncate">{selectedCustomer.name}</span>
+            {selectedCustomer.phone && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                ({selectedCustomer.phone})
+              </span>
+            )}
           </span>
           <Button
             type="button"
             variant="ghost"
-            className="h-7 px-2.5 text-[11px] ml-2 hover:bg-muted text-primary active:scale-95 transition-all shrink-0"
+            className="h-7 px-2 text-[11px] hover:bg-muted text-primary active:scale-95 transition-all shrink-0"
             onClick={() => {
               setIsOpen(true);
               setSearchQuery("");
@@ -71,6 +83,25 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
               setIsOpen(true);
             }}
             onFocus={() => setIsOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setIsOpen(true);
+                setHighlightIndex(prev => Math.min(prev + 1, Math.max(filteredCustomers.length - 1, 0)));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setIsOpen(true);
+                setHighlightIndex(prev => Math.max(prev - 1, 0));
+              } else if (e.key === "Enter") {
+                if (filteredCustomers.length > 0 && filteredCustomers[highlightIndex]) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect(filteredCustomers[highlightIndex].id);
+                }
+              } else if (e.key === "Escape") {
+                setIsOpen(false);
+              }
+            }}
             onBlur={() => {
               setTimeout(() => setIsOpen(false), 250);
             }}
@@ -84,25 +115,33 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
                   {lang === "bn" ? "কোন কাস্টমার পাওয়া যায়নি" : "No customers found"}
                 </div>
               ) : (
-                filteredCustomers.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between gap-2 active:bg-accent/60 cursor-pointer min-h-[44px]"
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(c.id);
-                    }}
-                    onClick={() => handleSelect(c.id)}
-                  >
-                    <span className="font-medium truncate flex-1 text-zinc-900 dark:text-zinc-100">{c.name}</span>
-                    {c.phone && (
-                      <span className="text-muted-foreground shrink-0 text-[10px]">
-                        {c.phone}
-                      </span>
-                    )}
-                  </button>
-                ))
+                filteredCustomers.map((c, idx) => {
+                  const isHighlighted = idx === highlightIndex;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`w-full text-left px-3 py-2.5 text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer min-h-[44px] ${
+                        isHighlighted
+                          ? "bg-primary text-primary-foreground font-semibold"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(c.id);
+                      }}
+                      onMouseEnter={() => setHighlightIndex(idx)}
+                      onClick={() => handleSelect(c.id)}
+                    >
+                      <span className="truncate flex-1">{c.name}</span>
+                      {c.phone && (
+                        <span className="shrink-0 text-[10px] opacity-80 font-mono">
+                          {c.phone}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
               )}
             </div>
           )}

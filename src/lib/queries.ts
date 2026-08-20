@@ -28,6 +28,10 @@ export type Product = {
   id: string; name: string; image_url: string | null;
   buy_price: number; sell_price: number; stock: number; created_at: string;
   barcode?: string | null;
+  code?: string | null;
+  sku?: string | null;
+  qr_code?: string | null;
+  product_number?: string | null;
   attributes?: Record<string, string>;
   archived?: boolean;
   min_stock?: number;
@@ -38,7 +42,7 @@ export type Customer = { id: string; name: string; phone: string | null; address
 export type Sale = {
   id: string; product_id: string | null; product_name: string;
   qty: number; buy_price: number; sell_price: number; profit: number;
-  type: "cash" | "credit" | "online"; party_id: string | null;
+  type: "cash" | "bkash" | "credit" | "online"; party_id: string | null;
   paid_amount: number; due_amount: number; created_at: string;
   returned?: boolean; return_qty?: number;
   parties?: { name: string } | null;
@@ -57,7 +61,7 @@ export type Purchase = {
   qty: number; unit_cost: number; total: number; note: string | null; created_at: string;
   payment_type?: "cash" | "credit" | null; party_id?: string | null;
 };
-export type Expense = { id: string; title: string; amount: number; note: string | null; created_at: string };
+export type Expense = { id: string; title: string; amount: number; category?: string | null; note: string | null; created_at: string };
 export type Somiti = { id: string; kind: "deposit" | "withdraw"; amount: number; note: string | null; created_at: string };
 export type Withdrawal = { id: string; amount: number; note: string | null; created_at: string };
 export type CashboxEntry = {

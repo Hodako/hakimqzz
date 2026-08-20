@@ -1035,12 +1035,20 @@ export async function getExpensesFn() {
   return items.map((e) => ({ ...e, id: e._id as any as string }));
 }
 
-export async function createExpenseFn(input: { data: { title: string; amount: number; note?: string | null; created_at?: string } }) {
+export async function createExpenseFn(input: { data: { title: string; amount: number; category?: string | null; note?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: data.created_at || new Date().toISOString() };
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    title: data.title,
+    amount: data.amount,
+    category: data.category || "other",
+    note: data.note || null,
+    created_at: data.created_at || new Date().toISOString()
+  };
   await db.collection("expenses").insertOne(doc as any);
   await insertCashboxEntry(db, session.ownerId, {
     kind: "expense",
@@ -1052,8 +1060,8 @@ export async function createExpenseFn(input: { data: { title: string; amount: nu
 
   // Sheets Sync
   appendRowToGoogleSheet(session.ownerId, "Expenses",
-    ["ID", "Title", "Amount", "Note", "Created At"],
-    [id, data.title, data.amount, data.note || "", doc.created_at]
+    ["ID", "Title", "Category", "Amount", "Note", "Created At"],
+    [id, data.title, data.category || "other", data.amount, data.note || "", doc.created_at]
   );
 
   return { ...doc, id };

@@ -41,7 +41,7 @@ function inRange(dateStr: string, range: Range, from?: string, to?: string) {
 
 export default function ProfitPage() {
   const { lang, t } = useT();
-  const [range, setRange] = useState<Range>("month");
+  const [range, setRange] = useState<Range>("today");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [chartType, setChartType] = useState<"area" | "bar" | "line">("area");

@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProductSearchSelect } from "@/components/product-search";
 import { CustomerSearchSelect } from "@/components/customer-search";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useT } from "@/lib/i18n";
@@ -16,35 +15,59 @@ import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Trash2, Scan, Printer } from "lucide-react";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart } from "lucide-react";
+import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
-import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
-import { printPwaInvoice } from "@/lib/invoice-printer";
+import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
+export type SalePaymentType = "cash" | "bkash" | "credit" | "online";
 
+function BkashLogo({ className = "size-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="-6.6741 -11.07275 57.8422 66.4365"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g fill="none">
+        <path
+          fill="#DF146E"
+          d="M42.31 44.291H2.182C.981 44.291 0 43.308 0 42.107V2.186C0 .982.981 0 2.182 0H42.31c1.203 0 2.184.982 2.184 2.186v39.921c0 1.201-.981 2.184-2.184 2.184"
+        />
+        <path
+          fill="#FFF"
+          d="M31.894 24.251l-14.107-2.246 1.909 8.329zm.572-.682L21.374 8.16l-3.623 13.106zm-15.402-2.482L5.441 6.239l15.221 1.819zm-5.639-6.154l-6.449-6.08h1.695zm24.504 1.15L33.2 23.486l-4.426-6.118zM21.417 30.232l10.71-4.3.454-1.365zm-8.933 7.821l4.589-16.102 2.326 10.479zm24.099-21.914l-1.128 3.056 4.059-.07z"
+        />
+      </g>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sale Dialog Component
+// ─────────────────────────────────────────────────────────────────────────────
 export function SaleDialog({
   open, onOpenChange, presetType, presetProductId, presetCart,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void;
-  presetType?: "cash" | "credit" | "online"; presetProductId?: string;
-  presetCart?: { productId: string; qty: string; sellPrice: string }[];
+  presetType?: SalePaymentType; presetProductId?: string;
+  presetCart?: { productId: string; qty: string; sellPrice: string; discount?: string }[];
 }) {
   const { lang, t } = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
+
+  const [type, setType] = useState<SalePaymentType>(presetType ?? "cash");
+  const [partyId, setPartyId] = useState("");
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [draft, setDraft] = useState<CartLine>({ productId: "", qty: "1", sellPrice: "", discount: "" });
+  const [paid, setPaid] = useState("");
+  const [busy, setBusy] = useState(false);
+
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
   const { data: customers = [] } = useCachedQuery(["customers"], getCustomers);
 
-  const [type, setType] = useState<"cash" | "credit" | "online">(presetType ?? "cash");
-  const [partyId, setPartyId] = useState("");
-  const [paid, setPaid] = useState("");
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [draft, setDraft] = useState<CartLine>({ productId: "", qty: "1", sellPrice: "", discount: "" });
-  const [busy, setBusy] = useState(false);
-  const [scannerOpen, setScannerOpen] = useState(false);
-
-  // Quick Customer Creation
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
@@ -81,6 +104,7 @@ export function SaleDialog({
       const pQr = ((p as any).qr_code || "").trim().toLowerCase();
       const pCode = ((p as any).code || "").trim().toLowerCase();
       const pSku = ((p as any).sku || "").trim().toLowerCase();
+      const pNum = ((p as any).product_number || "").trim().toLowerCase();
       const pId = String(p.id || "").trim().toLowerCase();
       const pName = (p.name || "").trim().toLowerCase();
 
@@ -89,6 +113,7 @@ export function SaleDialog({
         (pQr && (pQr === clean || clean.includes(pQr))) ||
         (pCode && (pCode === clean || clean.includes(pCode))) ||
         (pSku && (pSku === clean || clean.includes(pSku))) ||
+        (pNum && (pNum === clean || clean.includes(pNum))) ||
         (pId && (pId === clean || clean.includes(pId))) ||
         (pName && pName === clean)
       );
@@ -124,7 +149,7 @@ export function SaleDialog({
       setPartyId("");
       setPaid("");
       if (presetCart && presetCart.length > 0) {
-        setCart(presetCart.map(x => ({ ...x, discount: (x as any).discount ?? "" })));
+        setCart(presetCart.map(x => ({ ...x, discount: x.discount ?? "" })));
       } else if (presetProductId) {
         const p = products.find(x => x.id === presetProductId);
         setCart([{ productId: presetProductId, qty: "1", sellPrice: p ? String(p.sell_price || "") : "", discount: "" }]);
@@ -135,7 +160,6 @@ export function SaleDialog({
     }
   }, [open, presetType, presetProductId, presetCart, products]);
 
-  // Global Hardware USB / Bluetooth Barcode Listener for SaleDialog
   useEffect(() => {
     if (!open) return;
 
@@ -169,8 +193,6 @@ export function SaleDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, products]);
 
-
-
   function lineTotal(line: CartLine) {
     const p = products.find(x => x.id === line.productId);
     if (!p) return 0;
@@ -190,23 +212,70 @@ export function SaleDialog({
     const qty = Number(l.qty) || 0;
     return a + (finalPrice - p.buy_price) * qty;
   }, 0);
-  const paidNum = (type === "cash" || type === "online") ? sellTotal : Number(paid) || 0;
+
+  const isFullPaid = type === "cash" || type === "bkash" || type === "online";
+  const paidNum = isFullPaid ? sellTotal : Number(paid) || 0;
   const due = Math.max(sellTotal - paidNum, 0);
 
   function addToCart() {
     if (!draft.productId) return toast.error(t("select_product"));
-    const qty = Number(draft.qty) || 0;
-    if (qty <= 0) return;
-    const sell = Number(draft.sellPrice);
+    const p = products.find(x => x.id === draft.productId);
+    const qty = Number(draft.qty) || 1;
+    if (qty <= 0) return toast.error(t("qty") + " > 0");
+    const sell = Number(draft.sellPrice) || (p ? p.sell_price : 0);
     if (!sell || sell <= 0) return toast.error(t("sell_price") + " " + t("required"));
     const disc = Number(draft.discount) || 0;
     if (disc < 0) return toast.error(lang === "bn" ? "ডিসকাউন্ট নেতিবাচক হতে পারে না" : "Discount cannot be negative");
     
-    setCart(prev => [...prev, { ...draft }]);
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.productId === draft.productId);
+      if (idx !== -1) {
+        const next = [...prev];
+        const prevQty = Number(next[idx].qty) || 0;
+        next[idx] = {
+          ...next[idx],
+          qty: String(prevQty + qty),
+          sellPrice: String(sell),
+          discount: String(disc),
+        };
+        return next;
+      }
+      return [...prev, { productId: draft.productId, qty: String(qty), sellPrice: String(sell), discount: String(disc) }];
+    });
+
+    toast.success(lang === "bn" ? `কার্টে যুক্ত: ${p?.name || ""}` : `Added to cart: ${p?.name || ""}`);
     setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
   }
 
-  async function submit(e: React.FormEvent, shouldPrint = false) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleDialogKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+
+      if (e.code === "Space" || e.key === " ") {
+        const isTextInput = isInput && (target as HTMLInputElement).type === "text" && (target as HTMLInputElement).value.length > 0;
+        if (!isTextInput && cart.length > 0 && !draft.productId && !busy) {
+          e.preventDefault();
+          submit(e as any, "print");
+        }
+      }
+
+      if (e.key === "Enter") {
+        if (draft.productId) {
+          e.preventDefault();
+          addToCart();
+        }
+        // Never auto-submit the whole order on Enter while interacting with product drafts
+      }
+    };
+
+    window.addEventListener("keydown", handleDialogKeyDown);
+    return () => window.removeEventListener("keydown", handleDialogKeyDown);
+  }, [open, draft.productId, cart, busy, type, partyId, paidNum, due]);
+
+  async function submit(e: React.FormEvent, action: "print" | "download" | "none" = "none") {
     e.preventDefault();
     if (!user || cart.length === 0) return toast.error(t("select_product"));
     if (type === "credit" && !partyId) return toast.error((lang === "bn" ? "কাস্টমার" : "Customer") + " " + t("required"));
@@ -249,10 +318,12 @@ export function SaleDialog({
       qc.invalidateQueries({ queryKey: ["party-detail"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
 
-      if (shouldPrint) {
+      if (action === "print") {
         const cust = customers.find(c => c.id === partyId);
         const discTotal = cart.reduce((acc, item) => acc + (Number(item.discount) || 0) * (Number(item.qty) || 1), 0);
-        printPwaInvoice({
+        const paymentModeStr = type === "bkash" ? "BKASH" : type === "credit" ? "CREDIT" : type === "online" ? "BANK" : "CASH";
+
+        const invoiceParams = {
           businessName: user.business_name || user.full_name || "Dream Fashion POS",
           userEmail: user.business_emails || user.email || "",
           shopAddress: user.business_address || "",
@@ -260,13 +331,14 @@ export function SaleDialog({
           pageSize: user.invoice_page_size || "80mm",
           pageWidth: user.invoice_page_width || "",
           pageHeight: user.invoice_page_height || "",
-          invoiceFontSize: user.invoice_font_size || "22px",
+          invoiceFontSize: user.invoice_font_size || "16px",
           invoiceScale: user.invoice_scale || "100%",
-          invoiceLineSpacing: user.invoice_line_spacing || "6px",
+          invoiceLineSpacing: user.invoice_line_spacing || "3px",
           invoiceNo: `INV-${cartId.slice(-6).toUpperCase()}`,
           invoiceDate: fmtDateTime(new Date()),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
           customerPhone: cust?.phone || "",
+          paymentMode: paymentModeStr,
           items: cart.map(c => {
             const prod = products.find(p => p.id === c.productId);
             return {
@@ -281,7 +353,10 @@ export function SaleDialog({
           paidAmount: type === "credit" ? paidNum : sellTotal,
           due: type === "credit" ? due : 0,
           terms: user.invoice_terms || "",
-        });
+        };
+
+        await downloadPwaInvoicePdf(invoiceParams, true);
+        toast.success(lang === "bn" ? "ইনভয়েস প্রিন্ট প্রস্তুত হচ্ছে!" : "Opening invoice print view!");
       }
 
       onOpenChange(false);
@@ -293,14 +368,27 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-md w-full h-[88dvh] max-h-[88dvh] flex flex-col overflow-hidden p-0 rounded-2xl">
-          {/* Pinned header */}
-          <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b border-border">
-            <DialogTitle>{t("new_sale")}</DialogTitle>
+        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-2xl md:max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden p-0 rounded-2xl border-border shadow-2xl">
+          <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <ShoppingCart className="size-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold">{t("new_sale")}</DialogTitle>
+                <p className="text-[11px] text-muted-foreground hidden sm:block">
+                  {lang === "bn" ? "দ্রুত বিক্রয় ও ইনভয়েস জেনারেশন" : "Fast POS Checkout & Invoice Generation"}
+                </p>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/60 font-medium">
+              <span><strong className="text-foreground">Enter</strong>: {lang === "bn" ? "কার্টে যোগ" : "Add to Cart"}</span>
+              <span>·</span>
+              <span><strong className="text-foreground">Space</strong>: {lang === "bn" ? "বিক্রি সম্পন্ন" : "Complete Sale"}</span>
+            </div>
           </DialogHeader>
 
-          {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-3">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
             <form
               id="sale-form"
               onSubmit={(e) => {
@@ -311,233 +399,383 @@ export function SaleDialog({
                   submit(e);
                 }
               }}
-              className="space-y-3"
+              className="grid grid-cols-1 md:grid-cols-12 gap-4"
             >
-              <Tabs value={type} onValueChange={(v) => setType(v as "cash" | "credit" | "online")}>
-                <TabsList className="grid grid-cols-3 w-full">
-                  <TabsTrigger value="cash">{t("cash_sale")}</TabsTrigger>
-                  <TabsTrigger value="credit">{t("credit_sale")}</TabsTrigger>
-                  <TabsTrigger value="online">{t("online_sell")}</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="md:col-span-7 space-y-3.5">
+                {/* Payment Method Selector with 4 Button Options */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    {lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setType("cash")}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        type === "cash"
+                          ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-xs ring-1 ring-emerald-500/30"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <Banknote className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>{lang === "bn" ? "নগদ" : "Cash"}</span>
+                    </button>
 
-              {/* Customer selection - always visible but required only for Credit */}
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  {lang === "bn" ? "কাস্টমার (গ্রাহক)" : "Customer"} {type === "credit" ? "*" : `(${lang === "bn" ? "ঐচ্ছিক" : "Optional"})`}
-                </Label>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1">
-                    <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                    <button
+                      type="button"
+                      onClick={() => setType("bkash")}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        type === "bkash"
+                          ? "bg-[#E2136E]/15 border-[#E2136E] text-[#E2136E] dark:text-pink-300 shadow-xs ring-1 ring-[#E2136E]/30"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <BkashLogo className="size-4 shrink-0" />
+                      <span>{lang === "bn" ? "বিকাশ" : "bKash"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setType("online")}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        type === "online"
+                          ? "bg-sky-500/15 border-sky-500 text-sky-700 dark:text-sky-300 shadow-xs ring-1 ring-sky-500/30"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <DollarSign className="size-4 text-sky-600 dark:text-sky-400" />
+                      <span>{lang === "bn" ? "ব্যাংক" : "Bank"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setType("credit")}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        type === "credit"
+                          ? "bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-xs ring-1 ring-amber-500/30"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <CreditCard className="size-4 text-amber-600 dark:text-amber-400" />
+                      <span>{lang === "bn" ? "বাকী" : "Credit"}</span>
+                    </button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-9 shrink-0 cursor-pointer"
-                    onClick={() => setAddCustomerOpen(true)}
-                    title="Add Customer"
-                  >
-                    <Plus className="size-4" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    {lang === "bn" ? "কাস্টমার" : "Customer"} {type === "credit" ? "*" : ""}
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1">
+                      <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                    </div>
+                    {partyId && (
+                      <Link href={`/customers/detail?id=${partyId}`} target="_blank">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-9 shrink-0 cursor-pointer text-primary hover:bg-primary/10 hover:border-primary/40"
+                          title={lang === "bn" ? "কাস্টমারের ক্রয়ের ইতিহাস দেখুন" : "View Customer Buying History"}
+                        >
+                          <History className="size-4" />
+                        </Button>
+                      </Link>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-9 shrink-0 cursor-pointer"
+                      onClick={() => setAddCustomerOpen(true)}
+                      title="Add Customer"
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border border-border/90 bg-card/60 rounded-xl p-3.5 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <Scan className="size-3.5 text-primary" />
+                      {t("select_product")}
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground font-mono">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
+                  </div>
+
+                  <ProductSearchSelect
+                    products={products}
+                    value={draft.productId}
+                    onChange={v => {
+                      const p = products.find(x => x.id === v);
+                      setDraft(d => ({
+                        ...d,
+                        productId: v,
+                        qty: d.qty || "1",
+                        sellPrice: p && p.sell_price > 0 ? String(p.sell_price) : "",
+                        discount: "",
+                      }));
+                    }}
+                  />
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Field label={t("qty")}>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="1"
+                        value={draft.qty}
+                        onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (draft.productId) addToCart();
+                          }
+                        }}
+                      />
+                    </Field>
+                    <Field label={t("sell_price")}>
+                      <Input
+                        type="number"
+                        step="any"
+                        inputMode="decimal"
+                        pattern="[0-9.]*"
+                        placeholder={t("sell_price")}
+                        value={draft.sellPrice}
+                        onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (draft.productId) addToCart();
+                          }
+                        }}
+                      />
+                    </Field>
+                    <Field label={lang === "bn" ? "ছাড়" : "Discount"}>
+                      <Input
+                        type="number"
+                        step="any"
+                        inputMode="decimal"
+                        pattern="[0-9.]*"
+                        placeholder="0"
+                        value={draft.discount}
+                        onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (draft.productId) addToCart();
+                          }
+                        }}
+                      />
+                    </Field>
+                  </div>
+
+                  {draft.productId && draft.sellPrice && (
+                    <div className="text-xs text-muted-foreground flex justify-between items-center font-medium bg-muted/40 p-2 rounded-lg">
+                      <span>{lang === "bn" ? "আইটেম মোট:" : "Item Total:"}</span>
+                      <span className="font-bold text-foreground font-serif">
+                        ৳{Math.max((Number(draft.sellPrice) || 0) - (Number(draft.discount) || 0), 0) * (Number(draft.qty) || 1)}
+                      </span>
+                    </div>
+                  )}
+
+                  <Button type="button" variant="default" size="sm" className="w-full h-9 text-xs font-semibold cursor-pointer" onClick={addToCart}>
+                    <Plus className="size-4 mr-1" />{t("add_to_cart")} <span className="opacity-70 ml-1 font-mono text-[10px]">[Enter]</span>
                   </Button>
                 </div>
               </div>
 
-              <div className="border border-border rounded-lg p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">{t("select_product")}</Label>
+              <div className="md:col-span-5 flex flex-col justify-between space-y-3">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <ShoppingCart className="size-3.5 text-primary" />
+                      {t("cart")} ({cart.length})
+                    </Label>
+                    {cart.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] text-destructive hover:bg-destructive/10 px-1.5"
+                        onClick={() => setCart([])}
+                      >
+                        {lang === "bn" ? "কার্ট খালি করুন" : "Clear Cart"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="border border-dashed border-border rounded-xl p-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1.5 bg-muted/10 min-h-[140px]">
+                      <ShoppingCart className="size-6 text-muted-foreground/40" />
+                      <span>{lang === "bn" ? "কার্ট খালি রয়েছে। পণ্য যোগ করুন।" : "Cart is empty. Add products to proceed."}</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {cart.map((line, i) => {
+                        const p = products.find(x => x.id === line.productId);
+                        return (
+                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-2.5 text-xs bg-card space-y-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="truncate flex-1 text-zinc-900 dark:text-zinc-100 font-medium" title={p?.name}>
+                                {p?.name}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 shrink-0 text-destructive hover:bg-destructive/10"
+                                onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs pt-0.5">
+                              <div className="flex items-center border border-border rounded-lg bg-background">
+                                <button
+                                  type="button"
+                                  className="size-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                                  onClick={() => {
+                                    const current = Number(line.qty) || 1;
+                                    if (current > 1) {
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current - 1) } : item));
+                                    } else {
+                                      setCart(prev => prev.filter((_, idx) => idx !== i));
+                                    }
+                                  }}
+                                >
+                                  <Minus className="size-3" />
+                                </button>
+                                <span className="px-2 font-mono font-bold text-xs">{line.qty}</span>
+                                <button
+                                  type="button"
+                                  className="size-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                                  onClick={() => {
+                                    const current = Number(line.qty) || 0;
+                                    setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current + 1) } : item));
+                                  }}
+                                >
+                                  <Plus className="size-3" />
+                                </button>
+                              </div>
+
+                              <div className="text-right">
+                                <div className="font-bold text-foreground font-serif">৳{lineTotal(line)}</div>
+                                <div className="text-[10px] text-muted-foreground">৳{line.sellPrice} × {line.qty}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <ProductSearchSelect
-                  products={products}
-                  value={draft.productId}
-                  onChange={v => {
-                    const p = products.find(x => x.id === v);
-                    setDraft(d => ({
-                      ...d,
-                      productId: v,
-                      sellPrice: p && p.sell_price > 0 ? String(p.sell_price) : "",
-                      discount: "",
-                    }));
-                  }}
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  <Field label={t("qty")}>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder={t("qty")}
-                      value={draft.qty}
-                      onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          if (draft.productId) addToCart();
-                          else if (cart.length > 0) submit(e);
-                        }
-                      }}
-                    />
-                  </Field>
-                  <Field label={t("sell_price")}>
-                    <Input
-                      type="number"
-                      step="any"
-                      inputMode="decimal"
-                      pattern="[0-9.]*"
-                      placeholder={t("sell_price")}
-                      value={draft.sellPrice}
-                      onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          if (draft.productId) addToCart();
-                          else if (cart.length > 0) submit(e);
-                        }
-                      }}
-                    />
-                  </Field>
-                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}>
-                    <Input
-                      type="number"
-                      step="any"
-                      inputMode="decimal"
-                      pattern="[0-9.]*"
-                      placeholder="0"
-                      value={draft.discount}
-                      onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          if (draft.productId) addToCart();
-                          else if (cart.length > 0) submit(e);
-                        }
-                      }}
-                    />
-                  </Field>
-                </div>
-                {draft.productId && draft.sellPrice && (
-                  <div className="text-[11px] text-muted-foreground text-right font-medium">
-                    {lang === "bn" ? "চূড়ান্ত মূল্য: " : "Final Price: "} ৳{Math.max((Number(draft.sellPrice) || 0) - (Number(draft.discount) || 0), 0)}
+
+                {type === "credit" && (
+                  <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        {lang === "bn" ? "আংশিক জমা / আদায়কৃত টাকা" : "Partial Paid Amount"}
+                      </Label>
+                      <span className="text-[11px] font-semibold text-muted-foreground font-mono">
+                        {lang === "bn" ? "মোট বিল:" : "Total:"} ৳{sellTotal}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="number"
+                        step="any"
+                        inputMode="decimal"
+                        pattern="[0-9.]*"
+                        placeholder="0"
+                        value={paid}
+                        onChange={e => setPaid(e.target.value)}
+                        className="h-9 text-sm font-semibold font-serif bg-background rounded-lg"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 text-xs px-2.5 shrink-0 rounded-lg cursor-pointer font-medium"
+                        onClick={() => setPaid("0")}
+                      >
+                        {lang === "bn" ? "পুরো বাকী" : "Full Due"}
+                      </Button>
+                      {sellTotal > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 text-xs px-2.5 shrink-0 rounded-lg cursor-pointer font-medium"
+                          onClick={() => setPaid(String(Math.round(sellTotal / 2)))}
+                        >
+                          ৫০%
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs font-bold text-amber-700 dark:text-amber-300 pt-0.5 border-t border-amber-500/20">
+                      <span>{lang === "bn" ? "অবশিষ্ট বাকী থাকবে:" : "Remaining Due:"}</span>
+                      <span className="font-serif text-sm font-black text-rose-600 dark:text-rose-400">৳{due}</span>
+                    </div>
                   </div>
                 )}
-                <Button type="button" variant="outline" size="sm" className="w-full" onClick={addToCart}>
-                  <Plus className="size-3.5 mr-1" />{t("add_to_cart")}
-                </Button>
-              </div>
 
-              {cart.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">{t("cart")} ({cart.length})</Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {cart.map((line, i) => {
-                      const p = products.find(x => x.id === line.productId);
-                      return (
-                        <div key={`${line.productId}-${i}`} className="flex flex-col gap-1 border border-border rounded-md p-2 text-xs bg-muted/10">
-                          <div className="flex items-center justify-between font-semibold">
-                            <span className="truncate flex-1 text-zinc-800 dark:text-zinc-200">{p?.name}</span>
-                            <Button type="button" variant="ghost" size="icon" className="size-6 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2 text-[11px]">
-                            <div>
-                              <Label className="text-[9px] text-muted-foreground">{t("qty")}</Label>
-                              <Input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                className="h-7 text-xs"
-                                value={line.qty}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: val } : item));
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-[9px] text-muted-foreground">{t("sell_price")}</Label>
-                              <Input
-                                type="number"
-                                step="any"
-                                inputMode="decimal"
-                                pattern="[0-9.]*"
-                                className="h-7 text-xs"
-                                value={line.sellPrice}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setCart(prev => prev.map((item, idx) => idx === i ? { ...item, sellPrice: val } : item));
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-[9px] text-muted-foreground">{lang === "bn" ? "ছাড়/ডিসকাউন্ট" : "Discount"}</Label>
-                              <Input
-                                type="number"
-                                step="any"
-                                inputMode="decimal"
-                                pattern="[0-9.]*"
-                                className="h-7 text-xs"
-                                value={line.discount}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setCart(prev => prev.map((item, idx) => idx === i ? { ...item, discount: val } : item));
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground text-right font-medium pt-0.5">
-                            Subtotal: ৳{lineTotal(line)}
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t("subtotal")}</span>
+                    <span className="font-mono font-medium">৳{sellTotal}</span>
                   </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}</span>
+                    <span className="font-bold uppercase text-foreground">
+                      {type === "bkash" ? (lang === "bn" ? "বিকাশ" : "bKash") : type === "credit" ? (lang === "bn" ? "বাকী" : "Credit") : type === "online" ? (lang === "bn" ? "ব্যাংক" : "Bank") : (lang === "bn" ? "নগদ" : "Cash")}
+                    </span>
+                  </div>
+                  <div className="border-t border-border/80 pt-1.5 flex justify-between items-baseline font-bold text-sm">
+                    <span>{t("total")}</span>
+                    <span className="text-base font-serif text-foreground">৳{sellTotal}</span>
+                  </div>
+                  {profitTotal !== 0 && (
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 text-right font-medium">
+                      +{fmtMoney(profitTotal)} profit
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {type === "credit" && (
-                <Field label={lang === "bn" ? "নগদ পাওয়া টাকা (ঐচ্ছিক)" : "Received Cash Amount (Optional)"}>
-                  <Input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    pattern="[0-9.]*"
-                    placeholder={`0 (Total Due: ৳${sellTotal})`}
-                    value={paid}
-                    onChange={e => setPaid(e.target.value)}
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    {lang === "bn"
-                      ? `বাকি থাকবে: ৳${due} (পার্টির অ্যাকাউন্টে বকেয়া হিসেবে যুক্ত হবে)`
-                      : `Remaining Due: ৳${due} (will be added to customer ledger)`}
-                  </p>
-                </Field>
-              )}
+              </div>
             </form>
           </div>
 
-          {/* Pinned footer */}
-          <DialogFooter className="px-5 py-3 shrink-0 border-t border-border bg-card gap-2 flex-row items-center justify-between sm:justify-between">
+          <DialogFooter className="px-5 py-3 shrink-0 border-t border-border bg-card flex flex-row items-center justify-between sm:justify-between gap-2">
             <div className="text-xs">
               <span className="text-muted-foreground">{t("total")}: </span>
-              <span className="font-bold text-sm font-serif">৳{sellTotal}</span>
-              {profitTotal !== 0 && (
-                <span className="text-[10px] text-emerald-600 block">+{fmtMoney(profitTotal)} profit</span>
-              )}
+              <span className="font-bold text-base font-serif text-foreground">৳{sellTotal}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={busy || cart.length === 0}
-                onClick={(e) => submit(e, true)}
-                className="gap-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                onClick={(e) => submit(e, "print")}
+                className="gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 h-9 font-medium cursor-pointer"
               >
                 <Printer className="size-3.5" />
-                {lang === "bn" ? "ইনভয়েস প্রিন্ট" : "Print Invoice"}
+                <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
+                <span className="text-[10px] opacity-70 font-mono hidden sm:inline">[Space]</span>
               </Button>
-              <Button type="submit" form="sale-form" size="sm" disabled={busy || cart.length === 0}>
+              <Button
+                type="submit"
+                form="sale-form"
+                size="sm"
+                disabled={busy || cart.length === 0}
+                className="h-9 px-4 font-semibold cursor-pointer"
+              >
                 {busy ? "…" : t("record_sale")}
               </Button>
             </div>
@@ -545,7 +783,6 @@ export function SaleDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Quick Customer Add Modal */}
       <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
         <DialogContent className="max-w-xs">
           <DialogHeader>

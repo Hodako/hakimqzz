@@ -38,7 +38,7 @@ export function EditSaleDialog({
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("");
   const [sellPrice, setSellPrice] = useState("");
-  const [type, setType] = useState<"cash" | "credit" | "online">("cash");
+  const [type, setType] = useState<"cash" | "bkash" | "credit" | "online">("cash");
   const [partyId, setPartyId] = useState("");
   const [paid, setPaid] = useState("");
   const [note, setNote] = useState("");
@@ -64,7 +64,7 @@ export function EditSaleDialog({
   const buyPrice = selectedProduct ? selectedProduct.buy_price : (sale?.buy_price || 0);
   const profit = (sellPriceNum - buyPrice) * qtyNum;
 
-  const paidNum = (type === "cash" || type === "online") ? lineSell : Number(paid) || 0;
+  const paidNum = (type === "cash" || type === "bkash" || type === "online") ? lineSell : Number(paid) || 0;
   const due = Math.max(lineSell - paidNum, 0);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -81,8 +81,8 @@ export function EditSaleDialog({
 
       await editSaleFn({
         data: {
-          id: sale.id,
-          product_id: product.id,
+          id: sale!.id,
+          product_id: productId,
           product_name: product.name,
           qty: qtyNum,
           buy_price: product.buy_price,
@@ -90,16 +90,16 @@ export function EditSaleDialog({
           profit,
           type,
           party_id: type === "credit" ? partyId : null,
-          paid_amount: type === "credit" ? paidNum : lineSell,
-          due_amount: type === "credit" ? due : 0,
-          note: note || null,
+          paid_amount: paidNum,
+          due_amount: due,
+          note: note.trim() || null,
         },
       });
 
-      toast.success("Sale updated successfully");
+      toast.success(lang === "bn" ? "বিক্রি আপডেট করা হয়েছে" : "Sale updated");
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["party-detail"] });
+      qc.invalidateQueries({ queryKey: ["parties"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
       onOpenChange(false);
     } catch (err: unknown) {
@@ -111,7 +111,7 @@ export function EditSaleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>{lang === "bn" ? "বিক্রি এডিট করুন" : "Edit Sale"}</DialogTitle>
         </DialogHeader>
@@ -135,6 +135,7 @@ export function EditSaleDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cash">{t("cash_sale")}</SelectItem>
+                <SelectItem value="bkash">bKash</SelectItem>
                 <SelectItem value="credit">{t("credit_sale")}</SelectItem>
                 <SelectItem value="online">{t("online_sell")}</SelectItem>
               </SelectContent>

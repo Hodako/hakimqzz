@@ -3,15 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Calendar, Printer, ArrowLeft, Download,
+  Calendar, Printer, ArrowLeft,
   TrendingUp, ShoppingCart, Receipt, PiggyBank,
-  Banknote, Users, RefreshCw, ListOrdered, BarChart3,
-  FileCheck2, CheckCircle2, CircleDot
+  Banknote, Users, CheckCircle2, DollarSign,
+  FileSpreadsheet, Sparkles, Filter, ChevronRight
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend
-} from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,110 +19,64 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import {
   getSales, getPurchases, getExpenses,
-  getSomiti, getParties
+  getSomiti, getParties,
+  type Expense, type Purchase, type Sale, type Customer, type Somiti, type CashboxEntry
 } from "@/lib/queries";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { playTapSound } from "@/lib/audio";
+import { downloadCsv, exportDateStamp } from "@/lib/export";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
+import { generateBusinessReportPdf } from "@/lib/pdf-report-generator";
+import { FileText, Download, Loader2, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface GroupedSale {
-  id: string;
-  isGroup: boolean;
-  cart_id?: string | null;
-  product_name: string;
-  qty: number;
-  sell_price: number;
-  profit: number;
-  due_amount: number;
-  paid_amount: number;
-  type: "cash" | "credit" | "online";
-  created_at: string;
-  parties?: { name: string } | null;
-  items: any[];
-}
+// Expense Category Map for Bengali / English
+const EXPENSE_CATEGORIES: Record<string, { bn: string; en: string }> = {
+  rent: { bn: "দোকান ভাড়া", en: "Shop Rent" },
+  salary: { bn: "স্টাফ বেতন", en: "Staff Salary" },
+  utility: { bn: "বিদ্যুৎ ও ইউটিলিটি বিল", en: "Utility & Electricity Bills" },
+  refreshment: { bn: "চা-নাস্তা ও আপ্যায়ন", en: "Snacks & Entertainment" },
+  travel: { bn: "যাতায়াত খরচ", en: "Travel & Commute" },
+  transport: { bn: "পরিবহন ও মাল আনা", en: "Transport & Shipping" },
+  purchase: { bn: "পণ্য ক্রয় সংক্রান্ত", en: "Product Purchase" },
+  marketing: { bn: "প্রচার ও বিজ্ঞাপন", en: "Marketing & Promo" },
+  other: { bn: "অন্যান্য বিবিধ খরচ", en: "General / Other Expenses" },
+};
 
-function groupSales(sales: any[]): GroupedSale[] {
-  const grouped: GroupedSale[] = [];
-  const cartGroups: Record<string, any[]> = {};
-
-  sales.forEach(s => {
-    if (s.cart_id) {
-      if (!cartGroups[s.cart_id]) {
-        cartGroups[s.cart_id] = [];
-      }
-      cartGroups[s.cart_id].push(s);
-    } else {
-      grouped.push({
-        id: s.id,
-        isGroup: false,
-        cart_id: null,
-        product_name: s.product_name,
-        qty: s.qty,
-        sell_price: Number(s.sell_price) * s.qty,
-        profit: s.profit,
-        due_amount: s.due_amount,
-        paid_amount: s.paid_amount,
-        type: s.type,
-        created_at: s.created_at,
-        parties: s.parties,
-        items: [s]
-      });
-    }
-  });
-
-  Object.entries(cartGroups).forEach(([cartId, items]) => {
-    items.sort((a, b) => a.product_name.localeCompare(b.product_name));
-    
-    const firstItem = items[0];
-    const totalQty = items.reduce((sum, x) => sum + x.qty, 0);
-    const totalSellPrice = items.reduce((sum, x) => sum + Number(x.sell_price) * x.qty, 0);
-    const totalProfit = items.reduce((sum, x) => sum + x.profit, 0);
-    const totalDue = items.reduce((sum, x) => sum + x.due_amount, 0);
-    const totalPaid = items.reduce((sum, x) => sum + x.paid_amount, 0);
-    
-    const names = items.map(x => `${x.product_name} (×${x.qty})`).join(", ");
-
-    grouped.push({
-      id: firstItem.id,
-      isGroup: true,
-      cart_id: cartId,
-      product_name: names,
-      qty: totalQty,
-      sell_price: totalSellPrice,
-      profit: totalProfit,
-      due_amount: totalDue,
-      paid_amount: totalPaid,
-      type: firstItem.type,
-      created_at: firstItem.created_at,
-      parties: firstItem.parties,
-      items: items
-    });
-  });
-
-  grouped.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return grouped;
+function getCategoryInfo(exp: Expense, lang: "bn" | "en") {
+  if (exp.category && EXPENSE_CATEGORIES[exp.category]) {
+    return EXPENSE_CATEGORIES[exp.category][lang];
+  }
+  if (exp.title?.startsWith("Product Purchase:") || exp.note?.includes("Purchased")) {
+    return lang === "bn" ? "পণ্য ক্রয় সংক্রান্ত" : "Product Purchase";
+  }
+  return lang === "bn" ? "অন্যান্য বিবিধ খরচ" : "General / Other";
 }
 
 export default function ReportsGeneratorPage() {
   const { lang, t } = useT();
 
-  // Date range state
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const [from, setFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
-  });
+  // Date range state - Defaults to Today
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  const [from, setFrom] = useState(todayStr);
   const [to, setTo] = useState(todayStr);
+  const [activePreset, setActivePreset] = useState<"today" | "yesterday" | "week" | "month" | "all" | "custom">("today");
+  const [activeTab, setActiveTab] = useState<"summary" | "expenses" | "sales" | "purchases" | "dues" | "cashbox">("summary");
 
-  // Section toggle state
-  const [showSales, setShowSales] = useState(true);
-  const [showPurchases, setShowPurchases] = useState(true);
-  const [showExpenses, setShowExpenses] = useState(true);
-  const [showCashbox, setShowCashbox] = useState(true);
-  const [showSomiti, setShowSomiti] = useState(true);
-  const [showParties, setShowParties] = useState(true);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  // Pagination states
+  const [salesPage, setSalesPage] = useState(1);
+  const [purchasesPage, setPurchasesPage] = useState(1);
+  const [expensesPage, setExpensesPage] = useState(1);
+  const [duesPage, setDuesPage] = useState(1);
+  const [cashboxPage, setCashboxPage] = useState(1);
+  const pageSize = 15;
 
   // Queries
   const { data: bizSettings } = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
@@ -138,20 +88,41 @@ export default function ReportsGeneratorPage() {
   const partiesQuery = useCachedQuery(["parties"], getParties);
 
   const bizName = bizSettings?.business?.name || "Dream Fashion";
+  const bizPhone = bizSettings?.business?.phone || "";
+  const bizAddress = bizSettings?.business?.address || "";
 
   // Date Range Presets
-  const setPreset = (type: "today" | "week" | "month") => {
-    const end = new Date();
-    const start = new Date();
+  const setPreset = (type: "today" | "yesterday" | "week" | "month" | "all") => {
+    setActivePreset(type);
+    setSalesPage(1);
+    setPurchasesPage(1);
+    setExpensesPage(1);
+    setDuesPage(1);
+    setCashboxPage(1);
+    const now = new Date();
     if (type === "today") {
-      // today only
+      const d = now.toLocaleDateString("en-CA");
+      setFrom(d);
+      setTo(d);
+    } else if (type === "yesterday") {
+      const y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      const d = y.toLocaleDateString("en-CA");
+      setFrom(d);
+      setTo(d);
     } else if (type === "week") {
-      start.setDate(end.getDate() - 7);
+      const w = new Date(now);
+      w.setDate(w.getDate() - 6);
+      setFrom(w.toLocaleDateString("en-CA"));
+      setTo(now.toLocaleDateString("en-CA"));
     } else if (type === "month") {
-      start.setDate(end.getDate() - 30);
+      const m = new Date(now.getFullYear(), now.getMonth(), 1);
+      setFrom(m.toLocaleDateString("en-CA"));
+      setTo(now.toLocaleDateString("en-CA"));
+    } else if (type === "all") {
+      setFrom("2020-01-01");
+      setTo(now.toLocaleDateString("en-CA"));
     }
-    setFrom(start.toISOString().slice(0, 10));
-    setTo(end.toISOString().slice(0, 10));
   };
 
   // Helper date filtering
@@ -163,1173 +134,983 @@ export default function ReportsGeneratorPage() {
 
   // Filtered datasets
   const filteredSales = useMemo(() => (salesQuery.data ?? []).filter(s => !s.returned && inDateRange(s.created_at)), [salesQuery.data, from, to]);
-  const groupedSalesList = useMemo(() => {
-    return groupSales(filteredSales);
-  }, [filteredSales]);
   const filteredPurchases = useMemo(() => (purchasesQuery.data ?? []).filter(p => inDateRange(p.created_at)), [purchasesQuery.data, from, to]);
   const filteredExpenses = useMemo(() => (expensesQuery.data ?? []).filter(e => inDateRange(e.created_at)), [expensesQuery.data, from, to]);
   const filteredCashbox = useMemo(() => (cashboxQuery.data ?? []).filter(c => inDateRange(c.created_at)), [cashboxQuery.data, from, to]);
   const filteredSomiti = useMemo(() => (somitiQuery.data ?? []).filter(s => inDateRange(s.created_at)), [somitiQuery.data, from, to]);
-  const filteredParties = useMemo(() => (partiesQuery.data ?? []).filter(p => inDateRange(p.created_at)), [partiesQuery.data, from, to]);
 
   // Totals calculations
-  const salesTotalVal = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [filteredSales]);
-  const salesProfitVal = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.profit), 0), [filteredSales]);
+  const totalSalesVal = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [filteredSales]);
+  const totalSalesProfitVal = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.profit || 0), 0), [filteredSales]);
   const totalSalesDueVal = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.due_amount || 0), 0), [filteredSales]);
-  const purchaseTotalVal = useMemo(() => filteredPurchases.reduce((a, p) => a + Number(p.total), 0), [filteredPurchases]);
-  const expenseTotalVal = useMemo(() => filteredExpenses.reduce((a, e) => a + Number(e.amount), 0), [filteredExpenses]);
+  const totalSalesItemsCount = useMemo(() => filteredSales.reduce((a, s) => a + Number(s.qty || 0), 0), [filteredSales]);
 
+  // Sales by payment type
+  const cashSales = useMemo(() => filteredSales.filter(s => s.type === "cash"), [filteredSales]);
+  const bkashSales = useMemo(() => filteredSales.filter(s => (s as any).payment_method === "bkash" || (s.type as string) === "bkash"), [filteredSales]);
+  const creditSales = useMemo(() => filteredSales.filter(s => s.type === "credit"), [filteredSales]);
+  const onlineSales = useMemo(() => filteredSales.filter(s => s.type === "online"), [filteredSales]);
+
+  const cashSalesTotal = useMemo(() => cashSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [cashSales]);
+  const bkashSalesTotal = useMemo(() => bkashSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [bkashSales]);
+  const creditSalesTotal = useMemo(() => creditSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [creditSales]);
+  const creditSalesDueTotal = useMemo(() => creditSales.reduce((a, s) => a + Number(s.due_amount || 0), 0), [creditSales]);
+  const onlineSalesTotal = useMemo(() => onlineSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0), [onlineSales]);
+
+  // Purchases totals
+  const totalPurchaseVal = useMemo(() => filteredPurchases.reduce((a, p) => a + Number(p.total || 0), 0), [filteredPurchases]);
+  const totalPurchaseQty = useMemo(() => filteredPurchases.reduce((a, p) => a + Number(p.qty || 0), 0), [filteredPurchases]);
+
+  // Expenses totals & Category Breakdown
+  const totalExpenseVal = useMemo(() => filteredExpenses.reduce((a, e) => a + Number(e.amount || 0), 0), [filteredExpenses]);
+
+  const categoryExpenses = useMemo(() => {
+    const map: Record<string, { categoryKey: string; label: string; count: number; total: number }> = {};
+
+    filteredExpenses.forEach(exp => {
+      let catKey = exp.category || "other";
+      if (!exp.category && (exp.title?.startsWith("Product Purchase:") || exp.note?.includes("Purchased"))) {
+        catKey = "purchase";
+      }
+      const label = EXPENSE_CATEGORIES[catKey] ? EXPENSE_CATEGORIES[catKey][lang] : (lang === "bn" ? "অন্যান্য" : "Other");
+
+      if (!map[catKey]) {
+        map[catKey] = { categoryKey: catKey, label, count: 0, total: 0 };
+      }
+      map[catKey].count += 1;
+      map[catKey].total += Number(exp.amount || 0);
+    });
+
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [filteredExpenses, lang]);
+
+  // Somiti net
   const somitiNetVal = useMemo(() => {
-    return filteredSomiti.reduce((a, s) => {
-      return s.kind === "deposit" ? a + Number(s.amount) : a - Number(s.amount);
-    }, 0);
+    return filteredSomiti.reduce((a, s) => (s.kind === "deposit" ? a + Number(s.amount) : a - Number(s.amount)), 0);
   }, [filteredSomiti]);
 
-  const cashboxNetVal = useMemo(() => {
-    return filteredCashbox.reduce((a, c) => {
-      if (c.kind === "deposit" || c.kind === "sale") return a + Number(c.amount);
-      return a - Number(c.amount);
-    }, 0);
+  // Cashbox net movement
+  const cashboxIn = useMemo(() => {
+    return filteredCashbox.filter(c => c.kind === "deposit" || c.kind === "sale").reduce((a, c) => a + Number(c.amount || 0), 0);
+  }, [filteredCashbox]);
+  const cashboxOut = useMemo(() => {
+    return filteredCashbox.filter(c => c.kind === "withdraw" || c.kind === "expense").reduce((a, c) => a + Number(c.amount || 0), 0);
   }, [filteredCashbox]);
 
-  // Chart Data preparation
-  const chartData = useMemo(() => {
-    const map: Record<string, { date: string; Sales: number; Purchases: number; Expenses: number }> = {};
-    const start = new Date(from);
-    const end = new Date(to);
+  // Net Profit (Sales Profit - Operating Expenses excluding pure inventory product purchase duplicates)
+  const nonProductExpenses = useMemo(() => {
+    return filteredExpenses.filter(e => {
+      const isProductExp = e.category === "purchase" || e.title?.startsWith("Product Purchase:") || e.note?.includes("Purchased");
+      return !isProductExp;
+    }).reduce((a, e) => a + Number(e.amount || 0), 0);
+  }, [filteredExpenses]);
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = d.toISOString().slice(0, 10);
-      map[key] = { date: key, Sales: 0, Purchases: 0, Expenses: 0 };
-    }
+  const netBusinessProfit = totalSalesProfitVal - nonProductExpenses;
 
-    filteredSales.forEach(s => {
-      const key = s.created_at.slice(0, 10);
-      if (map[key]) map[key].Sales += Number(s.sell_price) * s.qty;
-    });
+  // Paginated Slices for On-Screen Display
+  const { items: pagedSales, totalPages: salesTotalPages, safePage: safeSalesPage } = paginate(filteredSales, salesPage, pageSize);
+  const { items: pagedPurchases, totalPages: purchasesTotalPages, safePage: safePurchasesPage } = paginate(filteredPurchases, purchasesPage, pageSize);
+  const { items: pagedExpenses, totalPages: expensesTotalPages, safePage: safeExpensesPage } = paginate(filteredExpenses, expensesPage, pageSize);
+  const { items: pagedDues, totalPages: duesTotalPages, safePage: safeDuesPage } = paginate(creditSales, duesPage, pageSize);
+  const { items: pagedCashbox, totalPages: cashboxTotalPages, safePage: safeCashboxPage } = paginate(filteredCashbox, cashboxPage, pageSize);
 
-    filteredPurchases.forEach(p => {
-      const key = p.created_at.slice(0, 10);
-      if (map[key]) map[key].Purchases += Number(p.total);
-    });
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-    filteredExpenses.forEach(e => {
-      const key = e.created_at.slice(0, 10);
-      if (map[key]) map[key].Expenses += Number(e.amount);
-    });
-
-    return Object.values(map)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map(item => ({
-        ...item,
-        date: item.date.slice(5) // e.g. "06-12"
-      }));
-  }, [filteredSales, filteredPurchases, filteredExpenses, from, to]);
-
-  // Index sections count builder
-  const indexItems = useMemo(() => {
-    const list: { id: string; num: number; titleBn: string; titleEn: string; count: number; active: boolean }[] = [
-      { id: "index", num: 1, titleBn: "সূচিপত্র ও রিপোর্ট পরিচিতি", titleEn: "Table of Contents & Overview", count: 1, active: true },
-      { id: "stats", num: 2, titleBn: "সার্বিক অর্থনৈতিক পরিসংখ্যান ও অ্যানালিটিক্স", titleEn: "Executive Financial Statistics & Analytics", count: 1, active: true },
-      { id: "chart", num: 3, titleBn: "রাজস্ব, ক্রয় ও ব্যয়ের ভিজ্যুয়াল চার্ট", titleEn: "Revenue vs Expenses Visual Analytics", count: chartData.length > 0 ? 1 : 0, active: showSales || showPurchases || showExpenses },
-    ];
-
-    let currentNum = 4;
-    if (showSales) {
-      list.push({ id: "sales", num: currentNum++, titleBn: "বিক্রয় ফলাফল বিবরণী শীট", titleEn: "Sales Results Sheet", count: filteredSales.length, active: true });
-    }
-    if (showPurchases) {
-      list.push({ id: "purchases", num: currentNum++, titleBn: "মাল ক্রয় ফলাফল বিবরণী শীট", titleEn: "Purchase Results Sheet", count: filteredPurchases.length, active: true });
-    }
-    if (showExpenses) {
-      list.push({ id: "expenses", num: currentNum++, titleBn: "খরচ ও পরিচালন ব্যয় ফলাফল শীট", titleEn: "Overhead Expenses Results Sheet", count: filteredExpenses.length, active: true });
-    }
-    if (showCashbox) {
-      list.push({ id: "cashbox", num: currentNum++, titleBn: "ক্যাশবক্স লেনদেন ফলাফল শীট", titleEn: "Cashbox Action Results Sheet", count: filteredCashbox.length, active: true });
-    }
-    if (showSomiti) {
-      list.push({ id: "somiti", num: currentNum++, titleBn: "সমিতি সঞ্চয় ফলাফল শীট", titleEn: "Somiti Savings Results Sheet", count: filteredSomiti.length, active: true });
-    }
-    if (showParties) {
-      list.push({ id: "parties", num: currentNum++, titleBn: "পার্টি ও গ্রাহক ডিরেক্টরি শীট", titleEn: "Parties & Customer Directory Sheet", count: filteredParties.length, active: true });
-    }
-
-    return list;
-  }, [showSales, showPurchases, showExpenses, showCashbox, showSomiti, showParties, filteredSales.length, filteredPurchases.length, filteredExpenses.length, filteredCashbox.length, filteredSomiti.length, filteredParties.length, chartData.length]);
-
-  const handlePrint = () => {
+  // Direct High-Resolution PDF Download (Zero Web-Preview, Bilingual Support)
+  const handleGeneratePdf = async (openInNewTab: boolean, targetLang: "bn" | "en" = lang) => {
     playTapSound();
-    setIsGeneratingPDF(true);
-    setTimeout(() => {
-      setIsGeneratingPDF(false);
-      window.print();
-    }, 1200);
+    setIsGeneratingPdf(true);
+    try {
+      await generateBusinessReportPdf({
+        bizName,
+        bizPhone,
+        bizAddress,
+        from,
+        to,
+        lang: targetLang,
+        totalSalesVal,
+        totalSalesProfitVal,
+        totalSalesDueVal,
+        totalSalesItemsCount,
+        filteredSales,
+        cashSalesTotal,
+        cashSalesCount: cashSales.length,
+        bkashSalesTotal,
+        bkashSalesCount: bkashSales.length,
+        creditSalesTotal,
+        creditSalesCount: creditSales.length,
+        creditSalesDueTotal,
+        onlineSalesTotal,
+        onlineSalesCount: onlineSales.length,
+        totalPurchaseVal,
+        totalPurchaseQty,
+        filteredPurchases,
+        totalExpenseVal,
+        categoryExpenses,
+        filteredExpenses,
+        netBusinessProfit,
+        somitiNetVal,
+        somitiCount: filteredSomiti.length,
+        cashboxIn,
+        cashboxOut,
+      }, openInNewTab, targetLang);
+
+      if (openInNewTab) {
+        toast.success(targetLang === "bn" ? "পিডিএফ ভিউ প্রস্তুত হচ্ছে!" : "Opening PDF preview!");
+      } else {
+        toast.success(targetLang === "bn" ? "পিডিএফ রিপোর্ট সফলভাবে ডাউনলোড হয়েছে!" : "Official PDF report downloaded successfully!");
+      }
+    } catch (err: any) {
+      toast.error(targetLang === "bn" ? "পিডিএফ তৈরি করতে সমস্যা হয়েছে: " + (err?.message || "") : "Failed to generate PDF: " + (err?.message || ""));
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
-  const handleDownloadPDF = () => {
+  // Instant Full Multi-Category CSV Download (Bilingual Support)
+  const handleDownloadCSV = (langCode: "en" | "bn" = lang) => {
     playTapSound();
-    setIsGeneratingPDF(true);
+    const isBn = langCode === "bn";
+    const rows: (string | number)[][] = [];
 
-    const runHtml2Pdf = () => {
-      const element = document.getElementById("print-report-content");
-      if (!element) {
-        setIsGeneratingPDF(false);
-        return;
-      }
+    // Header & Info
+    rows.push([isBn ? `${bizName} - ক্যাটাগরি অনুযায়ী ব্যবসায়িক প্রতিবেদন` : `${bizName} - Category-wise Business Statement Report`]);
+    rows.push([isBn ? "সময়কাল" : "Period", `${from} ${isBn ? "হতে" : "to"} ${to}`]);
+    rows.push([isBn ? "প্রস্তুত সময়" : "Generated At", new Date().toLocaleString()]);
+    rows.push([]);
 
-      element.classList.remove("hidden");
-      element.classList.remove("print:block");
-      element.style.display = "block";
+    // 1. Executive Financial Summary
+    rows.push([isBn ? "--- ১. সার্বিক অর্থনৈতিক সারসংক্ষেপ ---" : "--- 1. EXECUTIVE FINANCIAL SUMMARY ---"]);
+    rows.push([isBn ? "আর্থিক খাত" : "Financial Metric", isBn ? "পরিমাণ (টাকা)" : "Amount (BDT)", isBn ? "মন্তব্য" : "Remarks"]);
+    rows.push([isBn ? "মোট বিক্রয়মূল্য" : "Total Sales Value", totalSalesVal, `${filteredSales.length} ${isBn ? "টি চালান" : "orders"} (${totalSalesItemsCount} ${isBn ? "পিস" : "items"})`]);
+    rows.push([isBn ? "বিক্রয় হতে মোট লাভ" : "Gross Profit from Sales", totalSalesProfitVal, isBn ? "বিক্রয়মূল্য - ক্রয়মূল্য" : "Margin before overheads"]);
+    rows.push([isBn ? "দোকান পরিচালনা খরচ" : "Total Operating Expenses", totalExpenseVal, `${filteredExpenses.length} ${isBn ? "টি ভাউচার" : "expense vouchers"}`]);
+    rows.push([isBn ? "পণ্য ক্রয় ও স্টক" : "Total Product Purchases", totalPurchaseVal, `${filteredPurchases.length} ${isBn ? "টি চালান" : "purchase invoices"} (${totalPurchaseQty} ${isBn ? "পিস" : "pcs"})`]);
+    rows.push([isBn ? "নিট আনুমানিক লাভ" : "Net Estimated Profit", netBusinessProfit, isBn ? "মোট লাভ - দোকান খরচ" : "Gross Profit - Overhead Expenses"]);
+    rows.push([isBn ? "এই সময়ের নতুন বাকী" : "Total Dues on Period Sales", totalSalesDueVal, isBn ? "গ্রাহকদের কাছে পাওনা" : "Outstanding credit receivables"]);
+    rows.push([isBn ? "সমিতি নিট সঞ্চয়" : "Somiti Net Savings", somitiNetVal, isBn ? "জমা - উত্তোলন" : "Total deposited - withdrawn"]);
+    rows.push([]);
 
-      const opt = {
-        margin:       [0.2, 0.2, 0.2, 0.2],
-        filename:     `business_report_${from}_to_${to}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2.5, useCORS: true, logging: false, windowWidth: 1200 },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-      };
+    // 2. Expenses Category Breakdown
+    rows.push([isBn ? "--- ২. ক্যাটাগরি ভিত্তিক খরচের বিবরণী ---" : "--- 2. EXPENSES BREAKDOWN BY CATEGORY ---"]);
+    rows.push([isBn ? "ক্যাটাগরি" : "Category", isBn ? "ভাউচার সংখ্যা" : "Vouchers Count", isBn ? "মোট খরচ (টাকা)" : "Total Spent (BDT)", isBn ? "শতকরা হার (%)" : "Share %"]);
+    categoryExpenses.forEach(cat => {
+      const pct = totalExpenseVal > 0 ? ((cat.total / totalExpenseVal) * 100).toFixed(1) + "%" : "0%";
+      const catName = isBn ? (EXPENSE_CATEGORIES[cat.categoryKey]?.bn || cat.label) : (EXPENSE_CATEGORIES[cat.categoryKey]?.en || cat.label);
+      rows.push([catName, cat.count, cat.total, pct]);
+    });
+    rows.push([isBn ? "সর্বমোট পরিচালন খরচ" : "Total Overhead Expenses", filteredExpenses.length, totalExpenseVal, "100%"]);
+    rows.push([]);
 
-      // @ts-ignore
-      window.html2pdf().set(opt).from(element).save().then(() => {
-        element.classList.add("hidden");
-        element.classList.add("print:block");
-        element.style.display = "";
-        setIsGeneratingPDF(false);
-        toast.success(lang === "bn" ? "পিডিএফ ডাউনলোড শুরু হয়েছে!" : "PDF download completed!");
-      }).catch((err: any) => {
-        console.error("PDF download error", err);
-        element.classList.add("hidden");
-        element.classList.add("print:block");
-        element.style.display = "";
-        setIsGeneratingPDF(false);
-        toast.error(lang === "bn" ? "পিডিএফ তৈরি করতে ব্যর্থ হয়েছে" : "Failed to generate PDF");
-      });
-    };
+    // 3. Sales Breakdown by Payment Type
+    rows.push([isBn ? "--- ৩. পেমেন্ট পদ্ধতি ভিত্তিক বিক্রয় ---" : "--- 3. SALES BY PAYMENT TYPE ---"]);
+    rows.push([isBn ? "পেমেন্ট পদ্ধতি" : "Payment Method", isBn ? "চালান সংখ্যা" : "Orders Count", isBn ? "মোট বিক্রয় (টাকা)" : "Total Value (BDT)", isBn ? "বকেয়া বাকী (টাকা)" : "Due Amount (BDT)"]);
+    rows.push([isBn ? "নগদ বিক্রয় (Cash)" : "Cash Sales", cashSales.length, cashSalesTotal, 0]);
+    rows.push([isBn ? "বিকাশ বিক্রয় (bKash)" : "bKash Sales", bkashSales.length, bkashSalesTotal, 0]);
+    rows.push([isBn ? "বাকী বিক্রয় (Credit)" : "Credit Sales", creditSales.length, creditSalesTotal, creditSalesDueTotal]);
+    rows.push([isBn ? "অনলাইন বিক্রয় (Online)" : "Online Sales", onlineSales.length, onlineSalesTotal, 0]);
+    rows.push([isBn ? "সর্বমোট বিক্রয়" : "Total Sales", filteredSales.length, totalSalesVal, totalSalesDueVal]);
+    rows.push([]);
 
-    // @ts-ignore
-    if (window.html2pdf) {
-      runHtml2Pdf();
-    } else {
-      const script = document.createElement("script");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      script.onload = () => {
-        runHtml2Pdf();
-      };
-      script.onerror = () => {
-        setIsGeneratingPDF(false);
-        toast.error(lang === "bn" ? "লাইব্রেরি লোড করতে ব্যর্থ হয়েছে" : "Failed to load PDF library");
-      };
-      document.body.appendChild(script);
-    }
+    // 4. Detailed Purchases Restock
+    rows.push([isBn ? "--- ৪. পণ্য ক্রয় ও ইনভেন্টরি তালিকা ---" : "--- 4. PRODUCT PURCHASES / RESTOCK LIST ---"]);
+    rows.push([isBn ? "তারিখ" : "Date", isBn ? "পণ্যের নাম" : "Product Name", isBn ? "পরিমাণ" : "Quantity", isBn ? "একক ক্রয়মূল্য (টাকা)" : "Unit Cost (BDT)", isBn ? "মোট খরচ (টাকা)" : "Total Cost (BDT)", isBn ? "নোট / সরবরাহকারী" : "Supplier / Note"]);
+    filteredPurchases.forEach(p => {
+      rows.push([
+        p.created_at.slice(0, 10),
+        p.product_name,
+        p.qty,
+        p.unit_cost,
+        p.total,
+        p.note || ""
+      ]);
+    });
+    rows.push([]);
+
+    // 5. Customer Dues from Period
+    rows.push([isBn ? "--- ৫. বকেয়া বাকী ও কাস্টমার তালিকা ---" : "--- 5. CREDIT SALES / DUES LIST ---"]);
+    rows.push([isBn ? "তারিখ" : "Date", isBn ? "কাস্টমারের নাম" : "Customer Name", isBn ? "পণ্যের নাম" : "Product", isBn ? "মোট মূল্য (টাকা)" : "Total Price (BDT)", isBn ? "পরিশোধ (টাকা)" : "Paid (BDT)", isBn ? "বকেয়া পরিমাণ (টাকা)" : "Due Amount (BDT)"]);
+    creditSales.forEach(s => {
+      const paid = Number(s.sell_price) * s.qty - Number(s.due_amount || 0);
+      rows.push([
+        s.created_at.slice(0, 10),
+        s.parties?.name || (isBn ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
+        s.product_name,
+        Number(s.sell_price) * s.qty,
+        paid,
+        Number(s.due_amount || 0)
+      ]);
+    });
+
+    const headers = [
+      isBn ? "বিবরণী খাত / কলাম" : "Section / Column",
+      isBn ? "মূল্য / পরিমাণ" : "Value",
+      isBn ? "অতিরিক্ত বিবরণ ১" : "Detail 1",
+      isBn ? "অতিরিক্ত বিবরণ ২" : "Detail 2",
+      isBn ? "অতিরিক্ত বিবরণ ৩" : "Detail 3",
+      isBn ? "অতিরিক্ত বিবরণ ৪" : "Detail 4",
+    ];
+
+    downloadCsv(`Business_Report_${from}_to_${to}_${langCode}.csv`, headers, rows);
+    toast.success(isBn ? "রিপোর্ট এক্সেল/CSV সফলভাবে ডাউনলোড হয়েছে!" : "Report CSV downloaded successfully!");
   };
 
   return (
-    <div className="space-y-6 pb-20 sm:pb-12 font-sans">
-      {isGeneratingPDF && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/85 backdrop-blur-md animate-in fade-in duration-200 print:hidden">
-          <div className="flex flex-col items-center gap-3 p-6 rounded-xl border bg-card shadow-lg max-w-xs text-center beveled-card">
-            <RefreshCw className="size-8 text-primary animate-spin" />
-            <h3 className="font-semibold text-sm">
-              {lang === "bn" ? "পিডিএফ রিপোর্ট তৈরি হচ্ছে" : "Generating PDF Report"}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {lang === "bn"
-                ? "অনুগ্রহ করে অপেক্ষা করুন, প্রিন্ট প্রিভিউ প্রস্তুত করা হচ্ছে..."
-                : "Please wait, preparing print preview..."}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── SCREEN VIEW (hidden when printing) ────────────────────────────────── */}
-      <div className="print:hidden space-y-6">
-        {/* Screen Controls Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print border-b pb-3.5">
-          <div className="flex items-center gap-2">
-            <Link href="/more">
-              <Button size="icon" variant="ghost" className="size-8 rounded-lg">
+    <div className="space-y-5 pb-12">
+      {/* ── Screen Controls Header (Hidden in Print) ── */}
+      <div className="print:hidden space-y-4">
+        {/* Top bar with navigation & main action buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border/80 shadow-xs">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon" className="size-9 rounded-xl cursor-pointer">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                <FileCheck2 className="size-5 text-primary" />
-                <span>{lang === "bn" ? "ব্যবসায়িক রিপোর্ট ও অ্যানালিটিক্স" : "Reports & Business Analytics"}</span>
+              <h1 className="text-xl font-bold font-serif text-foreground">
+                {lang === "bn" ? "ব্যবসায়িক প্রতিবেদন ও ক্যাটাগরি রিপোর্ট" : "Business & Category Report"}
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {lang === "bn" ? "সূচিপত্র, পরিসংখ্যান ও বিবরণী সমন্বিত প্রফেশনাল পিডিএফ রিপোর্ট" : "Professional PDF report generator with Table of Contents & Statistics"}
+              <p className="text-xs text-muted-foreground">
+                {lang === "bn"
+                  ? `${bizName} · নির্বাচিত তারিখ: ${from === to ? from : `${from} হতে ${to}`}`
+                  : `${bizName} · Range: ${from === to ? from : `${from} to ${to}`}`}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button onClick={handlePrint} size="sm" className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 font-bold shadow-md h-9 text-xs">
-              <Printer className="size-4 mr-1.5 shrink-0" />
-              {lang === "bn" ? "প্রিন্ট রিপোর্ট" : "Print Report"}
-            </Button>
-            <Button onClick={handleDownloadPDF} size="sm" variant="outline" className="flex-1 sm:flex-initial border-primary/40 text-primary hover:bg-primary/5 font-semibold h-9 text-xs">
-              <Download className="size-4 mr-1.5 shrink-0" />
-              {lang === "bn" ? "ডাউনলোড পিডিএফ" : "Download PDF"}
-            </Button>
+          <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-semibold rounded-xl beveled-button gap-1.5 cursor-pointer"
+                >
+                  <FileSpreadsheet className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>{lang === "bn" ? "এক্সেল / CSV" : "Download CSV"}</span>
+                  <ChevronDown className="size-3 opacity-60 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDownloadCSV("bn")}>
+                  Bangla (বাংলা স্প্রেডশিট)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadCSV("en")}>
+                  English (ইংরেজি Spreadsheet)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isGeneratingPdf}
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-bold rounded-xl beveled-button gap-1.5 cursor-pointer shadow-xs border-sky-500/40 text-sky-700 dark:text-sky-300"
+                >
+                  <Printer className="size-4 text-sky-600 dark:text-sky-400" />
+                  <span>{lang === "bn" ? "পিডিএফ ভিউ" : "PDF Preview"}</span>
+                  <ChevronDown className="size-3 opacity-60 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleGeneratePdf(true, "bn")}>
+                  Bangla (বাংলা প্রিভিউ)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleGeneratePdf(true, "en")}>
+                  English (ইংরেজি Preview)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isGeneratingPdf}
+                  size="sm"
+                  className="h-9 text-xs font-bold rounded-xl beveled-button bg-primary text-primary-foreground gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {isGeneratingPdf ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                  <span>{isGeneratingPdf ? (lang === "bn" ? "পিডিএফ তৈরি হচ্ছে..." : "Generating...") : (lang === "bn" ? "ডাউনলোড PDF" : "Download PDF")}</span>
+                  <ChevronDown className="size-3 opacity-70 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleGeneratePdf(false, "bn")}>
+                  Bangla PDF (বাংলা পিডিএফ)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleGeneratePdf(false, "en")}>
+                  English PDF (ইংরেজি পিডিএফ)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        {/* Control Panel (no-print) */}
-        <Card className="p-4 no-print space-y-4 bg-card border-border/80 shadow-xs">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Date range picker */}
-            <div className="space-y-2.5">
-              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="size-3.5" />
-                {lang === "bn" ? "তারিখের সীমা নির্বাচন করুন" : "Select Date Range"}
-              </Label>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-medium text-muted-foreground">{lang === "bn" ? "হতে" : "From"}</span>
-                  <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-9 text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-medium text-muted-foreground">{lang === "bn" ? "পর্যন্ত" : "To"}</span>
-                  <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="h-9 text-xs" />
-                </div>
-              </div>
-              <div className="flex gap-1.5 pt-1">
-                <Button size="sm" variant="outline" className="text-[11px] h-7 px-3 font-medium" onClick={() => setPreset("today")}>
-                  {lang === "bn" ? "আজ" : "Today"}
-                </Button>
-                <Button size="sm" variant="outline" className="text-[11px] h-7 px-3 font-medium" onClick={() => setPreset("week")}>
-                  {lang === "bn" ? "৭ দিন" : "7 Days"}
-                </Button>
-                <Button size="sm" variant="outline" className="text-[11px] h-7 px-3 font-medium" onClick={() => setPreset("month")}>
-                  {lang === "bn" ? "৩০ দিন" : "30 Days"}
-                </Button>
-              </div>
+        {/* Date Filter Toolbar: Default is "Today" */}
+        <Card className="p-4 rounded-2xl border border-border/80 bg-card/60 backdrop-blur-sm space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <Calendar className="size-4 text-primary" />
+              <span>{lang === "bn" ? "তারিখ ফিল্টার (ডিফল্ট: আজ):" : "Date Filter (Default: Today):"}</span>
             </div>
 
-            {/* Section selections */}
-            <div className="space-y-2.5">
-              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <ListOrdered className="size-3.5" />
-                {lang === "bn" ? "রিপোর্টে সূচিপত্র ও ফলাফল অন্তর্ভুক্ত করুন" : "Include in Report Index"}
-              </Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-xs">
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showSales} onChange={e => setShowSales(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "বিক্রয় ফলাফল" : "Sales Results"}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showPurchases} onChange={e => setShowPurchases(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "মাল ক্রয় ফলাফল" : "Purchase Results"}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showExpenses} onChange={e => setShowExpenses(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "খরচ / ব্যয় ফলাফল" : "Expense Results"}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showCashbox} onChange={e => setShowCashbox(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "ক্যাশবক্স লেনদেন" : "Cashbox Action"}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showSomiti} onChange={e => setShowSomiti(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "সমিতি সঞ্চয়" : "Somiti Ledger"}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer font-medium">
-                  <input type="checkbox" checked={showParties} onChange={e => setShowParties(e.target.checked)} className="rounded text-primary border-muted-foreground/30 size-4" />
-                  <span>{lang === "bn" ? "পার্টি ডিরেক্টরি" : "Parties Log"}</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* ── TIER 1: INDEX / TABLE OF CONTENTS (সূচিপত্র) ────────────────────────── */}
-        <Card className="p-4 space-y-3 border-primary/20 bg-gradient-to-r from-primary/5 via-card to-transparent rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between border-b border-primary/15 pb-2">
-            <h2 className="font-bold text-sm text-foreground flex items-center gap-2">
-              <ListOrdered className="size-4 text-primary" />
-              <span>{lang === "bn" ? "রিপোর্ট সূচিপত্র ও সূচক নির্দেশিকা (Index & Contents)" : "Table of Contents & Report Index"}</span>
-            </h2>
-            <span className="text-[11px] font-semibold text-muted-foreground">
-              {from} - {to}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {indexItems.map((item) => (
-              <div
-                key={item.id}
-                className={`p-2.5 rounded-xl border transition flex items-center justify-between text-xs ${
-                  item.active
-                    ? "bg-card border-border/80 shadow-xs"
-                    : "bg-muted/30 border-dashed border-border/50 text-muted-foreground opacity-60"
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setPreset("today")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  activePreset === "today"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="size-5 rounded-full bg-primary/10 text-primary font-bold text-[10px] grid place-items-center shrink-0">
-                    {item.num}
-                  </span>
-                  <span className="font-medium text-foreground truncate">
-                    {lang === "bn" ? item.titleBn : item.titleEn}
-                  </span>
-                </div>
-                {item.active && item.count > 0 && (
-                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
-                    {item.count} {lang === "bn" ? "টি" : "items"}
-                  </span>
-                )}
+                {lang === "bn" ? "আজ (Today)" : "Today"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("yesterday")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  activePreset === "yesterday"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                }`}
+              >
+                {lang === "bn" ? "গতকাল" : "Yesterday"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("week")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  activePreset === "week"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                }`}
+              >
+                {lang === "bn" ? "গত ৭ দিন" : "Last 7 Days"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("month")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  activePreset === "month"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                }`}
+              >
+                {lang === "bn" ? "চলতি মাস" : "This Month"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset("all")}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  activePreset === "all"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                }`}
+              >
+                {lang === "bn" ? "সকল সময়" : "All Time"}
+              </button>
+            </div>
+          </div>
+
+          {/* Custom Date Range Selectors */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-1 border-t border-border/50">
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "হতে (From)" : "From Date"}</Label>
+              <Input
+                type="date"
+                value={from}
+                onChange={e => { setFrom(e.target.value); setActivePreset("custom"); }}
+                className="h-8 text-xs rounded-xl bg-background"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "পর্যন্ত (To)" : "To Date"}</Label>
+              <Input
+                type="date"
+                value={to}
+                onChange={e => { setTo(e.target.value); setActivePreset("custom"); }}
+                className="h-8 text-xs rounded-xl bg-background"
+              />
+            </div>
+            <div className="sm:col-span-2 flex items-end">
+              <div className="text-[11px] text-muted-foreground bg-muted/50 p-2 rounded-xl w-full flex items-center justify-between">
+                <span>{lang === "bn" ? "মোট রেকর্ড পাওয়া গেছে:" : "Records in Range:"}</span>
+                <span className="font-bold text-foreground">
+                  {filteredSales.length} {lang === "bn" ? "বিক্রি" : "sales"} · {filteredExpenses.length} {lang === "bn" ? "খরচ" : "exp"} · {filteredPurchases.length} {lang === "bn" ? "ক্রয়" : "buy"}
+                </span>
               </div>
-            ))}
+            </div>
           </div>
         </Card>
 
-        {/* ── TIER 2: EXECUTIVE FINANCIAL STATISTICS (পরিসংখ্যান) ──────────────────── */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="size-4.5 text-primary" />
-            <h2 className="font-bold text-sm tracking-wide text-foreground uppercase">
-              {lang === "bn" ? "২. সার্বিক অর্থনৈতিক পরিসংখ্যান (Financial Statistics)" : "2. Executive Financial Statistics"}
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {showSales && (
-              <Card className="p-3.5 space-y-1 bg-emerald-500/10 border-emerald-500/20 rounded-2xl shadow-xs">
-                <div className="text-[10px] text-muted-foreground uppercase font-bold flex items-center justify-between">
-                  <span>{lang === "bn" ? "মোট বিক্রি" : "Total Sales"}</span>
-                  <TrendingUp className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmtMoney(salesTotalVal)}</div>
-                <div className="text-[10px] text-muted-foreground font-medium">
-                  {lang === "bn" ? `${filteredSales.length} টি বিক্রি (লাভ ৳${salesProfitVal})` : `${filteredSales.length} sales (profit ৳${salesProfitVal})`}
-                </div>
-              </Card>
-            )}
-
-            {showPurchases && (
-              <Card className="p-3.5 space-y-1 bg-blue-500/10 border-blue-500/20 rounded-2xl shadow-xs">
-                <div className="text-[10px] text-muted-foreground uppercase font-bold flex items-center justify-between">
-                  <span>{lang === "bn" ? "মোট মাল ক্রয়" : "Total Purchases"}</span>
-                  <ShoppingCart className="size-3.5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{fmtMoney(purchaseTotalVal)}</div>
-                <div className="text-[10px] text-muted-foreground font-medium">
-                  {lang === "bn" ? `${filteredPurchases.length} টি ক্রয় ভাউচার` : `${filteredPurchases.length} purchase records`}
-                </div>
-              </Card>
-            )}
-
-            {showExpenses && (
-              <Card className="p-3.5 space-y-1 bg-rose-500/10 border-rose-500/20 rounded-2xl shadow-xs">
-                <div className="text-[10px] text-muted-foreground uppercase font-bold flex items-center justify-between">
-                  <span>{lang === "bn" ? "মোট খরচ" : "Total Overhead"}</span>
-                  <Receipt className="size-3.5 text-rose-600 dark:text-rose-400" />
-                </div>
-                <div className="text-lg font-bold text-rose-600 dark:text-rose-400">{fmtMoney(expenseTotalVal)}</div>
-                <div className="text-[10px] text-muted-foreground font-medium">
-                  {lang === "bn" ? `${filteredExpenses.length} টি খরচ বিবরণী` : `${filteredExpenses.length} expense entries`}
-                </div>
-              </Card>
-            )}
-
-            {showCashbox && (
-              <Card className="p-3.5 space-y-1 bg-amber-500/10 border-amber-500/20 rounded-2xl shadow-xs">
-                <div className="text-[10px] text-muted-foreground uppercase font-bold flex items-center justify-between">
-                  <span>{lang === "bn" ? "ক্যাশ নিট প্রবাহ" : "Cashbox Net"}</span>
-                  <Banknote className="size-3.5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className={`text-lg font-bold ${cashboxNetVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                  {cashboxNetVal >= 0 ? "+" : ""}{fmtMoney(cashboxNetVal)}
-                </div>
-                <div className="text-[10px] text-muted-foreground font-medium">
-                  {lang === "bn" ? `${filteredCashbox.length} টি ক্যাশ এন্ট্রি` : `${filteredCashbox.length} cash entries`}
-                </div>
-              </Card>
-            )}
-
-            {showSomiti && (
-              <Card className="p-3.5 space-y-1 bg-indigo-500/10 border-indigo-500/20 rounded-2xl shadow-xs col-span-2 md:col-span-1">
-                <div className="text-[10px] text-muted-foreground uppercase font-bold flex items-center justify-between">
-                  <span>{lang === "bn" ? "সমিতি সঞ্চয়" : "Somiti Balance"}</span>
-                  <PiggyBank className="size-3.5 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div className={`text-lg font-bold ${somitiNetVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                  {somitiNetVal >= 0 ? "+" : ""}{fmtMoney(somitiNetVal)}
-                </div>
-                <div className="text-[10px] text-muted-foreground font-medium">
-                  {lang === "bn" ? `${filteredSomiti.length} টি লেনদেন` : `${filteredSomiti.length} transactions`}
-                </div>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        {/* Visual Chart Section */}
-        {(showSales || showPurchases || showExpenses) && chartData.length > 0 && (
-          <Card className="p-4 space-y-3 bg-card border-border/80 rounded-2xl shadow-xs">
-            <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-              <BarChart3 className="size-4 text-primary" />
-              <span>{lang === "bn" ? "৩. রাজস্ব বনাম ক্রয় বনাম খরচ বিশ্লেষণ চার্ট" : "3. Sales vs Purchases vs Expenses Comparison Chart"}</span>
+        {/* 4 Bento Top KPI Summary Highlights */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card className="p-4 beveled-kpi bg-card rounded-none border-emerald-500/20 shadow-xs space-y-1 relative overflow-hidden">
+            <div className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "মোট বিক্রয়" : "Total Sales"}</div>
+            <div className="text-lg md:text-xl font-bold font-serif text-emerald-600 dark:text-emerald-400">
+              {fmtMoney(totalSalesVal)}
             </div>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} />
-                  <YAxis tick={{ fontSize: 9 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {showSales && <Bar dataKey="Sales" name={lang === "bn" ? "বিক্রয়" : "Sales"} fill="#10b981" isAnimationActive={false} radius={[3, 3, 0, 0]} />}
-                  {showPurchases && <Bar dataKey="Purchases" name={lang === "bn" ? "ক্রয়" : "Purchases"} fill="#3b82f6" isAnimationActive={false} radius={[3, 3, 0, 0]} />}
-                  {showExpenses && <Bar dataKey="Expenses" name={lang === "bn" ? "খরচ" : "Expenses"} fill="#ef4444" isAnimationActive={false} radius={[3, 3, 0, 0]} />}
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="text-[10px] text-muted-foreground">
+              {filteredSales.length} {lang === "bn" ? "টি চালান" : "invoices"}
             </div>
           </Card>
-        )}
 
-        {/* ── TIER 3: DETAILED RESULTS SHEETS (ফলাফল বিবরণী শীট) ──────────────────── */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-2 border-b pb-2">
-            <FileCheck2 className="size-4.5 text-primary" />
-            <h2 className="font-bold text-sm tracking-wide text-foreground uppercase">
-              {lang === "bn" ? "ফলাফল বিবরণী শীটসমূহ (Detailed Results Sheets)" : "Detailed Results Sheets"}
-            </h2>
-          </div>
-
-          {/* Sales Results Sheet */}
-          {showSales && filteredSales.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-bold grid place-items-center">1</span>
-                  <span>{lang === "bn" ? "বিক্রয় ফলাফল বিবরণী শীট (Sales Results Sheet)" : "Sales Results Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredSales.length} {lang === "bn" ? "টি বিক্রয় রেকর্ড" : "records"}
-                </span>
-              </div>
-              
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                      <th className="p-3">{lang === "bn" ? "পণ্যের বিবরণ" : "Product Details"}</th>
-                      <th className="p-3 text-center">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "বিক্রয় মূল্য" : "Sell Price"}</th>
-                      <th className="p-3 text-center">{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Mode"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "বকেয়া" : "Due"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "লাভ" : "Profit"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {groupedSalesList.map(s => (
-                      <tr key={s.id} className="hover:bg-muted/30 transition">
-                        <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(s.created_at)}</td>
-                        <td className="p-3 font-semibold text-foreground">
-                          {s.isGroup ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-1.5 py-0.2 rounded border border-emerald-500/20 shrink-0">
-                                {lang === "bn" ? "কার্ট" : "Cart"}
-                              </span>
-                              <span>{s.product_name}</span>
-                            </div>
-                          ) : (
-                            s.product_name
-                          )}
-                        </td>
-                        <td className="p-3 text-center font-bold">{s.qty}</td>
-                        <td className="p-3 text-right font-bold text-foreground">{fmtMoney(s.sell_price)}</td>
-                        <td className="p-3 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
-                            s.type === "cash"
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                              : s.type === "credit"
-                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                          }`}>
-                            {s.type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : s.type === "online" ? (lang === "bn" ? "অনলাইন" : "Online") : (lang === "bn" ? "ক্যাশ" : "Cash")}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right text-rose-600 font-bold">{s.due_amount > 0 ? fmtMoney(s.due_amount) : "—"}</td>
-                        <td className="p-3 text-right text-emerald-600 font-bold">{fmtMoney(s.profit)}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/50 font-bold border-t-2 border-border text-xs">
-                      <td colSpan={2} className="p-3 uppercase">{lang === "bn" ? "সর্বমোট বিক্রয় ফলাফল" : "Total Sales Results"}</td>
-                      <td className="p-3 text-center">{filteredSales.reduce((a, s) => a + s.qty, 0)}</td>
-                      <td className="p-3 text-right text-foreground">{fmtMoney(salesTotalVal)}</td>
-                      <td className="p-3 text-center">—</td>
-                      <td className="p-3 text-right text-rose-600">{fmtMoney(totalSalesDueVal)}</td>
-                      <td className="p-3 text-right text-emerald-600">{fmtMoney(salesProfitVal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <Card className="p-4 beveled-kpi bg-card rounded-none border-rose-500/20 shadow-xs space-y-1 relative overflow-hidden">
+            <div className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "পরিচালন খরচ" : "Overhead Expenses"}</div>
+            <div className="text-lg md:text-xl font-bold font-serif text-rose-600 dark:text-rose-400">
+              {fmtMoney(totalExpenseVal)}
             </div>
-          )}
-
-          {/* Purchase Results Sheet */}
-          {showPurchases && filteredPurchases.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-blue-500/15 text-blue-600 text-xs font-bold grid place-items-center">2</span>
-                  <span>{lang === "bn" ? "মাল ক্রয় ফলাফল বিবরণী শীট (Purchase Results Sheet)" : "Purchase Results Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredPurchases.length} {lang === "bn" ? "টি ক্রয় রেকর্ড" : "records"}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                      <th className="p-3">{lang === "bn" ? "পণ্যের বিবরণ" : "Product Name"}</th>
-                      <th className="p-3 text-center">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "একক ক্রয় মূল্য" : "Unit Cost"}</th>
-                      <th className="p-3 text-center">{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Mode"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "মোট ক্রয় খরচ" : "Total Cost"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredPurchases.map(p => (
-                      <tr key={p.id} className="hover:bg-muted/30 transition">
-                        <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(p.created_at)}</td>
-                        <td className="p-3 font-semibold text-foreground">{p.product_name}</td>
-                        <td className="p-3 text-center font-bold">{p.qty}</td>
-                        <td className="p-3 text-right text-muted-foreground">{fmtMoney(p.unit_cost)}</td>
-                        <td className="p-3 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
-                            p.payment_type === "credit"
-                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                          }`}>
-                            {p.payment_type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : (lang === "bn" ? "ক্যাশ" : "Cash")}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right font-bold text-foreground">{fmtMoney(p.total)}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/50 font-bold border-t-2 border-border text-xs">
-                      <td colSpan={2} className="p-3 uppercase">{lang === "bn" ? "সর্বমোট মাল ক্রয় খরচ" : "Total Purchase Expense"}</td>
-                      <td className="p-3 text-center">{filteredPurchases.reduce((a, p) => a + p.qty, 0)}</td>
-                      <td className="p-3 text-right">—</td>
-                      <td className="p-3 text-center">—</td>
-                      <td className="p-3 text-right text-foreground">{fmtMoney(purchaseTotalVal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              {categoryExpenses.length} {lang === "bn" ? "টি ক্যাটাগরিতে" : "categories"}
             </div>
-          )}
+          </Card>
 
-          {/* Expense Results Sheet */}
-          {showExpenses && filteredExpenses.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-rose-500/15 text-rose-600 text-xs font-bold grid place-items-center">3</span>
-                  <span>{lang === "bn" ? "পরিচালন খরচ ও ব্যয় শীট (Expense Results Sheet)" : "Expense Results Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredExpenses.length} {lang === "bn" ? "টি খরচ এন্ট্রি" : "records"}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                      <th className="p-3">{lang === "bn" ? "খরচের খাত / বিবরণ" : "Expense Head / Title"}</th>
-                      <th className="p-3">{lang === "bn" ? "মন্তব্য" : "Notes"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "খরচের পরিমাণ" : "Amount"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredExpenses.map(e => (
-                      <tr key={e.id} className="hover:bg-muted/30 transition">
-                        <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(e.created_at)}</td>
-                        <td className="p-3 font-semibold text-foreground">{e.title}</td>
-                        <td className="p-3 text-muted-foreground">{e.note || "—"}</td>
-                        <td className="p-3 text-right font-bold text-rose-600">{fmtMoney(e.amount)}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/50 font-bold border-t-2 border-border text-xs">
-                      <td colSpan={3} className="p-3 uppercase">{lang === "bn" ? "সর্বমোট পরিচালন খরচ" : "Total Overhead Expenses"}</td>
-                      <td className="p-3 text-right text-rose-600">{fmtMoney(expenseTotalVal)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <Card className="p-4 beveled-kpi bg-card rounded-none border-sky-500/20 shadow-xs space-y-1 relative overflow-hidden">
+            <div className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "পণ্য ক্রয় (ইনভেন্টরি)" : "Product Purchases"}</div>
+            <div className="text-lg md:text-xl font-bold font-serif text-sky-600 dark:text-sky-400">
+              {fmtMoney(totalPurchaseVal)}
             </div>
-          )}
-
-          {/* Cashbox Results Sheet */}
-          {showCashbox && filteredCashbox.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-amber-500/15 text-amber-600 text-xs font-bold grid place-items-center">4</span>
-                  <span>{lang === "bn" ? "ক্যাশবক্স লেনদেন শীট (Cashbox Action Sheet)" : "Cashbox Action Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredCashbox.length} {lang === "bn" ? "টি বিবরণী" : "records"}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                      <th className="p-3">{lang === "bn" ? "টাইপ" : "Action Type"}</th>
-                      <th className="p-3">{lang === "bn" ? "মন্তব্য" : "Note"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "পরিমাণ" : "Amount"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredCashbox.map(c => {
-                      const isPlus = c.kind === "deposit" || c.kind === "sale";
-                      return (
-                        <tr key={c.id} className="hover:bg-muted/30 transition">
-                          <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(c.created_at)}</td>
-                          <td className="p-3 capitalize font-medium">{c.kind}</td>
-                          <td className="p-3 text-muted-foreground">{c.note || "—"}</td>
-                          <td className={`p-3 text-right font-bold ${isPlus ? "text-emerald-600" : "text-rose-600"}`}>
-                            {isPlus ? "+" : "−"}{fmtMoney(c.amount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="bg-muted/50 font-bold border-t-2 border-border text-xs">
-                      <td colSpan={3} className="p-3 uppercase">{lang === "bn" ? "নিট ক্যাশ ব্যালেন্স প্রবাহ" : "Net Cashbox Flow"}</td>
-                      <td className={`p-3 text-right ${cashboxNetVal >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {cashboxNetVal >= 0 ? "+" : ""}{fmtMoney(cashboxNetVal)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              {totalPurchaseQty} {lang === "bn" ? "পিস সামগ্রী" : "units restocked"}
             </div>
-          )}
+          </Card>
 
-          {/* Somiti Results Sheet */}
-          {showSomiti && filteredSomiti.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-indigo-500/15 text-indigo-600 text-xs font-bold grid place-items-center">5</span>
-                  <span>{lang === "bn" ? "সমিতি সঞ্চয় বিবরণী শীট (Somiti Savings Sheet)" : "Somiti Savings Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredSomiti.length} {lang === "bn" ? "টি লেনদেন" : "records"}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                      <th className="p-3">{lang === "bn" ? "ধরন" : "Action"}</th>
-                      <th className="p-3">{lang === "bn" ? "মন্তব্য" : "Remarks"}</th>
-                      <th className="p-3 text-right">{lang === "bn" ? "পরিমাণ" : "Amount"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredSomiti.map(s => {
-                      const isPlus = s.kind === "deposit";
-                      return (
-                        <tr key={s.id} className="hover:bg-muted/30 transition">
-                          <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(s.created_at)}</td>
-                          <td className="p-3 capitalize font-medium">{s.kind}</td>
-                          <td className="p-3 text-muted-foreground">{s.note || "—"}</td>
-                          <td className={`p-3 text-right font-bold ${isPlus ? "text-emerald-600" : "text-rose-600"}`}>
-                            {isPlus ? "+" : "−"}{fmtMoney(s.amount)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="bg-muted/50 font-bold border-t-2 border-border text-xs">
-                      <td colSpan={3} className="p-3 uppercase">{lang === "bn" ? "সমিতি নিট সঞ্চয় ফান্ড" : "Net Somiti Balance"}</td>
-                      <td className={`p-3 text-right ${somitiNetVal >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {somitiNetVal >= 0 ? "+" : ""}{fmtMoney(somitiNetVal)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <Card className="p-4 beveled-kpi bg-card rounded-none border-amber-500/20 shadow-xs space-y-1 relative overflow-hidden">
+            <div className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "নিট অর্জিত লাভ" : "Estimated Net Profit"}</div>
+            <div className={`text-lg md:text-xl font-bold font-serif ${netBusinessProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+              {fmtMoney(netBusinessProfit)}
             </div>
-          )}
-
-          {/* Parties Results Sheet */}
-          {showParties && filteredParties.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold tracking-wide text-foreground flex items-center gap-2">
-                  <span className="size-5 rounded-full bg-amber-500/15 text-amber-600 text-xs font-bold grid place-items-center">6</span>
-                  <span>{lang === "bn" ? "পার্টি ও গ্রাহক ডিরেক্টরি শীট (Parties Directory Sheet)" : "Parties Directory Sheet"}</span>
-                </h3>
-                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
-                  {filteredParties.length} {lang === "bn" ? "জন পার্টি" : "parties"}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-muted/60 border-b border-border/80 text-muted-foreground uppercase text-[11px] font-bold">
-                      <th className="p-3">{lang === "bn" ? "নিবন্ধন তারিখ" : "Registered Date"}</th>
-                      <th className="p-3">{lang === "bn" ? "পার্টির নাম" : "Name"}</th>
-                      <th className="p-3">{lang === "bn" ? "ফোন নম্বর" : "Phone"}</th>
-                      <th className="p-3 text-center">{lang === "bn" ? "আর্কাইভ অবস্থা" : "Archived Status"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {filteredParties.map(p => (
-                      <tr key={p.id} className="hover:bg-muted/30 transition">
-                        <td className="p-3 whitespace-nowrap text-muted-foreground">{fmtDateTime(p.created_at)}</td>
-                        <td className="p-3 font-semibold text-foreground">{p.name}</td>
-                        <td className="p-3 font-mono">{p.phone || "—"}</td>
-                        <td className="p-3 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${p.archived ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"}`}>
-                            {p.archived ? (lang === "bn" ? "আর্কাইভড" : "Archived") : (lang === "bn" ? "সক্রিয়" : "Active")}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              {lang === "bn" ? "বিক্রয় লাভ − খরচ" : "Gross profit − expenses"}
             </div>
-          )}
+          </Card>
         </div>
+
+        {/* Category-wise Interactive Tabs Navigation */}
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
+          <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full h-auto p-1 bg-muted/60 rounded-xl gap-1">
+            <TabsTrigger value="summary" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "আর্থিক সারসংক্ষেপ" : "Summary"}
+            </TabsTrigger>
+            <TabsTrigger value="expenses" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "খরচ ক্যাটাগরি" : "Expenses"} ({categoryExpenses.length})
+            </TabsTrigger>
+            <TabsTrigger value="sales" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "বিক্রয় প্রতিবেদন" : "Sales"} ({filteredSales.length})
+            </TabsTrigger>
+            <TabsTrigger value="purchases" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "পণ্য ক্রয়" : "Purchases"} ({filteredPurchases.length})
+            </TabsTrigger>
+            <TabsTrigger value="dues" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "বাকী ও পাওনা" : "Dues"} ({creditSales.length})
+            </TabsTrigger>
+            <TabsTrigger value="cashbox" className="text-xs py-2 rounded-lg font-bold">
+              {lang === "bn" ? "ক্যাশ ও তহবিল" : "Cashbox"}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      {/* ── DEDICATED PRINT VIEW (visible only when printing or exporting PDF) ── */}
-      <div id="print-report-content" className="hidden print:block print-color-exact w-full max-w-none mx-auto bg-white text-zinc-900 p-6 font-sans space-y-6 text-sm">
+      {/* ── Official Structured Statement Document ── */}
+      {/* (Visible on Screen as clean document card & Formatted for High-Resolution Printing & PDF Export) */}
+      <div id="official-report-document" className="bg-card print:bg-white text-foreground print:text-black p-6 sm:p-8 rounded-2xl border border-border/80 print:border-none shadow-sm print:shadow-none space-y-6 font-['Hind_Siliguri',sans-serif]">
         
-        {/* REPORT COVER & HEADER */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-5">
-            <div className="flex items-center gap-4">
-              <img
-                src={bizSettings?.business?.logo_url || "/logo.png"}
-                alt={bizName}
-                className="h-14 w-auto object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).src = "/logo.png"; }}
-              />
-              <div>
-                <h1 className="text-2xl font-black uppercase tracking-tight text-zinc-900">{bizName}</h1>
-                <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider">{lang === "bn" ? "অফিসিয়াল ব্যবসায়িক আর্থিক রিপোর্ট" : "Official Business Financial Audit Report"}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <h2 className="text-xs font-bold text-zinc-900 uppercase tracking-wider bg-zinc-100 px-3 py-1 rounded-md border border-zinc-200">
-                {lang === "bn" ? "ব্যবসায়িক বিশ্লেষণ রিপোর্ট" : "Business Financial Audit Report"}
+        {/* Document Official Header */}
+        <div className="border-b-2 border-primary/20 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="size-3 rounded-full bg-primary print:bg-black inline-block" />
+              <h2 className="text-2xl sm:text-3xl font-extrabold font-serif tracking-tight text-foreground print:text-black uppercase">
+                {bizName}
               </h2>
-              <p className="text-zinc-600 text-[10px] mt-1.5 font-semibold">
-                {lang === "bn" ? `সময়কাল: ${from} থেকে ${to}` : `Period: ${from} to ${to}`}
-              </p>
-              <p className="text-zinc-500 text-[9px] mt-0.5">
-                {lang === "bn" ? `তৈরি হয়েছে: ${new Date().toLocaleString()}` : `Generated: ${new Date().toLocaleString()}`}
-              </p>
+            </div>
+            <p className="text-xs text-muted-foreground print:text-gray-600 mt-1">
+              {bizAddress && `${bizAddress} · `}{bizPhone && `ফোন: ${bizPhone}`}
+            </p>
+            <div className="text-sm font-bold text-primary print:text-black mt-1.5">
+              {lang === "bn" ? "অফিসিয়াল ব্যবসায়িক ও ক্যাটাগরি প্রতিবেদন" : "Official Business & Category Statement"}
             </div>
           </div>
 
-          {/* ── TIER 1 PRINT: TABLE OF CONTENTS / INDEX (সূচিপত্র) ────────────────────── */}
-          <div className="border border-zinc-300 rounded-lg p-4 bg-zinc-50/60 space-y-2.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 border-b border-zinc-200 pb-1.5 flex items-center gap-2">
-              <span>📋</span>
-              <span>{lang === "bn" ? "১. রিপোর্ট সূচিপত্র ও উপাদান তালিকা (Table of Contents & Index)" : "1. Table of Contents & Report Index"}</span>
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
-              {indexItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between border-b border-zinc-200/60 pb-1">
-                  <span className="font-semibold text-zinc-800">
-                    {item.num}. {lang === "bn" ? item.titleBn : item.titleEn}
-                  </span>
-                  <span className="font-mono text-zinc-500 text-[10px]">
-                    {item.active ? (item.count > 0 ? `${item.count} ${lang === "bn" ? "রেকর্ড" : "records"}` : (lang === "bn" ? "অন্তর্ভুক্ত" : "Included")) : (lang === "bn" ? "অনুপস্থিত" : "Excluded")}
-                  </span>
-                </div>
-              ))}
+          <div className="text-left sm:text-right text-xs text-muted-foreground print:text-gray-700 space-y-1">
+            <div className="px-2.5 py-1 bg-primary/10 print:bg-gray-100 rounded-lg text-primary print:text-black font-bold inline-block">
+              {lang === "bn" ? "সময়কাল:" : "Period:"} {from} {from !== to ? `হতে ${to}` : "(একদিন)"}
             </div>
+            <div>{lang === "bn" ? "প্রস্তুত সময়:" : "Generated:"} {fmtDateTime(new Date().toISOString())}</div>
           </div>
-
-          {/* ── TIER 2 PRINT: FINANCIAL STATISTICS & KEY METRICS (পরিসংখ্যান) ──────── */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 border-b border-zinc-200 pb-1 flex items-center gap-2">
-              <span>📊</span>
-              <span>{lang === "bn" ? "২. সার্বিক অর্থনৈতিক পরিসংখ্যান (Executive Financial Statistics)" : "2. Executive Financial Statistics"}</span>
-            </h3>
-            
-            <div className="grid grid-cols-3 gap-3">
-              {showSales && (
-                <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/40 space-y-1">
-                  <div className="text-[10px] text-emerald-900 uppercase font-bold tracking-wide">
-                    {lang === "bn" ? "মোট বিক্রি" : "Total Sales"}
-                  </div>
-                  <div className="text-lg font-bold text-emerald-800">{fmtMoney(salesTotalVal)}</div>
-                  <div className="text-[9px] text-emerald-700 font-semibold">
-                    {lang === "bn" ? `${filteredSales.length} টি বিক্রি (মোট লাভ ৳${salesProfitVal})` : `${filteredSales.length} sales (profit ৳${salesProfitVal})`}
-                  </div>
-                </div>
-              )}
-
-              {showPurchases && (
-                <div className="p-3 rounded-lg border border-blue-200 bg-blue-50/40 space-y-1">
-                  <div className="text-[10px] text-blue-900 uppercase font-bold tracking-wide">
-                    {lang === "bn" ? "মোট মাল ক্রয়" : "Total Purchases"}
-                  </div>
-                  <div className="text-lg font-bold text-blue-800">{fmtMoney(purchaseTotalVal)}</div>
-                  <div className="text-[9px] text-blue-700 font-semibold">
-                    {lang === "bn" ? `${filteredPurchases.length} টি ক্রয় ভাউচার` : `${filteredPurchases.length} purchase vouchers`}
-                  </div>
-                </div>
-              )}
-
-              {showExpenses && (
-                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/40 space-y-1">
-                  <div className="text-[10px] text-rose-900 uppercase font-bold tracking-wide">
-                    {lang === "bn" ? "মোট খরচ / ব্যয়" : "Total Overhead"}
-                  </div>
-                  <div className="text-lg font-bold text-rose-800">{fmtMoney(expenseTotalVal)}</div>
-                  <div className="text-[9px] text-rose-700 font-semibold">
-                    {lang === "bn" ? `${filteredExpenses.length} টি খরচ বিবরণী` : `${filteredExpenses.length} other expenses`}
-                  </div>
-                </div>
-              )}
-
-              {showCashbox && (
-                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/40 space-y-1">
-                  <div className="text-[10px] text-amber-900 uppercase font-bold tracking-wide">
-                    {lang === "bn" ? "ক্যাশ নিট প্রবাহ" : "Cashbox Net"}
-                  </div>
-                  <div className={`text-lg font-bold ${cashboxNetVal >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
-                    {cashboxNetVal >= 0 ? "+" : ""}{fmtMoney(cashboxNetVal)}
-                  </div>
-                  <div className="text-[9px] text-amber-700 font-semibold">
-                    {lang === "bn" ? `${filteredCashbox.length} টি ক্যাশ বিবরণী` : `${filteredCashbox.length} cash box actions`}
-                  </div>
-                </div>
-              )}
-
-              {showSomiti && (
-                <div className="p-3 rounded-lg border border-indigo-200 bg-indigo-50/40 space-y-1">
-                  <div className="text-[10px] text-indigo-900 uppercase font-bold tracking-wide">
-                    {lang === "bn" ? "সমিতি সঞ্চয়" : "Somiti Net"}
-                  </div>
-                  <div className={`text-lg font-bold ${somitiNetVal >= 0 ? "text-emerald-800" : "text-rose-800"}`}>
-                    {somitiNetVal >= 0 ? "+" : ""}{fmtMoney(somitiNetVal)}
-                  </div>
-                  <div className="text-[9px] text-indigo-700 font-semibold">
-                    {lang === "bn" ? `${filteredSomiti.length} টি লেনদেন` : `${filteredSomiti.length} somiti activities`}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Graph Comparison Section */}
-          {(showSales || showPurchases || showExpenses) && chartData.length > 0 && (
-            <div className="space-y-2 border border-zinc-200 bg-zinc-50/40 rounded-lg p-4">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-700">
-                {lang === "bn" ? "৩. রাজস্ব বনাম ক্রয় বনাম খরচ বিশ্লেষণ চার্ট" : "3. Sales vs Purchases vs Expenses Comparison Chart"}
-              </h3>
-              <div className="w-full flex justify-center">
-                <BarChart width={700} height={240} data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#3f3f46" }} />
-                  <YAxis tick={{ fontSize: 9, fill: "#3f3f46" }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {showSales && <Bar dataKey="Sales" name={lang === "bn" ? "বিক্রয়" : "Sales"} fill="#10b981" isAnimationActive={false} radius={[2, 2, 0, 0]} />}
-                  {showPurchases && <Bar dataKey="Purchases" name={lang === "bn" ? "ক্রয়" : "Purchases"} fill="#3b82f6" isAnimationActive={false} radius={[2, 2, 0, 0]} />}
-                  {showExpenses && <Bar dataKey="Expenses" name={lang === "bn" ? "খরচ" : "Expenses"} fill="#ef4444" isAnimationActive={false} radius={[2, 2, 0, 0]} />}
-                </BarChart>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* ── TIER 3 PRINT: RESULTS SHEETS (ফলাফল বিবরণী শীটসমূহ) ────────────────── */}
-        <div className="print-page-break pt-6 space-y-6">
-          <h2 className="text-xs font-bold text-zinc-900 border-b-2 border-zinc-900 pb-1.5 tracking-wider uppercase">
-            {lang === "bn" ? "ফলাফল বিবরণী শীটসমূহ (Detailed Results Sheets)" : "Detailed Results Sheets"}
-          </h2>
-
-          {/* Sales Results Sheet */}
-          {showSales && filteredSales.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>১. বিক্রয় ফলাফল বিবরণী শীট (Sales Results Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredSales.length} {lang === "bn" ? "টি এন্ট্রি" : "entries"}</span>
+        {/* ── Section 1: Executive Financial Summary Table ── */}
+        {(activeTab === "summary" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "summary" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center gap-2 border-b border-border/60 pb-1.5">
+              <span className="size-2 rounded-full bg-emerald-500 print:bg-black" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                {lang === "bn" ? "১. সার্বিক অর্থনৈতিক সারসংক্ষেপ" : "1. Executive Financial Summary"}
               </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "পণ্যের বিবরণ" : "Product"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-center">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-right">{lang === "bn" ? "বিক্রয় মূল্য" : "Sell Price"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-center">{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Mode"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-right">{lang === "bn" ? "বকেয়া" : "Due"}</th>
-                    <th className="p-2 text-right">{lang === "bn" ? "লাভ" : "Profit"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {groupedSalesList.map(s => (
-                    <tr key={s.id} className="print-avoid-break even:bg-zinc-50/70">
-                      <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(s.created_at)}</td>
-                      <td className="p-2 border-r border-zinc-200 font-semibold text-zinc-900">
-                        {s.isGroup ? (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className="bg-emerald-100 text-emerald-800 text-[8px] font-bold px-1 rounded border border-emerald-300 shrink-0">
-                              {lang === "bn" ? "কার্ট" : "Cart"}
-                            </span>
-                            <span>{s.product_name}</span>
-                          </div>
-                        ) : (
-                          s.product_name
-                        )}
-                      </td>
-                      <td className="p-2 border-r border-zinc-200 text-center font-bold">{s.qty}</td>
-                      <td className="p-2 border-r border-zinc-200 text-right font-bold">{fmtMoney(s.sell_price)}</td>
-                      <td className="p-2 border-r border-zinc-200 text-center uppercase font-bold text-[8px]">
-                        {s.type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : s.type === "online" ? (lang === "bn" ? "অনলাইন" : "Online") : (lang === "bn" ? "ক্যাশ" : "Cash")}
-                      </td>
-                      <td className="p-2 border-r border-zinc-200 text-right text-rose-700 font-bold">{s.due_amount > 0 ? fmtMoney(s.due_amount) : "—"}</td>
-                      <td className="p-2 text-right text-emerald-700 font-bold">{fmtMoney(s.profit)}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-zinc-100 font-bold border-t-2 border-zinc-400">
-                    <td colSpan={2} className="p-2 border-r border-zinc-300 uppercase">{lang === "bn" ? "সর্বমোট বিক্রয় ফলাফল" : "Total Sales Results"}</td>
-                    <td className="p-2 border-r border-zinc-300 text-center">{filteredSales.reduce((a, s) => a + s.qty, 0)}</td>
-                    <td className="p-2 border-r border-zinc-300 text-right">{fmtMoney(salesTotalVal)}</td>
-                    <td className="p-2 border-r border-zinc-300 text-center">—</td>
-                    <td className="p-2 border-r border-zinc-300 text-right text-rose-700">{fmtMoney(totalSalesDueVal)}</td>
-                    <td className="p-2 text-right text-emerald-700">{fmtMoney(salesProfitVal)}</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
-          )}
 
-          {/* Purchase Results Sheet */}
-          {showPurchases && filteredPurchases.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>২. মাল ক্রয় ফলাফল বিবরণী শীট (Purchase Results Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredPurchases.length} {lang === "bn" ? "টি এন্ট্রি" : "entries"}</span>
-              </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "পণ্যের বিবরণ" : "Product Name"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-center">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-right">{lang === "bn" ? "একক ক্রয় মূল্য" : "Unit Cost"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-center">{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Mode"}</th>
-                    <th className="p-2 text-right">{lang === "bn" ? "মোট ক্রয় খরচ" : "Total Cost"}</th>
+            <div className="overflow-x-auto border border-zinc-300 dark:border-zinc-700 print:border-black shadow-xs">
+              <table className="w-full text-xs text-left border-collapse border border-zinc-300 dark:border-zinc-700 print:border-black">
+                <thead className="bg-muted/90 print:bg-gray-200 text-foreground print:text-black font-bold uppercase">
+                  <tr className="border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "আর্থিক বিবরণী খাত" : "Financial Metric"}</th>
+                    <th className="p-2.5 text-center border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "সংখ্যা / ভাউচার" : "Count"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মোট পরিমাণ (টাকা)" : "Amount (BDT)"}</th>
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মন্তব্য" : "Remarks"}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredPurchases.map(p => (
-                    <tr key={p.id} className="print-avoid-break even:bg-zinc-50/70">
-                      <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(p.created_at)}</td>
-                      <td className="p-2 border-r border-zinc-200 font-semibold text-zinc-900">{p.product_name}</td>
-                      <td className="p-2 border-r border-zinc-200 text-center font-bold">{p.qty}</td>
-                      <td className="p-2 border-r border-zinc-200 text-right font-medium">{fmtMoney(p.unit_cost)}</td>
-                      <td className="p-2 border-r border-zinc-200 text-center uppercase font-bold text-[8px]">
-                        {p.payment_type === "credit" ? (lang === "bn" ? "বকেয়া" : "Credit") : (lang === "bn" ? "ক্যাশ" : "Cash")}
-                      </td>
-                      <td className="p-2 text-right font-bold">{fmtMoney(p.total)}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-zinc-100 font-bold border-t-2 border-zinc-400">
-                    <td colSpan={2} className="p-2 border-r border-zinc-300 uppercase">{lang === "bn" ? "সর্বমোট মাল ক্রয় খরচ" : "Total Purchase Expense"}</td>
-                    <td className="p-2 border-r border-zinc-300 text-center">{filteredPurchases.reduce((a, p) => a + p.qty, 0)}</td>
-                    <td className="p-2 border-r border-zinc-300 text-center">—</td>
-                    <td className="p-2 border-r border-zinc-300 text-center">—</td>
-                    <td className="p-2 text-right font-bold">{fmtMoney(purchaseTotalVal)}</td>
+                <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700 print:divide-black">
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মোট বিক্রয়মূল্য" : "Total Sales Revenue"}</td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{filteredSales.length} {lang === "bn" ? "টি" : "orders"}</td>
+                    <td className="p-2.5 text-right font-bold font-serif text-emerald-600 dark:text-emerald-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesVal)}</td>
+                    <td className="p-2.5 text-muted-foreground print:text-gray-600 border border-zinc-300 dark:border-zinc-700 print:border-black">{totalSalesItemsCount} {lang === "bn" ? "পিস পণ্য বিক্রি" : "items sold"}</td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Expense Results Sheet */}
-          {showExpenses && filteredExpenses.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>৩. পরিচালন খরচ ও ব্যয় শীট (Expense Results Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredExpenses.length} {lang === "bn" ? "টি এন্ট্রি" : "entries"}</span>
-              </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "খরচের খাত / বিবরণ" : "Expense Head / Title"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "মন্তব্য" : "Notes"}</th>
-                    <th className="p-2 text-right">{lang === "bn" ? "খরচের পরিমাণ" : "Amount"}</th>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "বিক্রয় হতে অর্জিত লাভ" : "Gross Profit from Sales"}</td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">—</td>
+                    <td className="p-2.5 text-right font-bold font-serif text-emerald-600 dark:text-emerald-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesProfitVal)}</td>
+                    <td className="p-2.5 text-muted-foreground print:text-gray-600 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "বিক্রয়মূল্য − ক্রয়মূল্য" : "Selling Price − Buy Cost"}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredExpenses.map(e => (
-                    <tr key={e.id} className="print-avoid-break even:bg-zinc-50/70">
-                      <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(e.created_at)}</td>
-                      <td className="p-2 border-r border-zinc-200 font-semibold text-zinc-900">{e.title}</td>
-                      <td className="p-2 border-r border-zinc-200 text-zinc-600">{e.note || "—"}</td>
-                      <td className="p-2 text-right font-bold text-rose-700">{fmtMoney(e.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-zinc-100 font-bold border-t-2 border-zinc-400">
-                    <td colSpan={3} className="p-2 border-r border-zinc-300 uppercase">{lang === "bn" ? "সর্বমোট পরিচালন খরচ" : "Total Overhead Expenses"}</td>
-                    <td className="p-2 text-right font-bold text-rose-700">{fmtMoney(expenseTotalVal)}</td>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "দোকান পরিচালনা খরচ" : "Overhead Operating Expenses"}</td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{filteredExpenses.length} {lang === "bn" ? "টি ভাউচার" : "vouchers"}</td>
+                    <td className="p-2.5 text-right font-bold font-serif text-rose-600 dark:text-rose-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">−{fmtMoney(totalExpenseVal)}</td>
+                    <td className="p-2.5 text-muted-foreground print:text-gray-600 border border-zinc-300 dark:border-zinc-700 print:border-black">{categoryExpenses.length} {lang === "bn" ? "টি ক্যাটাগরির খরচ" : "expense categories"}</td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Cashbox Action Sheet */}
-          {showCashbox && filteredCashbox.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>৪. ক্যাশবক্স লেনদেন শীট (Cashbox Action Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredCashbox.length} {lang === "bn" ? "টি এন্ট্রি" : "entries"}</span>
-              </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "টাইপ" : "Action Type"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "মন্তব্য" : "Note"}</th>
-                    <th className="p-2 text-right">{lang === "bn" ? "পরিমাণ" : "Amount"}</th>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "পণ্য ক্রয় ও ইনভেন্টরি ব্যয়" : "Product Purchases / Restock"}</td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{filteredPurchases.length} {lang === "bn" ? "টি চালান" : "invoices"}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-sky-600 dark:text-sky-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalPurchaseVal)}</td>
+                    <td className="p-2.5 text-muted-foreground print:text-gray-600 border border-zinc-300 dark:border-zinc-700 print:border-black">{totalPurchaseQty} {lang === "bn" ? "পিস নতুন পণ্য সংযোজন" : "units restocked"}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredCashbox.map(c => {
-                    const isPlus = c.kind === "deposit" || c.kind === "sale";
-                    return (
-                      <tr key={c.id} className="print-avoid-break even:bg-zinc-50/70">
-                        <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(c.created_at)}</td>
-                        <td className="p-2 border-r border-zinc-200 font-medium capitalize text-zinc-900">{c.kind}</td>
-                        <td className="p-2 border-r border-zinc-200 text-zinc-600">{c.note || "—"}</td>
-                        <td className={`p-2 text-right font-bold ${isPlus ? "text-emerald-700" : "text-rose-700"}`}>
-                          {isPlus ? "+" : "−"}{fmtMoney(c.amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="bg-zinc-100 font-bold border-t-2 border-zinc-400">
-                    <td colSpan={3} className="p-2 border-r border-zinc-300 uppercase">{lang === "bn" ? "নিট ক্যাশ ব্যালেন্স প্রবাহ" : "Net Cashbox Flow"}</td>
-                    <td className={`p-2 text-right font-bold ${cashboxNetVal >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                      {cashboxNetVal >= 0 ? "+" : ""}{fmtMoney(cashboxNetVal)}
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "এই সময়ের নতুন বকেয়া বাকী" : "Period Sales Dues"}</td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{creditSales.length} {lang === "bn" ? "টি" : "due sales"}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-amber-600 dark:text-amber-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesDueVal)}</td>
+                    <td className="p-2.5 text-muted-foreground print:text-gray-600 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "গ্রাহকদের কাছে পাওনা" : "Customer receivable"}</td>
+                  </tr>
+                  <tr className="bg-primary/10 dark:bg-primary/20 print:bg-gray-200 font-bold border-t-2 border-zinc-400 dark:border-zinc-600 print:border-black">
+                    <td className="p-3 text-sm font-extrabold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "নিট আনুমানিক ব্যবসায়িক লাভ" : "Net Estimated Business Profit"}</td>
+                    <td className="p-3 text-center font-bold border border-zinc-300 dark:border-zinc-700 print:border-black">—</td>
+                    <td className={`p-3 text-sm text-right font-extrabold font-serif border border-zinc-300 dark:border-zinc-700 print:border-black ${netBusinessProfit >= 0 ? "text-emerald-600 dark:text-emerald-400 print:text-black" : "text-rose-600 dark:text-rose-400 print:text-black"}`}>
+                      {fmtMoney(netBusinessProfit)}
                     </td>
+                    <td className="p-3 text-xs text-muted-foreground dark:text-muted-foreground print:text-gray-800 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মোট লাভ − দোকান খরচ" : "Gross Profit − Expenses"}</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-          )}
-
-          {/* Somiti Savings Sheet */}
-          {showSomiti && filteredSomiti.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>৫. সমিতি সঞ্চয় বিবরণী শীট (Somiti Savings Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredSomiti.length} {lang === "bn" ? "টি এন্ট্রি" : "entries"}</span>
-              </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "তারিখ ও সময়" : "Date & Time"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "ধরন" : "Action"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "মন্তব্য" : "Remarks"}</th>
-                    <th className="p-2 text-right">{lang === "bn" ? "পরিমাণ" : "Amount"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredSomiti.map(s => {
-                    const isPlus = s.kind === "deposit";
-                    return (
-                      <tr key={s.id} className="print-avoid-break even:bg-zinc-50/70">
-                        <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(s.created_at)}</td>
-                        <td className="p-2 border-r border-zinc-200 font-medium capitalize text-zinc-900">{s.kind}</td>
-                        <td className="p-2 border-r border-zinc-200 text-zinc-600">{s.note || "—"}</td>
-                        <td className={`p-2 text-right font-bold ${isPlus ? "text-emerald-700" : "text-rose-700"}`}>
-                          {isPlus ? "+" : "−"}{fmtMoney(s.amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="bg-zinc-100 font-bold border-t-2 border-zinc-400">
-                    <td colSpan={3} className="p-2 border-r border-zinc-300 uppercase">{lang === "bn" ? "সমিতি নিট সঞ্চয় ফান্ড" : "Net Somiti Balance"}</td>
-                    <td className={`p-2 text-right font-bold ${somitiNetVal >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                      {somitiNetVal >= 0 ? "+" : ""}{fmtMoney(somitiNetVal)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Parties Directory Sheet */}
-          {showParties && filteredParties.length > 0 && (
-            <div className="space-y-2 print-avoid-break">
-              <h3 className="text-[11px] font-bold tracking-wider uppercase text-zinc-900 flex items-center justify-between border-b border-zinc-300 pb-1">
-                <span>৬. পার্টি ও গ্রাহক ডিরেক্টরি শীট (Parties Directory Sheet)</span>
-                <span className="text-[10px] font-normal text-zinc-600">{filteredParties.length} {lang === "bn" ? "জন পার্টি" : "parties"}</span>
-              </h3>
-              <table className="w-full text-left text-[9px] border-collapse border border-zinc-300">
-                <thead>
-                  <tr className="bg-zinc-100 border-b border-zinc-300 uppercase text-zinc-800 font-bold">
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "নিবন্ধন তারিখ" : "Registered Date"}</th>
-                    <th className="p-2 border-r border-zinc-300">{lang === "bn" ? "পার্টির নাম" : "Name"}</th>
-                    <th className="p-2 border-r border-zinc-300 text-center">{lang === "bn" ? "ফোন নম্বর" : "Phone"}</th>
-                    <th className="p-2 text-center">{lang === "bn" ? "অবস্থা" : "Status"}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredParties.map(p => (
-                    <tr key={p.id} className="print-avoid-break even:bg-zinc-50/70">
-                      <td className="p-2 border-r border-zinc-200 whitespace-nowrap text-zinc-700">{fmtDateTime(p.created_at)}</td>
-                      <td className="p-2 border-r border-zinc-200 font-semibold text-zinc-900">{p.name}</td>
-                      <td className="p-2 border-r border-zinc-200 font-mono text-center">{p.phone || "—"}</td>
-                      <td className="p-2 text-center uppercase font-bold text-[8px]">
-                        {p.archived ? (lang === "bn" ? "আর্কাইভড" : "Archived") : (lang === "bn" ? "সক্রিয়" : "Active")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {/* Formal Executive Signature Footer */}
-          <div className="pt-8 border-t border-zinc-300 grid grid-cols-3 gap-6 text-center text-[10px] text-zinc-700 print-avoid-break mt-10">
-            <div>
-              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
-              <p className="font-bold text-zinc-900">{lang === "bn" ? "প্রস্তুতকারক" : "Prepared By"}</p>
-              <p className="text-[9px] text-zinc-500">{lang === "bn" ? "হিসাব বিভাগ" : "Accounts Executive"}</p>
-            </div>
-            <div>
-              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
-              <p className="font-bold text-zinc-900">{lang === "bn" ? "যাচাইকারী" : "Verified By"}</p>
-              <p className="text-[9px] text-zinc-500">{lang === "bn" ? "অভ্যন্তরীণ নিরীক্ষক" : "Internal Auditor"}</p>
-            </div>
-            <div>
-              <div className="h-10 border-b border-dashed border-zinc-400 mb-1.5"></div>
-              <p className="font-bold text-zinc-900">{lang === "bn" ? "অনুমোদনকারী স্বাক্ষর" : "Authorized Signature"}</p>
-              <p className="text-[9px] text-zinc-500">{bizName}</p>
             </div>
           </div>
+        )}
+
+        {/* ── Section 2: Expenses Breakdown by Category ── */}
+        {(activeTab === "expenses" || activeTab === "summary" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "expenses" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-rose-500 print:bg-black" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                  {lang === "bn" ? "২. ক্যাটাগরি ভিত্তিক খরচের বিবরণী" : "2. Expenses by Category"}
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-rose-600 print:text-black">
+                {lang === "bn" ? "মোট খরচ: " : "Total: "}{fmtMoney(totalExpenseVal)}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto border border-zinc-300 dark:border-zinc-700 print:border-black shadow-xs">
+              <table className="w-full text-xs text-left border-collapse border border-zinc-300 dark:border-zinc-700 print:border-black">
+                <thead className="bg-muted/90 print:bg-gray-200 text-foreground print:text-black font-bold uppercase">
+                  <tr className="border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <th className="p-2.5 text-center border border-zinc-300 dark:border-zinc-700 print:border-black">#</th>
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "খরচের ক্যাটাগরি" : "Expense Category"}</th>
+                    <th className="p-2.5 text-center border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "ভাউচার সংখ্যা" : "Count"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মোট খরচ (টাকা)" : "Amount (BDT)"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "শতকরা হার" : "Share %"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700 print:divide-black">
+                  {categoryExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-muted-foreground border border-zinc-300 dark:border-zinc-700 print:border-black">
+                        {lang === "bn" ? "এই সময়কালে কোনো খরচের রেকর্ড নেই" : "No expense records in this range"}
+                      </td>
+                    </tr>
+                  ) : (
+                    categoryExpenses.map((cat, idx) => {
+                      const sharePct = totalExpenseVal > 0 ? ((cat.total / totalExpenseVal) * 100).toFixed(1) : "0";
+                      return (
+                        <tr key={cat.categoryKey} className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                          <td className="p-2.5 text-center text-muted-foreground font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{cat.label}</td>
+                          <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{cat.count} {lang === "bn" ? "টি" : ""}</td>
+                          <td className="p-2.5 text-right font-bold font-serif text-rose-600 dark:text-rose-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(cat.total)}</td>
+                          <td className="p-2.5 text-right font-semibold text-muted-foreground print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{sharePct}%</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                  <tr className="bg-muted/40 print:bg-gray-100 font-bold border-t-2 border-zinc-400 dark:border-zinc-600 print:border-black">
+                    <td colSpan={3} className="p-2.5 text-right uppercase border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "সর্বমোট পরিচালন খরচ:" : "Total Overhead Expenses:"}</td>
+                    <td className="p-2.5 text-right font-serif text-rose-600 dark:text-rose-400 print:text-black font-extrabold border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalExpenseVal)}</td>
+                    <td className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Section 3: Sales by Payment Type ── */}
+        {(activeTab === "sales" || activeTab === "summary" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "sales" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-sky-500 print:bg-black" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                  {lang === "bn" ? "৩. পেমেন্ট পদ্ধতি ভিত্তিক বিক্রয় বিবরণী" : "3. Sales by Payment Type"}
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-emerald-600 print:text-black">
+                {lang === "bn" ? "মোট বিক্রয়: " : "Total Sales: "}{fmtMoney(totalSalesVal)}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto border border-zinc-300 dark:border-zinc-700 print:border-black shadow-xs">
+              <table className="w-full text-xs text-left border-collapse border border-zinc-300 dark:border-zinc-700 print:border-black">
+                <thead className="bg-muted/90 print:bg-gray-200 text-foreground print:text-black font-bold uppercase">
+                  <tr className="border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "পেমেন্ট পদ্ধতি" : "Payment Method"}</th>
+                    <th className="p-2.5 text-center border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "চালান সংখ্যা" : "Orders"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "মোট বিক্রয়মূল্য" : "Total Sold"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "আদায়কৃত টাকা" : "Collected"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "বকেয়া বাকী" : "Due Amount"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700 print:divide-black">
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 print:border-black">
+                      <span className="size-2 rounded-full bg-emerald-500 inline-block" />
+                      {lang === "bn" ? "নগদ বিক্রয়" : "Cash Sales"}
+                    </td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{cashSales.length}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-emerald-600 dark:text-emerald-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(cashSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-emerald-600 dark:text-emerald-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(cashSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-muted-foreground border border-zinc-300 dark:border-zinc-700 print:border-black">৳০</td>
+                  </tr>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 print:border-black">
+                      <span className="size-2 rounded-full bg-pink-500 inline-block" />
+                      {lang === "bn" ? "বিকাশ বিক্রয়" : "bKash Sales"}
+                    </td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{bkashSales.length}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-pink-600 dark:text-pink-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(bkashSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-pink-600 dark:text-pink-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(bkashSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-muted-foreground border border-zinc-300 dark:border-zinc-700 print:border-black">৳০</td>
+                  </tr>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 print:border-black">
+                      <span className="size-2 rounded-full bg-amber-500 inline-block" />
+                      {lang === "bn" ? "বাকী বিক্রয়" : "Credit Sales"}
+                    </td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{creditSales.length}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-amber-600 dark:text-amber-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(creditSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-emerald-600 dark:text-emerald-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(creditSalesTotal - creditSalesDueTotal)}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-rose-600 dark:text-rose-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(creditSalesDueTotal)}</td>
+                  </tr>
+                  <tr className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700 print:border-black">
+                    <td className="p-2.5 font-bold text-foreground print:text-black flex items-center gap-1.5 border border-zinc-300 dark:border-zinc-700 print:border-black">
+                      <span className="size-2 rounded-full bg-sky-500 inline-block" />
+                      {lang === "bn" ? "অনলাইন বিক্রয়" : "Online Sales"}
+                    </td>
+                    <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700 print:border-black">{onlineSales.length}</td>
+                    <td className="p-2.5 text-right font-serif font-bold text-sky-600 dark:text-sky-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(onlineSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-sky-600 dark:text-sky-400 print:text-black border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(onlineSalesTotal)}</td>
+                    <td className="p-2.5 text-right font-serif text-muted-foreground border border-zinc-300 dark:border-zinc-700 print:border-black">৳০</td>
+                  </tr>
+                  <tr className="bg-muted/40 print:bg-gray-100 font-bold border-t-2 border-zinc-400 dark:border-zinc-600 print:border-black">
+                    <td className="p-2.5 uppercase font-bold border border-zinc-300 dark:border-zinc-700 print:border-black">{lang === "bn" ? "সর্বমোট বিক্রয়:" : "Total Sales:"}</td>
+                    <td className="p-2.5 text-center font-bold border border-zinc-300 dark:border-zinc-700 print:border-black">{filteredSales.length}</td>
+                    <td className="p-2.5 text-right font-serif text-emerald-600 dark:text-emerald-400 print:text-black font-extrabold border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesVal)}</td>
+                    <td className="p-2.5 text-right font-serif text-emerald-600 dark:text-emerald-400 print:text-black font-extrabold border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesVal - totalSalesDueVal)}</td>
+                    <td className="p-2.5 text-right font-serif text-rose-600 dark:text-rose-400 print:text-black font-extrabold border border-zinc-300 dark:border-zinc-700 print:border-black">{fmtMoney(totalSalesDueVal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Section 4: Product Purchases Restock Statement ── */}
+        {(activeTab === "purchases" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "purchases" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-indigo-500 print:bg-black" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                  {lang === "bn" ? "৪. পণ্য ক্রয় ও ইনভেন্টরি স্টক বিবরণী" : "4. Product Purchases & Restock"}
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-sky-600 print:text-black">
+                {lang === "bn" ? "মোট ক্রয়: " : "Total: "}{fmtMoney(totalPurchaseVal)}
+              </span>
+            </div>
+
+            {/* Screen View (Paginated) */}
+            <div className="print:hidden overflow-x-auto border border-zinc-300 dark:border-zinc-700 shadow-xs">
+              <table className="w-full text-xs text-left border-collapse border border-zinc-300 dark:border-zinc-700">
+                <thead className="bg-muted/90 text-foreground font-bold uppercase">
+                  <tr className="border-b border-zinc-300 dark:border-zinc-700">
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "তারিখ" : "Date"}</th>
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "পণ্যের নাম" : "Product Name"}</th>
+                    <th className="p-2.5 text-center border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "একক ক্রয়মূল্য" : "Unit Cost"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "মোট খরচ" : "Total Cost"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700">
+                  {filteredPurchases.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-6 text-center text-muted-foreground border border-zinc-300 dark:border-zinc-700">
+                        {lang === "bn" ? "এই সময়কালে কোনো পণ্য ক্রয়ের রেকর্ড নেই" : "No purchase records in this range"}
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedPurchases.map((p) => (
+                      <tr key={p.id} className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700">
+                        <td className="p-2.5 text-muted-foreground font-medium border border-zinc-300 dark:border-zinc-700">{p.created_at.slice(0, 10)}</td>
+                        <td className="p-2.5 font-bold text-foreground border border-zinc-300 dark:border-zinc-700">{p.product_name}</td>
+                        <td className="p-2.5 text-center font-medium border border-zinc-300 dark:border-zinc-700">{p.qty} {lang === "bn" ? "টি" : "pcs"}</td>
+                        <td className="p-2.5 text-right font-serif border border-zinc-300 dark:border-zinc-700">{fmtMoney(p.unit_cost)}</td>
+                        <td className="p-2.5 text-right font-serif font-bold text-sky-600 dark:text-sky-400 border border-zinc-300 dark:border-zinc-700">{fmtMoney(p.total)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Screen Pagination */}
+            <div className="print:hidden">
+              {filteredPurchases.length > pageSize && (
+                <PaginationBar
+                  page={safePurchasesPage}
+                  totalPages={purchasesTotalPages}
+                  total={filteredPurchases.length}
+                  pageSize={pageSize}
+                  onPageChange={setPurchasesPage}
+                />
+              )}
+            </div>
+
+            {/* Print View (Full Table with All Rows) */}
+            <div className="hidden print:block overflow-x-auto border border-black">
+              <table className="w-full text-xs text-left border-collapse border border-black">
+                <thead className="bg-gray-200 text-black font-bold uppercase">
+                  <tr className="border-b border-black">
+                    <th className="p-2 border border-black">{lang === "bn" ? "তারিখ" : "Date"}</th>
+                    <th className="p-2 border border-black">{lang === "bn" ? "পণ্যের নাম" : "Product Name"}</th>
+                    <th className="p-2 text-center border border-black">{lang === "bn" ? "পরিমাণ" : "Qty"}</th>
+                    <th className="p-2 text-right border border-black">{lang === "bn" ? "একক ক্রয়মূল্য" : "Unit Cost"}</th>
+                    <th className="p-2 text-right border border-black">{lang === "bn" ? "মোট খরচ" : "Total Cost"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black">
+                  {filteredPurchases.map((p) => (
+                    <tr key={p.id} className="border-b border-black">
+                      <td className="p-2 text-gray-700 border border-black">{p.created_at.slice(0, 10)}</td>
+                      <td className="p-2 font-bold text-black border border-black">{p.product_name}</td>
+                      <td className="p-2 text-center font-medium border border-black">{p.qty}</td>
+                      <td className="p-2 text-right font-serif border border-black">{fmtMoney(p.unit_cost)}</td>
+                      <td className="p-2 text-right font-serif font-bold text-black border border-black">{fmtMoney(p.total)}</td>
+                    </tr>
+                  ))}
+                  {filteredPurchases.length > 0 && (
+                    <tr className="bg-gray-100 font-bold border-t-2 border-black">
+                      <td colSpan={2} className="p-2 uppercase border border-black">{lang === "bn" ? "সর্বমোট ক্রয়কৃত পণ্য:" : "Total Purchased Items:"}</td>
+                      <td className="p-2 text-center font-bold border border-black">{totalPurchaseQty} {lang === "bn" ? "টি" : "pcs"}</td>
+                      <td className="p-2 text-right font-serif border border-black">—</td>
+                      <td className="p-2 text-right font-serif text-black font-extrabold border border-black">{fmtMoney(totalPurchaseVal)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Section 5: Customer Dues / Credit Sales ── */}
+        {(activeTab === "dues" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "dues" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-amber-500 print:bg-black" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                  {lang === "bn" ? "৫. বকেয়া বাকী ও কাস্টমার পাওনা বিবরণী" : "5. Credit Sales & Receivables"}
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-rose-600 print:text-black">
+                {lang === "bn" ? "মোট বকেয়া: " : "Total Dues: "}{fmtMoney(totalSalesDueVal)}
+              </span>
+            </div>
+
+            {/* Screen View (Paginated) */}
+            <div className="print:hidden overflow-x-auto border border-zinc-300 dark:border-zinc-700 shadow-xs">
+              <table className="w-full text-xs text-left border-collapse border border-zinc-300 dark:border-zinc-700">
+                <thead className="bg-muted/90 text-foreground font-bold uppercase">
+                  <tr className="border-b border-zinc-300 dark:border-zinc-700">
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "তারিখ" : "Date"}</th>
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "কাস্টমার" : "Customer"}</th>
+                    <th className="p-2.5 border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "পণ্যের বিবরণ" : "Item"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "মোট মূল্য" : "Total Price"}</th>
+                    <th className="p-2.5 text-right border border-zinc-300 dark:border-zinc-700">{lang === "bn" ? "বকেয়া পরিমাণ" : "Due Amount"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700">
+                  {creditSales.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-6 text-center text-muted-foreground border border-zinc-300 dark:border-zinc-700">
+                        {lang === "bn" ? "এই সময়কালে কোনো বাকী বিক্রির রেকর্ড নেই" : "No credit sales in this range"}
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedDues.map((s) => (
+                      <tr key={s.id} className="hover:bg-muted/20 border-b border-zinc-300 dark:border-zinc-700">
+                        <td className="p-2.5 text-muted-foreground font-medium border border-zinc-300 dark:border-zinc-700">{s.created_at.slice(0, 10)}</td>
+                        <td className="p-2.5 font-bold text-foreground border border-zinc-300 dark:border-zinc-700">{s.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer")}</td>
+                        <td className="p-2.5 border border-zinc-300 dark:border-zinc-700">{s.product_name} × {s.qty}</td>
+                        <td className="p-2.5 text-right font-serif border border-zinc-300 dark:border-zinc-700">{fmtMoney(Number(s.sell_price) * s.qty)}</td>
+                        <td className="p-2.5 text-right font-serif font-bold text-rose-600 dark:text-rose-400 border border-zinc-300 dark:border-zinc-700">{fmtMoney(s.due_amount || 0)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Screen Pagination */}
+            <div className="print:hidden">
+              {creditSales.length > pageSize && (
+                <PaginationBar
+                  page={safeDuesPage}
+                  totalPages={duesTotalPages}
+                  total={creditSales.length}
+                  pageSize={pageSize}
+                  onPageChange={setDuesPage}
+                />
+              )}
+            </div>
+
+            {/* Print View (Full Table with All Rows) */}
+            <div className="hidden print:block overflow-x-auto border border-black">
+              <table className="w-full text-xs text-left border-collapse border border-black">
+                <thead className="bg-gray-200 text-black font-bold uppercase">
+                  <tr className="border-b border-black">
+                    <th className="p-2 border border-black">{lang === "bn" ? "তারিখ" : "Date"}</th>
+                    <th className="p-2 border border-black">{lang === "bn" ? "কাস্টমার" : "Customer"}</th>
+                    <th className="p-2 border border-black">{lang === "bn" ? "পণ্যের বিবরণ" : "Item"}</th>
+                    <th className="p-2 text-right border border-black">{lang === "bn" ? "মোট মূল্য" : "Total Price"}</th>
+                    <th className="p-2 text-right border border-black">{lang === "bn" ? "বকেয়া পরিমাণ" : "Due Amount"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black">
+                  {creditSales.map((s) => (
+                    <tr key={s.id} className="border-b border-black">
+                      <td className="p-2 text-gray-700 border border-black">{s.created_at.slice(0, 10)}</td>
+                      <td className="p-2 font-bold text-black border border-black">{s.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer")}</td>
+                      <td className="p-2 border border-black">{s.product_name} × {s.qty}</td>
+                      <td className="p-2 text-right font-serif border border-black">{fmtMoney(Number(s.sell_price) * s.qty)}</td>
+                      <td className="p-2 text-right font-serif font-bold text-black border border-black">{fmtMoney(s.due_amount || 0)}</td>
+                    </tr>
+                  ))}
+                  {creditSales.length > 0 && (
+                    <tr className="bg-gray-100 font-bold border-t-2 border-black">
+                      <td colSpan={4} className="p-2 text-right uppercase border border-black">{lang === "bn" ? "সর্বমোট পাওনা বাকী:" : "Total Outstanding Due:"}</td>
+                      <td className="p-2 text-right font-serif text-black font-extrabold border border-black">{fmtMoney(totalSalesDueVal)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Section 6: Cashbox & Somiti Movement ── */}
+        {(activeTab === "cashbox" || typeof window !== "undefined") && (
+          <div className={`space-y-3 ${activeTab !== "cashbox" ? "hidden print:block" : ""}`}>
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-teal-500 print:bg-black" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
+                  {lang === "bn" ? "৬. ক্যাশবক্স ও সমিতি তহবিল বিবরণী" : "6. Cashbox & Somiti Fund"}
+                </h3>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-lg border border-border/80 print:border-gray-500 bg-muted/20 space-y-2">
+                <div className="text-xs font-bold uppercase text-foreground print:text-black flex items-center gap-1.5 border-b border-border/60 pb-1">
+                  <Banknote className="size-4 text-emerald-600" />
+                  {lang === "bn" ? "ক্যাশবক্স নগদ প্রবাহ হিসাব" : "Cashbox Flow"}
+                </div>
+                <div className="flex justify-between text-xs py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">{lang === "bn" ? "নগদ জমা / ক্যাশ বিক্রি:" : "Cash In:"}</span>
+                  <span className="font-bold text-emerald-600 font-serif">+{fmtMoney(cashboxIn)}</span>
+                </div>
+                <div className="flex justify-between text-xs py-1">
+                  <span className="text-muted-foreground">{lang === "bn" ? "নগদ খরচ / উত্তোলন:" : "Cash Out:"}</span>
+                  <span className="font-bold text-rose-600 font-serif">−{fmtMoney(cashboxOut)}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-lg border border-border/80 print:border-gray-500 bg-muted/20 space-y-2">
+                <div className="text-xs font-bold uppercase text-foreground print:text-black flex items-center gap-1.5 border-b border-border/60 pb-1">
+                  <PiggyBank className="size-4 text-sky-600" />
+                  {lang === "bn" ? "সমিতি সঞ্চয় তহবিল হিসাব" : "Somiti Fund"}
+                </div>
+                <div className="flex justify-between text-xs py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">{lang === "bn" ? "সমিতিতে মোট লেনদেন:" : "Transactions:"}</span>
+                  <span className="font-bold text-foreground font-serif">{filteredSomiti.length} {lang === "bn" ? "টি" : ""}</span>
+                </div>
+                <div className="flex justify-between text-xs py-1">
+                  <span className="text-muted-foreground">{lang === "bn" ? "নিট সঞ্চয় ব্যালেন্স:" : "Net Savings:"}</span>
+                  <span className="font-bold text-sky-600 font-serif">{fmtMoney(somitiNetVal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Official Document Signatures Block */}
+        <div className="pt-10 border-t border-border/70 print:border-gray-400 grid grid-cols-3 gap-6 text-center text-xs text-muted-foreground print:text-black">
+          <div className="space-y-1">
+            <div className="border-t border-dashed border-border/80 print:border-gray-700 pt-2 font-semibold">
+              {lang === "bn" ? "হিসাবরক্ষকের স্বাক্ষর" : "Accountant Signature"}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="border-t border-dashed border-border/80 print:border-gray-700 pt-2 font-semibold">
+              {lang === "bn" ? "ব্যবস্থাপকের স্বাক্ষর" : "Manager Signature"}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="border-t border-dashed border-border/80 print:border-gray-700 pt-2 font-semibold">
+              {lang === "bn" ? "স্বত্বাধিকারীর স্বাক্ষর" : "Proprietor Signature"}
+            </div>
+          </div>
+        </div>
+
+        {/* Print Disclaimer Stamp */}
+        <div className="text-[10px] text-center text-muted-foreground/80 print:text-gray-500 pt-2">
+          {lang === "bn"
+            ? `এটি ${bizName} সফটওয়্যার সিস্টেম দ্বারা স্বয়ংক্রিয়ভাবে প্রস্তুতকৃত ক্যাটাগরি ভিত্তিক ব্যবসায়িক রিপোর্ট।`
+            : `This official category-wise business report is generated automatically by ${bizName} POS system.`}
         </div>
       </div>
     </div>

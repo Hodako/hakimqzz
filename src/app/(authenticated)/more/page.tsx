@@ -29,6 +29,7 @@ import { Plus } from "lucide-react";
 import { getProducts } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { ProductSearchSelect } from "@/components/product-search";
+import { PWAInstallButton } from "@/components/pwa-install-button";
 
 const businessLinks = [
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
@@ -2301,8 +2302,11 @@ export default function MorePage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-1 uppercase tracking-wider">
-              {user?.business_name || "Dream Fashion"}
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider">
+                {user?.business_name || "Dream Fashion"}
+              </div>
+              <PWAInstallButton variant="outline" className="h-7 text-[11px] px-2.5" />
             </div>
           </div>
         </div>

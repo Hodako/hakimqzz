@@ -80,23 +80,31 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="auth-page min-h-screen grid grid-cols-1 md:grid-cols-12">
+    <div className="auth-page h-screen h-[100dvh] max-h-[100dvh] overflow-hidden grid grid-cols-1 md:grid-cols-12">
       {/* Dynamic Scoped Styles */}
       <style dangerouslySetInnerHTML={{ __html: `
         .auth-page .form {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
           background-color: #ffffff;
-          padding: 30px;
+          padding: 24px;
           width: 100%;
-          max-width: 450px;
+          max-width: 440px;
           border-radius: 20px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+        }
+        @media (max-width: 640px) {
+          .auth-page .form {
+            padding: 18px 16px;
+            gap: 6px;
+          }
         }
         .dark .auth-page .form {
           background-color: #18181b;
           border: 1px solid #27272a;
+          box-shadow: 0 4px 20px -2px rgba(0,0,0,0.35);
         }
 
         .auth-page ::placeholder {
@@ -286,10 +294,10 @@ export default function AuthPage() {
       </div>
 
       {/* Right panel: Form input and Language selectors */}
-      <div className="col-span-12 md:col-span-6 lg:col-span-5 flex flex-col justify-between p-6 bg-slate-50 dark:bg-zinc-950 min-h-screen md:min-h-0 overflow-y-auto">
+      <div className="col-span-12 md:col-span-6 lg:col-span-5 flex flex-col justify-between p-4 sm:p-6 bg-slate-50 dark:bg-zinc-950 h-full max-h-[100dvh] overflow-y-auto">
         
         {/* Top Row: Language switcher */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:hidden">
             <AppLogo size="sm" alt="HakimQzz" />
             <span className="font-serif text-lg font-bold">HakimQzz</span>
@@ -313,7 +321,7 @@ export default function AuthPage() {
         </div>
 
         {/* Center: Uiverse style Form */}
-        <div className="flex justify-center items-center my-6">
+        <div className="flex justify-center items-center my-auto py-2 w-full">
           <form onSubmit={handleSubmit} className="form">
             <div className="text-center mb-2 flex flex-col items-center gap-1">
               <h1 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
@@ -387,12 +395,12 @@ export default function AuthPage() {
             </div>
             
             {/* Remember Me / Forgot Password */}
-            <div className="flex-row my-1.5">
+            <div className="flex-row my-1">
               <div className="flex items-center gap-1.5">
                 <input id="remember" type="checkbox" className="rounded accent-primary cursor-pointer" />
-                <label htmlFor="remember" className="select-none cursor-pointer">Remember me</label>
+                <label htmlFor="remember" className="select-none cursor-pointer text-xs">Remember me</label>
               </div>
-              <span className="span">Forgot password?</span>
+              <span className="span text-xs">Forgot password?</span>
             </div>
 
             <button type="submit" disabled={busy} className="button-submit">
@@ -401,13 +409,13 @@ export default function AuthPage() {
 
             {/* Info Message */}
             {activeTab === "signup" && (
-              <p className="text-[10px] text-zinc-400 text-center leading-normal mt-1">
+              <p className="text-[10px] text-zinc-400 text-center leading-normal mt-0.5">
                 After signup you will activate with a license key (HZ-… or EMP-…).
               </p>
             )}
 
             {/* Toggle Signin / Signup */}
-            <p className="p mt-2">
+            <p className="p mt-1">
               {activeTab === "signin" ? "Don't have an account? " : "Already have an account? "}
               <span 
                 onClick={() => setActiveTab(activeTab === "signin" ? "signup" : "signin")} 
@@ -418,7 +426,7 @@ export default function AuthPage() {
             </p>
 
             {/* Or With divider */}
-            <p className="p text-[11px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest my-2 select-none">— Or With —</p>
+            <p className="p text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest my-1.5 select-none">— Or With —</p>
 
             {/* Social log-in row */}
             <div className="flex-row">
@@ -447,7 +455,7 @@ export default function AuthPage() {
         </div>
 
         {/* Footer info (Mobile visible, desktop bottom right) */}
-        <div className="text-center text-[10px] text-zinc-400 py-2 space-y-1">
+        <div className="text-center text-[10px] text-zinc-400 py-1 space-y-0.5 shrink-0 mt-auto">
           <p>HakimQzz Inventory Management System. All rights reserved.</p>
           <p className="text-[9px] text-zinc-500">Powered by Dream Fashion</p>
         </div>

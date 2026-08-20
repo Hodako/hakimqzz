@@ -169,10 +169,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (!mounted) {
-    return <SpeedLoader />;
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

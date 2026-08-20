@@ -179,7 +179,7 @@ export function SpeedLoader({ fullScreen = true }: { fullScreen?: boolean }) {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Cinzel:wght@600;700&family=Share+Tech+Mono&display=swap');
 
         .hakim-loader-stage {
-          --loader-bg: #F7F6F2;
+          --loader-bg: #d1e2ea;
           --loader-ink: #201C16;
           --loader-ink-dim: #8B857A;
           --loader-steel-dark: #4B4B4E;

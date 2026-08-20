@@ -28,11 +28,14 @@ import {
   Edit3,
   Sparkles,
   Share2,
+  FileDown,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { createSaleFn } from "@/lib/rpc";
-import { printPwaInvoice } from "@/lib/invoice-printer";
+import { safeUUID } from "@/lib/utils";
+import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 
 type InvoiceItem = {
   product: Product;
@@ -98,8 +101,8 @@ function InvoiceDocumentView({
       }}
       className={`invoice-print-container bg-white text-black font-sans text-xs relative overflow-hidden flex flex-col justify-between transition-all ${
         isPrintOnly
-          ? "p-0 border-none shadow-none rounded-none w-full"
-          : "p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-lg w-full max-w-[360px] sm:max-w-[380px] mx-auto"
+          ? "p-0 pb-12 border-none shadow-none rounded-none w-full"
+          : "p-5 sm:p-6 pb-10 sm:pb-14 rounded-2xl border border-zinc-200/80 shadow-lg w-full max-w-[360px] sm:max-w-[380px] mx-auto"
       }`}
     >
       {/* Background Watermark */}
@@ -247,7 +250,7 @@ function InvoiceDocumentView({
 // Main Page Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function InvoicePage() {
-  const { t } = useT();
+  const { lang, t } = useT();
   const { user } = useAuth();
 
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
@@ -428,7 +431,7 @@ export default function InvoicePage() {
 
     // Save sales record to database for all items in the invoice
     try {
-      const cartId = crypto.randomUUID();
+      const cartId = safeUUID();
       const duePerItem = due > 0 ? due / invoiceItems.length : 0;
       const paidPerItem = due > 0 ? paidAmount / invoiceItems.length : 0;
 
@@ -458,34 +461,75 @@ export default function InvoicePage() {
       console.warn("Failed to automatically persist sale record:", err);
     }
 
-    // Invoke PWA-safe Print Routine with custom paper sizes and contacts
-    printPwaInvoice({
-      businessName,
-      userEmail: biz?.emails || user?.business_emails || userEmail,
-      shopAddress: biz?.address || user?.business_address || "",
-      shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
-      pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
-      pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
-      pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
-      invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "22px",
-      invoiceScale: biz?.invoice_scale || user?.invoice_scale || "100%",
-      invoiceLineSpacing: biz?.invoice_line_spacing || user?.invoice_line_spacing || "6px",
-      tagline,
-      invoiceNo,
-      invoiceDate,
-      customerName: activeCustomerName,
-      customerPhone: activeCustomerPhone,
-      items: invoiceItems,
-      subtotal,
-      discountAmount,
-      total,
-      paidAmount,
-      due,
-      changeAmount,
-      paymentStatus,
-      colorTheme,
-      terms: biz?.invoice_terms || "",
-    });
+    try {
+      await downloadPwaInvoicePdf({
+        businessName,
+        userEmail: biz?.emails || user?.business_emails || userEmail,
+        shopAddress: biz?.address || user?.business_address || "",
+        shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+        pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+        pageWidth: biz?.invoice_page_width || user?.invoice_page_width || "",
+        pageHeight: biz?.invoice_page_height || user?.invoice_page_height || "",
+        invoiceFontSize: biz?.invoice_font_size || user?.invoice_font_size || "22px",
+        invoiceScale: biz?.invoice_scale || user?.invoice_scale || "100%",
+        invoiceLineSpacing: biz?.invoice_line_spacing || user?.invoice_line_spacing || "6px",
+        tagline,
+        invoiceNo,
+        invoiceDate,
+        customerName: activeCustomerName,
+        customerPhone: activeCustomerPhone,
+        items: invoiceItems,
+        subtotal,
+        discountAmount,
+        total,
+        paidAmount,
+        due,
+        changeAmount,
+        paymentStatus,
+        colorTheme,
+        terms: biz?.invoice_terms || "",
+      }, true);
+      toast.success(lang === "bn" ? "ইনভয়েস পিডিএফ ভিউ প্রস্তুত হচ্ছে!" : "Opening invoice PDF!");
+    } catch (err: any) {
+      toast.error(lang === "bn" ? "পিডিএফ প্রস্তুত সমস্যা: " + (err?.message || "") : "Failed to generate PDF: " + (err?.message || ""));
+    }
+  }
+
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  // Standalone Clean PDF File Download (Zero Web-Preview)
+  async function handleDownloadPdf() {
+    if (invoiceItems.length === 0) return toast.error(t("no_items_in_cart"));
+    setIsDownloadingPdf(true);
+    try {
+      await downloadPwaInvoicePdf({
+        businessName,
+        userEmail: biz?.emails || user?.business_emails || userEmail,
+        shopAddress: biz?.address || user?.business_address || "",
+        shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
+        pageSize: biz?.invoice_page_size || user?.invoice_page_size || "80mm",
+        tagline,
+        invoiceNo,
+        invoiceDate,
+        customerName: activeCustomerName,
+        customerPhone: activeCustomerPhone,
+        items: invoiceItems,
+        subtotal,
+        discountAmount,
+        total,
+        paidAmount,
+        due,
+        changeAmount,
+        paymentStatus,
+        colorTheme,
+        terms: biz?.invoice_terms || "",
+      }, false);
+      toast.success(lang === "bn" ? "ইনভয়েস PDF সফলভাবে ডাউনলোড হয়েছে!" : "Invoice PDF downloaded successfully!");
+    } catch (err: any) {
+      toast.error(lang === "bn" ? "PDF ডাউনলোড ত্রুটি: " + (err?.message || "") : "Failed to download PDF: " + (err?.message || ""));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   }
 
   // Web Share / Mobile PWA Share
@@ -577,7 +621,7 @@ export default function InvoicePage() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={handleReset} className="h-8 px-2.5 text-xs">
               <RefreshCw className="size-3.5 mr-1" />
               {t("clear")}
@@ -594,13 +638,24 @@ export default function InvoicePage() {
             </Button>
 
             <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPdf}
+              disabled={invoiceItems.length === 0 || isDownloadingPdf}
+              className="h-8 px-3 text-xs font-semibold bg-sky-500/10 hover:bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/30 shadow-xs"
+            >
+              {isDownloadingPdf ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <FileDown className="size-3.5 mr-1.5" />}
+              {isDownloadingPdf ? (lang === "bn" ? "ডাউনলোড..." : "Downloading...") : (lang === "bn" ? "PDF ডাউনলোড" : "Download PDF")}
+            </Button>
+
+            <Button
               size="sm"
               onClick={handlePrint}
               disabled={invoiceItems.length === 0}
               className="h-8 px-3.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
             >
               <Printer className="size-3.5 mr-1.5" />
-              {t("print")} / PDF
+              {t("print")}
             </Button>
           </div>
         </div>
