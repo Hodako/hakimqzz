@@ -6,7 +6,7 @@ import { useCachedQuery } from "@/hooks/use-cached-query";
 import { getProducts, getParties, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { fmtMoney, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ import {
 import Link from "next/link";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { createSaleFn } from "@/lib/rpc";
-import { printPwaInvoice, generateBarcodeSvg } from "@/lib/invoice-printer";
+import { printPwaInvoice } from "@/lib/invoice-printer";
 
 type InvoiceItem = {
   product: Product;
@@ -86,7 +86,6 @@ function InvoiceDocumentView({
   t,
   isPrintOnly = false,
 }: InvoiceDocumentViewProps) {
-  const barcodeSvg = generateBarcodeSvg(invoiceNo || "INV-001", 32);
   const rawScale = biz?.invoice_scale || "100%";
   const numScale = parseInt(rawScale.replace(/[^0-9]/g, ""), 10) || 100;
   const scaleRatio = numScale / 100;
@@ -103,7 +102,14 @@ function InvoiceDocumentView({
           : "p-5 sm:p-6 rounded-2xl border border-zinc-200/80 shadow-lg w-full max-w-[360px] sm:max-w-[380px] mx-auto"
       }`}
     >
-      <div className="space-y-3">
+      {/* Background Watermark */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden select-none z-0">
+        <span className="text-black/[0.08] font-black text-3xl sm:text-4xl uppercase tracking-widest rotate-[-25deg] border-2 border-black/[0.08] py-1.5 px-4 rounded-xl whitespace-nowrap">
+          {paymentStatus === "DUE" ? "PAID BY: CREDIT" : "PAID BY: CASH"}
+        </span>
+      </div>
+
+      <div className="space-y-3 relative z-10">
         {/* Header - Centered */}
         <div className="text-center space-y-0.5">
           <h1 className="text-lg font-black uppercase tracking-wide text-black">
@@ -134,9 +140,6 @@ function InvoiceDocumentView({
             <span>Invoice No: <strong className="font-mono">{invoiceNo}</strong></span>
             <span className="font-mono">{invoiceDate}</span>
           </div>
-          <div className="flex justify-between">
-            <span>Time: <span className="font-mono">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}</span></span>
-          </div>
           {customerName && (
             <div className="flex justify-between pt-0.5">
               <span>Customer: <strong>{customerName}</strong></span>
@@ -152,7 +155,7 @@ function InvoiceDocumentView({
         <table className="w-full text-left border-collapse text-[11px]">
           <thead>
             <tr className="border-b border-dashed border-black">
-              <th className="py-1 text-left font-bold uppercase text-[10px]">Item Name</th>
+              <th className="py-1 text-left font-bold uppercase text-[10px]">Item</th>
               <th className="py-1 text-center font-bold uppercase text-[10px] w-8">Qty</th>
               <th className="py-1 text-right font-bold uppercase text-[10px] w-16">Price</th>
             </tr>
@@ -187,9 +190,9 @@ function InvoiceDocumentView({
 
         {/* Totals Section */}
         <div className="space-y-1 text-[11px] text-black">
-          <div className="flex justify-between">
+          <div className="flex justify-between font-bold">
             <span>Subtotal</span>
-            <span className="font-mono font-semibold">৳{subtotal.toLocaleString()}</span>
+            <span className="font-mono">৳{subtotal.toLocaleString()}</span>
           </div>
 
           {discountAmount > 0 && (
@@ -199,13 +202,7 @@ function InvoiceDocumentView({
             </div>
           )}
 
-          {/* Grand Total with double border / bold styling */}
-          <div className="border-y-2 border-black py-1.5 my-1.5 flex justify-between items-center font-black">
-            <span className="text-xs uppercase tracking-wide">Grand Total</span>
-            <span className="text-sm font-mono">৳{total.toLocaleString()}</span>
-          </div>
-
-          <div className="flex justify-between font-medium">
+          <div className="flex justify-between font-medium pt-1">
             <span>Cash Received</span>
             <span className="font-mono font-semibold">৳{paidAmount.toLocaleString()}</span>
           </div>
@@ -231,9 +228,8 @@ function InvoiceDocumentView({
         </div>
       </div>
 
-      {/* Barcode & Footer */}
-      <div className="pt-3 border-t border-dashed border-black text-center text-black space-y-1.5 mt-4">
-        <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+      {/* Footer */}
+      <div className="pt-3 border-t border-dashed border-black text-center text-black space-y-1.5 mt-4 relative z-10">
         {biz?.invoice_terms ? (
           <p className="text-xs font-bold whitespace-pre-line leading-snug text-black">
             {biz.invoice_terms}
@@ -244,9 +240,6 @@ function InvoiceDocumentView({
             <p className="text-[11px] font-medium">Please Visit Again</p>
           </div>
         )}
-        <p className="text-xs font-black uppercase tracking-wider text-black pt-2">
-          Powered by Dream Fashion POS
-        </p>
       </div>
     </div>
   );
@@ -430,7 +423,7 @@ export default function InvoicePage() {
   const businessName = user?.business_name || "HakimQzz";
   const userEmail = user?.email || "";
   const tagline = t("tagline") || "Quality Products & Service";
-  const invoiceDate = fmtDate(new Date().toISOString());
+  const invoiceDate = fmtDateTime(new Date().toISOString());
 
   async function handlePrint() {
     if (invoiceItems.length === 0) return toast.error(t("no_items_in_cart"));
@@ -703,7 +696,17 @@ export default function InvoicePage() {
               {t("add_item")}
             </h2>
 
-            <form onSubmit={handleAddItem} className="space-y-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (draftProduct) {
+                  handleAddItem(e);
+                } else if (invoiceItems.length > 0) {
+                  handlePrint();
+                }
+              }}
+              className="space-y-3"
+            >
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">{t("select_product")}</Label>
                 <ProductSearchSelect
@@ -731,6 +734,13 @@ export default function InvoicePage() {
                       min={1}
                       value={draftQty}
                       onChange={(e) => setDraftQty(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (draftProduct) handleAddItem(e);
+                          else if (invoiceItems.length > 0) handlePrint();
+                        }
+                      }}
                       className="h-8.5 text-xs text-center rounded-none font-mono"
                       inputMode="numeric"
                     />
@@ -752,6 +762,13 @@ export default function InvoicePage() {
                     type="number"
                     value={draftPrice}
                     onChange={(e) => setDraftPrice(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (draftProduct) handleAddItem(e);
+                        else if (invoiceItems.length > 0) handlePrint();
+                      }
+                    }}
                     className="h-8.5 text-xs font-mono"
                     inputMode="decimal"
                     placeholder="0"

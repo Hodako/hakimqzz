@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { ProductSearchSelect } from "@/components/product-search";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,7 @@ function groupAllDataByDay(sales: any[], expenses: any[], days: number) {
 // ── Bento Grid KPICard ─────────────────────────────────────────────────────────────
 function KPICard({
   label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName,
-  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false,
+  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false, hotkey,
 }: {
   label: string; value: string; sub?: string;
   icon?: React.ElementType; imageUrl?: string; trend?: string; trendUp?: boolean; color: string;
@@ -104,6 +105,7 @@ function KPICard({
   curve?: "none" | "sm" | "md" | "lg" | "xl" | "full";
   isBentoHero?: boolean;
   isDesktop?: boolean;
+  hotkey?: string | number;
 }) {
   const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
   
@@ -278,7 +280,14 @@ function KPICard({
       )}
 
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
-        <span className={`${labelSize} font-bold text-muted-foreground truncate mr-2 tracking-tight`}>{label}</span>
+        <div className="flex items-center gap-1.5 min-w-0 mr-2">
+          {isDesktop && hotkey !== undefined && (
+            <span className="px-1.5 py-0.5 text-[9px] font-mono font-extrabold rounded bg-muted/80 text-foreground/90 border border-border/80 shadow-2xs shrink-0 select-none">
+              [{hotkey}]
+            </span>
+          )}
+          <span className={`${labelSize} font-bold text-muted-foreground truncate tracking-tight`}>{label}</span>
+        </div>
         {imageUrl && !imgFailed ? (
           <div className="flex items-center justify-center shrink-0">
             <img
@@ -561,6 +570,8 @@ export default function Dashboard() {
     }, 100);
   };
 
+  const router = useRouter();
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem('dashboardDateFilter');
@@ -585,67 +596,150 @@ export default function Dashboard() {
     } catch {}
   };
 
+  const setPresetRange = (preset: "today" | "yesterday" | "this_week" | "this_month" | "last_month" | "all") => {
+    if (preset === "all") {
+      clearFilter();
+      return;
+    }
+    const now = new Date();
+    let from = "";
+    let to = "";
+
+    const toStr = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+
+    if (preset === "today") {
+      const todayStr = toStr(now);
+      from = todayStr;
+      to = todayStr;
+    } else if (preset === "yesterday") {
+      const yDate = new Date(now);
+      yDate.setDate(yDate.getDate() - 1);
+      const yStr = toStr(yDate);
+      from = yStr;
+      to = yStr;
+    } else if (preset === "this_week") {
+      const firstDay = new Date(now);
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      firstDay.setDate(diff);
+      from = toStr(firstDay);
+      to = toStr(now);
+    } else if (preset === "this_month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      from = toStr(firstDay);
+      to = toStr(now);
+    } else if (preset === "last_month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+      from = toStr(firstDay);
+      to = toStr(lastDay);
+    }
+
+    applyFilter(from, to);
+  };
+
+  // Desktop keyboard hotkeys (1-9) for quick KPI navigation & fast action opening
+  useEffect(() => {
+    if (isMobile) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.tagName === "SELECT")) {
+        return;
+      }
+      if (saleOpen || showFilter || showPopup || bentoCustomizerOpen) {
+        return;
+      }
+
+      const keyIndex = parseInt(e.key, 10);
+      if (!isNaN(keyIndex) && keyIndex >= 1 && keyIndex <= kpiConfig.order.length) {
+        e.preventDefault();
+        const targetKpiKey = kpiConfig.order[keyIndex - 1];
+        if (targetKpiKey === "credit_sale") {
+          playTapSound();
+          setSalePresetType("credit");
+          setSaleOpen(true);
+        } else if (targetKpiKey === "cash_sale") {
+          playTapSound();
+          setSalePresetType("cash");
+          setSaleOpen(true);
+        } else if (targetKpiKey === "online_sell") {
+          playTapSound();
+          setSalePresetType("online");
+          setSaleOpen(true);
+        } else if (targetKpiKey === "purchases" && canAccess(perms, "purchases")) {
+          playTapSound();
+          router.push("/purchases");
+        } else if (targetKpiKey === "profit") {
+          playTapSound();
+          router.push("/profits");
+        } else if (targetKpiKey === "loss") {
+          playTapSound();
+          router.push("/losses");
+        } else if (targetKpiKey === "expense" && canAccess(perms, "expenses")) {
+          playTapSound();
+          router.push("/expenses");
+        } else if (targetKpiKey === "due" && canAccess(perms, "parties")) {
+          playTapSound();
+          router.push("/dues");
+        } else if (targetKpiKey === "cashbox" && canAccess(perms, "cashbox")) {
+          playTapSound();
+          router.push("/cash-management/cashbox");
+        } else if (targetKpiKey === "somiti" && canAccess(perms, "expenses")) {
+          playTapSound();
+          router.push("/somiti");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobile, saleOpen, showFilter, showPopup, bentoCustomizerOpen, kpiConfig.order, perms, router]);
+
   const today = todayStart();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  const week = startOf(7);
-  const month = startOf(30);
 
-  // Compute filtered data based on date filter (if any)
-  const filteredSales = allSales.filter(s => {
-    if (s.returned) return false;
-    const d = new Date(s.created_at);
-    const showToday = !dateFilter.from && !dateFilter.to;
-    const fromOk = showToday
-      ? d >= today
-      : !dateFilter.from || d >= new Date(dateFilter.from);
-    const toOk = showToday
-      ? d < tomorrow
-      : !dateFilter.to || d <= new Date(dateFilter.to + "T23:59:59");
-    return fromOk && toOk;
-  });
-  const filteredExpenses = allExpenses.filter(e => {
-    const d = new Date(e.created_at);
-    const showToday = !dateFilter.from && !dateFilter.to;
-    const fromOk = showToday
-      ? d >= today
-      : !dateFilter.from || d >= new Date(dateFilter.from);
-    const toOk = showToday
-      ? d < tomorrow
-      : !dateFilter.to || d <= new Date(dateFilter.to + "T23:59:59");
-    return fromOk && toOk;
-  });
-  const filteredCashbox = allCashbox.filter(c => {
-    const d = new Date(c.created_at);
-    const showToday = !dateFilter.from && !dateFilter.to;
-    const fromOk = showToday
-      ? d >= today
-      : !dateFilter.from || d >= new Date(dateFilter.from);
-    const toOk = showToday
-      ? d < tomorrow
-      : !dateFilter.to || d <= new Date(dateFilter.to + "T23:59:59");
-    return fromOk && toOk;
-  });
+  // Robust date boundary matcher
+  const isDateInRange = (dateInput: string | Date | null | undefined) => {
+    if (!dateInput) return false;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return false;
+
+    // Default to today if no custom filter set
+    if (!dateFilter.from && !dateFilter.to) {
+      return d >= today && d < tomorrow;
+    }
+
+    if (dateFilter.from) {
+      const fromBoundary = new Date(`${dateFilter.from}T00:00:00`);
+      if (d < fromBoundary) return false;
+    }
+
+    if (dateFilter.to) {
+      const toBoundary = new Date(`${dateFilter.to}T23:59:59.999`);
+      if (d > toBoundary) return false;
+    }
+
+    return true;
+  };
+
+  // Compute filtered data based on date filter
+  const filteredSales = allSales.filter(s => !s.returned && isDateInRange(s.created_at));
+  const filteredExpenses = allExpenses.filter(e => isDateInRange(e.created_at));
+  const filteredCashbox = allCashbox.filter(c => isDateInRange(c.created_at));
+  const filteredPurchases = (purchases.data ?? []).filter(p => isDateInRange(p.created_at));
 
   // KPIs
   const cashToday    = filteredSales.filter(s => s.type === "cash").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
   const creditToday  = filteredSales.filter(s => s.type === "credit").reduce((a, s) => a + Number(s.due_amount), 0);
   const onlineToday  = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
-  
-  const filteredPurchases = (purchases.data ?? []).filter(p => {
-    const d = new Date(p.created_at);
-    const showToday = !dateFilter.from && !dateFilter.to;
-    const fromOk = showToday
-      ? d >= today
-      : !dateFilter.from || d >= new Date(dateFilter.from);
-    const toOk = showToday
-      ? d < tomorrow
-      : !dateFilter.to || d <= new Date(dateFilter.to + "T23:59:59");
-    return fromOk && toOk;
-  });
   const purchasesToday = filteredPurchases.reduce((a, p) => a + Number(p.total), 0);
-
-  // profit today
   const profitToday  = filteredSales.reduce((a, s) => a + Number(s.profit), 0);
   
   // loss today
@@ -1498,177 +1592,202 @@ export default function Dashboard() {
   const renderDesktopWidget = (widgetId: string) => {
     switch (widgetId) {
       case "kpis":
-        const desktopKpiCardsMap: Record<string, React.ReactNode> = {
-          credit_sale: (
-            <KPICard
-              key="credit_sale"
-              label={t("credit_sale")}
-              value={fmtMoney(creditToday)}
-              sub={dateRangeLabel}
-              icon={CreditCard}
-              color="bg-amber-500"
-              isDesktop={true}
-              onClick={() => {
-                playTapSound();
-                setSalePresetType("credit");
-                setSaleOpen(true);
-              }}
-              align={kpiConfig.align as any}
-              size={kpiConfig.size as any}
-            />
-          ),
-          cash_sale: (
-            <KPICard
-              key="cash_sale"
-              label={t("cash_sale")}
-              value={fmtMoney(cashToday)}
-              sub={dateRangeLabel}
-              icon={ShoppingBag}
-              color="bg-indigo-500"
-              isDesktop={true}
-              onClick={() => {
-                playTapSound();
-                setSalePresetType("cash");
-                setSaleOpen(true);
-              }}
-              align={kpiConfig.align as any}
-              size={kpiConfig.size as any}
-            />
-          ),
-          online_sell: (
-            <KPICard
-              key="online_sell"
-              label={t("online_sell")}
-              value={fmtMoney(onlineToday)}
-              sub={dateRangeLabel}
-              icon={DollarSign}
-              color="bg-sky-500"
-              isDesktop={true}
-              onClick={() => {
-                playTapSound();
-                setSalePresetType("online");
-                setSaleOpen(true);
-              }}
-              align={kpiConfig.align as any}
-              size={kpiConfig.size as any}
-            />
-          ),
-          purchases: canAccess(perms, "purchases") ? (
-            <Link href="/purchases" className="block" key="purchases" onClick={() => playTapSound()}>
-              <KPICard
-                label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
-                value={fmtMoney(purchasesToday)}
-                sub={dateRangeLabel}
-                icon={ShoppingCart}
-                color="bg-teal-500"
-                isDesktop={true}
-                className="h-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ) : <div key="purchases" className="hidden" />,
-          profit: (
-            <Link href="/profits" className="block" key="profit" onClick={() => playTapSound()}>
-              <KPICard
-                label={t("profit")}
-                value={fmtMoney(profitToday)}
-                sub={dateRangeLabel}
-                icon={TrendingUp}
-                color="bg-emerald-500"
-                isDesktop={true}
-                className="h-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ),
-          loss: (
-            <Link href="/losses" className="block" key="loss" onClick={() => playTapSound()}>
-              <KPICard
-                label={lang === "bn" ? "লোকসান" : "Loss"}
-                value={fmtMoney(lossToday)}
-                sub={dateRangeLabel}
-                icon={TrendingDown}
-                color="bg-rose-500"
-                isDesktop={true}
-                className="h-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ),
-          expense: canAccess(perms, "expenses") ? (
-            <Link href="/expenses" className="block" key="expense" onClick={() => playTapSound()}>
-              <KPICard
-                label={t("expense")}
-                value={fmtMoney(expenseToday)}
-                sub={dateRangeLabel}
-                icon={Receipt}
-                color="bg-orange-500"
-                isDesktop={true}
-                className="h-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ) : <div key="expense" className="hidden" />,
-          due: canAccess(perms, "parties") ? (
-            <Link href="/dues" className="block" key="due" onClick={() => playTapSound()}>
-              <KPICard
-                label={t("due")}
-                value={fmtMoney(totalDues)}
-                sub={dateRangeLabel}
-                icon={Banknote}
-                color="bg-amber-600"
-                isDesktop={true}
-                trendUp={false}
-                className="h-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ) : <div key="due" className="hidden" />,
-          cashbox: canAccess(perms, "cashbox") ? (
-            <Link href="/cash-management/cashbox" className="block" key="cashbox" onClick={() => playTapSound()}>
-              <KPICard
-                label={t("cashbox")}
-                value={fmtMoney(cashboxTotal)}
-                sub={dateRangeLabel}
-                icon={Wallet}
-                color="bg-indigo-600"
-                isDesktop={true}
-                trendUp={cashboxTotal >= 0}
-                trend={t("balance")}
-                className="h-full justify-between"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ) : <div key="cashbox" className="hidden" />,
-          somiti: canAccess(perms, "expenses") ? (
-            <Link href="/somiti" className="block" key="somiti" onClick={() => playTapSound()}>
-              <KPICard
-                label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
-                value={fmtMoney(somitiTotal)}
-                sub={dateRangeLabel}
-                icon={PiggyBank}
-                color="bg-purple-600"
-                isDesktop={true}
-                trendUp={somitiTotal >= 0}
-                trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
-                className="h-full justify-between"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </Link>
-          ) : <div key="somiti" className="hidden" />,
+        const renderDesktopCard = (key: string, index: number) => {
+          const hotkey = index + 1 <= 9 ? index + 1 : undefined;
+          switch (key) {
+            case "credit_sale":
+              return (
+                <KPICard
+                  key="credit_sale"
+                  label={t("credit_sale")}
+                  value={fmtMoney(creditToday)}
+                  sub={dateRangeLabel}
+                  icon={CreditCard}
+                  color="bg-amber-500"
+                  isDesktop={true}
+                  hotkey={hotkey}
+                  onClick={() => {
+                    playTapSound();
+                    setSalePresetType("credit");
+                    setSaleOpen(true);
+                  }}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                />
+              );
+            case "cash_sale":
+              return (
+                <KPICard
+                  key="cash_sale"
+                  label={t("cash_sale")}
+                  value={fmtMoney(cashToday)}
+                  sub={dateRangeLabel}
+                  icon={ShoppingBag}
+                  color="bg-indigo-500"
+                  isDesktop={true}
+                  hotkey={hotkey}
+                  onClick={() => {
+                    playTapSound();
+                    setSalePresetType("cash");
+                    setSaleOpen(true);
+                  }}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                />
+              );
+            case "online_sell":
+              return (
+                <KPICard
+                  key="online_sell"
+                  label={t("online_sell")}
+                  value={fmtMoney(onlineToday)}
+                  sub={dateRangeLabel}
+                  icon={DollarSign}
+                  color="bg-sky-500"
+                  isDesktop={true}
+                  hotkey={hotkey}
+                  onClick={() => {
+                    playTapSound();
+                    setSalePresetType("online");
+                    setSaleOpen(true);
+                  }}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                />
+              );
+            case "purchases":
+              return canAccess(perms, "purchases") ? (
+                <Link href="/purchases" className="block" key="purchases" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={lang === "bn" ? "মাল ক্রয় (BUY)" : "BUY"}
+                    value={fmtMoney(purchasesToday)}
+                    sub={dateRangeLabel}
+                    icon={ShoppingCart}
+                    color="bg-teal-500"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    className="h-full"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              ) : <div key="purchases" className="hidden" />;
+            case "profit":
+              return (
+                <Link href="/profits" className="block" key="profit" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={t("profit")}
+                    value={fmtMoney(profitToday)}
+                    sub={dateRangeLabel}
+                    icon={TrendingUp}
+                    color="bg-emerald-500"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    className="h-full"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              );
+            case "loss":
+              return (
+                <Link href="/losses" className="block" key="loss" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={lang === "bn" ? "লোকসান" : "Loss"}
+                    value={fmtMoney(lossToday)}
+                    sub={dateRangeLabel}
+                    icon={TrendingDown}
+                    color="bg-rose-500"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    className="h-full"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              );
+            case "expense":
+              return canAccess(perms, "expenses") ? (
+                <Link href="/expenses" className="block" key="expense" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={t("expense")}
+                    value={fmtMoney(expenseToday)}
+                    sub={dateRangeLabel}
+                    icon={Receipt}
+                    color="bg-orange-500"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    className="h-full"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              ) : <div key="expense" className="hidden" />;
+            case "due":
+              return canAccess(perms, "parties") ? (
+                <Link href="/dues" className="block" key="due" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={t("due")}
+                    value={fmtMoney(totalDues)}
+                    sub={dateRangeLabel}
+                    icon={Banknote}
+                    color="bg-amber-600"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    trendUp={false}
+                    className="h-full"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              ) : <div key="due" className="hidden" />;
+            case "cashbox":
+              return canAccess(perms, "cashbox") ? (
+                <Link href="/cash-management/cashbox" className="block" key="cashbox" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={t("cashbox")}
+                    value={fmtMoney(cashboxTotal)}
+                    sub={dateRangeLabel}
+                    icon={Wallet}
+                    color="bg-indigo-600"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    trendUp={cashboxTotal >= 0}
+                    trend={t("balance")}
+                    className="h-full justify-between"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              ) : <div key="cashbox" className="hidden" />;
+            case "somiti":
+              return canAccess(perms, "expenses") ? (
+                <Link href="/somiti" className="block" key="somiti" onClick={() => playTapSound()}>
+                  <KPICard
+                    label={lang === "bn" ? "সমিতি (Samity)" : "Samity"}
+                    value={fmtMoney(somitiTotal)}
+                    sub={dateRangeLabel}
+                    icon={PiggyBank}
+                    color="bg-purple-600"
+                    isDesktop={true}
+                    hotkey={hotkey}
+                    trendUp={somitiTotal >= 0}
+                    trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
+                    className="h-full justify-between"
+                    align={kpiConfig.align as any}
+                    size={kpiConfig.size as any}
+                  />
+                </Link>
+              ) : <div key="somiti" className="hidden" />;
+            default:
+              return null;
+          }
         };
 
         return (
           <div key="kpis" className="space-y-6 col-span-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              {kpiConfig.order.map(key => desktopKpiCardsMap[key])}
+              {kpiConfig.order.map((key, idx) => renderDesktopCard(key, idx))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1915,17 +2034,77 @@ export default function Dashboard() {
 
         {/* Date Filter */}
         {showFilter && (
-          <Card className="p-3 bg-card border border-border">
-            <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-muted-foreground block mb-0.5">Date from</label>
-                <Input type="date" className="h-8 text-xs" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
+          <Card className="p-3 bg-card border border-border space-y-2.5">
+            {/* Quick Preset Pills */}
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded"
+                onClick={() => setPresetRange("today")}
+              >
+                {lang === "bn" ? "আজ" : "Today"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded"
+                onClick={() => setPresetRange("yesterday")}
+              >
+                {lang === "bn" ? "গতকাল" : "Yesterday"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded"
+                onClick={() => setPresetRange("this_week")}
+              >
+                {lang === "bn" ? "এই সপ্তাহ" : "This Week"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded font-medium bg-primary/10 border-primary/30"
+                onClick={() => setPresetRange("this_month")}
+              >
+                {lang === "bn" ? "এই মাস" : "This Month"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2 rounded"
+                onClick={() => setPresetRange("last_month")}
+              >
+                {lang === "bn" ? "গত মাস" : "Last Month"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-[10px] px-2 text-muted-foreground hover:text-destructive"
+                onClick={clearFilter}
+              >
+                {lang === "bn" ? "রিসেট" : "Reset"}
+              </Button>
+            </div>
+
+            <div className="space-y-2 pt-1 border-t border-border/60">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Date from</label>
+                  <Input type="date" className="h-8 text-xs" value={dateFilter.from} onChange={e => applyFilter(e.target.value, dateFilter.to)} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block mb-0.5">Date to</label>
+                  <Input type="date" className="h-8 text-xs" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] text-muted-foreground block mb-0.5">Date to</label>
-                <Input type="date" className="h-8 text-xs" value={dateFilter.to} onChange={e => applyFilter(dateFilter.from, e.target.value)} />
-              </div>
-              <div className="flex gap-1.5 pt-1">
+              <div className="flex gap-1.5 pt-0.5">
                 <Button onClick={() => applyFilter(dateFilter.from, dateFilter.to)} variant="default" size="sm" className="h-7 text-xs flex-1">
                   Apply
                 </Button>
@@ -2036,7 +2215,67 @@ export default function Dashboard() {
 
       {/* Date Filter */}
       {showFilter && (
-        <Card className="p-4 bg-card border border-border">
+        <Card className="p-4 bg-card border border-border space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground mr-1">Presets:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 rounded-lg"
+                onClick={() => setPresetRange("today")}
+              >
+                {lang === "bn" ? "আজ (Today)" : "Today"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 rounded-lg"
+                onClick={() => setPresetRange("yesterday")}
+              >
+                {lang === "bn" ? "গতকাল (Yesterday)" : "Yesterday"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 rounded-lg"
+                onClick={() => setPresetRange("this_week")}
+              >
+                {lang === "bn" ? "এই সপ্তাহ (Week)" : "This Week"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 rounded-lg font-medium bg-primary/10 border-primary/30 text-primary"
+                onClick={() => setPresetRange("this_month")}
+              >
+                {lang === "bn" ? "এই মাস (Month)" : "This Month"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2.5 rounded-lg"
+                onClick={() => setPresetRange("last_month")}
+              >
+                {lang === "bn" ? "গত মাস (Last Month)" : "Last Month"}
+              </Button>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs px-2.5 text-muted-foreground hover:text-destructive"
+              onClick={clearFilter}
+            >
+              {lang === "bn" ? "রিসেট / সব (Clear)" : "Clear / All Time"}
+            </Button>
+          </div>
+
           <div className="flex items-end gap-4 max-w-2xl">
             <div className="flex-1">
               <label className="text-xs text-muted-foreground block mb-1">Date from</label>

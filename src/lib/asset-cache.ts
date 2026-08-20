@@ -95,7 +95,7 @@ export async function cacheAssetAsync(url: string | null): Promise<string | null
 export function preloadAssetsToLocalStorage(urls: (string | null)[]): void {
   if (typeof window === "undefined") return;
 
-  const validUrls = urls.filter((u): u is string => Boolean(u) && !u.startsWith("data:"));
+  const validUrls = urls.filter((u): u is string => typeof u === "string" && !u.startsWith("data:"));
   const uniqueUrls = Array.from(new Set(validUrls)).slice(0, 100);
 
   // Background non-blocking preloader

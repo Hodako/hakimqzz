@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { createSaleFn, createCustomerFn } from "@/lib/rpc";
 import { Plus, Trash2, Scan, Printer } from "lucide-react";
 import { safeUUID } from "@/lib/utils";
@@ -264,7 +264,7 @@ export function SaleDialog({
           invoiceScale: user.invoice_scale || "100%",
           invoiceLineSpacing: user.invoice_line_spacing || "6px",
           invoiceNo: `INV-${cartId.slice(-6).toUpperCase()}`,
-          invoiceDate: new Date().toLocaleDateString(),
+          invoiceDate: fmtDateTime(new Date()),
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
           customerPhone: cust?.phone || "",
           items: cart.map(c => {
@@ -301,7 +301,18 @@ export function SaleDialog({
 
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3">
-            <form id="sale-form" onSubmit={submit} className="space-y-3">
+            <form
+              id="sale-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (draft.productId) {
+                  addToCart();
+                } else if (cart.length > 0) {
+                  submit(e);
+                }
+              }}
+              className="space-y-3"
+            >
               <Tabs value={type} onValueChange={(v) => setType(v as "cash" | "credit" | "online")}>
                 <TabsList className="grid grid-cols-3 w-full">
                   <TabsTrigger value="cash">{t("cash_sale")}</TabsTrigger>
@@ -350,9 +361,59 @@ export function SaleDialog({
                   }}
                 />
                 <div className="grid grid-cols-3 gap-2">
-                  <Field label={t("qty")}><Input type="number" inputMode="numeric" pattern="[0-9]*" placeholder={t("qty")} value={draft.qty} onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))} /></Field>
-                  <Field label={t("sell_price")}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder={t("sell_price")} value={draft.sellPrice} onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))} /></Field>
-                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}><Input type="number" step="any" inputMode="decimal" pattern="[0-9.]*" placeholder="0" value={draft.discount} onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))} /></Field>
+                  <Field label={t("qty")}>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder={t("qty")}
+                      value={draft.qty}
+                      onChange={e => setDraft(d => ({ ...d, qty: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (draft.productId) addToCart();
+                          else if (cart.length > 0) submit(e);
+                        }
+                      }}
+                    />
+                  </Field>
+                  <Field label={t("sell_price")}>
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      pattern="[0-9.]*"
+                      placeholder={t("sell_price")}
+                      value={draft.sellPrice}
+                      onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (draft.productId) addToCart();
+                          else if (cart.length > 0) submit(e);
+                        }
+                      }}
+                    />
+                  </Field>
+                  <Field label={lang === "bn" ? "ডিসকাউন্ট" : "Discount"}>
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      pattern="[0-9.]*"
+                      placeholder="0"
+                      value={draft.discount}
+                      onChange={e => setDraft(d => ({ ...d, discount: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (draft.productId) addToCart();
+                          else if (cart.length > 0) submit(e);
+                        }
+                      }}
+                    />
+                  </Field>
                 </div>
                 {draft.productId && draft.sellPrice && (
                   <div className="text-[11px] text-muted-foreground text-right font-medium">

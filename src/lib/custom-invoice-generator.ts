@@ -47,6 +47,17 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Watermark (faded rotated stamp)
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((-25 * Math.PI) / 180);
+  ctx.font = `900 ${22 * scale}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(data.due > 0 ? "PAID BY: CREDIT" : "PAID BY: CASH", 0, 0);
+  ctx.restore();
+
   // Drawing Utilities
   const pad = Math.round(4 * scale);
   const contentWidth = canvas.width - pad * 2;
@@ -133,7 +144,7 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
   y += 12 * scale;
 
   // 3. TABLE HEADERS
-  drawText("ITEM DESCRIPTION", pad, y, { weight: "bold", sizePx: 10 * scale });
+  drawText("ITEM", pad, y, { weight: "bold", sizePx: 10 * scale });
   drawText("AMOUNT", canvas.width - pad, y, { align: "right", weight: "bold", sizePx: 10 * scale });
   y += 6 * scale;
 
@@ -170,7 +181,7 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
   y += 4 * scale;
 
   // 5. SUMMARY SECTION
-  drawText("Subtotal:", pad, y, { sizePx: 10 * scale, color: "#374151" });
+  drawText("Subtotal:", pad, y, { weight: "bold", sizePx: 10 * scale, color: "#111827" });
   drawText(`৳${data.subtotal.toLocaleString()}`, canvas.width - pad, y, {
     align: "right",
     font: "monospace",
@@ -189,22 +200,6 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
     });
     y += 14 * scale;
   }
-
-  // TOTAL PAYABLE BOX
-  drawSolidLine(y, 1.5);
-  y += 12 * scale;
-
-  drawText("TOTAL PAYABLE:", pad, y, { weight: "900", sizePx: 12 * scale });
-  drawText(`৳${data.total.toLocaleString()}`, canvas.width - pad, y, {
-    align: "right",
-    font: "monospace",
-    weight: "900",
-    sizePx: 13 * scale,
-  });
-  y += 10 * scale;
-
-  drawSolidLine(y, 1.5);
-  y += 14 * scale;
 
   // PAID & DUE
   drawText("Paid Amount:", pad, y, { weight: "bold", sizePx: 10 * scale, color: "#059669" });
@@ -237,13 +232,6 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
     align: "center",
     weight: "bold",
     sizePx: 9.5 * scale,
-  });
-  y += 12 * scale;
-
-  drawText("Powered by Dream Fashion POS", canvas.width / 2, y, {
-    align: "center",
-    sizePx: 8 * scale,
-    color: "#6b7280",
   });
 
   return canvas;

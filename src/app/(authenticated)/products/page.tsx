@@ -900,15 +900,12 @@ function ProductCard({
   return (
     <>
       <Card
-        className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] beveled-card ${
-          p.archived ? "opacity-60" : "hover:border-primary/40"
-        } ${longPressProgress ? "ring-2 ring-primary/40" : ""}`}
-        onMouseDown={handleStart}
-        onMouseUp={handleEnd}
-        onMouseLeave={handleEnd}
-        onTouchStart={handleStart}
-        onTouchEnd={handleEnd}
-        onTouchMove={handleEnd}
+        className={`overflow-hidden border-border/60 flex flex-col justify-between p-1 sm:p-1.5 gap-1 select-none transition-all active:scale-[0.98] beveled-card cursor-pointer ${
+          p.archived ? "opacity-60" : "hover:border-primary/50 hover:shadow-md hover:ring-1 hover:ring-primary/20"
+        }`}
+        onClick={() => {
+          setContextMenuOpen(true);
+        }}
       >
         <div>
           <div className="relative rounded overflow-hidden">
@@ -922,11 +919,6 @@ function ProductCard({
               <span className="absolute bottom-1 left-1 bg-black/60 text-[7px] sm:text-[8px] text-white px-1 py-0.2 rounded font-medium truncate max-w-[80px]">
                 {p.category}
               </span>
-            )}
-            {longPressProgress && (
-              <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                <div className="bg-black/50 rounded-full px-2 py-1 text-white text-[9px] font-semibold animate-pulse">Hold...</div>
-              </div>
             )}
           </div>
           <div className="p-1 space-y-0.5">
@@ -957,7 +949,7 @@ function ProductCard({
           </div>
         </div>
 
-        <div className="pt-0.5 flex gap-1" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+        <div className="pt-0.5 flex gap-1" onClick={e => e.stopPropagation()}>
           {!p.archived ? (
             <Button
               size="sm"
