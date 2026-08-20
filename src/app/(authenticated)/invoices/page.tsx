@@ -127,29 +127,28 @@ function InvoiceDocumentView({
             </p>
           )}
           {(biz?.emails || userEmail) && (
-            <p className="text-[10px] text-zinc-700">Email: {biz?.emails || userEmail}</p>
+            <p className="text-[10px] text-zinc-700">{biz?.emails || userEmail}</p>
           )}
         </div>
 
         {/* Dashed Separator */}
-        <div className="border-t border-dashed border-black my-2" />
+        <div className="border-t border-dashed border-black my-1.5" />
 
         {/* Invoice Meta Section */}
         <div className="text-[11px] leading-snug space-y-0.5 text-black">
-          <div className="flex justify-between">
-            <span>Invoice No: <strong className="font-mono">{invoiceNo}</strong></span>
-            <span className="font-mono">{invoiceDate}</span>
+          <div className="flex justify-end">
+            <span className="font-mono text-[10.5px]">{invoiceDate}</span>
           </div>
           {customerName && (
-            <div className="flex justify-between pt-0.5">
-              <span>Customer: <strong>{customerName}</strong></span>
-              <span className="font-mono">{customerPhone}</span>
+            <div className="flex justify-between items-baseline gap-1.5 whitespace-nowrap overflow-hidden pt-0.5">
+              <span className="truncate whitespace-nowrap">Customer: <strong>{customerName}</strong></span>
+              <span className="font-mono shrink-0 whitespace-nowrap">{customerPhone}</span>
             </div>
           )}
         </div>
 
         {/* Dashed Separator */}
-        <div className="border-t border-dashed border-black my-2" />
+        <div className="border-t border-dashed border-black my-1.5" />
 
         {/* Items Table */}
         <table className="w-full text-left border-collapse text-[11px]">
@@ -170,7 +169,7 @@ function InvoiceDocumentView({
             ) : (
               items.map((item, index) => (
                 <tr key={`${item.product.id}-${index}`} className="border-b border-dotted border-zinc-300">
-                  <td className="py-1.5 pr-1 font-semibold text-black break-words leading-tight">
+                  <td className="py-1.5 pr-1 font-semibold text-black break-words leading-tight" style={{ wordBreak: "normal", overflowWrap: "break-word" }}>
                     {item.product.name}
                   </td>
                   <td className="py-1.5 px-1 text-center font-mono font-medium text-black">
@@ -186,7 +185,7 @@ function InvoiceDocumentView({
         </table>
 
         {/* Dashed Separator */}
-        <div className="border-t border-dashed border-black my-2" />
+        <div className="border-t border-dashed border-black my-1.5" />
 
         {/* Totals Section */}
         <div className="space-y-1 text-[11px] text-black">
@@ -229,7 +228,7 @@ function InvoiceDocumentView({
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-dashed border-black text-center text-black space-y-1.5 mt-4 relative z-10">
+      <div className="pt-2.5 border-t border-dashed border-black text-center text-black space-y-1 mt-3 relative z-10">
         {biz?.invoice_terms ? (
           <p className="text-xs font-bold whitespace-pre-line leading-snug text-black">
             {biz.invoice_terms}
@@ -237,7 +236,6 @@ function InvoiceDocumentView({
         ) : (
           <div>
             <p className="font-black text-xs uppercase tracking-wider">Thank You!</p>
-            <p className="text-[11px] font-medium">Please Visit Again</p>
           </div>
         )}
       </div>

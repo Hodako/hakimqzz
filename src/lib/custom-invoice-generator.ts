@@ -130,7 +130,6 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
   y += 12 * scale;
 
   // 2. INVOICE META
-  drawText(`INV: #${data.invoiceNo}`, pad, y, { weight: "bold", sizePx: 10 * scale });
   drawText(data.date, canvas.width - pad, y, { align: "right", font: "monospace", sizePx: 10 * scale });
   y += 14 * scale;
 
@@ -145,7 +144,7 @@ export function generateCustomPosInvoiceCanvas(data: CustomInvoiceData): HTMLCan
 
   // 3. TABLE HEADERS
   drawText("ITEM", pad, y, { weight: "bold", sizePx: 10 * scale });
-  drawText("AMOUNT", canvas.width - pad, y, { align: "right", weight: "bold", sizePx: 10 * scale });
+  drawText("PRICE", canvas.width - pad, y, { align: "right", weight: "bold", sizePx: 10 * scale });
   y += 6 * scale;
 
   drawSolidLine(y, 1);
