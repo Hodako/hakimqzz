@@ -91,53 +91,44 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
   };
 }
 
+function getInitialUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  const cached = readAuthProfile();
+  const tokenExists = !!window.localStorage.getItem("auth_token");
+  if (cached && tokenExists) {
+    return profileToUser(cached);
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(getInitialUser);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const tokenExists = !!window.localStorage.getItem("auth_token");
+    const cached = readAuthProfile();
+    if (tokenExists && cached) return false;
+    if (!tokenExists) return false;
+    return true;
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { lang } = useT();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const cached = readAuthProfile();
-    const isCap = !!(window as any).Capacitor ||
-      window.location.hostname === "localhost" ||
-      window.location.origin.includes("localhost") ||
-      window.location.origin.startsWith("capacitor:") ||
-      window.location.origin.startsWith("file:");
-    const tokenExists = !!window.localStorage.getItem("auth_token");
-    const initUser = (cached && (!isCap || tokenExists)) ? profileToUser(cached) : null;
-    if (initUser) {
-      setUser(initUser);
-      setLoading(false);
-    }
-  }, []);
 
   async function checkUser() {
     try {
       const data = await getMeFn();
       const next = data.user as AuthUser | null;
-      setUser(next);
-      cacheUser(next);
-      if (next) writeBrand({ name: next.business_name, logo_url: next.logo_url });
-    } catch (err: any) {
-      console.warn("Failed to check user status:", err);
-      const isNetworkError = (
-        (typeof window !== "undefined" && !navigator.onLine) ||
-        err?.message?.includes("Failed to fetch") ||
-        err?.message?.includes("NetworkError") ||
-        err?.message?.includes("network error") ||
-        err?.message?.includes("status 502") ||
-        err?.message?.includes("status 503") ||
-        err?.message?.includes("status 504")
-      );
-      if (isNetworkError) {
-        console.log("Network/offline state detected. Keeping cached user session.");
-      } else {
+      if (next) {
+        setUser(next);
+        cacheUser(next);
+        writeBrand({ name: next.business_name, logo_url: next.logo_url });
+      } else if (!window.localStorage.getItem("auth_token")) {
         setUser(null);
         clearAuthProfile();
       }
+    } catch (err: any) {
+      console.warn("Background auth refresh info:", err?.message || err);
     } finally {
       setLoading(false);
     }
