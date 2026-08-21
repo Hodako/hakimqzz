@@ -355,7 +355,7 @@ export function SaleDialog({
           terms: user.invoice_terms || "",
         };
 
-        await downloadPwaInvoicePdf(invoiceParams, true);
+        printPwaInvoice(invoiceParams);
         toast.success(lang === "bn" ? "ইনভয়েস প্রিন্ট প্রস্তুত হচ্ছে!" : "Opening invoice print view!");
       }
 
