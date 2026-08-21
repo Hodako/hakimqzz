@@ -442,7 +442,7 @@ export async function getPayableSettlementsFn(input: { data: { partyId: string }
 export async function getSalesFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("sales").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("sales").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
 
   const partyIds = items.map(s => s.party_id).filter(Boolean);
   const customers = await db.collection("customers").find({ _id: { $in: partyIds } }).toArray();
@@ -845,7 +845,7 @@ export async function createPartyReturnFn(input: { data: { party_id: string; pro
 export async function getReturnsFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("returns").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("returns").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
   return items.map((r) => ({ ...r, id: r._id as any as string }));
 }
 
@@ -909,7 +909,7 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
 export async function getPurchasesFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("purchases").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("purchases").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
@@ -1031,7 +1031,7 @@ export async function deletePurchaseFn(input: { data: { id: string } }) {
 export async function getExpensesFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("expenses").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("expenses").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
   return items.map((e) => ({ ...e, id: e._id as any as string }));
 }
 
@@ -1122,7 +1122,6 @@ export async function deletePaymentFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   
-  // Calculate total cashbox delta impact of deleting this payment (which is a deposit)
   const relatedEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId, ref_id: data.id } as any).toArray();
   const relatedIds = relatedEntries.map(e => e._id.toString());
   let paymentDeltaEffect = 0;
@@ -1131,7 +1130,6 @@ export async function deletePaymentFn(input: { data: { id: string } }) {
     const val = isPos ? Number(entry.amount) : -Number(entry.amount);
     paymentDeltaEffect += val;
   }
-  // Deleting it means the balance changes by -paymentDeltaEffect
   if (-paymentDeltaEffect < 0) {
     await checkCashboxBalanceEffect(db, session.ownerId, -paymentDeltaEffect, relatedIds);
   }
@@ -1146,7 +1144,7 @@ export async function deletePaymentFn(input: { data: { id: string } }) {
 export async function getSomitiFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("somiti_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(200).toArray();
+  const items = await db.collection("somiti_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
   return items.map((s) => ({ ...s, id: s._id as any as string }));
 }
 
