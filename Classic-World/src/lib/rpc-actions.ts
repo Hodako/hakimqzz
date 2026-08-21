@@ -100,7 +100,7 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     activated: user.activated === false ? false : Boolean(user.activated ?? true),
     role: (user.role as string) || "owner",
     business_id: (user.business_id as string) || null,
-    business_name: (business?.name as string) || "HakimQzz",
+    business_name: (business?.name as string) || "Classic World",
     business_address: (business?.address as string) || "",
     business_phone_numbers: (business?.phone_numbers as string) || (business?.phone as string) || "",
     business_emails: (business?.emails as string) || (business?.email as string) || "",

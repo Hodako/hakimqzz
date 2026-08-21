@@ -370,7 +370,7 @@ export function FloatingAiChat() {
                 <Bot className="size-4" />
               </div>
               <div>
-                <h3 className="font-bold text-xs leading-none">{lang === "bn" ? "হাকিম কিউজেডজেড এআই অ্যাসিস্ট্যান্ট" : "HakimQzz AI Assistant"}</h3>
+                <h3 className="font-bold text-xs leading-none">{lang === "bn" ? "হাকিম কিউজেডজেড এআই অ্যাসিস্ট্যান্ট" : "Classic World AI Assistant"}</h3>
                 <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
                   <span className="size-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
                   {lang === "bn" ? "অনলাইন এজেন্ট" : "Online Agent"}
@@ -396,7 +396,7 @@ export function FloatingAiChat() {
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-bold text-xs text-foreground">
-                    {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with HakimQzz Audit Agent"}
+                    {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with Classic World Audit Agent"}
                   </h4>
                   <p className="text-[10px] text-muted-foreground leading-normal max-w-[240px] mx-auto">
                     {lang === "bn"

@@ -300,8 +300,8 @@ export default function AuthPage() {
 
         {/* Top brand header */}
         <div className="flex items-center gap-3 relative z-10">
-          <AppLogo size="md" alt="HakimQzz" />
-          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">HakimQzz</span>
+          <AppLogo size="md" alt="Classic World" />
+          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">Classic World</span>
         </div>
 
         {/* Middle minimalist description */}
@@ -311,8 +311,8 @@ export default function AuthPage() {
           </span>
           <h2 className="text-4xl lg:text-5xl font-bold font-serif leading-tight">
             {lang === "bn" 
-              ? `"HakimQzz" ইনভেন্টরি ম্যানেজমেন্ট এবং প্রোডাক্টস সলিউশন`
-              : `"HakimQzz" inventory management and products solutions`}
+              ? `"Classic World" ইনভেন্টরি ম্যানেজমেন্ট এবং প্রোডাক্টস সলিউশন`
+              : `"Classic World" inventory management and products solutions`}
           </h2>
           <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
             {lang === "bn" 
@@ -323,7 +323,7 @@ export default function AuthPage() {
 
         {/* Bottom copyright placeholder */}
         <div className="text-xs text-zinc-400 relative z-10">
-          © {new Date().getFullYear()} HakimQzz. Powered by Classic World.
+          © {new Date().getFullYear()} Classic World. Powered by Classic World.
         </div>
       </div>
 
@@ -333,8 +333,8 @@ export default function AuthPage() {
         {/* Top Row: Language switcher */}
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 md:hidden">
-            <AppLogo size="sm" alt="HakimQzz" />
-            <span className="font-serif text-lg font-bold">HakimQzz</span>
+            <AppLogo size="sm" alt="Classic World" />
+            <span className="font-serif text-lg font-bold">Classic World</span>
           </div>
           <div className="flex gap-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 p-0.5 text-[10px] ml-auto">
             <button 
@@ -490,7 +490,7 @@ export default function AuthPage() {
 
         {/* Footer info (Mobile visible, desktop bottom right) */}
         <div className="text-center text-[10px] text-zinc-400 py-1 space-y-0.5 shrink-0 mt-auto">
-          <p>HakimQzz Inventory Management System. All rights reserved.</p>
+          <p>Classic World Inventory Management System. All rights reserved.</p>
           <p className="text-[9px] text-zinc-500">Powered by Classic World</p>
         </div>
       </div>

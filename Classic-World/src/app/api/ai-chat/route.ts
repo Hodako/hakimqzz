@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       .slice(0, 10);
 
     // Build rich system prompt with real business data & Today's statistics
-    const systemPrompt = `You are an expert AI business advisor and financial analyst for a retail fashion management platform called Classic World (HakimQzz). You have access to live real-time business statistics.
+    const systemPrompt = `You are an expert AI business advisor and financial analyst for a retail fashion management platform called Classic World (Classic World). You have access to live real-time business statistics.
 
 ## 📅 TODAY'S LIVE STATISTICS (${todayLocalStr}):
 - Today's Total Sales Revenue: ৳${todaySalesRevenue.toLocaleString()} (${todaySalesCount} sales transactions today)

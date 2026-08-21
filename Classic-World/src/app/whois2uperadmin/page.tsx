@@ -138,7 +138,7 @@ export default function SuperAdminPage() {
             <div className="p-3 bg-primary/10 rounded-full text-primary">
               <Shield className="size-8 animate-pulse" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-center">HakimQzz Super Admin</h1>
+            <h1 className="text-xl font-bold tracking-tight text-center">Classic World Super Admin</h1>
             <p className="text-xs text-muted-foreground text-center">Enter your administrator credentials to access surveillance</p>
           </div>
           

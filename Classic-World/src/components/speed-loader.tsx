@@ -471,15 +471,14 @@ export function SpeedLoader({ fullScreen = true }: { fullScreen?: boolean }) {
 
       {/* Branding & Counter */}
       <div className="mark">
-        <div className="brand" aria-label="HakimEzy">
-          <span>H</span>
+        <div className="brand" aria-label="Classic World">
+          <span>C</span>
+          <span>l</span>
           <span>a</span>
-          <span>k</span>
+          <span>s</span>
+          <span>s</span>
           <span>i</span>
-          <span>m</span>
-          <span>E</span>
-          <span>z</span>
-          <span>y</span>
+          <span>c</span>
         </div>
         <div className="divider"></div>
         <div className="tagline">

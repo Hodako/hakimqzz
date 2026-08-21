@@ -414,7 +414,7 @@ export default function MorePage() {
               </div>
               <div className="space-y-1">
                 <h4 className="font-bold text-xs text-foreground">
-                  {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with HakimQzz Audit Agent"}
+                  {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with Classic World Audit Agent"}
                 </h4>
                 <p className="text-[10px] text-muted-foreground leading-normal max-w-[240px] mx-auto">
                   {lang === "bn"
@@ -929,7 +929,7 @@ export default function MorePage() {
         window.location.origin.startsWith("capacitor:") ||
         window.location.origin.startsWith("file:")
       );
-      const uploadUrl = isCap ? "https://hakim.qzz.io/api/upload" : "/api/upload";
+      const uploadUrl = isCap ? "https://classicworld-pos.web.app/api/upload" : "/api/upload";
 
       const headers: Record<string, string> = {};
       if (isCap) {

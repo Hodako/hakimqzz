@@ -371,7 +371,7 @@ export default function SettingsPage() {
     try {
       await updateBusinessSettingsFn({
         data: {
-          name: String(fd.get("name") || "HakimQzz"),
+          name: String(fd.get("name") || "Classic World"),
           address: String(fd.get("address") || ""),
           phone_numbers: String(fd.get("phone_numbers") || ""),
           emails: String(fd.get("emails") || ""),
@@ -504,7 +504,7 @@ export default function SettingsPage() {
           <form onSubmit={saveBusiness} className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs">Company Name</Label>
-              <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" />
+              <Input name="name" defaultValue={biz.name} placeholder="Classic World" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{lang === "bn" ? "দোকানের ঠিকানা (Shop Address)" : "Shop Address"}</Label>

@@ -55,7 +55,7 @@ export default function ActivatePage() {
           <AppLogo size="lg" />
           <h1 className="text-xl font-serif font-bold">Activate License</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your business or employee license key to activate HakimQzz.
+            Enter your business or employee license key to activate Classic World.
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3">
@@ -74,7 +74,7 @@ export default function ActivatePage() {
 
           <div className="pt-2 text-center">
             <a
-              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20HakimQzz."
+              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20Classic World."
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontFamily: "'Roboto', sans-serif" }}
