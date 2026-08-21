@@ -11,26 +11,27 @@ export function SpeedLoader({ fullScreen = true }: { fullScreen?: boolean }) {
           : "w-full py-8"
       }`}
     >
-      <div className="relative flex flex-col items-center justify-center">
-        {/* Ape Walk Lottie Animation - Big Size for Phone & PC */}
-        <div className="w-72 h-72 sm:w-96 sm:h-96 md:w-[440px] md:h-[440px] max-w-[92vw] flex items-center justify-center">
+      <div className="relative flex flex-col items-center justify-center w-full px-4">
+        {/* Ape Walk Lottie Animation - Big, Scaled Size on Mobile and PC */}
+        <div className="w-[88vw] max-w-[480px] h-[48vh] max-h-[480px] min-h-[280px] flex items-center justify-center">
           <DotLottieReact
             src="/ape-walk.lottie"
             loop
             autoplay
+            style={{ width: "100%", height: "100%" }}
             className="w-full h-full object-contain"
           />
         </div>
 
         {/* Branding & Loading Status */}
-        <div className="mt-2 flex flex-col items-center gap-1.5 text-center">
-          <span className="font-serif text-xl sm:text-2xl font-bold tracking-wide text-foreground">
+        <div className="mt-3 flex flex-col items-center gap-1.5 text-center">
+          <span className="font-serif text-2xl sm:text-3xl font-bold tracking-wide text-foreground">
             Classic World
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <span className="inline-block size-2 rounded-full bg-primary animate-pulse" />
             <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-              Loading...
+              Loading workspace...
             </p>
           </div>
         </div>
