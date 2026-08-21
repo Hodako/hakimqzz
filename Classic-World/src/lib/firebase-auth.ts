@@ -2,7 +2,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
-  GoogleAuthProvider, 
+  GoogleAuthProvider,
+  OAuthProvider,
   signOut, 
   onAuthStateChanged,
   updateProfile,
@@ -22,6 +23,9 @@ export interface FirebaseUserProfile {
 }
 
 const googleProvider = new GoogleAuthProvider();
+const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 /**
  * Sign in with Firebase Email and Password
@@ -30,26 +34,31 @@ export async function loginWithFirebase(email: string, pass: string): Promise<Fi
   const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
   const user = cred.user;
   
-  // Read or create firestore user profile
-  const userDocRef = doc(db, "users", user.uid);
-  const snap = await getDoc(userDocRef);
-  
-  if (snap.exists()) {
-    return snap.data() as FirebaseUserProfile;
+  try {
+    const userDocRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      return snap.data() as FirebaseUserProfile;
+    }
+  } catch (err) {
+    console.warn("Firestore user lookup skipped:", err);
   }
   
-  const newProfile: FirebaseUserProfile = {
+  const profile: FirebaseUserProfile = {
     uid: user.uid,
     email: user.email || email,
     fullName: user.displayName || email.split("@")[0],
     businessName: "Classic World",
     role: "owner",
-    activated: true,
-    createdAt: serverTimestamp(),
+    activated: false,
+    createdAt: new Date().toISOString(),
   };
   
-  await setDoc(userDocRef, newProfile, { merge: true });
-  return newProfile;
+  try {
+    await setDoc(doc(db, "users", user.uid), profile, { merge: true });
+  } catch (_) {}
+  
+  return profile;
 }
 
 /**
@@ -60,21 +69,23 @@ export async function signupWithFirebase(email: string, pass: string, fullName: 
   const user = cred.user;
   
   if (fullName) {
-    await updateProfile(user, { displayName: fullName });
+    await updateProfile(user, { displayName: fullName }).catch(() => {});
   }
   
-  const userDocRef = doc(db, "users", user.uid);
   const newProfile: FirebaseUserProfile = {
     uid: user.uid,
     email: user.email || email,
     fullName: fullName || email.split("@")[0],
     businessName: businessName || "Classic World",
     role: "owner",
-    activated: true,
-    createdAt: serverTimestamp(),
+    activated: false,
+    createdAt: new Date().toISOString(),
   };
   
-  await setDoc(userDocRef, newProfile, { merge: true });
+  try {
+    await setDoc(doc(db, "users", user.uid), newProfile, { merge: true });
+  } catch (_) {}
+  
   return newProfile;
 }
 
@@ -85,24 +96,64 @@ export async function loginWithFirebaseGoogle(): Promise<FirebaseUserProfile> {
   const cred = await signInWithPopup(auth, googleProvider);
   const user = cred.user;
   
-  const userDocRef = doc(db, "users", user.uid);
-  const snap = await getDoc(userDocRef);
-  
-  if (snap.exists()) {
-    return snap.data() as FirebaseUserProfile;
+  try {
+    const userDocRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      return snap.data() as FirebaseUserProfile;
+    }
+  } catch (err) {
+    console.warn("Firestore user check warning:", err);
   }
   
   const newProfile: FirebaseUserProfile = {
     uid: user.uid,
     email: user.email || "",
-    fullName: user.displayName || "Classic World Admin",
+    fullName: user.displayName || "Classic World User",
     businessName: "Classic World",
     role: "owner",
-    activated: true,
-    createdAt: serverTimestamp(),
+    activated: false, // User needs to enter license key to activate
+    createdAt: new Date().toISOString(),
   };
   
-  await setDoc(userDocRef, newProfile, { merge: true });
+  try {
+    await setDoc(doc(db, "users", user.uid), newProfile, { merge: true });
+  } catch (_) {}
+  
+  return newProfile;
+}
+
+/**
+ * Sign in with Apple ID Popup
+ */
+export async function loginWithFirebaseApple(): Promise<FirebaseUserProfile> {
+  const cred = await signInWithPopup(auth, appleProvider);
+  const user = cred.user;
+  
+  try {
+    const userDocRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      return snap.data() as FirebaseUserProfile;
+    }
+  } catch (err) {
+    console.warn("Firestore Apple user check warning:", err);
+  }
+  
+  const newProfile: FirebaseUserProfile = {
+    uid: user.uid,
+    email: user.email || "",
+    fullName: user.displayName || "Apple User",
+    businessName: "Classic World",
+    role: "owner",
+    activated: false, // User needs to enter license key to activate
+    createdAt: new Date().toISOString(),
+  };
+  
+  try {
+    await setDoc(doc(db, "users", user.uid), newProfile, { merge: true });
+  } catch (_) {}
+  
   return newProfile;
 }
 
@@ -110,7 +161,7 @@ export async function loginWithFirebaseGoogle(): Promise<FirebaseUserProfile> {
  * Sign out from Firebase
  */
 export async function logoutFromFirebase(): Promise<void> {
-  await signOut(auth);
+  await signOut(auth).catch(() => {});
 }
 
 /**

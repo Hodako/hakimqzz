@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { loginFn, registerFn } from "@/lib/rpc";
 import type { AuthUser } from "@/hooks/use-auth";
-import { loginWithFirebase, signupWithFirebase, loginWithFirebaseGoogle } from "@/lib/firebase-auth";
+import { loginWithFirebase, signupWithFirebase, loginWithFirebaseGoogle, loginWithFirebaseApple } from "@/lib/firebase-auth";
 
 export default function AuthPage() {
   const { user, loading, login } = useAuth();
@@ -92,7 +92,7 @@ export default function AuthPage() {
         full_name: fbUser.fullName,
         business_name: fbUser.businessName || "Classic World",
         role: "owner",
-        activated: true,
+        activated: fbUser.activated || false,
         business_id: null,
         logo_url: "/classic-world.svg",
       };
@@ -100,6 +100,29 @@ export default function AuthPage() {
       afterAuth(mockAuthUser);
     } catch (err: any) {
       toast.error(err?.message || "Google sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAppleSignIn() {
+    setBusy(true);
+    try {
+      const fbUser = await loginWithFirebaseApple();
+      const mockAuthUser: AuthUser = {
+        id: fbUser.uid,
+        email: fbUser.email,
+        full_name: fbUser.fullName,
+        business_name: fbUser.businessName || "Classic World",
+        role: "owner",
+        activated: fbUser.activated || false,
+        business_id: null,
+        logo_url: "/classic-world.svg",
+      };
+      toast.success(lang === "bn" ? "অ্যাপল লগইন সফল হয়েছে!" : "Apple login successful!");
+      afterAuth(mockAuthUser);
+    } catch (err: any) {
+      toast.error(err?.message || "Apple sign-in failed");
     } finally {
       setBusy(false);
     }
@@ -473,7 +496,7 @@ export default function AuthPage() {
                 </svg>
                 Google 
               </button>
-              <button type="button" onClick={() => toast.info("Apple sign-in is disabled")} className="btn apple flex-1 border-0">
+              <button type="button" onClick={handleAppleSignIn} disabled={busy} className="btn apple flex-1 border-0">
                 <svg version="1.1" height="16" width="16" id="Capa_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22.773 22.773" className="size-4 fill-zinc-900 dark:fill-zinc-100">
                   <g>
                     <g>
