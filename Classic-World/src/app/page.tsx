@@ -18,6 +18,11 @@ export default function IndexPage() {
       } else {
         router.replace("/dashboard");
       }
+    } else {
+      const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+      if (!token) {
+        router.replace("/auth");
+      }
     }
   }, [user, loading, router]);
 
