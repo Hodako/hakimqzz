@@ -1,6 +1,7 @@
 /** Lightweight localStorage cache for instant UI hydration. */
 
-const AUTH_KEY = "hz-auth-profile";
+const AUTH_KEY = "classicworld_auth_profile";
+const LEGACY_AUTH_KEY = "hz-auth-profile";
 const BRAND_KEY = "hz-brand";
 
 export interface AuthProfileCache {
@@ -13,6 +14,7 @@ export interface AuthProfileCache {
   business_name: string;
   logo_url: string;
   avatar_url?: string;
+  license_key?: string | null;
   updatedAt: number;
 }
 
@@ -47,19 +49,25 @@ function write<T extends object>(key: string, data: T) {
   }
 }
 
-const PROFILE_TTL = 7 * 24 * 60 * 60 * 1000;
-const BRAND_TTL = 24 * 60 * 60 * 1000;
+const PROFILE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const BRAND_TTL = 30 * 24 * 60 * 60 * 1000;
 
 export function readAuthProfile(): AuthProfileCache | null {
-  return read<AuthProfileCache>(AUTH_KEY, PROFILE_TTL);
+  return read<AuthProfileCache>(AUTH_KEY, PROFILE_TTL) || read<AuthProfileCache>(LEGACY_AUTH_KEY, PROFILE_TTL);
 }
 
 export function writeAuthProfile(profile: Omit<AuthProfileCache, "updatedAt">) {
   write(AUTH_KEY, profile);
+  write(LEGACY_AUTH_KEY, profile);
 }
 
 export function clearAuthProfile() {
-  if (typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(LEGACY_AUTH_KEY);
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("active_profile");
+  }
 }
 
 export function readBrand(): BrandCache | null {
@@ -69,3 +77,4 @@ export function readBrand(): BrandCache | null {
 export function writeBrand(brand: { name: string; logo_url: string }) {
   write(BRAND_KEY, brand);
 }
+

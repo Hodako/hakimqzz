@@ -86,17 +86,22 @@ export default function AuthPage() {
     setBusy(true);
     try {
       const fbUser = await loginWithFirebaseGoogle();
+      const isLicensed = Boolean(fbUser.activated && (fbUser as any).license_key);
       const mockAuthUser: AuthUser = {
         id: fbUser.uid,
         email: fbUser.email,
         full_name: fbUser.fullName,
         business_name: fbUser.businessName || "Classic World",
         role: "owner",
-        activated: fbUser.activated || false,
+        activated: isLicensed,
         business_id: null,
-        logo_url: "/classic-world.svg",
+        logo_url: "/logo.svg",
       };
-      toast.success(lang === "bn" ? "গুগল লগইন সফল হয়েছে!" : "Google login successful!");
+      if (isLicensed) {
+        toast.success(lang === "bn" ? "গুগল লগইন সফল হয়েছে!" : "Google login successful!");
+      } else {
+        toast.info(lang === "bn" ? "লগইন সফল — অনুগ্রহ করে লাইসেন্স কী প্রদান করুন" : "Login successful — please enter your license key");
+      }
       afterAuth(mockAuthUser);
     } catch (err: any) {
       toast.error(err?.message || "Google sign-in failed");
@@ -109,17 +114,22 @@ export default function AuthPage() {
     setBusy(true);
     try {
       const fbUser = await loginWithFirebaseApple();
+      const isLicensed = Boolean(fbUser.activated && (fbUser as any).license_key);
       const mockAuthUser: AuthUser = {
         id: fbUser.uid,
         email: fbUser.email,
         full_name: fbUser.fullName,
         business_name: fbUser.businessName || "Classic World",
         role: "owner",
-        activated: fbUser.activated || false,
+        activated: isLicensed,
         business_id: null,
-        logo_url: "/classic-world.svg",
+        logo_url: "/logo.svg",
       };
-      toast.success(lang === "bn" ? "অ্যাপল লগইন সফল হয়েছে!" : "Apple login successful!");
+      if (isLicensed) {
+        toast.success(lang === "bn" ? "অ্যাপল লগইন সফল হয়েছে!" : "Apple login successful!");
+      } else {
+        toast.info(lang === "bn" ? "লগইন সফল — অনুগ্রহ করে লাইসেন্স কী প্রদান করুন" : "Login successful — please enter your license key");
+      }
       afterAuth(mockAuthUser);
     } catch (err: any) {
       toast.error(err?.message || "Apple sign-in failed");

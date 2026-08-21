@@ -1,11 +1,34 @@
 import { db, auth } from "./firebase";
 import { doc, updateDoc, setDoc } from "firebase/firestore";
+import { fsValidateAndActivateLicense } from "./firestore-service";
 
 export async function activateLicenseFn(args: { data: { licenseKey: string } }) {
   const licenseKey = (args?.data?.licenseKey || "").trim();
   if (!licenseKey) {
     throw new Error("License key cannot be empty.");
   }
+
+  let userUid: string | undefined = undefined;
+  let userEmail: string | undefined = undefined;
+
+  // Retrieve current user ID/email from local storage or auth if available
+  if (typeof window !== "undefined") {
+    const raw = window.localStorage.getItem("classicworld_auth_profile");
+    if (raw) {
+      try {
+        const user = JSON.parse(raw);
+        userUid = user.id;
+        userEmail = user.email;
+      } catch (_) {}
+    }
+  }
+
+  if (!userUid && auth.currentUser) {
+    userUid = auth.currentUser.uid;
+    userEmail = auth.currentUser.email || undefined;
+  }
+
+  const result = await fsValidateAndActivateLicense(licenseKey, userUid, userEmail);
 
   // Update in localStorage
   if (typeof window !== "undefined") {
@@ -14,21 +37,13 @@ export async function activateLicenseFn(args: { data: { licenseKey: string } }) 
       try {
         const user = JSON.parse(raw);
         user.activated = true;
-        user.license_key = licenseKey;
+        user.license_key = result.licenseKey;
+        if (result.licenseKey.startsWith("EMP-")) {
+          user.role = "employee";
+        }
         window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(user));
       } catch (_) {}
     }
-  }
-
-  // Update in Firestore if logged in
-  try {
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      const userRef = doc(db, "users", currentUser.uid);
-      await setDoc(userRef, { activated: true, license_key: licenseKey }, { merge: true });
-    }
-  } catch (err) {
-    console.warn("Firestore license activation update skipped:", err);
   }
 
   return { success: true, message: "License activated successfully!" };

@@ -947,7 +947,7 @@ export default function Dashboard() {
               const firstAlert = activeRemindersList[0];
               new Notification(lang === "bn" ? "রিমাইন্ডার সতর্কতা" : "Reminder Alert", {
                 body: firstAlert.title,
-                icon: "/logo.png",
+                icon: "/logo.svg",
               });
             }
           });

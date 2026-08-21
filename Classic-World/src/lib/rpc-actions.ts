@@ -107,7 +107,7 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     invoice_page_size: (business?.invoice_page_size as string) || "80mm",
     invoice_page_width: (business?.invoice_page_width as string) || "",
     invoice_page_height: (business?.invoice_page_height as string) || "",
-    logo_url: (business?.logo_url as string) || "/logo.png",
+    logo_url: (business?.logo_url as string) || "/logo.svg",
     avatar_url: (user.avatar_url as string) || "",
     permissions: (user.role === "owner" ? OWNER_PERMISSIONS : (user.permissions as PermissionSet)) || DEFAULT_EMPLOYEE_PERMISSIONS,
     profiles,

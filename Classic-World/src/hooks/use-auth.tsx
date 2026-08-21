@@ -94,8 +94,7 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
 function getInitialUser(): AuthUser | null {
   if (typeof window === "undefined") return null;
   const cached = readAuthProfile();
-  const tokenExists = !!window.localStorage.getItem("auth_token");
-  if (cached && tokenExists) {
+  if (cached) {
     return profileToUser(cached);
   }
   return null;
@@ -105,9 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   const [loading, setLoading] = useState(() => {
     if (typeof window === "undefined") return true;
-    const tokenExists = !!window.localStorage.getItem("auth_token");
     const cached = readAuthProfile();
-    if (tokenExists && cached) return false;
+    if (cached) return false;
+    const tokenExists = !!window.localStorage.getItem("auth_token");
     if (!tokenExists) return false;
     return true;
   });
@@ -118,14 +117,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function checkUser() {
     try {
       const data = await getMeFn();
-      const next = data.user as AuthUser | null;
+      const next = data?.user as AuthUser | null;
       if (next) {
         setUser(next);
         cacheUser(next);
         writeBrand({ name: next.business_name, logo_url: next.logo_url });
-      } else if (!window.localStorage.getItem("auth_token")) {
-        setUser(null);
-        clearAuthProfile();
+      } else {
+        const local = readAuthProfile();
+        if (!local && !window.localStorage.getItem("auth_token")) {
+          setUser(null);
+          clearAuthProfile();
+        }
       }
     } catch (err: any) {
       console.warn("Background auth refresh info:", err?.message || err);
@@ -137,6 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void checkUser(); }, []);
 
   const login = (newUser: AuthUser) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("auth_token", "cw_token_" + (newUser.id || Date.now()));
+    }
     setUser(newUser);
     cacheUser(newUser);
     writeBrand({ name: newUser.business_name, logo_url: newUser.logo_url });

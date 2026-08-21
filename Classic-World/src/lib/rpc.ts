@@ -27,37 +27,71 @@ async function executeFirestoreAction(actionName: string, args: any) {
   switch (actionName) {
     // Auth & Session
     case "getMeFn": {
-      const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
-      if (!token) return { user: null };
-      const stored = typeof window !== "undefined" ? window.localStorage.getItem("classicworld_auth_profile") : null;
-      if (stored) {
-        try { return { user: JSON.parse(stored) }; } catch (_) {}
+      if (typeof window !== "undefined") {
+        const stored = window.localStorage.getItem("classicworld_auth_profile") || window.localStorage.getItem("hz-auth-profile");
+        const token = window.localStorage.getItem("auth_token");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed && (parsed.id || parsed.email)) {
+              if (!token) {
+                window.localStorage.setItem("auth_token", "cw_token_" + (parsed.id || Date.now()));
+              }
+              return { user: parsed };
+            }
+          } catch (_) {}
+        }
       }
       return { user: null };
     }
     case "loginFn":
     case "registerFn": {
-      const email = data?.email || "admin@classicworld.com";
-      const user = {
-        id: "cw_" + Date.now(),
-        email: email,
-        full_name: data?.fullName || "Classic World Admin",
-        business_name: "Classic World",
-        role: "owner",
-        activated: true,
-        logo_url: "/classic-world.svg",
-      };
+      const email = (data?.email || "admin@classicworld.com").trim().toLowerCase();
+      let isActivated = false;
+      let existingProfile: any = null;
+
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("auth_token", "cw_token_" + Date.now());
-        window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(user));
+        const stored = window.localStorage.getItem("classicworld_auth_profile") || window.localStorage.getItem("hz-auth-profile");
+        if (stored) {
+          try {
+            existingProfile = JSON.parse(stored);
+            if (existingProfile.email?.toLowerCase() === email && existingProfile.activated && existingProfile.license_key) {
+              isActivated = true;
+            }
+          } catch (_) {}
+        }
       }
-      return { success: true, user, token: "cw_token_" + Date.now() };
+
+      if (existingProfile?.license_key && existingProfile?.activated) {
+        isActivated = true;
+      } else {
+        isActivated = false;
+      }
+
+      const user = {
+        id: existingProfile?.id || "cw_" + Date.now(),
+        email: email,
+        full_name: data?.fullName || existingProfile?.full_name || email.split("@")[0] || "Classic World Admin",
+        business_name: "Classic World",
+        role: existingProfile?.role || (existingProfile?.license_key?.startsWith("EMP-") ? "employee" : "owner"),
+        activated: isActivated,
+        license_key: existingProfile?.license_key || null,
+        logo_url: "/logo.svg",
+      };
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("auth_token", "cw_token_" + (user.id || Date.now()));
+        window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(user));
+        window.localStorage.setItem("hz-auth-profile", JSON.stringify(user));
+      }
+      return { success: true, user, token: "cw_token_" + (user.id || Date.now()) };
     }
     case "logoutFn": {
       if (typeof window !== "undefined") {
         window.localStorage.removeItem("auth_token");
         window.localStorage.removeItem("active_profile");
         window.localStorage.removeItem("classicworld_auth_profile");
+        window.localStorage.removeItem("hz-auth-profile");
       }
       return { success: true };
     }

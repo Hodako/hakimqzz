@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
@@ -17,7 +17,23 @@ export const firebaseConfig = {
 // Initialize Firebase client instance
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+function initFirestoreDb(): Firestore {
+  try {
+    if (typeof window !== "undefined") {
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        })
+      });
+    }
+  } catch (_) {
+    // If already initialized or not supported, fallback to getFirestore
+  }
+  return getFirestore(app);
+}
+
+export const db = initFirestoreDb();
 export const storage = getStorage(app);
 
 // Safe Analytics initialization for browser environment
@@ -27,3 +43,4 @@ export const initAnalytics = async () => {
   }
   return null;
 };
+

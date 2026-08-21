@@ -5,7 +5,6 @@ const PRECACHE_ASSETS = [
   "/manifest.json",
   "/classic-world.svg",
   "/logo.svg",
-  "/ape-walk.lottie",
   "/background.avif",
 ];
 

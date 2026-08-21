@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description: "Smart Inventory, Sales, POS & Accounting Management System for Classic World.",
   authors: [{ name: "Classic World" }],
   icons: {
-    icon: "/classic-world.svg",
-    apple: "/classic-world.svg",
+    icon: "/logo.svg",
+    apple: "/logo.svg",
   },
   manifest: "/manifest.json",
   appleWebApp: {
@@ -48,7 +48,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Classic World" />
-        <link rel="apple-touch-icon" href="/classic-world.svg" />
+        <link rel="apple-touch-icon" href="/logo.svg" />
         <link rel="manifest" href="/manifest.json" />
         <script
           dangerouslySetInnerHTML={{

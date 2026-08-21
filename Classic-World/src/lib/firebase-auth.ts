@@ -38,7 +38,11 @@ export async function loginWithFirebase(email: string, pass: string): Promise<Fi
     const userDocRef = doc(db, "users", user.uid);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
-      return snap.data() as FirebaseUserProfile;
+      const data = snap.data() as FirebaseUserProfile & { license_key?: string };
+      return {
+        ...data,
+        activated: Boolean(data.activated && data.license_key),
+      };
     }
   } catch (err) {
     console.warn("Firestore user lookup skipped:", err);
@@ -100,7 +104,11 @@ export async function loginWithFirebaseGoogle(): Promise<FirebaseUserProfile> {
     const userDocRef = doc(db, "users", user.uid);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
-      return snap.data() as FirebaseUserProfile;
+      const data = snap.data() as FirebaseUserProfile & { license_key?: string };
+      return {
+        ...data,
+        activated: Boolean(data.activated && data.license_key),
+      };
     }
   } catch (err) {
     console.warn("Firestore user check warning:", err);
@@ -134,7 +142,11 @@ export async function loginWithFirebaseApple(): Promise<FirebaseUserProfile> {
     const userDocRef = doc(db, "users", user.uid);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
-      return snap.data() as FirebaseUserProfile;
+      const data = snap.data() as FirebaseUserProfile & { license_key?: string };
+      return {
+        ...data,
+        activated: Boolean(data.activated && data.license_key),
+      };
     }
   } catch (err) {
     console.warn("Firestore Apple user check warning:", err);

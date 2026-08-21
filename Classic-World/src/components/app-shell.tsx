@@ -251,7 +251,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {group.items.map(({ to, labelKey, icon: Icon }) => (
-                      <SidebarMenuItem key={to}>
+                      <SidebarMenuItem key={`${to}-${labelKey}`}>
                         <SidebarMenuButton
                           isActive={isActive(to)}
                           tooltip={t(labelKey)}
@@ -345,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {resolved === "dark" ? <Sun className="icon-sm" /> : <Moon className="icon-sm" />}
               </Button>
               {!isMobile && (
-                <span className="text-[10px] text-muted-foreground mr-1 hidden lg:block">
+                <span className="text-[10px] text-muted-foreground mr-1 hidden lg:block" suppressHydrationWarning>
                   {new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}
                 </span>
               )}
@@ -405,7 +405,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const active = isActive(to);
               return (
                 <Link
-                  key={to}
+                  key={`${to}-${labelKey}`}
                   href={to}
                   prefetch={true}
                   className={`flex flex-col items-center justify-center py-1 gap-0.5 text-[10px] font-medium transition-colors active:scale-95 ${

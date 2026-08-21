@@ -58,7 +58,7 @@ export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
     }
   };
 
-  let logoSrc = src ?? user?.logo_url ?? "/classic-world.svg";
+  let logoSrc = src ?? user?.logo_url ?? "/logo.svg";
 
   const logoAlt = alt ?? user?.business_name ?? "Classic World";
 
@@ -69,7 +69,7 @@ export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
       onClick={handleClick}
       className={cn("w-auto object-contain cursor-pointer select-none", sizes[size], className)}
       onError={(e) => { 
-        (e.target as HTMLImageElement).src = "/classic-world.svg"; 
+        (e.target as HTMLImageElement).src = "/logo.svg"; 
       }}
     />
   );

@@ -991,7 +991,7 @@ export default function MorePage() {
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => (
-              <Link key={to} href={to} className="block group">
+              <Link key={`${to}-${labelKey}`} href={to} className="block group">
                 <Card className="p-3.5 h-full flex flex-col justify-between gap-3 hover:border-primary/30 transition-all active:scale-[0.98] beveled-card bg-card/60 backdrop-blur-sm">
                   <div className="size-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary grid place-items-center shrink-0 border border-primary/10 shadow-sm">
                     <Icon className="size-4.5" />
@@ -1015,7 +1015,7 @@ export default function MorePage() {
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {visibleFin.map(({ to, labelKey, desc, icon: Icon, imageUrl }: any) => (
-              <Link key={to} href={to} className="block group">
+              <Link key={`${to}-${labelKey}`} href={to} className="block group">
                 <Card className="p-3.5 h-full flex flex-col justify-between gap-3 hover:border-indigo-500/30 transition-all active:scale-[0.98] beveled-card bg-card/60 backdrop-blur-sm">
                   <div className="size-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 text-indigo-600 dark:text-indigo-400 grid place-items-center shrink-0 border border-indigo-500/10 shadow-sm overflow-hidden">
                     {imageUrl ? (
@@ -1048,7 +1048,7 @@ export default function MorePage() {
           <Card className="overflow-hidden border border-white/20 dark:border-white/5 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
             <div className="divide-y divide-zinc-200/50 dark:divide-zinc-800/40">
               {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => (
-                <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
+                <Link key={`${to}-${labelKey}`} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
                   <div className="flex items-center gap-3">
                     <div className="size-8.5 rounded-xl bg-primary/10 text-primary grid place-items-center border border-primary/15 shadow-sm">
                       <Icon className="size-4" />
@@ -1075,7 +1075,7 @@ export default function MorePage() {
           <Card className="overflow-hidden border border-white/20 dark:border-white/5 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
             <div className="divide-y divide-zinc-200/50 dark:divide-zinc-800/40">
               {visibleFin.map(({ to, labelKey, desc, icon: Icon, imageUrl }: any) => (
-                <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
+                <Link key={`${to}-${labelKey}`} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
                   <div className="flex items-center gap-3">
                     <div className="size-8.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 grid place-items-center border border-indigo-500/15 shadow-sm overflow-hidden">
                       {imageUrl ? (
