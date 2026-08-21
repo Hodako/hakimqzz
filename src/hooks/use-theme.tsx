@@ -45,7 +45,7 @@ function applyTheme(resolved: "light" | "dark") {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
   const [accentColor, setAccentColorState] = useState<AccentColor>("mechanix");
   const [bgStyle, setBgStyleState] = useState<BgStyle>("default");
 
@@ -54,6 +54,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const savedTheme = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
     if (savedTheme === "light" || savedTheme === "dark" || savedTheme === "system") {
       setThemeState(savedTheme);
+    } else {
+      setThemeState("light");
     }
     const savedAccent = localStorage.getItem(ACCENT_KEY) as AccentColor | null;
     if (savedAccent && savedAccent in ACCENTS) {
