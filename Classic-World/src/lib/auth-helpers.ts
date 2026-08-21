@@ -6,7 +6,7 @@ async function getSecret() {
   const { default: process } = await import("node:process");
   const { TextEncoder } = globalThis;
   return new TextEncoder().encode(
-    process.env.JWT_SECRET || "dreamfashion-fallback-secret-key-123456"
+    process.env.JWT_SECRET || "classicworld-fallback-secret-key-123456"
   );
 }
 

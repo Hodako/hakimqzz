@@ -134,7 +134,7 @@ export function BarcodeScannerDialog({
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [isZoomed, setIsZoomed] = useState<boolean>(false);
 
-  const PERM_KEY = "dreamfashion_camera_permission_granted";
+  const PERM_KEY = "classicworld_camera_permission_granted";
 
   // ── Stop camera stream & cancel decode loop ─────────────────────────────
   const stopScanner = useCallback(() => {
