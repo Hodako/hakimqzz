@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/session";
 import { getDb } from "@/lib/db";
 
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "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";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 // Groq High-Speed Free Models Fallback Array
