@@ -1156,12 +1156,13 @@ export async function createSomitiFn(input: { data: { kind: string; amount: numb
   const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
   await db.collection("somiti_entries").insertOne(doc as any);
 
-  // Sync to cashbox — ALL somiti entries take money out of the business cashbox
-  // (samity contributions always leave the business, regardless of deposit/withdraw kind)
+  // Sync to cashbox — Samity is a savings asset, not an operational expense (does NOT cut from net profit)
+  // Depositing into Samity reduces cash in cashbox (withdraw); withdrawing from Samity returns cash to cashbox (deposit)
+  const cashboxKind = data.kind === "withdraw" ? "deposit" : "withdraw";
   await insertCashboxEntry(db, session.ownerId, {
-    kind: "withdraw",
+    kind: cashboxKind,
     amount: Number(data.amount),
-    note: data.note || "Samity payment",
+    note: data.note ? `Samity (${data.kind}): ${data.note}` : `Samity ${data.kind}`,
     ref_id: id,
   });
 
@@ -1178,13 +1179,13 @@ export async function updateSomitiFn(input: { data: { id: string; kind: string; 
     { $set: updates }
   );
 
-  // Keep cashbox entry in sync — always withdraw since samity always takes money out
+  const cashboxKind = data.kind === "withdraw" ? "deposit" : "withdraw";
   await db.collection("cashbox_entries").updateOne(
     { owner_id: session.ownerId, ref_id: id },
     { $set: {
-        kind: "withdraw",
+        kind: cashboxKind,
         amount: Number(data.amount),
-        note: data.note || "Samity payment",
+        note: data.note ? `Samity (${data.kind}): ${data.note}` : `Samity ${data.kind}`,
       }
     }
   );
