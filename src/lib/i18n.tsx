@@ -238,6 +238,13 @@ const dict = {
   key_metrics: { bn: "মূল হিসাবসমূহ", en: "Key Metrics" },
   ai_audits: { bn: "এআই অডিট", en: "AI Audits" },
   ai_audits_desc: { bn: "এআই এজেন্টের সাথে ব্যবসার আর্থিক ও স্টক বিশ্লেষণ", en: "Analyze financials & stock with AI" },
+  bank_management: { bn: "ব্যাংক ও ঋণ হিসাব", en: "Bank & Loans" },
+  bank_management_desc: { bn: "ব্যাংক একাউন্ট, ঋণ গ্রহণ ও ক্যাশবক্স থেকে কিস্তি পরিশোধ", en: "Bank accounts, loans & installment repayments" },
+  bank_accounts: { bn: "ব্যাংক একাউন্ট", en: "Bank Accounts" },
+  bank_loans: { bn: "ব্যাংক ঋণ ও ধার", en: "Bank Loans & Lending" },
+  add_bank_account: { bn: "নতুন ব্যাংক একাউন্ট", en: "Add Bank Account" },
+  take_loan: { bn: "ঋণ গ্রহণ", en: "Take Loan" },
+  pay_installment: { bn: "কিস্তি পরিশোধ", en: "Pay Installment" },
 } as const;
 
 export type DictKey = keyof typeof dict;

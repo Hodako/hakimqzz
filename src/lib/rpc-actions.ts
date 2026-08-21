@@ -72,9 +72,13 @@ async function insertCashboxEntry(
 
 function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
   if (data.type === "credit") return Number(data.paid_amount) || 0;
-  if (data.type === "cash") return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
-  // Online sales: admin does not receive money immediately, so not added to cashbox
-  return 0;
+  // Cash, bKash, Bank, Nagad, Card, POS payments all deposit into Cashbox
+  if (data.type === "cash" || data.type === "bkash" || data.type === "bank" || data.type === "nagad" || data.type === "card" || data.type === "pos") {
+    return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
+  }
+  // Online deliveries (courier pending): only if paid_amount > 0
+  if (data.type === "online") return Number(data.paid_amount) || 0;
+  return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
 }
 
 async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
@@ -483,10 +487,11 @@ export async function createSaleFn(input: { data: { product_id?: string | null; 
   }
   const cashAmt = saleCashboxAmount(data);
   if (cashAmt > 0) {
+    const methodTag = data.type ? ` [Paid by ${data.type.toUpperCase()}]` : "";
     await insertCashboxEntry(db, session.ownerId, {
       kind: "sale",
       amount: cashAmt,
-      note: `Sale: ${data.product_name}`,
+      note: `Sale${methodTag}: ${data.product_name}${data.note ? ` - ${data.note}` : ""}`,
       ref_id: id,
       created_at: doc.created_at,
     });
@@ -2200,4 +2205,195 @@ export async function repairCashboxDbFn() {
   }
 
   return { success: true, repairedCount };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bank Accounts & Loan Management Engine
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getBankAccountsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const accounts = await db.collection("bank_accounts").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return accounts.map(a => ({ ...a, id: a._id.toString() }));
+}
+
+export async function createBankAccountFn(input: { data: { bank_name: string; account_name: string; account_number: string; branch?: string | null; balance?: number; note?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    bank_name: data.bank_name,
+    account_name: data.account_name,
+    account_number: data.account_number,
+    branch: data.branch || null,
+    balance: Number(data.balance) || 0,
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("bank_accounts").insertOne(doc as any);
+  return { ...doc, id };
+}
+
+export async function updateBankAccountFn(input: { data: { id: string; bank_name?: string; account_name?: string; account_number?: string; branch?: string | null; balance?: number; note?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const { id, ...updates } = data;
+  await db.collection("bank_accounts").updateOne(
+    { _id: id as any, owner_id: session.ownerId },
+    { $set: updates }
+  );
+  const updated = await db.collection("bank_accounts").findOne({ _id: id as any });
+  return { ...updated, id };
+}
+
+export async function deleteBankAccountFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("bank_accounts").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function createBankTransactionFn(input: { data: { account_id: string; type: "deposit" | "withdraw"; amount: number; note?: string | null; sync_cashbox?: boolean } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const amount = Number(data.amount) || 0;
+  const txId = crypto.randomUUID();
+
+  const balanceDelta = data.type === "deposit" ? amount : -amount;
+  await db.collection("bank_accounts").updateOne(
+    { _id: data.account_id as any, owner_id: session.ownerId },
+    { $inc: { balance: balanceDelta } }
+  );
+
+  const txDoc = {
+    _id: txId,
+    owner_id: session.ownerId,
+    account_id: data.account_id,
+    type: data.type,
+    amount,
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("bank_transactions").insertOne(txDoc as any);
+
+  if (data.sync_cashbox !== false) {
+    const cashboxKind = data.type === "deposit" ? "withdraw" : "deposit";
+    const noteText = data.type === "deposit" 
+      ? `Bank Deposit: ${data.note || "Transfer to bank"}`
+      : `Bank Withdrawal: ${data.note || "Cash from bank"}`;
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: cashboxKind,
+      amount,
+      note: noteText,
+      ref_id: txId,
+    });
+  }
+
+  return { success: true, id: txId };
+}
+
+export async function getBankLoansFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const loans = await db.collection("bank_loans").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return loans.map(l => ({ ...l, id: l._id.toString() }));
+}
+
+export async function createBankLoanFn(input: { data: { bank_name: string; loan_title: string; principal_amount: number; total_repayable: number; total_installments: number; installment_amount: number; receive_to_cashbox?: boolean; note?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const loanId = crypto.randomUUID();
+
+  const doc = {
+    _id: loanId,
+    owner_id: session.ownerId,
+    bank_name: data.bank_name,
+    loan_title: data.loan_title,
+    principal_amount: Number(data.principal_amount) || 0,
+    total_repayable: Number(data.total_repayable) || Number(data.principal_amount) || 0,
+    total_installments: Number(data.total_installments) || 1,
+    installment_amount: Number(data.installment_amount) || 0,
+    paid_amount: 0,
+    paid_installments: 0,
+    status: "active",
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+
+  await db.collection("bank_loans").insertOne(doc as any);
+
+  if (data.receive_to_cashbox) {
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "deposit",
+      amount: Number(data.principal_amount),
+      note: `Bank Loan Disbursement: ${data.bank_name} (${data.loan_title})`,
+      ref_id: loanId,
+    });
+  }
+
+  return { ...doc, id: loanId };
+}
+
+export async function payBankLoanInstallmentFn(input: { data: { loan_id: string; amount: number; payment_method?: string; note?: string | null } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const amount = Number(data.amount) || 0;
+  const pmtId = crypto.randomUUID();
+
+  const loan = await db.collection("bank_loans").findOne({ _id: data.loan_id as any, owner_id: session.ownerId });
+  if (!loan) throw new Error("Loan not found");
+
+  const newPaidAmount = (Number(loan.paid_amount) || 0) + amount;
+  const newPaidInstallments = (Number(loan.paid_installments) || 0) + 1;
+  const isFullyPaid = newPaidAmount >= Number(loan.total_repayable);
+
+  await db.collection("bank_loans").updateOne(
+    { _id: data.loan_id as any, owner_id: session.ownerId },
+    {
+      $set: {
+        paid_amount: newPaidAmount,
+        paid_installments: newPaidInstallments,
+        status: isFullyPaid ? "completed" : "active",
+      }
+    }
+  );
+
+  const pmtDoc = {
+    _id: pmtId,
+    owner_id: session.ownerId,
+    loan_id: data.loan_id,
+    amount,
+    payment_method: data.payment_method || "cashbox",
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("bank_loan_payments").insertOne(pmtDoc as any);
+
+  // ALWAYS cut installment money from CASHBOX
+  await insertCashboxEntry(db, session.ownerId, {
+    kind: "withdraw",
+    amount,
+    note: `Bank Loan Installment: ${loan.bank_name} (${loan.loan_title}) - ${data.note || `Installment #${newPaidInstallments}`}`,
+    ref_id: pmtId,
+  });
+
+  return { success: true, id: pmtId, isFullyPaid, remaining: Math.max(Number(loan.total_repayable) - newPaidAmount, 0) };
+}
+
+export async function deleteBankLoanFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("bank_loan_payments").deleteMany({ owner_id: session.ownerId, loan_id: data.id });
+  await db.collection("bank_loans").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
 }

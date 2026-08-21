@@ -8,7 +8,7 @@ import {
   Banknote, BarChart3, Settings, FileText, Users,
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
-  Bot, Send, Loader2, HelpCircle, RefreshCw
+  Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -42,6 +42,7 @@ const businessLinks = [
 ] as const;
 
 const financeLinks = [
+  { to: "/bank",           labelKey: "bank_management", desc: "Bank accounts, loans & installment repayments", icon: Landmark, imageUrl: "https://img.icons8.com/color/48/bank-building.png", perm: "expenses" as const },
   { to: "/expenses",       labelKey: "expenses",        desc: "Record overhead expenses", icon: Receipt, imageUrl: "https://img.icons8.com/color/48/tax.png", perm: "expenses"   as const },
   { to: "/somiti",         labelKey: "somiti",          desc: "Manage Somiti accounts", icon: PiggyBank, imageUrl: "/icons/samity_icon.png",    perm: "expenses"   as const },
   { to: "/cash-management",labelKey: "cash_management", desc: "Cashbox ledger & cashflow", icon: Banknote, imageUrl: "/icons/cashbox_icon.png",     perm: "cashbox"   as const },
