@@ -38,6 +38,9 @@ dist-ssr
 
 # Vercel
 .vercel/
+.firebase/
+out/
+.next/
 
 # Next.js
 .next/
