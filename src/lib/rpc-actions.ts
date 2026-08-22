@@ -474,20 +474,32 @@ export async function getSalesForPartyFn(input: { data: { partyId: string } }) {
   return items.map((s) => ({ ...s, id: s._id as any as string }));
 }
 
-export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null; cart_id?: string | null; created_at?: string } }) {
+export async function createSaleFn(input: { data: { product_id?: string | null; product_name: string; qty: number; buy_price: number; sell_price: number; profit: number; type: string; party_id?: string | null; paid_amount: number; due_amount: number; note?: string | null; cart_id?: string | null; courier_name?: string | null; tracking_code?: string | null; courier_status?: string | null; created_at?: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, party_id: data.party_id || null, created_at: data.created_at || new Date().toISOString() };
+  const isOnline = data.type === "online";
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    ...data,
+    courier_status: isOnline ? (data.courier_status || "pending") : undefined,
+    courier_name: data.courier_name || (isOnline ? "Courier Delivery" : undefined),
+    tracking_code: data.tracking_code || undefined,
+    paid_amount: isOnline ? (data.courier_status === "collected" ? data.paid_amount : 0) : data.paid_amount,
+    due_amount: isOnline ? (data.courier_status === "collected" ? 0 : Number(data.sell_price) * (Number(data.qty) || 1)) : data.due_amount,
+    party_id: data.party_id || null,
+    created_at: data.created_at || new Date().toISOString()
+  };
   await db.collection("sales").insertOne(doc as any);
   if (data.product_id) {
     const product = await db.collection("products").findOne({ _id: data.product_id as any });
     if (product) await db.collection("products").updateOne({ _id: data.product_id as any }, { $set: { stock: Math.max(((product.stock as number) ?? 0) - data.qty, 0) } });
   }
-  const cashAmt = saleCashboxAmount(data);
+  const cashAmt = isOnline ? (doc.courier_status === "collected" ? Number(doc.paid_amount) : 0) : saleCashboxAmount(data);
   if (cashAmt > 0) {
-    const methodTag = data.type ? ` [Paid by ${data.type.toUpperCase()}]` : "";
+    const methodTag = data.type === "online" ? " [Paid by COURIER]" : data.type ? ` [Paid by ${data.type.toUpperCase()}]` : "";
     await insertCashboxEntry(db, session.ownerId, {
       kind: "sale",
       amount: cashAmt,
@@ -499,11 +511,99 @@ export async function createSaleFn(input: { data: { product_id?: string | null; 
 
   // Sheets Sync
   appendRowToGoogleSheet(session.ownerId, "Sales",
-    ["ID", "Product Name", "Qty", "Buy Price", "Sell Price", "Profit", "Type", "Party ID", "Paid Amount", "Due Amount", "Created At"],
-    [id, data.product_name, data.qty, data.buy_price, data.sell_price, data.profit, data.type, data.party_id || "", data.paid_amount, data.due_amount, doc.created_at]
+    ["ID", "Product Name", "Qty", "Buy Price", "Sell Price", "Profit", "Type", "Party ID", "Paid Amount", "Due Amount", "Courier Status", "Created At"],
+    [id, data.product_name, data.qty, data.buy_price, data.sell_price, data.profit, data.type, data.party_id || "", doc.paid_amount, doc.due_amount, doc.courier_status || "", doc.created_at]
   );
 
   return { ...doc, id };
+}
+
+export async function approveCourierPaymentFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const sale = await db.collection("sales").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!sale) throw new Error("Sale not found");
+  if (sale.courier_status === "collected") return { success: true, message: "Already collected" };
+
+  const cartId = sale.cart_id;
+  const salesToApprove = cartId
+    ? await db.collection("sales").find({ cart_id: cartId, owner_id: session.ownerId }).toArray()
+    : [sale];
+
+  const nowStr = new Date().toISOString();
+  for (const s of salesToApprove) {
+    const totalAmount = Number(s.sell_price) || (Number(s.qty) * Number(s.buy_price) + Number(s.profit));
+    await db.collection("sales").updateOne(
+      { _id: s._id as any, owner_id: session.ownerId },
+      {
+        $set: {
+          courier_status: "collected",
+          paid_amount: totalAmount,
+          due_amount: 0,
+          collected_at: nowStr,
+          updated_at: nowStr,
+        }
+      }
+    );
+
+    // Deposit remittance into Cashbox
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "sale",
+      amount: totalAmount,
+      note: `Online Courier Payment Collected: ${s.product_name} [${s.courier_name || "Courier"}] (INV-${(s._id as string).slice(-6).toUpperCase()})`,
+      ref_id: s._id as string,
+      created_at: nowStr,
+    });
+  }
+
+  return { success: true };
+}
+
+export async function cancelCourierOrderFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const sale = await db.collection("sales").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!sale) throw new Error("Sale not found");
+
+  const cartId = sale.cart_id;
+  const salesToCancel = cartId
+    ? await db.collection("sales").find({ cart_id: cartId, owner_id: session.ownerId }).toArray()
+    : [sale];
+
+  const nowStr = new Date().toISOString();
+  for (const s of salesToCancel) {
+    if (s.courier_status === "collected") {
+      await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: s._id as any });
+    }
+
+    if (s.product_id && !s.returned) {
+      const qtyToRestore = Number(s.qty) || 0;
+      if (qtyToRestore > 0) {
+        await db.collection("products").updateOne(
+          { _id: s.product_id as any, owner_id: session.ownerId },
+          { $inc: { stock: qtyToRestore } }
+        );
+      }
+    }
+
+    await db.collection("sales").updateOne(
+      { _id: s._id as any, owner_id: session.ownerId },
+      {
+        $set: {
+          courier_status: "cancelled",
+          returned: true,
+          cancelled_at: nowStr,
+          updated_at: nowStr,
+        }
+      }
+    );
+  }
+
+  return { success: true };
 }
 
 export async function deleteSaleFn(input: { data: { id: string } }) {

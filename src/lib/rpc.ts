@@ -152,6 +152,8 @@ export const deletePayableSettlementFn = makeWriteAction("deletePayableSettlemen
 export const createSaleFn = makeWriteAction("createSaleFn");
 export const deleteSaleFn = makeWriteAction("deleteSaleFn");
 export const editSaleFn = makeWriteAction("editSaleFn");
+export const approveCourierPaymentFn = makeWriteAction("approveCourierPaymentFn");
+export const cancelCourierOrderFn = makeWriteAction("cancelCourierOrderFn");
 
 export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
 export const createReturnFn = makeWriteAction("createReturnFn");
