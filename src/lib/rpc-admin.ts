@@ -87,4 +87,5 @@ export const listAdminPopupsFn = makeAdminAction("listAdminPopupsFn");
 export const deleteAdminPopupFn = makeAdminAction("deleteAdminPopupFn");
 export const getMasterSmsSettingsFn = makeAdminAction("getMasterSmsSettingsFn");
 export const updateMasterSmsSettingsFn = makeAdminAction("updateMasterSmsSettingsFn");
+export const checkMasterSmsBalanceFn = makeAdminAction("checkMasterSmsBalanceFn");
 export const directSendSmsAsAdminFn = makeAdminAction("directSendSmsAsAdminFn");

@@ -927,6 +927,23 @@ export async function updateMasterSmsSettingsFn(input: {
   return { success: true };
 }
 
+export async function checkMasterSmsBalanceFn() {
+  await requireSuperAdminSession();
+  const db = await getDb();
+  const platform = await db.collection("platform_settings").findOne({ _id: "global" as any });
+
+  const apiKey = (platform?.master_sms_api_key as string) || "";
+  const userName = (platform?.master_sms_user_name as string) || "";
+
+  if (!apiKey || !userName) {
+    throw new Error("Master SMS credentials are not configured. Please enter and save API Key & Username first.");
+  }
+
+  const { checkSmsBalance } = await import("@/lib/mimsms");
+  const res = await checkSmsBalance({ apiKey: apiKey.trim(), userName: userName.trim() });
+  return res;
+}
+
 export async function directSendSmsAsAdminFn(input: {
   data: {
     mobileNumber: string;
@@ -944,18 +961,57 @@ export async function directSendSmsAsAdminFn(input: {
   const senderName = (platform?.master_sms_sender_name as string) || "DreamFashion";
 
   if (!apiKey || !userName) {
-    throw new Error("Master MiMSMS credentials are not configured. Please save API Key & Username first.");
+    throw new Error("Master SMS credentials are not configured. Please enter and save API Key & Username in Master Gateway settings first.");
   }
 
   const { sendSingleSms } = await import("@/lib/mimsms");
   const res = await sendSingleSms({
-    apiKey,
-    userName,
-    senderName,
-    mobileNumber: data.mobileNumber,
-    message: data.message,
+    apiKey: apiKey.trim(),
+    userName: userName.trim(),
+    senderName: senderName.trim(),
+    mobileNumber: data.mobileNumber.trim(),
+    message: data.message.trim(),
     transactionType: data.routeType || "T",
   });
+
+  const isSuccess = res.status === "Success" || res.statusCode === "200";
+  const isUnauthorized =
+    res.status === "Unauthorized" ||
+    res.statusCode === "401" ||
+    String(res.status || "").toLowerCase().includes("unauthor") ||
+    String(res.responseResult || "").toLowerCase().includes("unauthor");
+
+  if (isUnauthorized) {
+    throw new Error(
+      "SMS Gateway rejected: Unauthorized (401). Please verify your Master API Key, Username, and Sender Name on your SMS provider portal. Also verify if your server IP needs to be whitelisted."
+    );
+  }
+
+  if (!isSuccess) {
+    throw new Error(
+      `SMS Gateway error (${res.statusCode || "Failed"}): ${res.responseResult || res.status || "Check recipient number and gateway balance."}`
+    );
+  }
+
+  // Record into audit log
+  try {
+    const logId = crypto.randomUUID();
+    await db.collection("sms_logs").insertOne({
+      _id: logId as any,
+      campaign_title: "SuperAdmin Direct Dispatch",
+      recipient_type: "direct",
+      recipients_summary: data.mobileNumber,
+      recipient_count: 1,
+      message: data.message,
+      parts_count: 1,
+      total_credits_used: 1,
+      status: "Success",
+      route_type: data.routeType || "T",
+      trxn_ids: res.trxId ? [res.trxId] : [],
+      created_at: new Date().toISOString(),
+      owner_id: "superadmin",
+    } as any);
+  } catch (_) {}
 
   return res;
 }

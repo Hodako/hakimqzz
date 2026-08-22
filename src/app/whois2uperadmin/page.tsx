@@ -34,6 +34,7 @@ import {
   deleteAdminPopupFn,
   getMasterSmsSettingsFn,
   updateMasterSmsSettingsFn,
+  checkMasterSmsBalanceFn,
   directSendSmsAsAdminFn,
 } from "@/lib/rpc-admin";
 import {
@@ -144,6 +145,8 @@ export default function SuperAdminPage() {
   const [masterSenderName, setMasterSenderName] = useState("");
   const [adminWhatsapp, setAdminWhatsapp] = useState("");
   const [masterSmsSaving, setMasterSmsSaving] = useState(false);
+  const [testingBalance, setTestingBalance] = useState(false);
+  const [gatewayBalanceInfo, setGatewayBalanceInfo] = useState<string | null>(null);
 
   // 10. Direct SMS from Admin
   const [directPhone, setDirectPhone] = useState("");
@@ -875,31 +878,77 @@ export default function SuperAdminPage() {
                   </p>
                 </div>
 
-                <Button
-                  onClick={async () => {
-                    setMasterSmsSaving(true);
-                    try {
-                      await updateMasterSmsSettingsFn({
-                        data: {
-                          apiKey: masterApiKey,
-                          userName: masterUserName,
-                          senderName: masterSenderName,
-                          adminWhatsapp,
-                        },
-                      });
-                      toast.success("Master SMS Gateway settings saved!");
-                      qc.invalidateQueries({ queryKey: ["master-sms-settings"] });
-                    } catch (err: any) {
-                      toast.error(err.message || "Failed to save");
-                    } finally {
-                      setMasterSmsSaving(false);
-                    }
-                  }}
-                  disabled={masterSmsSaving}
-                  className="w-full rounded-xl beveled-button"
-                >
-                  {masterSmsSaving ? "Saving..." : "Save Master Gateway Settings"}
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <Button
+                    onClick={async () => {
+                      setMasterSmsSaving(true);
+                      try {
+                        await updateMasterSmsSettingsFn({
+                          data: {
+                            apiKey: masterApiKey,
+                            userName: masterUserName,
+                            senderName: masterSenderName,
+                            adminWhatsapp,
+                          },
+                        });
+                        toast.success("Master SMS Gateway settings saved!");
+                        qc.invalidateQueries({ queryKey: ["master-sms-settings"] });
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to save");
+                      } finally {
+                        setMasterSmsSaving(false);
+                      }
+                    }}
+                    disabled={masterSmsSaving}
+                    className="w-full rounded-xl beveled-button"
+                  >
+                    {masterSmsSaving ? "Saving..." : "Save Master Gateway"}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setTestingBalance(true);
+                      setGatewayBalanceInfo(null);
+                      try {
+                        const bal = await checkMasterSmsBalanceFn();
+                        const isOk = bal.status === "Success" || bal.statusCode === "200";
+                        if (isOk) {
+                          const info = `Balance: ৳${bal.balance ?? "0"} (SMS count: ${bal.smsCount ?? "N/A"})`;
+                          setGatewayBalanceInfo(info);
+                          toast.success(`Gateway Connected! ${info}`);
+                        } else {
+                          const errText = bal.responseResult || bal.status || "Unauthorized/Error";
+                          setGatewayBalanceInfo(`Gateway Status: ${errText}`);
+                          toast.error(`Gateway rejected: ${errText}. Please check API Key & Username or IP Whitelist.`);
+                        }
+                      } catch (err: any) {
+                        setGatewayBalanceInfo(`Error: ${err.message}`);
+                        toast.error(err.message || "Failed to query SMS gateway");
+                      } finally {
+                        setTestingBalance(false);
+                      }
+                    }}
+                    disabled={testingBalance}
+                    className="w-full rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                  >
+                    {testingBalance ? (
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCw className="size-3.5 animate-spin" />
+                        Testing...
+                      </span>
+                    ) : (
+                      "Test Connection / Balance"
+                    )}
+                  </Button>
+                </div>
+
+                {gatewayBalanceInfo && (
+                  <div className="p-3 rounded-xl bg-muted/60 border border-border/70 text-xs font-mono">
+                    {gatewayBalanceInfo}
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -963,8 +1012,12 @@ export default function SuperAdminPage() {
                             routeType: directRoute,
                           },
                         });
-                        toast.success(`SMS dispatched! Status: ${res.status}`);
-                        setDirectMsg("");
+                        if (res?.status === "Success" || res?.statusCode === "200") {
+                          toast.success(`SMS dispatched successfully! (ID: ${res?.trxId || "Delivered"})`);
+                          setDirectMsg("");
+                        } else {
+                          toast.error(`SMS Failed: ${res?.responseResult || res?.status || "Unauthorized"}`);
+                        }
                       } catch (err: any) {
                         toast.error(err.message || "Failed to send SMS");
                       } finally {
