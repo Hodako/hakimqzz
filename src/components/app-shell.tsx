@@ -145,10 +145,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
-      
+
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
       const key = e.key.toLowerCase();
       const isCtrlK = (e.ctrlKey || e.metaKey) && key === "k";
-      const isSlash = e.key === "/" && !e.shiftKey;
+      const isSlash = e.key === "/" && !e.shiftKey && !hasModifier;
+
+      // Allow browser native shortcuts (Ctrl+C for copy, Ctrl+R for reload, etc.)
+      if (hasModifier && !isCtrlK) {
+        return;
+      }
 
       if (key === "s" || isCtrlK || isSlash) {
         e.preventDefault();
