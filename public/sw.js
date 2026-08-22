@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v13";
+const CACHE_NAME = "hakimqzz-pos-v14";
 
 const PRECACHE_ASSETS = [
   "/",
@@ -27,13 +27,14 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ── Activate: Clean up old caches ────────────────────────────────────
+// ── Activate: Clean up all old caches immediately ─────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log("[SW] Deleting obsolete cache:", key);
             return caches.delete(key);
           }
         })
