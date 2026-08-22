@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { toast } from "sonner";
 import {
   superAdminLoginFn,
@@ -266,6 +267,12 @@ export default function SuperAdminPage() {
     );
   }
 
+  // Pagination states
+  const [activitiesPage, setActivitiesPage] = useState(1);
+  const [bizPage, setBizPage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
+  const [popupsPage, setPopupsPage] = useState(1);
+
   // Filter businesses
   const filteredBiz = (businesses.data ?? []).filter((b: any) => {
     const name = String(b.name || "").toLowerCase();
@@ -288,6 +295,11 @@ export default function SuperAdminPage() {
     const query = searchQuery.toLowerCase();
     return name.includes(query) || email.includes(query) || role.includes(query) || biz.includes(query) || id.includes(query);
   });
+
+  const pagedActivities = paginate(activities.data ?? [], activitiesPage, 10);
+  const pagedBiz = paginate(filteredBiz, bizPage, 6);
+  const pagedUsers = paginate(filteredUsers, usersPage, 8);
+  const pagedPopups = paginate(popups.data ?? [], popupsPage, 6);
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20">
@@ -486,7 +498,7 @@ export default function SuperAdminPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(activities.data ?? []).map((ev: any, idx: number) => {
+              {pagedActivities.items.map((ev: any, idx: number) => {
                 const isSale = ev.type === "sale";
                 const isProd = ev.type === "product";
                 const isExpense = ev.type === "expense";
@@ -531,6 +543,16 @@ export default function SuperAdminPage() {
                 );
               })}
             </div>
+
+            {pagedActivities.totalPages > 1 && (
+              <div className="pt-3 border-t border-border/60 flex justify-center">
+                <PaginationBar
+                  currentPage={activitiesPage}
+                  totalPages={pagedActivities.totalPages}
+                  onPageChange={setActivitiesPage}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -570,7 +592,7 @@ export default function SuperAdminPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-              {filteredBiz.map((biz: any) => {
+              {pagedBiz.items.map((biz: any) => {
                 const isFrozen = biz.status === "frozen" || biz.status === "suspended";
 
                 return (
@@ -740,6 +762,16 @@ export default function SuperAdminPage() {
                 );
               })}
             </div>
+
+            {pagedBiz.totalPages > 1 && (
+              <div className="pt-3 border-t border-border/60 flex justify-center">
+                <PaginationBar
+                  currentPage={bizPage}
+                  totalPages={pagedBiz.totalPages}
+                  onPageChange={setBizPage}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -747,7 +779,7 @@ export default function SuperAdminPage() {
         {activeTab === "users" && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {filteredUsers.map((u: any) => (
+              {pagedUsers.items.map((u: any) => (
                 <Card key={u.id} className="p-4 rounded-2xl bg-card border-border/80 shadow-xs space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -814,6 +846,16 @@ export default function SuperAdminPage() {
                 </Card>
               ))}
             </div>
+
+            {pagedUsers.totalPages > 1 && (
+              <div className="pt-3 border-t border-border/60 flex justify-center">
+                <PaginationBar
+                  currentPage={usersPage}
+                  totalPages={pagedUsers.totalPages}
+                  onPageChange={setUsersPage}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1062,7 +1104,7 @@ export default function SuperAdminPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(popups.data ?? []).map((p: any) => (
+                {pagedPopups.items.map((p: any) => (
                   <div
                     key={p.id}
                     className="p-3.5 rounded-xl bg-muted/40 border border-border/60 space-y-2 flex flex-col justify-between"
@@ -1095,6 +1137,16 @@ export default function SuperAdminPage() {
                   </div>
                 ))}
               </div>
+
+              {pagedPopups.totalPages > 1 && (
+                <div className="pt-3 border-t border-border/60 flex justify-center">
+                  <PaginationBar
+                    currentPage={popupsPage}
+                    totalPages={pagedPopups.totalPages}
+                    onPageChange={setPopupsPage}
+                  />
+                </div>
+              )}
             </Card>
           </div>
         )}
