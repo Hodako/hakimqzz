@@ -8,7 +8,16 @@ import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS } from "@/lib/permissions";
 import { appendRowToGoogleSheet, bulkExportToGoogleSheets } from "@/lib/google-sheets";
-import { sendSingleSms, sendBroadcastSms, sendDynamicSms, checkSmsBalance, lookupDlrStatus, type MiMSMSResponse } from "@/lib/mimsms";
+import {
+  sendSingleSms,
+  sendBroadcastSms,
+  sendDynamicSms,
+  checkSmsBalance,
+  lookupDlrStatus,
+  calculateSmsParts,
+  sanitizeBdPhoneNumber,
+  type MiMSMSResponse
+} from "@/lib/mimsms";
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
@@ -719,8 +728,8 @@ export async function approveCourierPaymentFn(input: { data: { id: string } }) {
     await insertCashboxEntry(db, session.ownerId, {
       kind: "sale",
       amount: totalAmount,
-      note: `Online Courier Payment Collected: ${s.product_name} [${s.courier_name || "Courier"}] (INV-${(s._id as string).slice(-6).toUpperCase()})`,
-      ref_id: s._id as string,
+      note: `Online Courier Payment Collected: ${s.product_name} [${s.courier_name || "Courier"}] (INV-${String(s._id).slice(-6).toUpperCase()})`,
+      ref_id: String(s._id),
       created_at: nowStr,
     });
   }
@@ -2689,13 +2698,10 @@ async function triggerAutoPurchaseSms(
   try {
     if (!sale.party_id) return;
     const smsSettings = await db.collection("sms_settings").findOne({ owner_id: ownerId });
-    if (
-      !smsSettings ||
-      !smsSettings.customer_sms_after_purchase ||
-      !smsSettings.apiKey ||
-      !smsSettings.userName ||
-      !smsSettings.senderName
-    ) {
+    const business = await db.collection("businesses").findOne({ owner_id: ownerId });
+    
+    const isAutoSmsEnabled = Boolean(smsSettings?.customer_sms_after_purchase ?? business?.customer_sms_after_purchase);
+    if (!isAutoSmsEnabled) {
       return;
     }
 
@@ -2706,7 +2712,6 @@ async function triggerAutoPurchaseSms(
     }
     if (!party || !party.phone) return;
 
-    const business = await db.collection("businesses").findOne({ owner_id: ownerId });
     const shopName = business?.name || "Dream Fashion";
 
     const platform = await db.collection("platform_settings").findOne({ _id: "global" as any });
@@ -2727,7 +2732,7 @@ async function triggerAutoPurchaseSms(
     const invoiceId = sale.id.slice(0, 8).toUpperCase();
 
     const template =
-      smsSettings.purchase_sms_template ||
+      smsSettings?.purchase_sms_template ||
       business?.purchase_sms_template ||
       "Dear {customer_name}, thanks for shopping with {shop_name}! Items: {product_name} x{qty}, Total: Tk {total_amount}, Paid: Tk {paid_amount}, Due: Tk {due_amount}. Inv #{invoice_id}.";
 

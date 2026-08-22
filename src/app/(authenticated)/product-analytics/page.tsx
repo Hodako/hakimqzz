@@ -1305,14 +1305,14 @@ export default function ProductAnalyticsPage() {
       <SaleDialog
         open={saleOpen}
         onOpenChange={setSaleOpen}
-        initialProductId={saleProduct}
+        presetProductId={saleProduct}
       />
 
       {/* Buy / Purchase Dialog */}
       <PurchaseDialog
         open={buyOpen}
         onOpenChange={setBuyOpen}
-        initialProductId={buyProduct}
+        presetProductId={buyProduct}
       />
 
       {/* Product Edit Dialog */}

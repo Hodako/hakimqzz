@@ -361,8 +361,8 @@ export function SaleDialog({
               sellPrice: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
             };
           }),
-          subtotal: sellTotal + discTotal,
-          discountAmount: discTotal,
+          subtotal: sellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+          discountAmount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
           total: sellTotal,
           paidAmount: type === "online" ? 0 : (type === "credit" ? paidNum : sellTotal),
           due: type === "online" ? sellTotal : (type === "credit" ? due : 0),

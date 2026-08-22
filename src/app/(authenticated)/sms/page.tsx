@@ -35,7 +35,7 @@ import {
 } from "@/lib/rpc";
 import { calculateSmsParts, sanitizeBdPhoneNumber } from "@/lib/mimsms";
 
-export function SmsCharacterCounter({
+function SmsCharacterCounter({
   message,
   maxLength = 1000,
 }: {
@@ -179,10 +179,8 @@ export default function SmsPage() {
   };
 
   useEffect(() => {
-    if (smsSettings?.apiKey && smsSettings?.userName) {
-      fetchBalance(false);
-    }
-  }, [smsSettings?.apiKey, smsSettings?.userName]);
+    fetchBalance(false);
+  }, []);
 
   // Direct SMS state
   const [directNumbers, setDirectNumbers] = useState("");

@@ -1007,7 +1007,7 @@ export async function directSendSmsAsAdminFn(input: {
       total_credits_used: 1,
       status: "Success",
       route_type: data.routeType || "T",
-      trxn_ids: res.trxId ? [res.trxId] : [],
+      trxn_ids: (res.trxnId || (res as any).trxId) ? [res.trxnId || (res as any).trxId] : [],
       created_at: new Date().toISOString(),
       owner_id: "superadmin",
     } as any);
