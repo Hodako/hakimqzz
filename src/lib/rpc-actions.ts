@@ -100,7 +100,7 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
       business_type: "retail",
       theme: "green",
       status: "active",
-      sms_credits: 50,
+      sms_credits: 0,
       max_products: 500,
       max_invoices: 10000,
       employee_limit: 5,
@@ -145,7 +145,7 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     status: (business?.status as string) || (user?.status as string) || "active",
     frozen_reason: (business?.frozen_reason as string) || (user?.frozen_reason as string) || "",
     subscription_expires_at: (business?.subscription_expires_at as string) || "",
-    sms_credits: Number(business?.sms_credits ?? 50),
+    sms_credits: Number(business?.sms_credits ?? 0),
     admin_whatsapp: adminWhatsapp,
   };
 }
@@ -236,7 +236,7 @@ export async function registerFn(input: { data: { email: string; password: strin
   const now = new Date().toISOString();
   const shopName = sanitizeInput(data.fullName ? `${data.fullName}'s Shop` : "Dream Fashion");
 
-  // Create default business for new user with starter SMS credits
+  // Create default business for new user with starter 0 SMS credits
   await db.collection("businesses").insertOne({
     _id: businessId as any,
     owner_id: userId,
@@ -245,7 +245,7 @@ export async function registerFn(input: { data: { email: string; password: strin
     business_type: "retail",
     theme: "green",
     status: "active",
-    sms_credits: 50, // 50 Free starter credits
+    sms_credits: 0, // No free starter credits
     max_products: 500,
     max_invoices: 10000,
     employee_limit: 5,
@@ -293,7 +293,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       await db.collection("users").updateOne({ _id: user._id }, { $set: updates });
     }
   } else {
-    // Register new Google / Firebase user automatically
+    // Register new Google / Firebase user automatically with 0 starter credits
     userId = crypto.randomUUID();
     const businessId = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -307,7 +307,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       business_type: "retail",
       theme: "green",
       status: "active",
-      sms_credits: 50,
+      sms_credits: 0,
       max_products: 500,
       max_invoices: 10000,
       created_at: now,
@@ -2750,7 +2750,7 @@ export async function getSmsSettingsFn() {
   const platform = await db.collection("platform_settings").findOne({ _id: "global" as any });
 
   return {
-    sms_credits: Number(business?.sms_credits ?? 50),
+    sms_credits: Number(business?.sms_credits ?? 0),
     admin_whatsapp: (platform?.admin_whatsapp as string) || "8801700000000",
     customer_sms_after_purchase: Boolean(settings?.customer_sms_after_purchase ?? business?.customer_sms_after_purchase),
     purchase_sms_template:
@@ -2810,7 +2810,7 @@ export async function checkSmsBalanceFn() {
   const business = await db.collection("businesses").findOne({ owner_id: session.ownerId });
   const platform = await db.collection("platform_settings").findOne({ _id: "global" as any });
 
-  const credits = Number(business?.sms_credits ?? 50);
+  const credits = Number(business?.sms_credits ?? 0);
 
   return {
     status: "Success",
