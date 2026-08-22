@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamfashion-v12";
+const CACHE_NAME = "dreamfashion-v13";
 
 const PRECACHE_ASSETS = [
   "/",
@@ -43,13 +43,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch: Cache-First for static assets, Stale-While-Revalidate for pages ──
+// ── Fetch: Cache-First for static assets, Network-First for pages ───
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
 
-  // Skip API routes, WebSockets and HMR
+  // Skip non-http, WebSockets, HMR and API routes
   if (
     !url.protocol.startsWith("http") ||
     url.pathname.includes("/_next/webpack-hmr") ||
@@ -76,37 +76,46 @@ self.addEventListener("fetch", (event) => {
   if (isStaticAsset) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-
         try {
+          const cached = await cache.match(event.request);
+          if (cached) return cached;
+
           const networkRes = await fetch(event.request);
           if (networkRes && networkRes.status === 200) {
             cache.put(event.request, networkRes.clone());
           }
           return networkRes;
         } catch (_) {
-          return cached || new Response("", { status: 408 });
+          return new Response("", { status: 408, statusText: "Request Timeout" });
         }
       })
     );
     return;
   }
 
-  // Stale-While-Revalidate for navigation and HTML pages
+  // Network-First with Cache fallback for pages & navigation
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(event.request);
-      const networkPromise = fetch(event.request)
-        .then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
-            cache.put(event.request, networkRes.clone());
-          }
-          return networkRes;
-        })
-        .catch(() => cached);
-
-      return cached || networkPromise;
-    })
+    fetch(event.request)
+      .then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkRes;
+      })
+      .catch(async () => {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          const cached = await cache.match(event.request);
+          if (cached) return cached;
+          const fallback = await cache.match("/");
+          if (fallback) return fallback;
+        } catch (_) {}
+        return new Response("Offline", {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "Content-Type": "text/plain" }
+        });
+      })
   );
 });
