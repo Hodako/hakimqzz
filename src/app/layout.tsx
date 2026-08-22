@@ -4,7 +4,7 @@ import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "../styles.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://hakimqzz.web.app"),
+  metadataBase: new URL("https://hakim.qzz.io"),
   title: "HakimQzz POS software",
   description: "HakimQzz POS software — Automated inventory, sales, accounting, and store management system for any shop.",
   authors: [{ name: "HakimQzz" }],
