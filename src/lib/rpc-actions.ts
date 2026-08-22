@@ -273,6 +273,69 @@ export async function registerFn(input: { data: { email: string; password: strin
   return { user: mapped, token };
 }
 
+export async function firebaseAuthSyncFn(input: { data: { email: string; fullName?: string; firebaseUid?: string; photoUrl?: string } }) {
+  const { data } = input;
+  if (!data.email) throw new Error("Email is required for authentication");
+  validateEmail(data.email);
+  const cleanEmail = data.email.toLowerCase().trim();
+  const db = await getDb();
+
+  let user = await db.collection("users").findOne({ email: cleanEmail });
+  let userId: string;
+
+  if (user) {
+    userId = user._id as any as string;
+    const updates: Record<string, any> = {};
+    if (data.photoUrl && !user.avatar_url) updates.avatar_url = data.photoUrl;
+    if (data.fullName && !user.full_name) updates.full_name = data.fullName;
+    if (data.firebaseUid && !user.firebase_uid) updates.firebase_uid = data.firebaseUid;
+    if (Object.keys(updates).length > 0) {
+      await db.collection("users").updateOne({ _id: user._id }, { $set: updates });
+    }
+  } else {
+    // Register new Google / Firebase user automatically
+    userId = crypto.randomUUID();
+    const businessId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const shopName = sanitizeInput(data.fullName ? `${data.fullName}'s Shop` : "HakimQzz Store");
+
+    await db.collection("businesses").insertOne({
+      _id: businessId as any,
+      owner_id: userId,
+      name: shopName,
+      logo_url: data.photoUrl || "/logo.png",
+      business_type: "retail",
+      theme: "green",
+      status: "active",
+      sms_credits: 50,
+      max_products: 500,
+      max_invoices: 10000,
+      created_at: now,
+      updated_at: now,
+    } as any);
+
+    await db.collection("users").insertOne({
+      _id: userId as any,
+      email: cleanEmail,
+      full_name: sanitizeInput(data.fullName || cleanEmail.split("@")[0]),
+      avatar_url: data.photoUrl || null,
+      firebase_uid: data.firebaseUid || null,
+      role: "owner",
+      business_id: businessId,
+      status: "active",
+      activated: true,
+      created_at: now,
+      updated_at: now,
+    } as any);
+  }
+
+  const token = await signToken({ userId, email: cleanEmail });
+  const cookieStore = await cookies();
+  cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+  const mapped = await mapUser(db, userId);
+  return { user: mapped, token };
+}
+
 export async function logoutFn() {
   const cookieStore = await cookies();
   cookieStore.delete("token");

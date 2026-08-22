@@ -158,6 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      const { signOut } = await import("firebase/auth");
+      const { auth } = await import("@/lib/firebase");
+      await signOut(auth);
+    } catch { /* ignore */ }
     try { await logoutFn(); } catch { /* ignore */ }
     setUser(null);
     clearAuthProfile();
