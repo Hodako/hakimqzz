@@ -84,6 +84,12 @@ export default function SuperAdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [bizStatusFilter, setBizStatusFilter] = useState<"all" | "active" | "frozen">("all");
 
+  // Pagination states
+  const [activitiesPage, setActivitiesPage] = useState(1);
+  const [bizPage, setBizPage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
+  const [popupsPage, setPopupsPage] = useState(1);
+
   // ─── Modal States ─────────────────────────────────────────────────────────
 
   // 1. Refill SMS Modal
@@ -266,12 +272,6 @@ export default function SuperAdminPage() {
       </div>
     );
   }
-
-  // Pagination states
-  const [activitiesPage, setActivitiesPage] = useState(1);
-  const [bizPage, setBizPage] = useState(1);
-  const [usersPage, setUsersPage] = useState(1);
-  const [popupsPage, setPopupsPage] = useState(1);
 
   // Filter businesses
   const filteredBiz = (businesses.data ?? []).filter((b: any) => {
