@@ -1,3 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Hind+Siliguri:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Ubuntu:wght@400;500;700&family=Playfair+Display:wght@400;600;700&display=swap');
+@import url('https://banglawebfonts.pages.dev/css/siyam-rupali.css');
+@import url('https://banglawebfonts.pages.dev/css/baloo-da-2.css');
+@import url('https://banglawebfonts.pages.dev/css/charukola.css');
+@import url('https://banglawebfonts.pages.dev/css/bensen-handwriting.css');
+
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
 
