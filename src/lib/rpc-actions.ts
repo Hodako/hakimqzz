@@ -8,6 +8,7 @@ import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS } from "@/lib/permissions";
 import { appendRowToGoogleSheet, bulkExportToGoogleSheets } from "@/lib/google-sheets";
+import { sendSingleSms, sendBroadcastSms, sendDynamicSms, checkSmsBalance, lookupDlrStatus, type MiMSMSResponse } from "@/lib/mimsms";
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
@@ -514,6 +515,19 @@ export async function createSaleFn(input: { data: { product_id?: string | null; 
     ["ID", "Product Name", "Qty", "Buy Price", "Sell Price", "Profit", "Type", "Party ID", "Paid Amount", "Due Amount", "Courier Status", "Created At"],
     [id, data.product_name, data.qty, data.buy_price, data.sell_price, data.profit, data.type, data.party_id || "", doc.paid_amount, doc.due_amount, doc.courier_status || "", doc.created_at]
   );
+
+  // Trigger Automatic SMS if enabled
+  if (data.party_id) {
+    triggerAutoPurchaseSms(db, session.ownerId, {
+      id,
+      product_name: data.product_name,
+      qty: data.qty,
+      sell_price: data.sell_price,
+      paid_amount: doc.paid_amount,
+      due_amount: doc.due_amount,
+      party_id: data.party_id,
+    }).catch(err => console.error("Auto purchase SMS error:", err));
+  }
 
   return { ...doc, id };
 }
@@ -2497,3 +2511,380 @@ export async function deleteBankLoanFn(input: { data: { id: string } }) {
   await db.collection("bank_loans").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
 }
+
+// ─── SMS Gateway & Management (MiMSMS v2) ───────────────────────────────────
+
+async function triggerAutoPurchaseSms(
+  db: Awaited<ReturnType<typeof getDb>>,
+  ownerId: string,
+  sale: {
+    id: string;
+    product_name: string;
+    qty: number;
+    sell_price: number;
+    paid_amount: number;
+    due_amount: number;
+    party_id?: string | null;
+  }
+) {
+  try {
+    if (!sale.party_id) return;
+    const smsSettings = await db.collection("sms_settings").findOne({ owner_id: ownerId });
+    if (
+      !smsSettings ||
+      !smsSettings.customer_sms_after_purchase ||
+      !smsSettings.apiKey ||
+      !smsSettings.userName ||
+      !smsSettings.senderName
+    ) {
+      return;
+    }
+
+    // Find customer details
+    let party = await db.collection("customers").findOne({ _id: sale.party_id as any, owner_id: ownerId });
+    if (!party) {
+      party = await db.collection("parties").findOne({ _id: sale.party_id as any, owner_id: ownerId });
+    }
+    if (!party || !party.phone) return;
+
+    const business = await db.collection("businesses").findOne({ owner_id: ownerId });
+    const shopName = business?.name || "Dream Fashion";
+
+    const customerName = party.name || "Customer";
+    const totalAmount = (Number(sale.sell_price) || 0) * (Number(sale.qty) || 1);
+    const paidAmount = Number(sale.paid_amount) || 0;
+    const dueAmount = Number(sale.due_amount) || 0;
+    const invoiceId = sale.id.slice(0, 8).toUpperCase();
+
+    const template =
+      smsSettings.purchase_sms_template ||
+      "Dear {customer_name}, thanks for shopping with {shop_name}! Items: {product_name} x{qty}, Total: Tk {total_amount}, Paid: Tk {paid_amount}, Due: Tk {due_amount}. Inv #{invoice_id}.";
+
+    const message = template
+      .replace(/{customer_name}/g, customerName)
+      .replace(/{shop_name}/g, shopName)
+      .replace(/{product_name}/g, sale.product_name || "Product")
+      .replace(/{qty}/g, String(sale.qty || 1))
+      .replace(/{total_amount}/g, String(totalAmount))
+      .replace(/{paid_amount}/g, String(paidAmount))
+      .replace(/{due_amount}/g, String(dueAmount))
+      .replace(/{invoice_id}/g, invoiceId);
+
+    const result = await sendSingleSms({
+      apiKey: smsSettings.apiKey,
+      userName: smsSettings.userName,
+      senderName: smsSettings.senderName,
+      mobileNumber: party.phone,
+      message,
+      transactionType: "T",
+      campaignName: "auto-purchase",
+    });
+
+    const logId = crypto.randomUUID();
+    await db.collection("sms_logs").insertOne({
+      _id: logId as any,
+      owner_id: ownerId,
+      recipient_type: "auto_purchase",
+      recipient_count: 1,
+      recipients_summary: `${customerName} (${party.phone})`,
+      message,
+      trxn_ids: result.trxnId ? [result.trxnId] : [],
+      status: result.status === "Success" ? "Success" : "Failed",
+      response_summary: result.responseResult || result.status,
+      created_at: new Date().toISOString(),
+    } as any);
+  } catch (err) {
+    console.error("Failed to execute auto purchase SMS:", err);
+  }
+}
+
+export async function getSmsSettingsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const settings = await db.collection("sms_settings").findOne({ owner_id: session.ownerId });
+  const business = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+
+  return {
+    apiKey: (settings?.apiKey as string) || "",
+    userName: (settings?.userName as string) || "",
+    senderName: (settings?.senderName as string) || (business?.name ? business.name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 11) : "DreamFashion"),
+    defaultTransactionType: (settings?.defaultTransactionType as "T" | "P") || "T",
+    customer_sms_after_purchase: Boolean(settings?.customer_sms_after_purchase),
+    purchase_sms_template:
+      (settings?.purchase_sms_template as string) ||
+      "Dear {customer_name}, thanks for shopping with {shop_name}! Items: {product_name} x{qty}, Total: Tk {total_amount}, Paid: Tk {paid_amount}, Due: Tk {due_amount}. Inv #{invoice_id}.",
+    offer_sms_template:
+      (settings?.offer_sms_template as string) ||
+      "Special offer from {shop_name}! Visit our store or order online to get exciting discounts on latest collections.",
+  };
+}
+
+export async function updateSmsSettingsFn(input: {
+  data: {
+    apiKey?: string;
+    userName?: string;
+    senderName?: string;
+    defaultTransactionType?: "T" | "P";
+    customer_sms_after_purchase?: boolean;
+    purchase_sms_template?: string;
+    offer_sms_template?: string;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  await db.collection("sms_settings").updateOne(
+    { owner_id: session.ownerId },
+    {
+      $set: {
+        owner_id: session.ownerId,
+        apiKey: (data.apiKey ?? "").trim(),
+        userName: (data.userName ?? "").trim(),
+        senderName: (data.senderName ?? "").trim(),
+        defaultTransactionType: data.defaultTransactionType || "T",
+        customer_sms_after_purchase: Boolean(data.customer_sms_after_purchase),
+        purchase_sms_template: data.purchase_sms_template,
+        offer_sms_template: data.offer_sms_template,
+        updated_at: new Date().toISOString(),
+      },
+    },
+    { upsert: true }
+  );
+
+  return { success: true };
+}
+
+export async function checkSmsBalanceFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const settings = await db.collection("sms_settings").findOne({ owner_id: session.ownerId });
+
+  if (!settings?.apiKey || !settings?.userName) {
+    throw new Error("Please configure your MiMSMS API Key and Username in SMS Settings first.");
+  }
+
+  const result = await checkSmsBalance({
+    apiKey: settings.apiKey,
+    userName: settings.userName,
+  });
+
+  return result;
+}
+
+export async function sendSmsCampaignFn(input: {
+  data: {
+    recipientType: "all_suppliers" | "selected_suppliers" | "all_customers" | "selected_customers" | "direct_numbers";
+    selectedIds?: string[];
+    directNumbers?: string;
+    message: string;
+    transactionType?: "T" | "P";
+    campaignTitle?: string;
+    isPersonalized?: boolean;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const settings = await db.collection("sms_settings").findOne({ owner_id: session.ownerId });
+  if (!settings?.apiKey || !settings?.userName || !settings?.senderName) {
+    throw new Error("Please configure your MiMSMS API Key, Username, and Sender Name in SMS Settings first.");
+  }
+
+  const business = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+  const shopName = business?.name || "Dream Fashion";
+
+  interface TargetRecipient {
+    id?: string;
+    name: string;
+    phone: string;
+  }
+
+  let recipients: TargetRecipient[] = [];
+
+  if (data.recipientType === "all_suppliers" || data.recipientType === "selected_suppliers") {
+    const query: any = { owner_id: session.ownerId, phone: { $nin: [null, ""] } };
+    if (data.recipientType === "selected_suppliers" && data.selectedIds && data.selectedIds.length > 0) {
+      query._id = { $in: data.selectedIds as any };
+    }
+    const parties = await db.collection("parties").find(query).toArray();
+    recipients = parties
+      .filter((p) => p.phone && p.phone.trim())
+      .map((p) => ({
+        id: p._id as any as string,
+        name: p.name || "Supplier",
+        phone: p.phone as string,
+      }));
+  } else if (data.recipientType === "all_customers" || data.recipientType === "selected_customers") {
+    const query: any = { owner_id: session.ownerId, phone: { $nin: [null, ""] } };
+    if (data.recipientType === "selected_customers" && data.selectedIds && data.selectedIds.length > 0) {
+      query._id = { $in: data.selectedIds as any };
+    }
+    const customers = await db.collection("customers").find(query).toArray();
+    if (customers.length > 0) {
+      recipients = customers
+        .filter((c) => c.phone && c.phone.trim())
+        .map((c) => ({
+          id: c._id as any as string,
+          name: c.name || "Customer",
+          phone: c.phone as string,
+        }));
+    } else {
+      const parties = await db.collection("parties").find(query).toArray();
+      recipients = parties
+        .filter((p) => p.phone && p.phone.trim())
+        .map((p) => ({
+          id: p._id as any as string,
+          name: p.name || "Customer",
+          phone: p.phone as string,
+        }));
+    }
+  } else if (data.recipientType === "direct_numbers") {
+    const rawNumbers = (data.directNumbers || "")
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    recipients = rawNumbers.map((num, idx) => ({
+      name: `Recipient ${idx + 1}`,
+      phone: num,
+    }));
+  }
+
+  if (recipients.length === 0) {
+    throw new Error("No recipients with valid phone numbers were found for this campaign.");
+  }
+
+  const transactionType = data.transactionType || settings.defaultTransactionType || "T";
+  let results: MiMSMSResponse[] = [];
+  const trxnIds: string[] = [];
+
+  if (data.isPersonalized) {
+    // Dynamic Personalized SMS
+    const dynamicData = recipients.map((r) => {
+      const personalMsg = data.message
+        .replace(/{name}/g, r.name)
+        .replace(/{customer_name}/g, r.name)
+        .replace(/{supplier_name}/g, r.name)
+        .replace(/{shop_name}/g, shopName);
+      return {
+        mobileNumber: r.phone,
+        message: personalMsg,
+      };
+    });
+
+    results = await sendDynamicSms({
+      apiKey: settings.apiKey,
+      userName: settings.userName,
+      senderName: settings.senderName,
+      smsData: dynamicData,
+      transactionType,
+    });
+  } else {
+    // Broadcast / Single SMS
+    const numbers = recipients.map((r) => r.phone);
+    const finalMsg = data.message.replace(/{shop_name}/g, shopName);
+
+    results = await sendBroadcastSms({
+      apiKey: settings.apiKey,
+      userName: settings.userName,
+      senderName: settings.senderName,
+      numbers,
+      message: finalMsg,
+      transactionType,
+      campaignId: data.campaignTitle || "campaign",
+    });
+  }
+
+  let successCount = 0;
+  let failCount = 0;
+  let summary = "";
+
+  for (const res of results) {
+    if (res.status === "Success" || res.statusCode === "200") {
+      successCount++;
+      if (res.trxnId) trxnIds.push(res.trxnId);
+    } else {
+      failCount++;
+    }
+    if (res.responseResult) {
+      summary = res.responseResult;
+    }
+  }
+
+  const finalStatus = failCount === 0 ? "Success" : successCount > 0 ? "Partial" : "Failed";
+
+  const logId = crypto.randomUUID();
+  await db.collection("sms_logs").insertOne({
+    _id: logId as any,
+    owner_id: session.ownerId,
+    recipient_type: data.recipientType,
+    recipient_count: recipients.length,
+    recipients_summary:
+      recipients.length <= 3
+        ? recipients.map((r) => `${r.name} (${r.phone})`).join(", ")
+        : `${recipients.slice(0, 2).map((r) => r.name).join(", ")} + ${recipients.length - 2} more`,
+    message: data.message,
+    transaction_type: transactionType,
+    campaign_title: data.campaignTitle || null,
+    trxn_ids: trxnIds,
+    status: finalStatus,
+    response_summary: summary || (finalStatus === "Success" ? "SMS Sent Successfully" : "Failed to deliver SMS"),
+    created_at: new Date().toISOString(),
+  } as any);
+
+  return {
+    success: finalStatus !== "Failed",
+    status: finalStatus,
+    recipientCount: recipients.length,
+    trxnIds,
+    summary,
+    logId,
+  };
+}
+
+export async function getSmsLogsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const logs = await db
+    .collection("sms_logs")
+    .find({ owner_id: session.ownerId })
+    .sort({ created_at: -1 })
+    .limit(100)
+    .toArray();
+  return logs.map((l) => ({ ...l, id: l._id as any as string }));
+}
+
+export async function checkSmsDeliveryStatusFn(input: { data: { trackingId: string; logId?: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const settings = await db.collection("sms_settings").findOne({ owner_id: session.ownerId });
+  if (!settings?.apiKey || !settings?.userName) {
+    throw new Error("Missing API credentials in SMS Settings");
+  }
+  const result = await lookupDlrStatus({
+    apiKey: settings.apiKey,
+    userName: settings.userName,
+    trackingId: data.trackingId,
+  });
+
+  if (data.logId && result.deliveryStatus) {
+    await db.collection("sms_logs").updateOne(
+      { _id: data.logId as any, owner_id: session.ownerId },
+      { $set: { delivery_status: result.deliveryStatus } }
+    );
+  }
+
+  return result;
+}
+
+export async function deleteSmsLogFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("sms_logs").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
+}
+

@@ -8,7 +8,7 @@ import {
   Banknote, BarChart3, Settings, FileText, Users,
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
-  Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark
+  Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,6 +32,7 @@ import { ProductSearchSelect } from "@/components/product-search";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 
 const businessLinks = [
+  { to: "/sms",            labelKey: "sms_management",  desc: "Send bulk SMS, offers & auto triggers", icon: MessageSquare, perm: "sales"      as const },
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
   { to: "/purchases",      labelKey: "new_purchase",    desc: "Log product inventory buys", icon: ShoppingCart, perm: "purchases"  as const },
   { to: "/online-sells",   labelKey: "online_sell",     desc: "Track web and online sales", icon: DollarSign,   perm: "sales"      as const },

@@ -245,6 +245,16 @@ const dict = {
   add_bank_account: { bn: "নতুন ব্যাংক একাউন্ট", en: "Add Bank Account" },
   take_loan: { bn: "ঋণ গ্রহণ", en: "Take Loan" },
   pay_installment: { bn: "কিস্তি পরিশোধ", en: "Pay Installment" },
+  sms: { bn: "এসএমএস", en: "SMS" },
+  sms_management: { bn: "এসএমএস প্যানেল", en: "SMS Panel" },
+  sms_desc: { bn: "সাপ্লায়ার, কাস্টমার ও বাল্ক মেসেজ পাঠান এবং ক্রয়ের পর অটো এসএমএস", en: "Send bulk SMS to suppliers, customers, offers & auto-SMS triggers" },
+  send_sms: { bn: "এসএমএস পাঠান", en: "Send SMS" },
+  sms_balance: { bn: "এসএমএস ব্যালেন্স", en: "SMS Balance" },
+  sms_settings: { bn: "এসএমএস সেটিংস", en: "SMS Settings" },
+  sms_history: { bn: "মেসেজ হিস্টোরি", en: "SMS Logs" },
+  suppliers_sms: { bn: "সাপ্লায়ার এসএমএস", en: "Suppliers SMS" },
+  customers_sms: { bn: "কাস্টমার এসএমএস", en: "Customer SMS" },
+  auto_sms_purchase: { bn: "ক্রয়ের পর অটো এসএমএস", en: "Auto SMS After Purchase" },
 } as const;
 
 export type DictKey = keyof typeof dict;

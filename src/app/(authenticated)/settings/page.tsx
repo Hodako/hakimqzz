@@ -18,7 +18,8 @@ import {
   updateEmployeePermissionsFn,
   deleteLicenseFn,
 } from "@/lib/rpc-admin";
-import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer } from "lucide-react";
+import Link from "next/link";
+import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer, MessageSquare } from "lucide-react";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
@@ -998,6 +999,40 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+          </div>
+        </Card>
+
+        {/* SMS Gateway Quick Card */}
+        <Card className="glass-card p-5 space-y-4 border-emerald-500/20 bg-emerald-500/5 relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                  <MessageSquare className="size-6" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-lg">{lang === "bn" ? "এসএমএস সিস্টেম ও গেটওয়ে" : "SMS System & MiMSMS Gateway"}</h2>
+                  <p className="text-xs text-muted-foreground">{lang === "bn" ? "বাল্ক এসএমএস, কাস্টমার অফার ও অটোমেটিক মেসেজ" : "Bulk messaging, supplier notices, customer offers & post-purchase auto SMS"}</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {lang === "bn"
+                ? "MiMSMS API (v2) ইন্টিগ্রেশনের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার, সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
+                : "Manage API credentials, check real-time SMS balances, dispatch marketing campaigns, and configure automatic post-sale notifications."}
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link href="/sms">
+              <Button
+                type="button"
+                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                {lang === "bn" ? "এসএমএস প্যানেল ও সেটিংস খুলুন" : "Open SMS Panel & Settings"}
+              </Button>
+            </Link>
           </div>
         </Card>
 

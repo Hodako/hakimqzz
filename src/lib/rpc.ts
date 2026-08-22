@@ -257,3 +257,12 @@ export const getBankLoansFn = () => rpc<any[]>({ method: "getBankLoansFn" });
 export const createBankLoanFn = (input: { data: any }) => rpc<any>({ method: "createBankLoanFn", input });
 export const payBankLoanInstallmentFn = (input: { data: any }) => rpc<{ success: boolean; id: string; isFullyPaid: boolean; remaining: number }>({ method: "payBankLoanInstallmentFn", input });
 export const deleteBankLoanFn = (input: { data: { id: string } }) => rpc<{ success: boolean }>({ method: "deleteBankLoanFn", input });
+
+// ── SMS Gateway & Campaigns (MiMSMS v2) ─────────────────────────────────────
+export const getSmsSettingsFn = makeReadAction("getSmsSettingsFn");
+export const updateSmsSettingsFn = makeWriteAction("updateSmsSettingsFn");
+export const checkSmsBalanceFn = makeReadAction("checkSmsBalanceFn");
+export const sendSmsCampaignFn = makeWriteAction("sendSmsCampaignFn");
+export const getSmsLogsFn = makeReadAction("getSmsLogsFn");
+export const checkSmsDeliveryStatusFn = makeWriteAction("checkSmsDeliveryStatusFn");
+export const deleteSmsLogFn = makeWriteAction("deleteSmsLogFn");
