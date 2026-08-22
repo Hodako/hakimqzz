@@ -384,7 +384,7 @@ export default function SuperAdminPage() {
             <p className="text-xl font-bold font-num text-foreground">
               {(stats.data?.totalSmsSent ?? 0).toLocaleString()}
             </p>
-            <span className="text-[10px] text-emerald-600 font-semibold">Delivered via MiMSMS</span>
+            <span className="text-[10px] text-emerald-600 font-semibold">SMS Gateway Active</span>
           </Card>
 
           <Card className="p-3.5 rounded-2xl bg-card border-border/80 shadow-xs space-y-1">

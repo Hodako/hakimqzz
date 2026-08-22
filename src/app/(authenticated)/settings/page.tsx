@@ -1012,15 +1012,15 @@ export default function SettingsPage() {
                   <MessageSquare className="size-6" />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-lg">{lang === "bn" ? "এসএমএস সিস্টেম ও গেটওয়ে" : "SMS System & MiMSMS Gateway"}</h2>
+                  <h2 className="font-semibold text-lg">{lang === "bn" ? "এসএমএস সিস্টেম ও বার্তা প্যানেল" : "SMS System & Gateway"}</h2>
                   <p className="text-xs text-muted-foreground">{lang === "bn" ? "বাল্ক এসএমএস, কাস্টমার অফার ও অটোমেটিক মেসেজ" : "Bulk messaging, supplier notices, customer offers & post-purchase auto SMS"}</p>
                 </div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {lang === "bn"
-                ? "MiMSMS API (v2) ইন্টিগ্রেশনের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার, সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
-                : "Manage API credentials, check real-time SMS balances, dispatch marketing campaigns, and configure automatic post-sale notifications."}
+                ? "এসএমএস গেটওয়ের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার, সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
+                : "Manage SMS balance, dispatch marketing campaigns, and configure automatic post-sale notifications."}
             </p>
           </div>
           <div className="pt-2">
@@ -1030,7 +1030,7 @@ export default function SettingsPage() {
                 className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
-                {lang === "bn" ? "এসএমএস প্যানেল ও সেটিংস খুলুন" : "Open SMS Panel & Settings"}
+                {lang === "bn" ? "এসএমএস প্যানেল খুলুন" : "Open SMS Panel"}
               </Button>
             </Link>
           </div>

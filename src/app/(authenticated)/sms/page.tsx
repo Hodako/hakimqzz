@@ -154,8 +154,8 @@ export default function SmsPage() {
           if (showToast) {
             toast.error(
               lang === "bn"
-                ? "MiMSMS সতর্কতা: আপনার সার্ভার/ডিভাইস IP অনুমোদিত নয় (IP Blacklist)। sms.mimsms.com-এ গিয়ে IP Whitelist চেক করুন।"
-                : "MiMSMS Warning: Server/Device IP is blocked or not in MiMSMS IP Whitelist."
+                ? "সতর্কতা: সার্ভার সংযোগে সমস্যা হচ্ছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
+                : "Warning: SMS gateway connection issue. Please retry shortly."
             );
           }
         } else {
@@ -535,39 +535,36 @@ export default function SmsPage() {
   const hasConfig = Boolean(smsSettings?.apiKey && smsSettings?.userName && smsSettings?.senderName);
 
   return (
-    <div className="p-2.5 sm:p-5 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="p-2.5 sm:p-5 lg:p-8 max-w-7xl mx-auto space-y-3 sm:space-y-6">
       {/* Top Banner / Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-gradient-to-r from-emerald-600/10 via-teal-600/10 to-primary/10 border border-emerald-500/20 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm">
-        <div className="space-y-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-600/10 via-teal-600/10 to-primary/10 border border-emerald-500/20 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm">
+        <div className="space-y-0.5 sm:space-y-1 min-w-0">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 text-primary">
-              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="p-1.5 sm:p-2 rounded-xl bg-primary/10 text-primary shrink-0">
+              <MessageSquare className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">
+            <h1 className="text-base sm:text-2xl lg:text-3xl font-bold tracking-tight truncate whitespace-nowrap">
               {lang === "bn" ? "এসএমএস সিস্টেম ও বার্তা প্যানেল" : "SMS Management & Gateway"}
             </h1>
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] sm:text-xs font-semibold uppercase">
-              MiMSMS v2
-            </Badge>
           </div>
-          <p className="text-muted-foreground text-xs sm:text-sm">
+          <p className="text-muted-foreground text-[11px] sm:text-sm truncate sm:whitespace-normal">
             {lang === "bn"
-              ? "সাপ্লায়ার, কাস্টমারদের কাছে বাল্ক এসএমএস, বিশেষ অফার এবং বিক্রির পর অটোমেটিক বার্তা পাঠান।"
-              : "Send broadcast SMS, promotional offers, supplier alerts, and automatic post-purchase confirmations."}
+              ? "সাপ্লায়ার ও কাস্টমারদের কাছে বাল্ক ও অটোমেটিক বার্তা পাঠান।"
+              : "Send broadcast SMS, promotional offers, and automatic notices."}
           </p>
         </div>
 
         {/* Real-time SMS Balance & Recharge Widget */}
-        <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2.5 sm:gap-3 bg-card/80 backdrop-blur border border-border/80 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 bg-card/90 backdrop-blur border border-border/80 p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm shrink-0">
           <div className="flex flex-col">
-            <span className="text-[11px] sm:text-xs text-muted-foreground font-medium flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              {lang === "bn" ? "অবশিষ্ট এসএমএস ক্রেডিট" : "Available SMS Credits"}
+            <span className="text-[10px] sm:text-xs text-muted-foreground font-medium flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              {lang === "bn" ? "অবশিষ্ট ক্রেডিট" : "SMS Credits"}
             </span>
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-xl sm:text-2xl font-bold text-foreground font-num">
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-lg sm:text-2xl font-bold text-foreground font-num">
                 {balanceLoading ? (
-                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-primary inline" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-primary inline" />
                 ) : balance !== null ? (
                   balance
                 ) : smsSettings?.sms_credits !== undefined ? (
@@ -576,7 +573,7 @@ export default function SmsPage() {
                   "0"
                 )}
               </span>
-              <span className="text-xs text-muted-foreground">{lang === "bn" ? "টি" : "SMS"}</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">{lang === "bn" ? "টি" : "SMS"}</span>
             </div>
           </div>
 
@@ -586,7 +583,7 @@ export default function SmsPage() {
               variant="outline"
               onClick={() => fetchBalance(true)}
               disabled={balanceLoading}
-              className="h-8 sm:h-9 px-2.5 rounded-lg sm:rounded-xl border-primary/30 hover:bg-primary/5 text-primary"
+              className="h-7 sm:h-9 px-2 sm:px-2.5 rounded-lg sm:rounded-xl border-primary/30 hover:bg-primary/5 text-primary"
               title={lang === "bn" ? "ব্যালেন্স রিফ্রেশ" : "Refresh Balance"}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${balanceLoading ? "animate-spin" : ""}`} />
@@ -594,164 +591,196 @@ export default function SmsPage() {
             <Button
               size="sm"
               onClick={() => setRechargeOpen(true)}
-              className="h-8 sm:h-9 px-3 sm:px-4 rounded-lg sm:rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm shadow-md gap-1.5 cursor-pointer"
+              className="h-7 sm:h-9 px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm shadow-md gap-1 cursor-pointer"
             >
-              <MessageCircle className="w-4 h-4 fill-current" />
-              <span>{lang === "bn" ? "রিচার্জ করুন" : "Recharge SMS"}</span>
+              <MessageCircle className="w-3.5 h-3.5 fill-current" />
+              <span>{lang === "bn" ? "রিচার্জ" : "Recharge"}</span>
             </Button>
           </div>
         </div>
       </div>
 
       {/* Main Feature Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-        <div className="overflow-x-auto pb-1 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
-          <TabsList className="bg-muted/70 p-1 rounded-xl sm:rounded-2xl h-auto flex flex-nowrap sm:flex-wrap overflow-x-auto gap-1 min-w-max sm:min-w-0">
-            <TabsTrigger value="direct" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
-              <span>{lang === "bn" ? "ডাইরেক্ট মেসেজ" : "Direct SMS"}</span>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3 sm:space-y-6">
+        {/* Mobile View: Clean Dropdown Button with Short Titles */}
+        <div className="block sm:hidden">
+          <Select value={activeTab} onValueChange={setActiveTab}>
+            <SelectTrigger className="w-full h-10 rounded-xl bg-card border-border/80 font-semibold text-xs shadow-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="direct">
+                <div className="flex items-center gap-2">
+                  <Send className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{lang === "bn" ? "সরাসরি এসএমএস" : "Direct SMS"}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="customers">
+                <div className="flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{lang === "bn" ? `কাস্টমার (${validCustomers.length})` : `Customers (${validCustomers.length})`}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="suppliers">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>{lang === "bn" ? `সাপ্লায়ার (${validParties.length})` : `Suppliers (${validParties.length})`}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="auto">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{lang === "bn" ? "অটো বার্তা" : "Auto SMS"}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="logs">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{lang === "bn" ? `হিস্টোরি (${smsLogs.length})` : `History (${smsLogs.length})`}</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop View: Horizontal Tab List with Short Titles */}
+        <div className="hidden sm:block overflow-x-auto pb-1">
+          <TabsList className="bg-muted/70 p-1 rounded-xl sm:rounded-2xl h-auto flex flex-wrap gap-1">
+            <TabsTrigger value="direct" className="rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Send className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{lang === "bn" ? "সরাসরি" : "Direct"}</span>
             </TabsTrigger>
-            <TabsTrigger value="customers" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
-              <span>{lang === "bn" ? "কাস্টমার ও অফার" : "Customer & Offers"}</span>
-              <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0 h-4 sm:h-5">
+            <TabsTrigger value="customers" className="rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-blue-600" />
+              <span>{lang === "bn" ? "কাস্টমার" : "Customers"}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                 {validCustomers.length}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="suppliers" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
-              <span>{lang === "bn" ? "সাপ্লায়ার এসএমএস" : "Suppliers SMS"}</span>
-              <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0 h-4 sm:h-5">
+            <TabsTrigger value="suppliers" className="rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Truck className="w-3.5 h-3.5 text-purple-600" />
+              <span>{lang === "bn" ? "সাপ্লায়ার" : "Suppliers"}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                 {validParties.length}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="auto" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
-              <span>{lang === "bn" ? "অটো এসএমএস" : "Auto SMS"}</span>
+            <TabsTrigger value="auto" className="rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5 text-amber-600" />
+              <span>{lang === "bn" ? "অটো বার্তা" : "Auto SMS"}</span>
               {autoSmsEnabled && (
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="logs" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
-              <span>{lang === "bn" ? "হিস্টোরি" : "SMS Logs"}</span>
-              <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0 h-4 sm:h-5">
+            <TabsTrigger value="logs" className="rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{lang === "bn" ? "হিস্টোরি" : "Logs"}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                 {smsLogs.length}
               </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
-              <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-600" />
-              <span>{lang === "bn" ? "সেটিংস" : "Settings"}</span>
             </TabsTrigger>
           </TabsList>
         </div>
 
         {/* ─── TAB 1: DIRECT SMS ────────────────────────────────────────────── */}
-        <TabsContent value="direct" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 border-border/80 shadow-sm rounded-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Send className="w-5 h-5 text-emerald-600" />
-                  {lang === "bn" ? "যেকোনো নম্বরে সরাসরি এসএমএস পাঠান" : "Send Direct SMS to Numbers"}
+        <TabsContent value="direct" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <Card className="lg:col-span-2 border-border/80 shadow-sm rounded-xl sm:rounded-2xl">
+              <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-lg font-bold truncate whitespace-nowrap">
+                  <Send className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" />
+                  <span className="truncate">{lang === "bn" ? "যেকোনো নম্বরে সরাসরি এসএমএস পাঠান" : "Send Direct SMS"}</span>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs hidden sm:block">
                   {lang === "bn"
-                    ? "এক বা একাধিক মোবাইল নম্বরে দ্রুত কাস্টম বার্তা পাঠান (কমা বা নতুন লাইন দিয়ে আলাদা করুন)।"
-                    : "Enter one or multiple mobile numbers separated by commas or line breaks."}
+                    ? "এক বা একাধিক মোবাইল নম্বরে দ্রুত কাস্টম বার্তা পাঠান।"
+                    : "Enter mobile numbers separated by commas or line breaks."}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
+              <CardContent className="p-3.5 sm:p-6 pt-0 space-y-3 sm:space-y-4">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="direct-numbers" className="font-semibold text-sm">
-                      {lang === "bn" ? "মোবাইল নম্বরসমূহ (BD Mobile Numbers)" : "Mobile Numbers (01XXXXXXXXX)"}
+                    <Label htmlFor="direct-numbers" className="font-semibold text-xs sm:text-sm">
+                      {lang === "bn" ? "মোবাইল নম্বরসমূহ" : "Mobile Numbers (01XXXXXXXXX)"}
                     </Label>
-                    <span className="text-xs text-muted-foreground">
-                      {directNumbersList.length > 0
-                        ? lang === "bn"
-                          ? `সঠিক নম্বর: ${directNumbersList.length} টি`
-                          : `Valid Numbers: ${directNumbersList.length}`
-                        : lang === "bn"
-                        ? "উদাহরণ: 01711000000, 01811000000"
-                        : "e.g. 01711000000, 01811000000"}
-                    </span>
+                    {directNumbersList.length > 0 && (
+                      <span className="text-[11px] font-semibold text-emerald-600">
+                        {lang === "bn" ? `সঠিক নম্বর: ${directNumbersList.length} টি` : `Valid: ${directNumbersList.length}`}
+                      </span>
+                    )}
                   </div>
                   <Textarea
                     id="direct-numbers"
                     placeholder="017XXXXXXXX&#10;018XXXXXXXX&#10;019XXXXXXXX"
                     value={directNumbers}
                     onChange={e => setDirectNumbers(e.target.value)}
-                    rows={3}
-                    className="rounded-xl font-mono text-sm"
+                    rows={2}
+                    className="rounded-xl font-mono text-xs sm:text-sm min-h-[56px] py-2"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="direct-msg" className="font-semibold text-sm">
-                      {lang === "bn" ? "এসএমএস বার্তা" : "Message Content"}
-                    </Label>
-                  </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="direct-msg" className="font-semibold text-xs sm:text-sm">
+                    {lang === "bn" ? "এসএমএস বার্তা" : "Message Content"}
+                  </Label>
                   <Textarea
                     id="direct-msg"
                     placeholder={lang === "bn" ? "আপনার বার্তা লিখুন..." : "Type your SMS content here..."}
                     value={directMessage}
                     onChange={e => setDirectMessage(e.target.value.slice(0, 1000))}
                     maxLength={1000}
-                    rows={5}
-                    className="rounded-xl text-base"
+                    rows={3}
+                    className="rounded-xl text-xs sm:text-sm min-h-[76px] py-2"
                   />
                   <SmsCharacterCounter message={directMessage} maxLength={1000} />
                 </div>
 
                 {/* Quick Templates */}
-                <div className="space-y-2 pt-2">
+                <div className="space-y-1.5 pt-1">
                   <Label className="text-xs text-muted-foreground font-medium">
-                    {lang === "bn" ? "কুইক টেমপ্লেট নির্বাচন করুন:" : "Quick Preset Messages:"}
+                    {lang === "bn" ? "কুইক টেমপ্লেট:" : "Quick Preset Messages:"}
                   </Label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="text-xs rounded-lg h-7"
+                      className="text-xs rounded-lg h-7 px-2"
                       onClick={() => setDirectMessage("Dear Customer, thank you for shopping with us! Visit again soon.")}
                     >
-                      {lang === "bn" ? "ধন্যবাদ বার্তা" : "Thank You Message"}
+                      {lang === "bn" ? "ধন্যবাদ বার্তা" : "Thank You"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="text-xs rounded-lg h-7"
+                      className="text-xs rounded-lg h-7 px-2"
                       onClick={() => setDirectMessage("সম্মানিত গ্রাহক, আপনার দোকানে কিছু বকেয়া রয়েছে। দয়া করে পরিশোধ করুন।")}
                     >
-                      {lang === "bn" ? "বকেয়া তাগাদা" : "Due Reminder (BN)"}
+                      {lang === "bn" ? "বকেয়া তাগাদা" : "Due Reminder"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="text-xs rounded-lg h-7"
-                      onClick={() => setDirectMessage("Eid Mubarak! Enjoy special discount on our latest fashion collection.")}
+                      className="text-xs rounded-lg h-7 px-2"
+                      onClick={() => setDirectMessage("Special offer! Enjoy discount on our store products.")}
                     >
-                      {lang === "bn" ? "ঈদ মোবারক অফার" : "Eid Promo"}
+                      {lang === "bn" ? "অফার বার্তা" : "Promo Offer"}
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Label className="text-xs text-muted-foreground whitespace-nowrap">
-                      {lang === "bn" ? "রুট টাইপ:" : "Route Type:"}
+                      {lang === "bn" ? "রুট:" : "Route:"}
                     </Label>
                     <Select value={directTxType} onValueChange={(val: "T" | "P") => setDirectTxType(val)}>
-                      <SelectTrigger className="h-9 w-44 rounded-xl text-xs">
+                      <SelectTrigger className="h-8 w-36 rounded-xl text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="T">{lang === "bn" ? "ট্রানজেকশনাল (T) - দ্রুত" : "Transactional (T)"}</SelectItem>
+                        <SelectItem value="T">{lang === "bn" ? "ট্রানজেকশনাল (T)" : "Transactional (T)"}</SelectItem>
                         <SelectItem value="P">{lang === "bn" ? "প্রোমোশনাল (P)" : "Promotional (P)"}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -760,17 +789,17 @@ export default function SmsPage() {
                   <Button
                     onClick={handleSendDirect}
                     disabled={directSending || !directNumbersList.length || !directMessage.trim()}
-                    className="w-full sm:w-auto rounded-xl px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                    className="w-full sm:w-auto rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs sm:text-sm"
                   >
                     {directSending ? (
                       <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending SMS..."}
+                        <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                        {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4 mr-2" />
-                        {lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send SMS (${directNumbersList.length})`}
+                        <Send className="w-3.5 h-3.5 mr-2" />
+                        {lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send (${directNumbersList.length})`}
                       </>
                     )}
                   </Button>
@@ -826,40 +855,40 @@ export default function SmsPage() {
         </TabsContent>
 
         {/* ─── TAB 2: CUSTOMER SMS & OFFERS ─────────────────────────────────── */}
-        <TabsContent value="customers" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-border/80 shadow-sm rounded-2xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    {lang === "bn" ? "কাস্টমারদের কাছে বাল্ক এসএমএস ও অফার ক্যাম্পেইন" : "Customer Bulk SMS & Offer Campaigns"}
+        <TabsContent value="customers" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+              <Card className="border-border/80 shadow-sm rounded-xl sm:rounded-2xl">
+                <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-lg font-bold truncate whitespace-nowrap">
+                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 shrink-0" />
+                    <span className="truncate">{lang === "bn" ? "কাস্টমার এসএমএস ও অফার ক্যাম্পেইন" : "Customer Bulk SMS & Offers"}</span>
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs hidden sm:block">
                     {lang === "bn"
                       ? "সকল বা নির্দিষ্ট কাস্টমারদের কাছে ডিসকাউন্ট, বিশেষ অফার বা গুরুত্বপূর্ণ নোটিশ পাঠান।"
                       : "Send promotional offers, seasonal discounts, or general notices to customers."}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="p-3.5 sm:p-6 pt-0 space-y-3 sm:space-y-4">
                   {/* Target Audience Selector */}
-                  <div className="space-y-2">
-                    <Label className="font-semibold text-sm">
-                      {lang === "bn" ? "প্রাপক কাস্টমার নির্বাচন করুন:" : "Target Customer Audience:"}
+                  <div className="space-y-1.5">
+                    <Label className="font-semibold text-xs sm:text-sm">
+                      {lang === "bn" ? "প্রাপক কাস্টমার:" : "Target Audience:"}
                     </Label>
-                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => setCustTargetMode("all")}
-                        className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all ${
+                        className={`p-2 sm:p-3 rounded-xl border text-left transition-all ${
                           custTargetMode === "all"
                             ? "border-blue-600 bg-blue-500/10 ring-2 ring-blue-500/20"
                             : "border-border hover:bg-muted/40"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-                          <span className="font-semibold text-xs sm:text-sm truncate">{lang === "bn" ? "সকল কাস্টমার" : "All Customers"}</span>
-                          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
+                          <span className="font-semibold text-xs truncate">{lang === "bn" ? "সকল কাস্টমার" : "All"}</span>
+                          <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         </div>
                         <span className="text-[10px] sm:text-xs text-muted-foreground font-num block">
                           {validCustomers.length} {lang === "bn" ? "জন" : "recipients"}
@@ -869,15 +898,15 @@ export default function SmsPage() {
                       <button
                         type="button"
                         onClick={() => setCustTargetMode("dues")}
-                        className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all ${
+                        className={`p-2 sm:p-3 rounded-xl border text-left transition-all ${
                           custTargetMode === "dues"
                             ? "border-amber-600 bg-amber-500/10 ring-2 ring-amber-500/20"
                             : "border-border hover:bg-muted/40"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-                          <span className="font-semibold text-xs sm:text-sm truncate">{lang === "bn" ? "বকেয়াদার" : "With Dues"}</span>
-                          <PhoneCall className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
+                          <span className="font-semibold text-xs truncate">{lang === "bn" ? "বকেয়াদার" : "With Dues"}</span>
+                          <PhoneCall className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         </div>
                         <span className="text-[10px] sm:text-xs text-muted-foreground font-num block">
                           {customersWithDues.length} {lang === "bn" ? "জন" : "recipients"}
@@ -887,15 +916,15 @@ export default function SmsPage() {
                       <button
                         type="button"
                         onClick={() => setCustTargetMode("selected")}
-                        className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all ${
+                        className={`p-2 sm:p-3 rounded-xl border text-left transition-all ${
                           custTargetMode === "selected"
                             ? "border-purple-600 bg-purple-500/10 ring-2 ring-purple-500/20"
                             : "border-border hover:bg-muted/40"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-                          <span className="font-semibold text-xs sm:text-sm truncate">{lang === "bn" ? "বাছাইকৃত" : "Custom"}</span>
-                          <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 shrink-0" />
+                          <span className="font-semibold text-xs truncate">{lang === "bn" ? "বাছাইকৃত" : "Custom"}</span>
+                          <UserCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         </div>
                         <span className="text-[10px] sm:text-xs text-muted-foreground font-num block">
                           {selectedCustIds.length} {lang === "bn" ? "জন" : "selected"}
@@ -905,38 +934,36 @@ export default function SmsPage() {
                   </div>
 
                   {/* Campaign Title */}
-                  <div className="space-y-2">
-                    <Label htmlFor="cust-camp-title" className="font-semibold text-sm">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cust-camp-title" className="font-semibold text-xs sm:text-sm">
                       {lang === "bn" ? "ক্যাম্পেইন শিরোনাম (অপশনাল)" : "Campaign Title (Optional)"}
                     </Label>
                     <Input
                       id="cust-camp-title"
-                      placeholder="e.g. Eid Discount 20%, New Arrival Notice"
+                      placeholder="e.g. Special Discount 20%, Notice"
                       value={custCampaignTitle}
                       onChange={e => setCustCampaignTitle(e.target.value)}
-                      className="rounded-xl"
+                      className="rounded-xl h-9 text-xs sm:text-sm"
                     />
                   </div>
 
                   {/* Message Composer */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="cust-msg" className="font-semibold text-sm">
-                        {lang === "bn" ? "অফার বা প্রচারমূলক বার্তা" : "Offer / Promotional Message"}
-                      </Label>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cust-msg" className="font-semibold text-xs sm:text-sm">
+                      {lang === "bn" ? "অফার বা প্রচারমূলক বার্তা" : "Offer / Promotional Message"}
+                    </Label>
                     <Textarea
                       id="cust-msg"
                       placeholder={
                         lang === "bn"
-                          ? "প্রিয় {customer_name}, {shop_name}-এ শুরু হয়েছে বিশেষ ছাড়! আজই ভিজিট করুন..."
-                          : "Dear {customer_name}, special sale at {shop_name}! Get flat 20% off this week..."
+                          ? "প্রিয় {customer_name}, বিশেষ ছাড় শুরু হয়েছে! আজই ভিজিট করুন..."
+                          : "Dear {customer_name}, special discount at our store!"
                       }
                       value={custMessage}
                       onChange={e => setCustMessage(e.target.value.slice(0, 1000))}
                       maxLength={1000}
-                      rows={5}
-                      className="rounded-xl text-base"
+                      rows={3}
+                      className="rounded-xl text-xs sm:text-sm min-h-[76px] py-2"
                     />
                     <SmsCharacterCounter message={custMessage} maxLength={1000} />
                   </div>
@@ -1109,40 +1136,40 @@ export default function SmsPage() {
         </TabsContent>
 
         {/* ─── TAB 3: SUPPLIER SMS ─────────────────────────────────────────── */}
-        <TabsContent value="suppliers" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-border/80 shadow-sm rounded-2xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Truck className="w-5 h-5 text-purple-600" />
-                    {lang === "bn" ? "সাপ্লায়ার ও পার্টনারদের এসএমএস বার্তা" : "Supplier & Vendor Communication"}
+        <TabsContent value="suppliers" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+              <Card className="border-border/80 shadow-sm rounded-xl sm:rounded-2xl">
+                <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-lg font-bold truncate whitespace-nowrap">
+                    <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 shrink-0" />
+                    <span className="truncate">{lang === "bn" ? "সাপ্লায়ার ও পার্টনারদের এসএমএস বার্তা" : "Supplier SMS"}</span>
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs hidden sm:block">
                     {lang === "bn"
-                      ? "পণ্য ক্রয় সংক্রান্ত অর্ডার, পেমেন্ট কনফার্মেশন বা স্টক অনুসন্ধান বার্তা পাঠান।"
-                      : "Send purchase requests, stock queries, or payment notices directly to suppliers."}
+                      ? "পণ্য ক্রয় সংক্রান্ত অর্ডার বা পেমেন্ট কনফার্মেশন বার্তা পাঠান।"
+                      : "Send purchase requests or payment notices directly to suppliers."}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="p-3.5 sm:p-6 pt-0 space-y-3 sm:space-y-4">
                   {/* Target Supplier Selector */}
-                  <div className="space-y-2">
-                    <Label className="font-semibold text-sm">
-                      {lang === "bn" ? "প্রাপক সাপ্লায়ার নির্বাচন করুন:" : "Target Suppliers:"}
+                  <div className="space-y-1.5">
+                    <Label className="font-semibold text-xs sm:text-sm">
+                      {lang === "bn" ? "প্রাপক সাপ্লায়ার:" : "Target Suppliers:"}
                     </Label>
-                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => setSuppTargetMode("all")}
-                        className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all ${
+                        className={`p-2 sm:p-3 rounded-xl border text-left transition-all ${
                           suppTargetMode === "all"
                             ? "border-purple-600 bg-purple-500/10 ring-2 ring-purple-500/20"
                             : "border-border hover:bg-muted/40"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-                          <span className="font-semibold text-xs sm:text-sm truncate">{lang === "bn" ? "সকল সাপ্লায়ার" : "All Suppliers"}</span>
-                          <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 shrink-0" />
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-semibold text-xs truncate">{lang === "bn" ? "সকল সাপ্লায়ার" : "All"}</span>
+                          <Truck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         </div>
                         <span className="text-[10px] sm:text-xs text-muted-foreground font-num block">
                           {validParties.length} {lang === "bn" ? "জন" : "suppliers"}
@@ -1152,15 +1179,15 @@ export default function SmsPage() {
                       <button
                         type="button"
                         onClick={() => setSuppTargetMode("selected")}
-                        className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all ${
+                        className={`p-2 sm:p-3 rounded-xl border text-left transition-all ${
                           suppTargetMode === "selected"
                             ? "border-purple-600 bg-purple-500/10 ring-2 ring-purple-500/20"
                             : "border-border hover:bg-muted/40"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-0.5 sm:mb-1">
-                          <span className="font-semibold text-xs sm:text-sm truncate">{lang === "bn" ? "বাছাইকৃত" : "Selected"}</span>
-                          <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 shrink-0" />
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-semibold text-xs truncate">{lang === "bn" ? "বাছাইকৃত" : "Selected"}</span>
+                          <UserCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         </div>
                         <span className="text-[10px] sm:text-xs text-muted-foreground font-num block">
                           {selectedSuppIds.length} {lang === "bn" ? "জন" : "selected"}
@@ -1170,48 +1197,46 @@ export default function SmsPage() {
                   </div>
 
                   {/* Message Composer */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="supp-msg" className="font-semibold text-sm">
-                        {lang === "bn" ? "বার্তা লিখুন" : "Supplier Message"}
-                      </Label>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="supp-msg" className="font-semibold text-xs sm:text-sm">
+                      {lang === "bn" ? "বার্তা" : "Supplier Message"}
+                    </Label>
                     <Textarea
                       id="supp-msg"
                       placeholder={
                         lang === "bn"
-                          ? "সম্মানিত সাপ্লায়ার, {shop_name} থেকে আমাদের নতুন লটের মালের অর্ডার পাঠানো হয়েছে। অনুগ্রহ করে স্টক কনফার্ম করুন..."
-                          : "Dear Supplier, we need urgent stock dispatch for {shop_name}. Please confirm availability."
+                          ? "সম্মানিত সাপ্লায়ার, নতুন অর্ডারের মাল দ্রুত পাঠান..."
+                          : "Dear Supplier, please confirm dispatch."
                       }
                       value={suppMessage}
                       onChange={e => setSuppMessage(e.target.value.slice(0, 1000))}
                       maxLength={1000}
-                      rows={5}
-                      className="rounded-xl text-base"
+                      rows={3}
+                      className="rounded-xl text-xs sm:text-sm min-h-[76px] py-2"
                     />
                     <SmsCharacterCounter message={suppMessage} maxLength={1000} />
                   </div>
 
                   {/* Preset Templates */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 pt-1">
                     <Label className="text-xs text-muted-foreground font-medium">
-                      {lang === "bn" ? "সাপ্লায়ার টেমপ্লেট নির্বাচন করুন:" : "Quick Supplier Presets:"}
+                      {lang === "bn" ? "সাপ্লায়ার টেমপ্লেট:" : "Presets:"}
                     </Label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="text-xs rounded-lg h-7"
+                        className="text-xs rounded-lg h-7 px-2"
                         onClick={() => setSuppMessage("সম্মানিত সাপ্লায়ার, আমাদের নতুন লটের পণ্যের তাগাদা ও রেট জানার জন্য যোগাযোগ করছি।")}
                       >
-                        {lang === "bn" ? "নতুন স্টক অর্ডার" : "Stock Inquiry (BN)"}
+                        {lang === "bn" ? "নতুন স্টক অর্ডার" : "Stock Inquiry"}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="text-xs rounded-lg h-7"
+                        className="text-xs rounded-lg h-7 px-2"
                         onClick={() => setSuppMessage("Dear Supplier, your payment has been processed successfully from {shop_name}. Thank you.")}
                       >
                         {lang === "bn" ? "পেমেন্ট নিশ্চিতকরণ" : "Payment Confirmed"}
@@ -1360,78 +1385,74 @@ export default function SmsPage() {
         </TabsContent>
 
         {/* ─── TAB 4: AUTOMATIC SMS ON PURCHASE ─────────────────────────────── */}
-        <TabsContent value="auto" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 border-border/80 shadow-sm rounded-2xl">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Smartphone className="w-5 h-5 text-amber-600" />
-                      {lang === "bn" ? "পণ্য ক্রয়ের পর স্বয়ংক্রিয় এসএমএস" : "Automated SMS on Customer Purchase"}
-                    </CardTitle>
-                    <CardDescription>
-                      {lang === "bn"
-                        ? "কাস্টমারের ফোন নম্বরে বিক্রি বা ইনভয়েস তৈরি হওয়ার সাথে সাথে অটো কনফার্মেশন এসএমএস পাঠানো হবে।"
-                        : "Automatically dispatches a personalized SMS invoice whenever a sale is completed with a customer phone number."}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2 bg-muted/60 p-2 rounded-xl">
+        <TabsContent value="auto" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <Card className="lg:col-span-2 border-border/80 shadow-sm rounded-xl sm:rounded-2xl">
+              <CardHeader className="p-3.5 sm:p-6 pb-2 sm:pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-lg font-bold truncate whitespace-nowrap">
+                    <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0" />
+                    <span className="truncate">{lang === "bn" ? "পণ্য ক্রয়ের পর স্বয়ংক্রিয় এসএমএস" : "Auto SMS on Purchase"}</span>
+                  </CardTitle>
+                  <div className="flex items-center gap-2 bg-muted/60 px-2 py-1 rounded-xl shrink-0">
                     <Switch
                       id="auto-sms-toggle"
                       checked={autoSmsEnabled}
                       onCheckedChange={setAutoSmsEnabled}
                     />
-                    <Label htmlFor="auto-sms-toggle" className="font-bold text-xs cursor-pointer">
+                    <Label htmlFor="auto-sms-toggle" className="font-bold text-[11px] cursor-pointer">
                       {autoSmsEnabled ? (
-                        <span className="text-emerald-600 font-semibold">{lang === "bn" ? "চালু আছে" : "ACTIVE"}</span>
+                        <span className="text-emerald-600">{lang === "bn" ? "চালু" : "ON"}</span>
                       ) : (
-                        <span className="text-muted-foreground">{lang === "bn" ? "বন্ধ" : "DISABLED"}</span>
+                        <span className="text-muted-foreground">{lang === "bn" ? "বন্ধ" : "OFF"}</span>
                       )}
                     </Label>
                   </div>
                 </div>
+                <CardDescription className="text-xs hidden sm:block">
+                  {lang === "bn"
+                    ? "কাস্টমারের ফোন নম্বরে বিক্রি বা ইনভয়েস তৈরি হওয়ার সাথে সাথে অটো কনফার্মেশন এসএমএস পাঠানো হবে।"
+                    : "Automatically dispatches an SMS whenever a sale is completed."}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="auto-template" className="font-semibold text-sm">
-                      {lang === "bn" ? "স্বয়ংক্রিয় বার্তা টেমপ্লেট" : "Purchase Confirmation Template"}
-                    </Label>
-                  </div>
+              <CardContent className="p-3.5 sm:p-6 pt-0 space-y-3 sm:space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="auto-template" className="font-semibold text-xs sm:text-sm">
+                    {lang === "bn" ? "স্বয়ংক্রিয় বার্তা টেমপ্লেট" : "Purchase Confirmation Template"}
+                  </Label>
                   <Textarea
                     id="auto-template"
                     value={autoSmsTemplate}
                     onChange={e => setAutoSmsTemplate(e.target.value.slice(0, 1000))}
                     maxLength={1000}
-                    rows={4}
-                    className="rounded-xl text-sm leading-relaxed"
+                    rows={3}
+                    className="rounded-xl text-xs sm:text-sm leading-relaxed min-h-[76px] py-2"
                   />
                   <SmsCharacterCounter message={autoSmsTemplate} maxLength={1000} />
                 </div>
 
                 {/* Variable Inserters */}
-                <div className="space-y-2">
+                <div className="space-y-1.5 pt-1">
                   <Label className="text-xs text-muted-foreground font-medium">
-                    {lang === "bn" ? "টেমপ্লেটে যোগ করার ভ্যারিয়েবলসমূহ:" : "Available Template Placeholders (Click to insert):"}
+                    {lang === "bn" ? "যোগ করার ভ্যারিয়েবলসমূহ:" : "Available Placeholders:"}
                   </Label>
-                  <div className="flex flex-wrap gap-1.5 font-mono text-xs">
+                  <div className="flex flex-wrap gap-1 font-mono text-xs">
                     {[
-                      { key: "{customer_name}", desc: "গ্রাহকের নাম" },
-                      { key: "{shop_name}", desc: "দোকানের নাম" },
-                      { key: "{product_name}", desc: "পণ্যের নাম" },
+                      { key: "{customer_name}", desc: "নাম" },
+                      { key: "{shop_name}", desc: "দোকান" },
+                      { key: "{product_name}", desc: "পণ্য" },
                       { key: "{qty}", desc: "পরিমাণ" },
-                      { key: "{total_amount}", desc: "মোট টাকা" },
-                      { key: "{paid_amount}", desc: "জমা টাকা" },
-                      { key: "{due_amount}", desc: "বাকী টাকা" },
-                      { key: "{invoice_id}", desc: "ইনভয়েস নং" },
+                      { key: "{total_amount}", desc: "মোট" },
+                      { key: "{paid_amount}", desc: "জমা" },
+                      { key: "{due_amount}", desc: "বাকী" },
+                      { key: "{invoice_id}", desc: "ইনভয়েস" },
                     ].map(item => (
                       <Button
                         key={item.key}
                         type="button"
                         variant="secondary"
                         size="sm"
-                        className="h-7 text-xs rounded-lg bg-muted hover:bg-muted/80"
+                        className="h-6 text-[11px] rounded-lg bg-muted hover:bg-muted/80 px-1.5"
                         onClick={() => setAutoSmsTemplate(prev => prev + " " + item.key)}
                       >
                         + {item.key}
@@ -1441,11 +1462,11 @@ export default function SmsPage() {
                 </div>
 
                 {/* Test SMS Box */}
-                <div className="p-4 bg-muted/30 border border-border/60 rounded-xl space-y-3">
-                  <div className="flex items-center gap-2">
-                    <PhoneCall className="w-4 h-4 text-primary" />
+                <div className="p-3 bg-muted/30 border border-border/60 rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <PhoneCall className="w-3.5 h-3.5 text-primary" />
                     <Label className="text-xs font-semibold">
-                      {lang === "bn" ? "টেস্ট এসএমএস পাঠিয়ে যাচাই করুন" : "Send Test Post-Purchase SMS:"}
+                      {lang === "bn" ? "টেস্ট এসএমএস:" : "Send Test SMS:"}
                     </Label>
                   </div>
                   <div className="flex gap-2">
@@ -1453,29 +1474,29 @@ export default function SmsPage() {
                       placeholder="01XXXXXXXXX"
                       value={autoTestNumber}
                       onChange={e => setAutoTestNumber(e.target.value)}
-                      className="rounded-xl h-9 text-xs font-mono"
+                      className="rounded-xl h-8 text-xs font-mono"
                     />
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={handleSendTestAutoSms}
                       disabled={autoTestSending || !autoTestNumber}
-                      className="rounded-xl h-9 text-xs flex-shrink-0"
+                      className="rounded-xl h-8 text-xs flex-shrink-0 px-3"
                     >
-                      {autoTestSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" /> : <Send className="w-3.5 h-3.5 mr-1" />}
-                      {lang === "bn" ? "টেস্ট পাঠান" : "Send Test"}
+                      {autoTestSending ? <RefreshCw className="w-3 h-3 animate-spin mr-1" /> : <Send className="w-3 h-3 mr-1" />}
+                      {lang === "bn" ? "টেস্ট" : "Test"}
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-4 border-t">
+                <div className="flex justify-end pt-3 border-t">
                   <Button
                     onClick={handleSaveAutoSms}
                     disabled={autoSaving}
-                    className="rounded-xl px-6 bg-primary text-primary-foreground font-medium"
+                    className="w-full sm:w-auto rounded-xl px-5 h-9 bg-primary text-primary-foreground font-medium text-xs sm:text-sm"
                   >
-                    {autoSaving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                    {lang === "bn" ? "সেটিংস সংরক্ষণ করুন" : "Save Auto-SMS Settings"}
+                    {autoSaving ? <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-2" />}
+                    {lang === "bn" ? "সেভ করুন" : "Save Settings"}
                   </Button>
                 </div>
               </CardContent>
