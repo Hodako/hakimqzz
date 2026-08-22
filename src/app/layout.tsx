@@ -42,6 +42,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <link href="https://banglawebfonts.pages.dev/css/siyam-rupali.css" rel="stylesheet" />
+        <link href="https://banglawebfonts.pages.dev/css/baloo-da-2.css" rel="stylesheet" />
+        <link href="https://banglawebfonts.pages.dev/css/charukola.css" rel="stylesheet" />
+        <link href="https://banglawebfonts.pages.dev/css/bensen-handwriting.css" rel="stylesheet" />
         {/* PWA meta — mobile-web-app-capable is the modern standard (replaces deprecated apple- version) */}
         <meta name="mobile-web-app-capable" content="yes" />
         {/* Keep apple- variant for iOS Safari compatibility */}

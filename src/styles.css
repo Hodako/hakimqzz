@@ -648,4 +648,18 @@
   }
 }
 
+/* Custom Bangla Web Typography Utilities */
+.font-balooda {
+  font-family: 'Baloo Da 2', 'Hind Siliguri', sans-serif !important;
+}
+
+.font-charukola {
+  font-family: 'Charukola', 'Charukola Ultra Light', 'Charukola Unicode', 'Hind Siliguri', sans-serif !important;
+}
+
+.font-bensen {
+  font-family: 'Bensen Handwriting', 'Bensen', 'Hind Siliguri', cursive, sans-serif !important;
+}
+
+
 
