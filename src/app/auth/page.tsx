@@ -28,10 +28,8 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (mounted && !loading) {
-      if (user?.activated) {
+      if (user) {
         router.replace("/dashboard");
-      } else if (user && !user.activated) {
-        router.replace("/activate");
       }
     }
   }, [user, loading, router, mounted]);
@@ -41,7 +39,7 @@ export default function AuthPage() {
   function afterAuth(u: AuthUser | null) {
     if (!u) return;
     login(u);
-    router.replace(u.activated ? "/dashboard" : "/activate");
+    router.replace("/dashboard");
   }
 
   async function signIn(e: React.FormEvent) {
@@ -62,7 +60,7 @@ export default function AuthPage() {
     setBusy(true);
     try {
       const data = await registerFn({ data: { email, password, fullName } });
-      toast.success(lang === "bn" ? "একাউন্ট তৈরি — লাইসেন্স দিয়ে সক্রিয় করুন" : "Account created — activate with license");
+      toast.success(lang === "bn" ? "একাউন্ট সফলভাবে তৈরি হয়েছে!" : "Account created successfully!");
       afterAuth(data.user as AuthUser);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
@@ -423,13 +421,6 @@ export default function AuthPage() {
             <button type="submit" disabled={busy} className="button-submit">
               {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
             </button>
-
-            {/* Info Message */}
-            {activeTab === "signup" && (
-              <p className="text-[9.5px] text-zinc-400 text-center leading-normal mt-0.5">
-                After signup you will activate with a license key (HZ-… or EMP-…).
-              </p>
-            )}
 
             {/* Toggle Signin / Signup */}
             <p className="p mt-0.5 text-xs">

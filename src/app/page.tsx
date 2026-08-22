@@ -13,8 +13,6 @@ export default function IndexPage() {
     if (!loading) {
       if (!user) {
         router.replace("/auth");
-      } else if (!user.activated) {
-        router.replace("/activate");
       } else {
         router.replace("/dashboard");
       }

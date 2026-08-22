@@ -28,6 +28,11 @@ export type AuthUser = {
   permissions?: PermissionSet;
   profiles?: { id: string; name: string; created_at: string }[];
   activeProfile?: string;
+  status?: string;
+  frozen_reason?: string;
+  subscription_expires_at?: string;
+  sms_credits?: number;
+  admin_whatsapp?: string;
 };
 
 type AuthCtx = {
