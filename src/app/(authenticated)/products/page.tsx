@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { FAB } from "@/components/ui/fab";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -356,6 +357,17 @@ export default function ProductsPage() {
               </span>
             )}
           </Button>
+          <Link href="/product-analytics">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-[10px] sm:text-xs text-primary border-primary/30 hover:bg-primary/10"
+              title={lang === "bn" ? "পণ্য অ্যানালিটিক্স" : "Product Analytics"}
+            >
+              <BarChart2 className="size-3.5 mr-1" />
+              {isMobile ? "" : (lang === "bn" ? "অ্যানালিটিক্স" : "Analytics")}
+            </Button>
+          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 text-[10px] sm:text-xs">

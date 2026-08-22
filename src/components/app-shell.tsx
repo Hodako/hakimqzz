@@ -8,7 +8,7 @@ import { getProducts, getParties, getSales, getPurchases, getExpenses } from "@/
 import {
   Home, Package, ShoppingBag, Users, MoreHorizontal,
   LogOut, Languages, Banknote, DollarSign, Settings,
-  BarChart3, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
+  BarChart3, BarChart2, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
   TrendingUp, TrendingDown, Sparkles, Palette, MessageSquare,
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
@@ -40,7 +40,7 @@ import { AdminPopupDialog } from "@/components/admin-popup-dialog";
 
 type NavItem = {
   to: string;
-  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits" | "customers" | "theme_settings" | "sms";
+  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits" | "customers" | "theme_settings" | "sms" | "product_analytics";
   icon: React.ElementType;
   perm?: keyof PermissionSet;
 };
@@ -74,6 +74,7 @@ const desktopNavGroups: NavGroup[] = [
   {
     labelKey: "reports",
     items: [
+      { to: "/product-analytics", labelKey: "product_analytics", icon: BarChart2, perm: "reports" },
       { to: "/reports", labelKey: "reports_generator", icon: FileText, perm: "reports" },
       { to: "/profits", labelKey: "profit", icon: TrendingUp, perm: "reports" },
       { to: "/losses", labelKey: "losses", icon: TrendingDown, perm: "reports" },
