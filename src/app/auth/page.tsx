@@ -394,7 +394,7 @@ export default function AuthPage() {
         {/* Middle minimalist description */}
         <div className="space-y-4 lg:space-y-5 relative z-10 max-w-lg my-auto">
           <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">
-            {lang === "bn" ? "পোশাক ব্যবসায়ীদের আস্থার প্রতীক" : "Designed for Fashion Retailers"}
+            {lang === "bn" ? "যেকোনো ব্যবসার আস্থার প্রতীক" : "Automated System for Any Shop"}
           </span>
           <h2 className="text-3xl lg:text-4xl font-bold font-serif leading-tight">
             {lang === "bn" 
@@ -458,7 +458,9 @@ export default function AuthPage() {
                 {activeTab === "signin" ? t("sign_in") : t("sign_up")}
               </h1>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                {activeTab === "signin" ? "Login to access your store dashboard" : "Create a new owner account for your clothing business"}
+                {activeTab === "signin"
+                  ? (lang === "bn" ? "আপনার শপ ড্যাশবোর্ডে প্রবেশ করুন" : "Login to access your store dashboard")
+                  : (lang === "bn" ? "আপনার দোকানের জন্য নতুন একাউন্ট তৈরি করুন" : "Create a new owner account for your shop")}
               </p>
             </div>
 
