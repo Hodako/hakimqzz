@@ -185,8 +185,8 @@ export function SpeedLoader({ fullScreen = true }: { fullScreen?: boolean }) {
           --loader-steel-dark: #4B4B4E;
           --loader-steel: #8C8C90;
           --loader-steel-light: #DEDEDF;
-          --loader-brass: #B8902E;
-          --loader-brass-light: #DFBB63;
+          --loader-brass: #228B22;
+          --loader-brass-light: #32CD32;
           --loader-thread: #7A2635;
           --loader-line: rgba(32,28,22,0.10);
 
