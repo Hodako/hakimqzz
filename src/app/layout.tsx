@@ -35,7 +35,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
+      <head suppressHydrationWarning>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -47,6 +47,7 @@ export default function RootLayout({
         <link href="https://banglawebfonts.pages.dev/css/charukola.css" rel="stylesheet" />
         <link href="https://banglawebfonts.pages.dev/css/bensen-handwriting.css" rel="stylesheet" />
         <script
+          id="theme-initializer"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

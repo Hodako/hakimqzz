@@ -35,6 +35,45 @@ import {
 } from "@/lib/rpc";
 import { calculateSmsParts, sanitizeBdPhoneNumber } from "@/lib/mimsms";
 
+export function SmsCharacterCounter({
+  message,
+  maxLength = 1000,
+}: {
+  message: string;
+  maxLength?: number;
+}) {
+  const parts = useMemo(() => calculateSmsParts(message), [message]);
+  const chars = message.length;
+  const left = Math.max(0, maxLength - chars);
+  const charLimitPerSms = parts.isUnicode ? (parts.parts > 1 ? 67 : 70) : (parts.parts > 1 ? 153 : 160);
+  const smsCount = chars === 0 ? 0 : parts.parts;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-1.5 py-1 px-0.5 text-xs text-muted-foreground font-mono">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Badge
+          variant="outline"
+          className={`text-[10px] font-mono px-2 py-0.5 rounded-md ${
+            parts.isUnicode
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+          }`}
+        >
+          {parts.isUnicode ? "Unicode (বাংলা)" : "GSM (English)"}
+        </Badge>
+        <span className="font-semibold text-foreground">
+          {chars} Characters | {left} Characters Left | {smsCount} SMS ({charLimitPerSms} Char./SMS)
+        </span>
+      </div>
+      {chars >= maxLength && (
+        <span className="text-[11px] text-destructive font-semibold">
+          (সর্বোচ্চ সীমা ১০০০ ক্যারেক্টার)
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function SmsPage() {
   const { lang, t } = useT();
   const { user } = useAuth();
@@ -608,24 +647,17 @@ export default function SmsPage() {
                     <Label htmlFor="direct-msg" className="font-semibold text-sm">
                       {lang === "bn" ? "এসএমএস বার্তা" : "Message Content"}
                     </Label>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className={directParts.isUnicode ? "text-amber-600 font-semibold" : "text-muted-foreground"}>
-                        {directParts.isUnicode ? "Unicode (Bengali)" : "GSM (English)"}
-                      </span>
-                      <span className="text-muted-foreground">|</span>
-                      <span className="font-bold text-foreground">
-                        {directParts.chars} chars ({directParts.parts} SMS)
-                      </span>
-                    </div>
                   </div>
                   <Textarea
                     id="direct-msg"
                     placeholder={lang === "bn" ? "আপনার বার্তা লিখুন..." : "Type your SMS content here..."}
                     value={directMessage}
-                    onChange={e => setDirectMessage(e.target.value)}
+                    onChange={e => setDirectMessage(e.target.value.slice(0, 1000))}
+                    maxLength={1000}
                     rows={5}
                     className="rounded-xl text-base"
                   />
+                  <SmsCharacterCounter message={directMessage} maxLength={1000} />
                 </div>
 
                 {/* Quick Templates */}
@@ -847,15 +879,6 @@ export default function SmsPage() {
                       <Label htmlFor="cust-msg" className="font-semibold text-sm">
                         {lang === "bn" ? "অফার বা প্রচারমূলক বার্তা" : "Offer / Promotional Message"}
                       </Label>
-                      <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className={custParts.isUnicode ? "text-amber-600 font-semibold" : "text-muted-foreground"}>
-                          {custParts.isUnicode ? "Unicode (Bengali)" : "GSM (English)"}
-                        </span>
-                        <span className="text-muted-foreground">|</span>
-                        <span className="font-bold text-foreground">
-                          {custParts.chars} chars ({custParts.parts} SMS)
-                        </span>
-                      </div>
                     </div>
                     <Textarea
                       id="cust-msg"
@@ -865,10 +888,12 @@ export default function SmsPage() {
                           : "Dear {customer_name}, special sale at {shop_name}! Get flat 20% off this week..."
                       }
                       value={custMessage}
-                      onChange={e => setCustMessage(e.target.value)}
+                      onChange={e => setCustMessage(e.target.value.slice(0, 1000))}
+                      maxLength={1000}
                       rows={5}
                       className="rounded-xl text-base"
                     />
+                    <SmsCharacterCounter message={custMessage} maxLength={1000} />
                   </div>
 
                   {/* Dynamic Tags */}
@@ -1105,15 +1130,6 @@ export default function SmsPage() {
                       <Label htmlFor="supp-msg" className="font-semibold text-sm">
                         {lang === "bn" ? "বার্তা লিখুন" : "Supplier Message"}
                       </Label>
-                      <div className="flex items-center gap-2 text-xs font-mono">
-                        <span className={suppParts.isUnicode ? "text-amber-600 font-semibold" : "text-muted-foreground"}>
-                          {suppParts.isUnicode ? "Unicode (Bengali)" : "GSM (English)"}
-                        </span>
-                        <span className="text-muted-foreground">|</span>
-                        <span className="font-bold text-foreground">
-                          {suppParts.chars} chars ({suppParts.parts} SMS)
-                        </span>
-                      </div>
                     </div>
                     <Textarea
                       id="supp-msg"
@@ -1123,10 +1139,12 @@ export default function SmsPage() {
                           : "Dear Supplier, we need urgent stock dispatch for {shop_name}. Please confirm availability."
                       }
                       value={suppMessage}
-                      onChange={e => setSuppMessage(e.target.value)}
+                      onChange={e => setSuppMessage(e.target.value.slice(0, 1000))}
+                      maxLength={1000}
                       rows={5}
                       className="rounded-xl text-base"
                     />
+                    <SmsCharacterCounter message={suppMessage} maxLength={1000} />
                   </div>
 
                   {/* Preset Templates */}
@@ -1335,23 +1353,16 @@ export default function SmsPage() {
                     <Label htmlFor="auto-template" className="font-semibold text-sm">
                       {lang === "bn" ? "স্বয়ংক্রিয় বার্তা টেমপ্লেট" : "Purchase Confirmation Template"}
                     </Label>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className={autoParts.isUnicode ? "text-amber-600 font-semibold" : "text-muted-foreground"}>
-                        {autoParts.isUnicode ? "Unicode (Bengali)" : "GSM (English)"}
-                      </span>
-                      <span className="text-muted-foreground">|</span>
-                      <span className="font-bold text-foreground">
-                        {autoParts.chars} chars ({autoParts.parts} SMS)
-                      </span>
-                    </div>
                   </div>
                   <Textarea
                     id="auto-template"
                     value={autoSmsTemplate}
-                    onChange={e => setAutoSmsTemplate(e.target.value)}
+                    onChange={e => setAutoSmsTemplate(e.target.value.slice(0, 1000))}
+                    maxLength={1000}
                     rows={4}
                     className="rounded-xl text-sm leading-relaxed"
                   />
+                  <SmsCharacterCounter message={autoSmsTemplate} maxLength={1000} />
                 </div>
 
                 {/* Variable Inserters */}
