@@ -197,6 +197,13 @@ export const resetExpensesFn = makeReadAction("resetExpensesFn");
 export const resetPartiesFn = makeReadAction("resetPartiesFn");
 export const resetAllDataFn = makeReadAction("resetAllDataFn");
 
+// ─── WhatsApp Integration Operations ─────────────────────────────────────────
+export const getWhatsAppStatusFn = makeReadAction("getWhatsAppStatusFn");
+export const startWhatsAppSessionFn = makeReadAction("startWhatsAppSessionFn");
+export const disconnectWhatsAppSessionFn = makeReadAction("disconnectWhatsAppSessionFn");
+export const sendWhatsAppMessageFn = makeReadAction("sendWhatsAppMessageFn");
+export const sendWhatsAppCampaignFn = makeReadAction("sendWhatsAppCampaignFn");
+
 // Register background sync engine with remote HTTP execution map
 const actionsList = [
   "createProductFn", "updateProductFn", "deleteProductFn", "archiveProductFn",

@@ -18,6 +18,13 @@ import {
   sanitizeBdPhoneNumber,
   type MiMSMSResponse
 } from "@/lib/mimsms";
+import {
+  getWhatsAppStatus,
+  startWhatsAppSession,
+  disconnectWhatsAppSession,
+  sendWhatsAppMessage,
+  sendWhatsAppCampaign,
+} from "@/lib/whatsapp-baileys";
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
@@ -3410,5 +3417,135 @@ export async function deleteShopEmployeeFn(input: { data: { employeeId: string }
   }
 
   return { success: true };
+}
+
+// ── WhatsApp Web Integration Server Actions ─────────────────────────
+
+export async function getWhatsAppStatusFn() {
+  const session = await requireSession();
+  return await getWhatsAppStatus(session.ownerId);
+}
+
+export async function startWhatsAppSessionFn() {
+  const session = await requireSession();
+  return await startWhatsAppSession(session.ownerId);
+}
+
+export async function disconnectWhatsAppSessionFn() {
+  const session = await requireSession();
+  return await disconnectWhatsAppSession(session.ownerId);
+}
+
+export async function sendWhatsAppMessageFn(input: {
+  data: {
+    phone: string;
+    message: string;
+    recipientName?: string;
+  };
+}) {
+  const session = await requireSession();
+  const { data } = input;
+  if (!data.phone || !data.message) {
+    throw new Error("Recipient phone and message text are required");
+  }
+
+  const res = await sendWhatsAppMessage(
+    session.ownerId,
+    data.phone,
+    data.message,
+    {
+      recipientName: data.recipientName,
+      userId: session.userId,
+    }
+  );
+
+  if (!res.isSuccess) {
+    throw new Error(res.error || "Failed to send WhatsApp message");
+  }
+
+  return res;
+}
+
+export async function sendWhatsAppCampaignFn(input: {
+  data: {
+    recipientType: "all_suppliers" | "selected_suppliers" | "all_customers" | "selected_customers" | "direct_numbers";
+    selectedIds?: string[];
+    directNumbers?: string;
+    message: string;
+    campaignTitle?: string;
+    isPersonalized?: boolean;
+  };
+}) {
+  const session = await requireSession();
+  const { data } = input;
+  const db = await getDb();
+
+  interface TargetRecipient {
+    id?: string;
+    name: string;
+    phone: string;
+  }
+
+  let recipients: TargetRecipient[] = [];
+
+  if (data.recipientType === "all_suppliers" || data.recipientType === "selected_suppliers") {
+    const query: any = { owner_id: session.ownerId, phone: { $nin: [null, ""] } };
+    if (data.recipientType === "selected_suppliers" && data.selectedIds && data.selectedIds.length > 0) {
+      query._id = { $in: data.selectedIds as any };
+    }
+    const parties = await db.collection("parties").find(query).toArray();
+    recipients = parties
+      .filter((p) => p.phone && p.phone.trim())
+      .map((p) => ({
+        id: p._id as any as string,
+        name: p.name || "Supplier",
+        phone: p.phone as string,
+      }));
+  } else if (data.recipientType === "all_customers" || data.recipientType === "selected_customers") {
+    const query: any = { owner_id: session.ownerId, phone: { $nin: [null, ""] } };
+    if (data.recipientType === "selected_customers" && data.selectedIds && data.selectedIds.length > 0) {
+      query._id = { $in: data.selectedIds as any };
+    }
+    const customers = await db.collection("customers").find(query).toArray();
+    if (customers.length > 0) {
+      recipients = customers
+        .filter((c) => c.phone && c.phone.trim())
+        .map((c) => ({
+          id: c._id as any as string,
+          name: c.name || "Customer",
+          phone: c.phone as string,
+        }));
+    } else {
+      const parties = await db.collection("parties").find(query).toArray();
+      recipients = parties
+        .filter((p) => p.phone && p.phone.trim())
+        .map((p) => ({
+          id: p._id as any as string,
+          name: p.name || "Customer",
+          phone: p.phone as string,
+        }));
+    }
+  } else if (data.recipientType === "direct_numbers") {
+    const rawNumbers = (data.directNumbers || "")
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    recipients = rawNumbers.map((num, idx) => ({
+      name: `Recipient ${idx + 1}`,
+      phone: num,
+    }));
+  }
+
+  if (recipients.length === 0) {
+    throw new Error("No recipients with valid phone numbers were found for this WhatsApp campaign.");
+  }
+
+  return await sendWhatsAppCampaign(
+    session.ownerId,
+    recipients,
+    data.message,
+    session.userId
+  );
 }
 
