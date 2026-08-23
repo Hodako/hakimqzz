@@ -18,10 +18,11 @@ const nextConfig = {
     "0.0.0.0:3141",
     "127.0.0.1:3141",
   ],
-  // Prevent OOM SIGKILL by running build in single-process mode with minimal memory
+  // Completely disable separate build worker processes to prevent OOM SIGKILL on 1GB VPS
   experimental: {
-    cpus: 1,
-    workerThreads: false,
+    webpackBuildWorker: false,
+    parallelServerCompiles: false,
+    parallelServerBuildTraces: false,
   },
   productionBrowserSourceMaps: false,
   ...(isStatic
