@@ -9,6 +9,15 @@ const isStatic = process.env.EXPORT_STATIC === "true";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Next.js 15 top-level whitelist for dev origins
+  allowedDevOrigins: [
+    "hakim.qzz.io",
+    "*.qzz.io",
+    "localhost:3141",
+    "localhost:3000",
+    "0.0.0.0:3141",
+    "127.0.0.1:3141",
+  ],
   ...(isStatic
     ? {
         output: "export",
@@ -52,17 +61,6 @@ const nextConfig = {
       }),
   // Allow MongoDB server-side code to build properly
   serverExternalPackages: ["mongodb"],
-  experimental: {
-    // Explicitly whitelist origin domain to eliminate cross-origin dev origin warnings
-    allowedDevOrigins: [
-      "hakim.qzz.io",
-      "*.qzz.io",
-      "localhost:3141",
-      "localhost:3000",
-      "0.0.0.0:3141",
-      "127.0.0.1:3141",
-    ],
-  },
   eslint: {
     // Disable ESLint during production build since we lint separately
     ignoreDuringBuilds: true,
