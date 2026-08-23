@@ -974,20 +974,32 @@ export async function directSendSmsAsAdminFn(input: {
     transactionType: data.routeType || "T",
   });
 
-  const isSuccess = res.status === "Success" || res.statusCode === "200";
-  const isUnauthorized =
-    res.status === "Unauthorized" ||
-    res.statusCode === "401" ||
-    String(res.status || "").toLowerCase().includes("unauthor") ||
-    String(res.responseResult || "").toLowerCase().includes("unauthor");
-
-  if (isUnauthorized) {
-    throw new Error(
-      "SMS Gateway rejected: Unauthorized (401). Please verify your Master API Key, Username, and Sender Name on your SMS provider portal. Also verify if your server IP needs to be whitelisted."
-    );
-  }
+  const isSuccess = Boolean(res.isSuccess || res.status === "Success" || res.statusCode === "200" || res.trxnId);
 
   if (!isSuccess) {
+    const isIpBlocked =
+      res.isIpBlocked ||
+      String(res.responseResult || "").toLowerCase().includes("black") ||
+      String(res.responseResult || "").toLowerCase().includes("ip");
+
+    const isUnauthorized =
+      res.status === "Unauthorized" ||
+      res.statusCode === "401" ||
+      String(res.status || "").toLowerCase().includes("unauthor") ||
+      String(res.responseResult || "").toLowerCase().includes("unauthor");
+
+    if (isIpBlocked) {
+      throw new Error(
+        "SMS Gateway IP Restriction: Your server IP is not recognized or not yet active in MiMSMS. If you recently whitelisted your IP on sms.mimsms.com -> Utility -> Developer, please allow a few minutes for the MiMSMS firewall to propagate, or verify that your server/proxy IP matches."
+      );
+    }
+
+    if (isUnauthorized) {
+      throw new Error(
+        "SMS Gateway Rejected (Unauthorized): Please verify that 'Username' is your MiMSMS login email, 'API Key' matches sms.mimsms.com -> Utility -> Developer, and 'Sender Name' matches an approved Sender ID on sms.mimsms.com."
+      );
+    }
+
     throw new Error(
       `SMS Gateway error (${res.statusCode || "Failed"}): ${res.responseResult || res.status || "Check recipient number and gateway balance."}`
     );

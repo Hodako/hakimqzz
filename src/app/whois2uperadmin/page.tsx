@@ -955,9 +955,9 @@ export default function SuperAdminPage() {
                       setGatewayBalanceInfo(null);
                       try {
                         const bal = await checkMasterSmsBalanceFn();
-                        const isOk = bal.status === "Success" || bal.statusCode === "200";
+                        const isOk = bal?.isSuccess || bal?.status === "Success" || bal?.statusCode === "200" || bal?.balance !== undefined;
                         if (isOk) {
-                          const info = `Balance: ৳${bal.balance ?? "0"} (SMS count: ${bal.smsCount ?? "N/A"})`;
+                          const info = `Balance: ৳${bal.balance ?? "0"} (SMS count: ${bal.smsCount ?? "Active"})`;
                           setGatewayBalanceInfo(info);
                           toast.success(`Gateway Connected! ${info}`);
                         } else {
@@ -1054,8 +1054,9 @@ export default function SuperAdminPage() {
                             routeType: directRoute,
                           },
                         });
-                        if (res?.status === "Success" || res?.statusCode === "200") {
-                          toast.success(`SMS dispatched successfully! (ID: ${res?.trxId || "Delivered"})`);
+                        const isOk = res?.isSuccess || res?.status === "Success" || res?.statusCode === "200" || Boolean(res?.trxnId);
+                        if (isOk) {
+                          toast.success(`SMS dispatched successfully! (ID: ${res?.trxnId || (res as any)?.trxId || "Delivered"})`);
                           setDirectMsg("");
                         } else {
                           toast.error(`SMS Failed: ${res?.responseResult || res?.status || "Unauthorized"}`);

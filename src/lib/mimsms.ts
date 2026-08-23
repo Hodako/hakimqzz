@@ -1,6 +1,7 @@
 /**
  * MiMSMS Bulk SMS API (v2) Client
- * Official Spec: https://api.mimsms.com/api
+ * Official Spec: https://api.mimsms.com
+ * Supports PascalCase & camelCase response normalization, POST & GET fallbacks, and intelligent number sanitation.
  */
 
 export interface MiMSMSCredentials {
@@ -43,6 +44,8 @@ export interface MiMSMSResponse {
   smsCount?: number;
   recipientCount?: number;
   responseResult?: string;
+  isSuccess?: boolean;
+  isIpBlocked?: boolean;
   error_Data?: Array<{
     res_Code?: string;
     error?: string;
@@ -58,8 +61,8 @@ const BASE_URL = "https://api.mimsms.com/api";
  */
 export function sanitizeBdPhoneNumber(phone: string): string | null {
   if (!phone) return null;
-  // Remove all whitespace, hyphens, plus signs, brackets
-  const cleaned = phone.replace(/[\s\-\+\(\)]/g, "");
+  // Remove all whitespace, hyphens, plus signs, brackets, dots
+  const cleaned = phone.replace(/[\s\-\+\(\)\.]/g, "");
 
   // Match 8801XXXXXXXXX (13 digits starting with 8801)
   if (/^8801[3-9]\d{8}$/.test(cleaned)) {
@@ -69,7 +72,7 @@ export function sanitizeBdPhoneNumber(phone: string): string | null {
   if (/^01[3-9]\d{8}$/.test(cleaned)) {
     return `88${cleaned}`;
   }
-  // Match 1XXXXXXXXX (10 digits) -> convert to 8801XXXXXXXXX
+  // Match 1XXXXXXXXX (10 digits starting with 1) -> convert to 8801XXXXXXXXX
   if (/^1[3-9]\d{8}$/.test(cleaned)) {
     return `880${cleaned}`;
   }
@@ -112,7 +115,114 @@ export function calculateSmsParts(message: string): {
 }
 
 /**
- * Send Single SMS via POST /V2/SMS
+ * Robust response normalizer for MiMSMS backend (supports PascalCase, camelCase, plain-text)
+ */
+export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "OK"): MiMSMSResponse {
+  if (!raw && httpStatus >= 400) {
+    return {
+      statusCode: String(httpStatus),
+      status: "Failed",
+      responseResult: `HTTP ${httpStatus}: ${httpText}`,
+      isSuccess: false,
+    };
+  }
+
+  // If raw is a plain number or string
+  if (typeof raw === "string" || typeof raw === "number") {
+    const str = String(raw).trim();
+    if (/^\d+(\.\d+)?$/.test(str)) {
+      return {
+        statusCode: "200",
+        status: "Success",
+        balance: str,
+        responseResult: "Success",
+        isSuccess: true,
+      };
+    }
+    try {
+      raw = JSON.parse(str);
+    } catch {
+      const isBlocked = str.toLowerCase().includes("black") || str.toLowerCase().includes("ip");
+      const isOk = str.toLowerCase().includes("success") || str.toLowerCase().includes("ok");
+      return {
+        statusCode: isBlocked ? "403" : isOk ? "200" : String(httpStatus),
+        status: isOk ? "Success" : "Failed",
+        responseResult: str,
+        isSuccess: isOk,
+        isIpBlocked: isBlocked,
+      };
+    }
+  }
+
+  if (typeof raw !== "object" || raw === null) {
+    return {
+      statusCode: String(httpStatus),
+      status: httpStatus < 400 ? "Success" : "Failed",
+      responseResult: String(raw ?? httpText),
+      isSuccess: httpStatus < 400,
+    };
+  }
+
+  const statusCode = String(
+    raw.StatusCode ??
+    raw.statusCode ??
+    raw.status_code ??
+    raw.Code ??
+    raw.code ??
+    httpStatus
+  );
+
+  const rawStatus = String(
+    raw.Status ??
+    raw.status ??
+    (statusCode === "200" ? "Success" : "Failed")
+  );
+
+  const trxnId = raw.TrxnId ?? raw.trxnId ?? raw.trxId ?? raw.TrxId ?? raw.TransactionId ?? raw.transactionId ?? raw.trackingId ?? raw.TrackingId;
+  const trackingId = raw.TrackingId ?? raw.trackingId ?? trxnId;
+  const balance = raw.Balance ?? raw.balance ?? raw.SmsCount ?? raw.smsCount ?? raw.data?.Balance ?? raw.data?.balance;
+  
+  const responseResult = String(
+    raw.ResponseResult ??
+    raw.responseResult ??
+    raw.Message ??
+    raw.message ??
+    raw.Error ??
+    raw.error ??
+    raw.Details ??
+    raw.details ??
+    (rawStatus === "Success" || statusCode === "200" ? "Success" : `Status ${statusCode}`)
+  );
+
+  const isSuccess =
+    rawStatus.toLowerCase() === "success" ||
+    statusCode === "200" ||
+    responseResult.toLowerCase() === "success" ||
+    Boolean(trxnId && String(trxnId).length > 0);
+
+  const isIpBlocked =
+    responseResult.toLowerCase().includes("black") ||
+    responseResult.toLowerCase().includes("ip") ||
+    rawStatus.toLowerCase().includes("black");
+
+  return {
+    statusCode,
+    status: isSuccess ? "Success" : isIpBlocked ? "Failed" : rawStatus,
+    trxnId: trxnId ? String(trxnId) : undefined,
+    trackingId: trackingId ? String(trackingId) : undefined,
+    balance: balance !== undefined && balance !== null ? String(balance) : undefined,
+    deliveryStatus: raw.DeliveryStatus ?? raw.deliveryStatus,
+    smsCount: raw.SmsCount ?? raw.smsCount,
+    recipientCount: raw.RecipientCount ?? raw.recipientCount,
+    responseResult,
+    isSuccess,
+    isIpBlocked,
+    error_Data: raw.error_Data ?? raw.Error_Data ?? raw.errors,
+  };
+}
+
+/**
+ * Send Single SMS via POST /V2/SMS with GET /V2/Send fallback
  */
 export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMSResponse> {
   const { apiKey, userName, senderName, mobileNumber, message, transactionType = "T", campaignName } = params;
@@ -121,16 +231,20 @@ export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMS
     throw new Error("Missing MiMSMS credentials (apiKey, userName, senderName are required)");
   }
 
+  const cleanApiKey = apiKey.trim();
+  const cleanUserName = userName.trim();
+  const cleanSenderName = senderName.trim();
+
   const sanitizedNumber = sanitizeBdPhoneNumber(mobileNumber);
   if (!sanitizedNumber) {
     throw new Error(`Invalid Bangladeshi mobile number: ${mobileNumber}`);
   }
 
   const payload: Record<string, any> = {
-    apiKey,
-    userName,
-    senderName,
-    transactionType,
+    apiKey: cleanApiKey,
+    userName: cleanUserName,
+    senderName: cleanSenderName,
+    transactionType: transactionType || "T",
     mobileNumber: sanitizedNumber,
     message,
   };
@@ -139,19 +253,61 @@ export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMS
     payload.campaignName = campaignName;
   }
 
-  const res = await fetch(`${BASE_URL}/V2/SMS`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  // Attempt 1: POST /V2/SMS
+  try {
+    const res = await fetch(`${BASE_URL}/V2/SMS`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/plain, */*",
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const data: MiMSMSResponse = await res.json().catch(() => ({
-    statusCode: String(res.status),
-    status: "Failed",
-    responseResult: `HTTP ${res.status}: ${res.statusText}`,
-  }));
+    const rawText = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = rawText;
+    }
 
-  return data;
+    const normalized = normalizeMiMSMSResponse(json, res.status, res.statusText);
+    if (normalized.isSuccess) {
+      return normalized;
+    }
+
+    // If POST rejected with Unauthorized or 400, attempt GET fallback
+    console.warn("MiMSMS POST /V2/SMS returned non-success, trying GET /V2/Send fallback...", normalized);
+  } catch (err: any) {
+    console.warn("MiMSMS POST /V2/SMS network error, trying GET fallback...", err?.message);
+  }
+
+  // Attempt 2: GET /V2/Send fallback
+  try {
+    const getUrl = `${BASE_URL}/V2/Send?apiKey=${encodeURIComponent(cleanApiKey)}&userName=${encodeURIComponent(cleanUserName)}&senderName=${encodeURIComponent(cleanSenderName)}&transactionType=${encodeURIComponent(transactionType || "T")}&mobileNumber=${encodeURIComponent(sanitizedNumber)}&message=${encodeURIComponent(message)}${campaignName ? `&campaignName=${encodeURIComponent(campaignName)}` : ""}`;
+    const getRes = await fetch(getUrl, {
+      method: "GET",
+      headers: { Accept: "application/json, text/plain, */*" },
+    });
+
+    const rawText = await getRes.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = rawText;
+    }
+
+    return normalizeMiMSMSResponse(json, getRes.status, getRes.statusText);
+  } catch (err: any) {
+    return {
+      statusCode: "500",
+      status: "Failed",
+      responseResult: err?.message || "Failed to reach MiMSMS SMS Gateway",
+      isSuccess: false,
+    };
+  }
 }
 
 /**
@@ -163,6 +319,10 @@ export async function sendBroadcastSms(params: SendBroadcastSmsParams): Promise<
   if (!apiKey || !userName || !senderName) {
     throw new Error("Missing MiMSMS credentials (apiKey, userName, senderName are required)");
   }
+
+  const cleanApiKey = apiKey.trim();
+  const cleanUserName = userName.trim();
+  const cleanSenderName = senderName.trim();
 
   // Sanitize and filter out invalid/duplicate numbers
   const validNumbers = Array.from(
@@ -180,9 +340,9 @@ export async function sendBroadcastSms(params: SendBroadcastSmsParams): Promise<
   // If only 1 number and transactional, use single SMS endpoint
   if (validNumbers.length === 1 && transactionType === "T") {
     const singleRes = await sendSingleSms({
-      apiKey,
-      userName,
-      senderName,
+      apiKey: cleanApiKey,
+      userName: cleanUserName,
+      senderName: cleanSenderName,
       mobileNumber: validNumbers[0],
       message,
       transactionType: "T",
@@ -200,10 +360,10 @@ export async function sendBroadcastSms(params: SendBroadcastSmsParams): Promise<
     const smsData = chunk.map((mobileNumber) => ({ mobileNumber }));
 
     const payload: Record<string, any> = {
-      apiKey,
-      userName,
-      senderName,
-      transactionType,
+      apiKey: cleanApiKey,
+      userName: cleanUserName,
+      senderName: cleanSenderName,
+      transactionType: transactionType || "P",
       message,
       smsData,
     };
@@ -212,19 +372,30 @@ export async function sendBroadcastSms(params: SendBroadcastSmsParams): Promise<
       payload.campaignId = campaignId;
     }
 
-    const res = await fetch(`${BASE_URL}/V2/OneToMany`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch(`${BASE_URL}/V2/OneToMany`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/plain, */*" },
+        body: JSON.stringify(payload),
+      });
 
-    const data: MiMSMSResponse = await res.json().catch(() => ({
-      statusCode: String(res.status),
-      status: "Failed",
-      responseResult: `HTTP ${res.status}: ${res.statusText}`,
-    }));
+      const rawText = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = rawText;
+      }
 
-    results.push(data);
+      results.push(normalizeMiMSMSResponse(json, res.status, res.statusText));
+    } catch (err: any) {
+      results.push({
+        statusCode: "500",
+        status: "Failed",
+        responseResult: err?.message || "Failed to dispatch batch",
+        isSuccess: false,
+      });
+    }
   }
 
   return results;
@@ -239,6 +410,10 @@ export async function sendDynamicSms(params: SendDynamicSmsParams): Promise<MiMS
   if (!apiKey || !userName || !senderName) {
     throw new Error("Missing MiMSMS credentials (apiKey, userName, senderName are required)");
   }
+
+  const cleanApiKey = apiKey.trim();
+  const cleanUserName = userName.trim();
+  const cleanSenderName = senderName.trim();
 
   // Sanitize all items
   const validData = smsData
@@ -258,33 +433,44 @@ export async function sendDynamicSms(params: SendDynamicSmsParams): Promise<MiMS
   for (let i = 0; i < validData.length; i += CHUNK_SIZE) {
     const chunk = validData.slice(i, i + CHUNK_SIZE);
     const payload = {
-      apiKey,
-      userName,
-      senderName,
-      transactionType,
+      apiKey: cleanApiKey,
+      userName: cleanUserName,
+      senderName: cleanSenderName,
+      transactionType: transactionType || "T",
       smsData: chunk,
     };
 
-    const res = await fetch(`${BASE_URL}/V2/DSMS`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch(`${BASE_URL}/V2/DSMS`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/plain, */*" },
+        body: JSON.stringify(payload),
+      });
 
-    const data: MiMSMSResponse = await res.json().catch(() => ({
-      statusCode: String(res.status),
-      status: "Failed",
-      responseResult: `HTTP ${res.status}: ${res.statusText}`,
-    }));
+      const rawText = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = rawText;
+      }
 
-    results.push(data);
+      results.push(normalizeMiMSMSResponse(json, res.status, res.statusText));
+    } catch (err: any) {
+      results.push({
+        statusCode: "500",
+        status: "Failed",
+        responseResult: err?.message || "Failed to dispatch dynamic batch",
+        isSuccess: false,
+      });
+    }
   }
 
   return results;
 }
 
 /**
- * Check remaining balance via GET /V2/BalanceCheck (with POST fallback & multi-format response parsing)
+ * Check remaining balance via GET /V2/BalanceCheck and POST fallback
  */
 export async function checkSmsBalance(credentials: { apiKey: string; userName: string }): Promise<MiMSMSResponse & { isIpBlocked?: boolean }> {
   const { apiKey, userName } = credentials;
@@ -296,73 +482,6 @@ export async function checkSmsBalance(credentials: { apiKey: string; userName: s
   const cleanApiKey = apiKey.trim();
   const cleanUserName = userName.trim();
 
-  // Helper to extract balance from raw body text or parsed JSON
-  const parseBalanceData = (rawText: string): (MiMSMSResponse & { isIpBlocked?: boolean }) | null => {
-    if (!rawText) return null;
-    const text = rawText.trim();
-
-    // 1. If response is a direct number string (e.g. "500" or "500.50")
-    if (/^\d+(\.\d+)?$/.test(text)) {
-      return {
-        statusCode: "200",
-        status: "Success",
-        balance: text,
-      };
-    }
-
-    // 2. Try JSON parse
-    try {
-      const json = JSON.parse(text);
-      if (json && typeof json === "object") {
-        const bal = json.balance ?? json.Balance ?? json.smsCount ?? json.SmsCount ?? json.data?.balance ?? json.data?.Balance;
-        const status = json.status ?? json.Status ?? (json.statusCode === "200" || json.StatusCode === "200" ? "Success" : "Failed");
-        const respResult = json.responseResult ?? json.ResponseResult ?? json.message ?? json.error ?? text;
-
-        const isBlocked =
-          String(respResult).toLowerCase().includes("black") ||
-          String(respResult).toLowerCase().includes("ip") ||
-          String(status).toLowerCase().includes("black");
-
-        if (bal !== undefined && bal !== null && !isBlocked) {
-          return {
-            statusCode: String(json.statusCode || json.StatusCode || "200"),
-            status: "Success",
-            balance: String(bal),
-            responseResult: String(respResult),
-          };
-        }
-
-        if (isBlocked) {
-          return {
-            statusCode: "403",
-            status: "Failed",
-            isIpBlocked: true,
-            responseResult: "IP Blacklisted: Your server or device IP is not whitelisted in MiMSMS. Please add your IP in sms.mimsms.com -> Settings -> API -> IP Whitelist.",
-          };
-        }
-
-        return {
-          statusCode: String(json.statusCode || json.StatusCode || "400"),
-          status: status,
-          balance: bal !== undefined ? String(bal) : undefined,
-          responseResult: String(respResult),
-        };
-      }
-    } catch (e) {}
-
-    // Check if raw text mentions IP blacklist
-    if (text.toLowerCase().includes("black") || text.toLowerCase().includes("ip")) {
-      return {
-        statusCode: "403",
-        status: "Failed",
-        isIpBlocked: true,
-        responseResult: "IP Blacklisted: Your server or device IP is not whitelisted in MiMSMS. Please add your IP in sms.mimsms.com -> Settings -> API -> IP Whitelist.",
-      };
-    }
-
-    return null;
-  };
-
   // Attempt 1: GET request
   try {
     const url = `${BASE_URL}/V2/BalanceCheck?apiKey=${encodeURIComponent(cleanApiKey)}&userName=${encodeURIComponent(cleanUserName)}`;
@@ -370,9 +489,18 @@ export async function checkSmsBalance(credentials: { apiKey: string; userName: s
       method: "GET",
       headers: { Accept: "application/json, text/plain, */*" },
     });
-    const text = await res.text();
-    const parsed = parseBalanceData(text);
-    if (parsed) return parsed;
+    const rawText = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = rawText;
+    }
+
+    const parsed = normalizeMiMSMSResponse(json, res.status, res.statusText);
+    if (parsed.isSuccess || parsed.balance !== undefined) {
+      return parsed;
+    }
   } catch (err: any) {
     console.warn("MiMSMS GET BalanceCheck failed, trying POST fallback...", err?.message);
   }
@@ -387,20 +515,21 @@ export async function checkSmsBalance(credentials: { apiKey: string; userName: s
         userName: cleanUserName,
       }),
     });
-    const text = await res.text();
-    const parsed = parseBalanceData(text);
-    if (parsed) return parsed;
+    const rawText = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = rawText;
+    }
 
-    return {
-      statusCode: String(res.status),
-      status: "Failed",
-      responseResult: text || `HTTP ${res.status}: ${res.statusText}`,
-    };
+    return normalizeMiMSMSResponse(json, res.status, res.statusText);
   } catch (err: any) {
     return {
       statusCode: "500",
       status: "Failed",
       responseResult: err?.message || "Failed to reach MiMSMS API Gateway",
+      isSuccess: false,
     };
   }
 }
@@ -419,17 +548,32 @@ export async function lookupDlrStatus(params: {
     throw new Error("apiKey, userName, and trackingId are required to check delivery status");
   }
 
-  const res = await fetch(`${BASE_URL}/V2/DlrApi`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apiKey, userName, trackingId }),
-  });
+  const cleanApiKey = apiKey.trim();
+  const cleanUserName = userName.trim();
+  const cleanTrackingId = trackingId.trim();
 
-  const data: MiMSMSResponse = await res.json().catch(() => ({
-    statusCode: String(res.status),
-    status: "Failed",
-    responseResult: `HTTP ${res.status}: ${res.statusText}`,
-  }));
+  try {
+    const res = await fetch(`${BASE_URL}/V2/DlrApi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/plain, */*" },
+      body: JSON.stringify({ apiKey: cleanApiKey, userName: cleanUserName, trackingId: cleanTrackingId }),
+    });
 
-  return data;
+    const rawText = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      json = rawText;
+    }
+
+    return normalizeMiMSMSResponse(json, res.status, res.statusText);
+  } catch (err: any) {
+    return {
+      statusCode: "500",
+      status: "Failed",
+      responseResult: err?.message || "Failed to fetch delivery report",
+      isSuccess: false,
+    };
+  }
 }

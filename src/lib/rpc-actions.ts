@@ -3019,7 +3019,7 @@ export async function sendSmsCampaignFn(input: {
   let summary = "";
 
   for (const res of results) {
-    if (res.status === "Success" || res.statusCode === "200") {
+    if (res.isSuccess || res.status === "Success" || res.statusCode === "200" || Boolean(res.trxnId)) {
       successCount++;
       if (res.trxnId) trxnIds.push(res.trxnId);
     } else {
