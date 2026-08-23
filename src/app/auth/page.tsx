@@ -21,7 +21,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { KeyRound, Mail, CheckCircle2, RefreshCw, UserCheck, Shield, Lock, User, ArrowRight, Eye, EyeOff, Store, Phone, Sparkles } from "lucide-react";
+import { KeyRound, Mail, CheckCircle2, RefreshCw, UserCheck, Shield, Lock, User, ArrowRight, Eye, EyeOff, Smartphone, Sparkles } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loading, login } = useAuth();
@@ -32,18 +32,17 @@ export default function AuthPage() {
   // Active Main Tab: Owner vs Employee
   const [mainRole, setMainRole] = useState<"owner" | "employee">("owner");
 
-  // Owner Auth State
+  // Owner Auth State (Phone or Email)
   const [ownerMode, setOwnerMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
+  const [ownerIdentifier, setOwnerIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Employee Auth State
+  // Employee Auth State (Phone or Email or Username)
   const [empMode, setEmpMode] = useState<"signin" | "signup">("signin");
   const [empIdentifier, setEmpIdentifier] = useState("");
   const [empFullName, setEmpFullName] = useState("");
-  const [empEmail, setEmpEmail] = useState("");
   const [empPassword, setEmpPassword] = useState("");
   const [showEmpPassword, setShowEmpPassword] = useState(false);
 
@@ -82,24 +81,31 @@ export default function AuthPage() {
     router.replace("/dashboard");
   }
 
-  // ─── Owner Sign-In ────────────────────────────────────────────────────────
+  // ─── Owner Sign-In (Phone or Email) ───────────────────────────────────────
   async function handleOwnerSignIn(e: React.FormEvent) {
     e.preventDefault();
+    const cleanId = ownerIdentifier.trim();
+    if (!cleanId || !password) {
+      toast.error(lang === "bn" ? "ইমেইল/মোবাইল নম্বর ও পাসওয়ার্ড লিখুন" : "Please enter email/phone and password");
+      return;
+    }
+
     setBusy(true);
     try {
-      const cleanEmail = email.trim().toLowerCase();
-
-      try {
-        await signInWithEmailAndPassword(auth, cleanEmail, password);
-      } catch (fbErr: any) {
-        if (fbErr.code === "auth/user-not-found" || fbErr.code === "auth/invalid-credential") {
-          try {
-            await createUserWithEmailAndPassword(auth, cleanEmail, password);
-          } catch {}
+      // If user typed an email address, also sync with Firebase Auth if available
+      if (cleanId.includes("@")) {
+        try {
+          await signInWithEmailAndPassword(auth, cleanId.toLowerCase(), password);
+        } catch (fbErr: any) {
+          if (fbErr.code === "auth/user-not-found" || fbErr.code === "auth/invalid-credential") {
+            try {
+              await createUserWithEmailAndPassword(auth, cleanId.toLowerCase(), password);
+            } catch {}
+          }
         }
       }
 
-      const data = await loginFn({ data: { email: cleanEmail, password } });
+      const data = await loginFn({ data: { identifier: cleanId, password } });
       afterAuth(data.user as AuthUser);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
@@ -108,25 +114,39 @@ export default function AuthPage() {
     }
   }
 
-  // ─── Owner Sign-Up ────────────────────────────────────────────────────────
+  // ─── Owner Sign-Up (Phone or Email) ───────────────────────────────────────
   async function handleOwnerSignUp(e: React.FormEvent) {
     e.preventDefault();
+    const cleanId = ownerIdentifier.trim();
+    if (!cleanId || !password) {
+      toast.error(lang === "bn" ? "ইমেইল বা মোবাইল নম্বর এবং পাসওয়ার্ড প্রদান করুন" : "Please provide email/phone and password");
+      return;
+    }
+
     setBusy(true);
     try {
-      const cleanEmail = email.trim().toLowerCase();
-
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        if (fullName && userCred.user) {
-          await updateProfile(userCred.user, { displayName: fullName });
-        }
-      } catch (fbErr: any) {
-        if (fbErr.code !== "auth/email-already-in-use") {
-          console.warn("Firebase Auth registration notice:", fbErr.message);
+      if (cleanId.includes("@")) {
+        try {
+          const userCred = await createUserWithEmailAndPassword(auth, cleanId.toLowerCase(), password);
+          if (fullName && userCred.user) {
+            await updateProfile(userCred.user, { displayName: fullName });
+          }
+        } catch (fbErr: any) {
+          if (fbErr.code !== "auth/email-already-in-use") {
+            console.warn("Firebase Auth notice:", fbErr.message);
+          }
         }
       }
 
-      const data = await registerFn({ data: { email: cleanEmail, password, fullName } });
+      const data = await registerFn({
+        data: {
+          identifier: cleanId,
+          password,
+          fullName,
+          role: "owner",
+        },
+      });
+
       toast.success(lang === "bn" ? "দোকান মালিক অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!" : "Shop Owner account created successfully!");
       afterAuth(data.user as AuthUser);
     } catch (err: unknown) {
@@ -136,64 +156,73 @@ export default function AuthPage() {
     }
   }
 
-  // ─── Employee Sign-In (Direct Credentials or Email) ───────────────────────
+  // ─── Employee Sign-In (Phone, Username or Email) ──────────────────────────
   async function handleEmployeeSignIn(e: React.FormEvent) {
     e.preventDefault();
-    if (!empIdentifier.trim() || !empPassword) {
+    const cleanId = empIdentifier.trim();
+    if (!cleanId || !empPassword) {
       toast.error(lang === "bn" ? "ইউজারনেম/মোবাইল নম্বর ও পাসওয়ার্ড লিখুন" : "Please enter username/phone and password");
       return;
     }
+
     setBusy(true);
     try {
-      // First try employee credential login (username, phone, or assigned email)
+      // First try employee login
       const data = await employeeLoginFn({
         data: {
-          username: empIdentifier.trim(),
+          username: cleanId,
           password: empPassword,
         },
       });
       toast.success(lang === "bn" ? "কর্মচারী হিসেবে সফলভাবে লগইন হয়েছে!" : "Employee signed in successfully!");
       afterAuth(data.user as AuthUser);
     } catch (err: unknown) {
-      // If identifier is an email, fallback to general email login
-      if (empIdentifier.includes("@")) {
-        try {
-          const cleanEmail = empIdentifier.trim().toLowerCase();
-          try {
-            await signInWithEmailAndPassword(auth, cleanEmail, empPassword);
-          } catch {}
-          const data = await loginFn({ data: { email: cleanEmail, password: empPassword } });
-          afterAuth(data.user as AuthUser);
-          return;
-        } catch {}
-      }
+      // Fallback to standard login if account is registered via general auth
+      try {
+        const data = await loginFn({ data: { identifier: cleanId, password: empPassword } });
+        afterAuth(data.user as AuthUser);
+        return;
+      } catch {}
       toast.error(err instanceof Error ? err.message : "Employee login failed. Please check credentials.");
     } finally {
       setBusy(false);
     }
   }
 
-  // ─── Employee Sign-Up (Email & Password for Staff) ─────────────────────────
+  // ─── Employee Sign-Up (Phone or Email for Staff) ──────────────────────────
   async function handleEmployeeSignUp(e: React.FormEvent) {
     e.preventDefault();
+    const cleanId = empIdentifier.trim();
+    if (!cleanId || !empPassword || !empFullName.trim()) {
+      toast.error(lang === "bn" ? "সকল তথ্য সঠিকভাবে পূরণ করুন" : "Please fill in all fields");
+      return;
+    }
+
     setBusy(true);
     try {
-      const cleanEmail = empEmail.trim().toLowerCase();
-
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, empPassword);
-        if (empFullName && userCred.user) {
-          await updateProfile(userCred.user, { displayName: empFullName });
-        }
-      } catch (fbErr: any) {
-        if (fbErr.code !== "auth/email-already-in-use") {
-          console.warn("Firebase Auth notice:", fbErr.message);
+      if (cleanId.includes("@")) {
+        try {
+          const userCred = await createUserWithEmailAndPassword(auth, cleanId.toLowerCase(), empPassword);
+          if (empFullName && userCred.user) {
+            await updateProfile(userCred.user, { displayName: empFullName });
+          }
+        } catch (fbErr: any) {
+          if (fbErr.code !== "auth/email-already-in-use") {
+            console.warn("Firebase notice:", fbErr.message);
+          }
         }
       }
 
-      // Register staff user in database
-      const data = await registerFn({ data: { email: cleanEmail, password: empPassword, fullName: empFullName } });
-      toast.success(lang === "bn" ? "কর্মচারী অ্যাকাউন্ট তৈরি হয়েছে! লগইন করুন।" : "Employee account created! Logged in successfully.");
+      const data = await registerFn({
+        data: {
+          identifier: cleanId,
+          password: empPassword,
+          fullName: empFullName,
+          role: "employee",
+        },
+      });
+
+      toast.success(lang === "bn" ? "কর্মচারী অ্যাকাউন্ট তৈরি হয়েছে! লগইন সফল।" : "Employee account created! Signed in successfully.");
       afterAuth(data.user as AuthUser);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Employee registration failed");
@@ -296,8 +325,8 @@ export default function AuthPage() {
 
           <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
             {lang === "bn"
-              ? "স্টক মূল্যায়ন, ক্যাশ ফ্লো, কাস্টম ইনভয়েস, কর্মচারী এক্সেস এবং বিক্রয় ট্র্যাকিং সহজতর করার পূর্ণাঙ্গ প্ল্যাটফর্ম।"
-              : "Next-generation inventory valuation, cashbox ledger, custom invoices, staff management, and analytics in one place."}
+              ? "স্টক মূল্যায়ন, ক্যাশ ফ্লো, কাস্টম ইনভয়েস, মোবাইল ও ইমেইল লগইন, কর্মচারী এক্সেস এবং বিক্রয় ট্র্যাকিং সহজতর করার নির্ভরযোগ্য মাধ্যম।"
+              : "Next-generation inventory valuation, cashbox ledger, phone & email authentication, staff management, and analytics."}
           </p>
         </div>
 
@@ -392,13 +421,13 @@ export default function AuthPage() {
                   </div>
                   <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">
                     {empMode === "signin"
-                      ? (lang === "bn" ? "কর্মচারী লগইন" : "Employee Sign In")
-                      : (lang === "bn" ? "কর্মচারী সাইন আপ" : "Employee Sign Up")}
+                      ? (lang === "bn" ? "কর্মচারী লগইন (মোবাইল / ইমেইল)" : "Employee Sign In")
+                      : (lang === "bn" ? "কর্মচারী সাইন আপ (মোবাইল / ইমেইল)" : "Employee Sign Up")}
                   </h1>
                   <p className="text-xs text-muted-foreground">
                     {empMode === "signin"
-                      ? (lang === "bn" ? "দোকান মালিকের দেওয়া ইউজারনেম/মোবাইল/ইমেইল দিয়ে প্রবেশ করুন" : "Sign in with your staff username, phone, or email")
-                      : (lang === "bn" ? "কর্মচারী হিসেবে নতুন একাউন্ট তৈরি করুন" : "Create a new employee account")}
+                      ? (lang === "bn" ? "মোবাইল নম্বর, ইমেইল বা ইউজারনেম দিয়ে লগইন করুন" : "Sign in with phone number, email, or username")
+                      : (lang === "bn" ? "মোবাইল নম্বর বা ইমেইল দিয়ে নতুন একাউন্ট খুলুন" : "Create employee account with phone or email")}
                   </p>
                 </div>
 
@@ -407,7 +436,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setEmpMode("signin")}
-                    className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
                       empMode === "signin" ? "bg-background text-foreground font-bold shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -416,7 +445,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setEmpMode("signup")}
-                    className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
                       empMode === "signup" ? "bg-background text-foreground font-bold shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -429,15 +458,15 @@ export default function AuthPage() {
                   <form onSubmit={handleEmployeeSignIn} className="space-y-3.5 pt-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <User className="size-3.5 text-muted-foreground" />
-                        <span>{lang === "bn" ? "ইউজারনেম, মোবাইল বা ইমেইল" : "Username, Mobile or Email"}</span>
+                        <Smartphone className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>{lang === "bn" ? "মোবাইল নম্বর / ইমেইল / ইউজারনেম" : "Phone, Email or Username"}</span>
                       </Label>
                       <Input
                         type="text"
                         required
                         value={empIdentifier}
                         onChange={(e) => setEmpIdentifier(e.target.value)}
-                        placeholder={lang === "bn" ? "যেমন: rahim, 017XXXXXXXX বা rahim@gmail.com" : "e.g. rahim, 017XXXXXXXX or staff@gmail.com"}
+                        placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX, staff@gmail.com বা rahim" : "e.g. 017XXXXXXXX, staff@gmail.com or rahim"}
                         className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
                       />
                     </div>
@@ -502,15 +531,15 @@ export default function AuthPage() {
 
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Mail className="size-3.5 text-muted-foreground" />
-                        <span>{t("email")}</span>
+                        <Smartphone className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>{lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল" : "Phone Number or Email"}</span>
                       </Label>
                       <Input
-                        type="email"
+                        type="text"
                         required
-                        value={empEmail}
-                        onChange={(e) => setEmpEmail(e.target.value)}
-                        placeholder={lang === "bn" ? "যেমন: employee@gmail.com" : "e.g. employee@gmail.com"}
+                        value={empIdentifier}
+                        onChange={(e) => setEmpIdentifier(e.target.value)}
+                        placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা employee@gmail.com" : "e.g. 017XXXXXXXX or employee@gmail.com"}
                         className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
                       />
                     </div>
@@ -600,12 +629,14 @@ export default function AuthPage() {
                     <Shield className="size-5" />
                   </div>
                   <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">
-                    {ownerMode === "signin" ? t("sign_in") : t("sign_up")}
+                    {ownerMode === "signin"
+                      ? (lang === "bn" ? "দোকান মালিক লগইন (মোবাইল / ইমেইল)" : "Shop Owner Sign In")
+                      : (lang === "bn" ? "দোকান মালিক সাইন আপ (মোবাইল / ইমেইল)" : "Shop Owner Sign Up")}
                   </h1>
                   <p className="text-xs text-muted-foreground">
                     {ownerMode === "signin"
-                      ? (lang === "bn" ? "আপনার শপ ড্যাশবোর্ডে প্রবেশ করুন" : "Login to access your store dashboard")
-                      : (lang === "bn" ? "দোকান পরিচালনার জন্য নতুন একাউন্ট খুলুন" : "Create a new shop owner account")}
+                      ? (lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল দিয়ে প্রবেশ করুন" : "Login with your phone number or email address")
+                      : (lang === "bn" ? "মোবাইল নম্বর বা ইমেইল দিয়ে নতুন শপ একাউন্ট খুলুন" : "Create a new shop account with phone or email")}
                   </p>
                 </div>
 
@@ -614,7 +645,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setOwnerMode("signin")}
-                    className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
                       ownerMode === "signin" ? "bg-background text-foreground font-bold shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -623,7 +654,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setOwnerMode("signup")}
-                    className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
                       ownerMode === "signup" ? "bg-background text-foreground font-bold shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -650,18 +681,18 @@ export default function AuthPage() {
                     </div>
                   )}
 
-                  {/* Email */}
+                  {/* Phone or Email */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Mail className="size-3.5 text-muted-foreground" />
-                      <span>{t("email")}</span>
+                      <Smartphone className="size-3.5 text-primary" />
+                      <span>{lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল এড্রেস" : "Phone Number or Email Address"}</span>
                     </Label>
                     <Input
-                      type="email"
+                      type="text"
                       required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. owner@gmail.com"
+                      value={ownerIdentifier}
+                      onChange={(e) => setOwnerIdentifier(e.target.value)}
+                      placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা owner@gmail.com" : "e.g. 017XXXXXXXX or owner@gmail.com"}
                       className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-primary w-full"
                     />
                   </div>
@@ -703,7 +734,7 @@ export default function AuthPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setForgotEmail(email || "");
+                          setForgotEmail(ownerIdentifier.includes("@") ? ownerIdentifier : "");
                           setForgotSent(false);
                           setForgotModalOpen(true);
                         }}
@@ -787,7 +818,7 @@ export default function AuthPage() {
                 <DialogDescription className="text-xs text-muted-foreground">
                   {lang === "bn"
                     ? "পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হবে।"
-                    : "Enter your account email to receive a secure password reset link."}
+                    : "Enter your registered account email to receive a password reset link."}
                 </DialogDescription>
               </div>
             </div>

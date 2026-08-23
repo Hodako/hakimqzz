@@ -74,31 +74,33 @@ function EmployeeLoginForm() {
 
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim() || !newPassword) {
+    const cleanId = email.trim();
+    if (!fullName.trim() || !cleanId || !newPassword) {
       toast.error(lang === "bn" ? "সকল তথ্য সঠিকভাবে পূরণ করুন" : "Please fill in all fields");
       return;
     }
 
     setBusy(true);
     try {
-      const cleanEmail = email.trim().toLowerCase();
-
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
-        if (userCred.user) {
-          await updateProfile(userCred.user, { displayName: fullName.trim() });
-        }
-      } catch (fbErr: any) {
-        if (fbErr.code !== "auth/email-already-in-use") {
-          console.warn("Firebase notice:", fbErr.message);
+      if (cleanId.includes("@")) {
+        try {
+          const userCred = await createUserWithEmailAndPassword(auth, cleanId.toLowerCase(), newPassword);
+          if (userCred.user) {
+            await updateProfile(userCred.user, { displayName: fullName.trim() });
+          }
+        } catch (fbErr: any) {
+          if (fbErr.code !== "auth/email-already-in-use") {
+            console.warn("Firebase notice:", fbErr.message);
+          }
         }
       }
 
       const res = await registerFn({
         data: {
-          email: cleanEmail,
+          identifier: cleanId,
           password: newPassword,
           fullName: fullName.trim(),
+          role: "employee",
         },
       });
 
@@ -294,14 +296,14 @@ function EmployeeLoginForm() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Mail className="size-3.5 text-indigo-400" />
-                  {lang === "bn" ? "ইমেইল এড্রেস" : "Email Address"}
+                  <Smartphone className="size-3.5 text-indigo-400" />
+                  {lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল এড্রেস" : "Phone Number or Email"}
                 </Label>
                 <Input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={lang === "bn" ? "যেমন: employee@gmail.com" : "e.g. employee@gmail.com"}
+                  placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা employee@gmail.com" : "e.g. 017XXXXXXXX or employee@gmail.com"}
                   required
                   className="h-11 sm:h-12 rounded-xl bg-slate-800/90 border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 w-full"
                 />
