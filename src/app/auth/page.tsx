@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { loginFn, registerFn, firebaseAuthSyncFn } from "@/lib/rpc";
+import { loginFn, registerFn, firebaseAuthSyncFn, employeeLoginFn } from "@/lib/rpc";
 import type { AuthUser } from "@/hooks/use-auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import {
@@ -21,7 +21,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { KeyRound, Mail, CheckCircle2, RefreshCw } from "lucide-react";
+import { KeyRound, Mail, CheckCircle2, RefreshCw, UserCheck, Shield, Lock, User, ArrowRight } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loading, login } = useAuth();
@@ -33,7 +33,11 @@ export default function AuthPage() {
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  const [activeTab, setActiveTab] = useState<"signin" | "signup" | "employee">("signin");
+
+  // Employee Login State
+  const [empIdentifier, setEmpIdentifier] = useState("");
+  const [empPassword, setEmpPassword] = useState("");
 
   // Forgot Password State
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
@@ -184,8 +188,34 @@ export default function AuthPage() {
     }
   }
 
+  // ─── Employee Sign-In (Direct DB & Credentials) ───────────────────────────
+  async function signInEmployee(e: React.FormEvent) {
+    e.preventDefault();
+    if (!empIdentifier.trim() || !empPassword) {
+      toast.error(lang === "bn" ? "ইউজারনেম/মোবাইল নম্বর ও পাসওয়ার্ড দিন" : "Please enter username/phone and password");
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await employeeLoginFn({
+        data: {
+          username: empIdentifier.trim(),
+          password: empPassword,
+        },
+      });
+      toast.success(lang === "bn" ? "কর্মচারী হিসেবে সফলভাবে লগইন হয়েছে!" : "Employee logged in successfully!");
+      afterAuth(data.user as AuthUser);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Employee login failed. Please check credentials.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
-    if (activeTab === "signin") {
+    if (activeTab === "employee") {
+      await signInEmployee(e);
+    } else if (activeTab === "signin") {
       await signIn(e);
     } else {
       await signUp(e);
@@ -453,135 +483,249 @@ export default function AuthPage() {
         {/* Center: Uiverse style Form */}
         <div className="flex justify-center items-center my-auto py-1 w-full">
           <form onSubmit={handleSubmit} className="form">
-            <div className="text-center mb-1 flex flex-col items-center gap-0.5">
-              <h1 className="text-lg sm:text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
-                {activeTab === "signin" ? t("sign_in") : t("sign_up")}
-              </h1>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                {activeTab === "signin"
-                  ? (lang === "bn" ? "আপনার শপ ড্যাশবোর্ডে প্রবেশ করুন" : "Login to access your store dashboard")
-                  : (lang === "bn" ? "আপনার দোকানের জন্য নতুন একাউন্ট তৈরি করুন" : "Create a new owner account for your shop")}
-              </p>
+            {/* Top Mode Selector: Owner vs Employee */}
+            <div className="grid grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-900/90 rounded-xl mb-2.5 border border-zinc-200/80 dark:border-zinc-800 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setActiveTab("signin")}
+                className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab !== "employee"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Shield className="size-3.5 text-primary" />
+                <span>{lang === "bn" ? "দোকান মালিক" : "Shop Owner"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("employee")}
+                className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === "employee"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <UserCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{lang === "bn" ? "কর্মচারী লগইন" : "Employee"}</span>
+              </button>
             </div>
 
-            {/* Field: Full Name (Only on Signup) */}
-            {activeTab === "signup" && (
+            {activeTab === "employee" ? (
+              /* ─── EMPLOYEE LOGIN VIEW ─── */
               <>
+                <div className="text-center mb-1 flex flex-col items-center gap-0.5">
+                  <h1 className="text-lg sm:text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-1.5">
+                    <UserCheck className="size-5 text-emerald-600" />
+                    <span>{lang === "bn" ? "কর্মচারী লগইন" : "Employee Login"}</span>
+                  </h1>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {lang === "bn"
+                      ? "আপনার দোকান মালিকের দেওয়া ইউজারনেম/মোবাইল ও পাসওয়ার্ড দিয়ে প্রবেশ করুন"
+                      : "Login with the username/phone and password provided by your shop owner"}
+                  </p>
+                </div>
+
+                {/* Field: Employee Username or Phone */}
                 <div className="flex-column">
-                  <label>{t("full_name")}</label>
+                  <label>{lang === "bn" ? "ইউজারনেম বা মোবাইল নম্বর" : "Username or Phone"}</label>
                 </div>
                 <div className="inputForm">
                   <svg height="15" viewBox="0 0 24 24" width="15" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                   </svg>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
-                    className="input" 
-                    placeholder="Your full name" 
-                    value={fullName} 
-                    onChange={e => setFullName(e.target.value)} 
+                    className="input"
+                    placeholder={lang === "bn" ? "যেমন: rahim বা 01700000000" : "e.g. rahim or 01700000000"}
+                    value={empIdentifier}
+                    onChange={(e) => setEmpIdentifier(e.target.value)}
                   />
                 </div>
+
+                {/* Field: Employee Password */}
+                <div className="flex-column">
+                  <label>{t("password")}</label>
+                </div>
+                <div className="inputForm">
+                  <svg height="15" viewBox="-64 0 512 512" width="15" xmlns="http://www.w3.org/2000/svg">
+                    <path d="m336 512h-288c-26.453125 0-48-21.523438-48-48v-224c0-26.476562 21.546875-48 48-48h288c26.453125 0 48 21.523438 48 48v224c0 26.476562-21.546875 48-48 48zm-288-288c-8.8125 0-16 7.167969-16 16v224c0 8.832031 7.1875 16 16 16h288c8.8125 0 16-7.167969 16-16v-224c0-8.832031-7.1875-16-16-16zm0 0"></path>
+                    <path d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0"></path>
+                  </svg>
+                  <input
+                    type="password"
+                    required
+                    className="input"
+                    placeholder={lang === "bn" ? "পাসওয়ার্ড লিখুন" : "Enter employee password"}
+                    value={empPassword}
+                    onChange={(e) => setEmpPassword(e.target.value)}
+                  />
+                </div>
+
+                <button type="submit" disabled={busy} className="button-submit mt-2">
+                  {busy ? "…" : (lang === "bn" ? "কর্মচারী হিসেবে প্রবেশ করুন" : "Login as Employee")}
+                </button>
+
+                <p className="p mt-2 text-xs text-center">
+                  <span
+                    onClick={() => setActiveTab("signin")}
+                    className="span font-semibold text-primary cursor-pointer"
+                  >
+                    {lang === "bn" ? "← দোকান মালিক লগইনে ফিরে যান" : "← Back to Shop Owner Login"}
+                  </span>
+                </p>
+              </>
+            ) : (
+              /* ─── OWNER SIGNIN / SIGNUP VIEW ─── */
+              <>
+                <div className="text-center mb-1 flex flex-col items-center gap-0.5">
+                  <h1 className="text-lg sm:text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
+                    {activeTab === "signin" ? t("sign_in") : t("sign_up")}
+                  </h1>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {activeTab === "signin"
+                      ? (lang === "bn" ? "আপনার শপ ড্যাশবোর্ডে প্রবেশ করুন" : "Login to access your store dashboard")
+                      : (lang === "bn" ? "আপনার দোকানের জন্য নতুন একাউন্ট তৈরি করুন" : "Create a new owner account for your shop")}
+                  </p>
+                </div>
+
+                {/* Field: Full Name (Only on Signup) */}
+                {activeTab === "signup" && (
+                  <>
+                    <div className="flex-column">
+                      <label>{t("full_name")}</label>
+                    </div>
+                    <div className="inputForm">
+                      <svg height="15" viewBox="0 0 24 24" width="15" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                      </svg>
+                      <input
+                        type="text"
+                        required
+                        className="input"
+                        placeholder="Your full name"
+                        value={fullName}
+                        onChange={e => setFullName(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Field: Email */}
+                <div className="flex-column">
+                  <label>{t("email")}</label>
+                </div>
+                <div className="inputForm">
+                  <svg height="15" viewBox="0 0 32 32" width="15" xmlns="http://www.w3.org/2000/svg">
+                    <g id="Layer_3" data-name="Layer 3">
+                      <path d="m30.853 13.87a15 15 0 0 0 -29.729 4.082 15.1 15.1 0 0 0 12.876 12.918 15.6 15.6 0 0 0 2.016.13 14.85 14.85 0 0 0 7.715-2.145 1 1 0 1 0 -1.031-1.711 13.007 13.007 0 1 1 5.458-6.529 2.149 2.149 0 0 1 -4.158-.759v-10.856a1 1 0 0 0 -2 0v1.726a8 8 0 1 0 .2 10.325 4.135 4.135 0 0 0 7.83.274 15.2 15.2 0 0 0 .823-7.455zm-14.853 8.13a6 6 0 1 1 6-6 6.006 6.006 0 0 1 -6 6z"></path>
+                    </g>
+                  </svg>
+                  <input
+                    type="email"
+                    required
+                    className="input"
+                    placeholder="Enter your Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                  />
+                </div>
+
+                {/* Field: Password */}
+                <div className="flex-column">
+                  <label>{t("password")}</label>
+                </div>
+                <div className="inputForm">
+                  <svg height="15" viewBox="-64 0 512 512" width="15" xmlns="http://www.w3.org/2000/svg">
+                    <path d="m336 512h-288c-26.453125 0-48-21.523438-48-48v-224c0-26.476562 21.546875-48 48-48h288c26.453125 0 48 21.523438 48 48v224c0 26.476562-21.546875 48-48 48zm-288-288c-8.8125 0-16 7.167969-16 16v224c0 8.832031 7.1875 16 16 16h288c8.8125 0 16-7.167969 16-16v-224c0-8.832031-7.1875-16-16-16zm0 0"></path>
+                    <path d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0"></path>
+                  </svg>
+                  <input
+                    type="password"
+                    required
+                    minLength={activeTab === "signup" ? 6 : undefined}
+                    className="input"
+                    placeholder="Enter your Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                  />
+                </div>
+
+                {/* Remember Me / Forgot Password */}
+                <div className="flex-row my-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <input id="remember" type="checkbox" defaultChecked className="rounded accent-primary cursor-pointer" />
+                    <label htmlFor="remember" className="select-none cursor-pointer text-[11px]">Remember me</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotEmail(email || "");
+                      setForgotSent(false);
+                      setForgotModalOpen(true);
+                    }}
+                    className="span text-[11px] bg-transparent border-0 p-0 text-primary hover:underline cursor-pointer"
+                  >
+                    {lang === "bn" ? "পাসওয়ার্ড ভুলে গেছেন?" : "Forgot password?"}
+                  </button>
+                </div>
+
+                <button type="submit" disabled={busy} className="button-submit">
+                  {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
+                </button>
+
+                {/* If employee prompt */}
+                {activeTab === "signin" && (
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center my-1">
+                    <p className="text-[11.5px] text-emerald-800 dark:text-emerald-300 font-medium">
+                      {lang === "bn" ? "আপনি কি দোকানের কর্মচারী?" : "Are you an employee?"}{" "}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("employee")}
+                        className="underline font-bold text-emerald-700 dark:text-emerald-200 cursor-pointer hover:text-emerald-900"
+                      >
+                        {lang === "bn" ? "এখানে লগইন করুন" : "Login here"}
+                      </button>
+                    </p>
+                  </div>
+                )}
+
+                {/* Toggle Signin / Signup */}
+                <p className="p mt-0.5 text-xs">
+                  {activeTab === "signin" ? "Don't have an account? " : "Already have an account? "}
+                  <span
+                    onClick={() => setActiveTab(activeTab === "signin" ? "signup" : "signin")}
+                    className="span font-semibold cursor-pointer"
+                  >
+                    {activeTab === "signin" ? "Sign Up" : "Sign In"}
+                  </span>
+                </p>
+
+                {/* Or With divider */}
+                <p className="p text-[9px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest my-1 select-none">— Or Continue With —</p>
+
+                {/* Google Authentication via Firebase (Single, modern, full-width button) */}
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={googleBusy}
+                  className="btn google w-full shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2.5 font-semibold text-xs sm:text-sm py-2"
+                >
+                  {googleBusy ? (
+                    <RefreshCw className="size-4 animate-spin text-primary" />
+                  ) : (
+                    <svg version="1.1" width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4 shrink-0">
+                      <path style={{ fill: "#FBBB00" }} d="M113.47,309.408L95.648,375.94l-65.139,1.378C11.042,341.211,0,299.9,0,256c0-42.451,10.324-82.483,28.624-117.732h0.014l57.992,10.632l25.404,57.644c-5.317,15.501-8.215,32.141-8.215,49.456C103.821,274.792,107.225,292.797,113.47,309.408z"></path>
+                      <path style={{ fill: "#518EF8" }} d="M507.527,208.176C510.467,223.662,512,239.655,512,256c0,18.328-1.927,36.206-5.598,53.451c-12.462,58.683-45.025,109.925-90.134,146.187l-0.014-0.014l-73.044-3.727l-10.338-64.535c29.932-17.554,53.324-45.025,65.646-77.911h-136.89V208.176h138.887L507.527,208.176L507.527,208.176z"></path>
+                      <path style={{ fill: "#28B446" }} d="M416.253,455.624l0.014,0.014C372.396,490.901,316.666,512,256,512c-97.491,0-182.252-54.491-225.491-134.681l82.961-67.91c21.619,57.698,77.278,98.771,142.53,98.771c28.047,0,54.323-7.582,76.87-20.818L416.253,455.624z"></path>
+                      <path style={{ fill: "#F14336" }} d="M419.404,58.936l-82.933,67.896c-23.335-14.586-50.919-23.012-80.471-23.012c-66.729,0-123.429,42.957-143.965,102.724l-83.397-68.276h-0.014C71.23,56.123,157.06,0,256,0C318.115,0,375.068,22.126,419.404,58.936z"></path>
+                    </svg>
+                  )}
+                  <span>{lang === "bn" ? "গুগল দিয়ে লগইন করুন (Google Auth)" : "Continue with Google"}</span>
+                </button>
               </>
             )}
-
-            {/* Field: Email */}
-            <div className="flex-column">
-              <label>{t("email")}</label>
-            </div>
-            <div className="inputForm">
-              <svg height="15" viewBox="0 0 32 32" width="15" xmlns="http://www.w3.org/2000/svg">
-                <g id="Layer_3" data-name="Layer 3">
-                  <path d="m30.853 13.87a15 15 0 0 0 -29.729 4.082 15.1 15.1 0 0 0 12.876 12.918 15.6 15.6 0 0 0 2.016.13 14.85 14.85 0 0 0 7.715-2.145 1 1 0 1 0 -1.031-1.711 13.007 13.007 0 1 1 5.458-6.529 2.149 2.149 0 0 1 -4.158-.759v-10.856a1 1 0 0 0 -2 0v1.726a8 8 0 1 0 .2 10.325 4.135 4.135 0 0 0 7.83.274 15.2 15.2 0 0 0 .823-7.455zm-14.853 8.13a6 6 0 1 1 6-6 6.006 6.006 0 0 1 -6 6z"></path>
-                </g>
-              </svg>
-              <input 
-                type="email" 
-                required
-                className="input" 
-                placeholder="Enter your Email" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-              />
-            </div>
-            
-            {/* Field: Password */}
-            <div className="flex-column">
-              <label>{t("password")}</label>
-            </div>
-            <div className="inputForm">
-              <svg height="15" viewBox="-64 0 512 512" width="15" xmlns="http://www.w3.org/2000/svg">
-                <path d="m336 512h-288c-26.453125 0-48-21.523438-48-48v-224c0-26.476562 21.546875-48 48-48h288c26.453125 0 48 21.523438 48 48v224c0 26.476562-21.546875 48-48 48zm-288-288c-8.8125 0-16 7.167969-16 16v224c0 8.832031 7.1875 16 16 16h288c8.8125 0 16-7.167969 16-16v-224c0-8.832031-7.1875-16-16-16zm0 0"></path>
-                <path d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0"></path>
-              </svg>        
-              <input 
-                type="password" 
-                required
-                minLength={activeTab === "signup" ? 6 : undefined}
-                className="input" 
-                placeholder="Enter your Password" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-              />
-            </div>
-            
-            {/* Remember Me / Forgot Password */}
-            <div className="flex-row my-0.5">
-              <div className="flex items-center gap-1.5">
-                <input id="remember" type="checkbox" defaultChecked className="rounded accent-primary cursor-pointer" />
-                <label htmlFor="remember" className="select-none cursor-pointer text-[11px]">Remember me</label>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setForgotEmail(email || "");
-                  setForgotSent(false);
-                  setForgotModalOpen(true);
-                }}
-                className="span text-[11px] bg-transparent border-0 p-0 text-primary hover:underline cursor-pointer"
-              >
-                {lang === "bn" ? "পাসওয়ার্ড ভুলে গেছেন?" : "Forgot password?"}
-              </button>
-            </div>
-
-            <button type="submit" disabled={busy} className="button-submit">
-              {busy ? "…" : (activeTab === "signin" ? t("sign_in") : t("create_account"))}
-            </button>
-
-            {/* Toggle Signin / Signup */}
-            <p className="p mt-0.5 text-xs">
-              {activeTab === "signin" ? "Don't have an account? " : "Already have an account? "}
-              <span 
-                onClick={() => setActiveTab(activeTab === "signin" ? "signup" : "signin")} 
-                className="span font-semibold cursor-pointer"
-              >
-                {activeTab === "signin" ? "Sign Up" : "Sign In"}
-              </span>
-            </p>
-
-            {/* Or With divider */}
-            <p className="p text-[9px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest my-1 select-none">— Or Continue With —</p>
-
-            {/* Google Authentication via Firebase (Single, modern, full-width button) */}
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={googleBusy}
-              className="btn google w-full shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2.5 font-semibold text-xs sm:text-sm py-2"
-            >
-              {googleBusy ? (
-                <RefreshCw className="size-4 animate-spin text-primary" />
-              ) : (
-                <svg version="1.1" width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="size-4 shrink-0">
-                  <path style={{ fill: "#FBBB00" }} d="M113.47,309.408L95.648,375.94l-65.139,1.378C11.042,341.211,0,299.9,0,256c0-42.451,10.324-82.483,28.624-117.732h0.014l57.992,10.632l25.404,57.644c-5.317,15.501-8.215,32.141-8.215,49.456C103.821,274.792,107.225,292.797,113.47,309.408z"></path>
-                  <path style={{ fill: "#518EF8" }} d="M507.527,208.176C510.467,223.662,512,239.655,512,256c0,18.328-1.927,36.206-5.598,53.451c-12.462,58.683-45.025,109.925-90.134,146.187l-0.014-0.014l-73.044-3.727l-10.338-64.535c29.932-17.554,53.324-45.025,65.646-77.911h-136.89V208.176h138.887L507.527,208.176L507.527,208.176z"></path>
-                  <path style={{ fill: "#28B446" }} d="M416.253,455.624l0.014,0.014C372.396,490.901,316.666,512,256,512c-97.491,0-182.252-54.491-225.491-134.681l82.961-67.91c21.619,57.698,77.278,98.771,142.53,98.771c28.047,0,54.323-7.582,76.87-20.818L416.253,455.624z"></path>
-                  <path style={{ fill: "#F14336" }} d="M419.404,58.936l-82.933,67.896c-23.335-14.586-50.919-23.012-80.471-23.012c-66.729,0-123.429,42.957-143.965,102.724l-83.397-68.276h-0.014C71.23,56.123,157.06,0,256,0C318.115,0,375.068,22.126,419.404,58.936z"></path>
-                </svg>
-              )}
-              <span>{lang === "bn" ? "গুগল দিয়ে লগইন করুন (Google Auth)" : "Continue with Google"}</span>
-            </button>
           </form>
         </div>
 

@@ -10,7 +10,7 @@ async function getSecret() {
   );
 }
 
-export async function signToken(payload: { userId: string; email: string }) {
+export async function signToken(payload: { userId: string; email: string; role?: string }) {
   const { SignJWT } = await import("jose");
   const secret = await getSecret();
   return await new SignJWT(payload)
@@ -25,7 +25,7 @@ export async function verifyToken(token: string) {
     const { jwtVerify } = await import("jose");
     const secret = await getSecret();
     const { payload } = await jwtVerify(token, secret);
-    return payload as { userId: string; email: string };
+    return payload as { userId: string; email: string; role?: string };
   } catch {
     return null;
   }

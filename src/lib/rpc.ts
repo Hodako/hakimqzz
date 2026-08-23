@@ -41,7 +41,7 @@ async function callRemoteRpc(actionName: string, args: any) {
 
   try {
     const result = JSON.parse(txt);
-    if ((actionName === "loginFn" || actionName === "registerFn") && result?.token) {
+    if ((actionName === "loginFn" || actionName === "registerFn" || actionName === "employeeLoginFn") && result?.token) {
       if (typeof window !== "undefined") {
         window.localStorage.setItem("auth_token", result.token);
       }
@@ -271,3 +271,11 @@ export const deleteSmsLogFn = makeWriteAction("deleteSmsLogFn");
 // ── Admin Popups & Announcements ──────────────────────────────────────────
 export const getActiveAdminPopupsFn = makeReadAction("getActiveAdminPopupsFn");
 export const dismissAdminPopupFn = makeWriteAction("dismissAdminPopupFn");
+
+// ── Shop Employee Management & Auth ──────────────────────────────────────
+export const employeeLoginFn = makeWriteAction("employeeLoginFn");
+export const listShopEmployeesFn = makeReadAction("listShopEmployeesFn");
+export const createShopEmployeeFn = makeWriteAction("createShopEmployeeFn");
+export const updateShopEmployeeFn = makeWriteAction("updateShopEmployeeFn");
+export const deleteShopEmployeeFn = makeWriteAction("deleteShopEmployeeFn");
+

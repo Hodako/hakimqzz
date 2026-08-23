@@ -206,6 +206,51 @@ export async function loginFn(input: { data: { email: string; password: string }
   return { user: mapped, token };
 }
 
+export async function employeeLoginFn(input: { data: { username: string; password: string } }) {
+  const { data } = input;
+  const db = await getDb();
+  const identifier = (data.username || "").trim().toLowerCase();
+  if (!identifier || !data.password) {
+    const err = new Error("Employee username/phone and password are required");
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  // Support login via username, phone, or email
+  const user = await db.collection("users").findOne({
+    role: "employee",
+    $or: [
+      { username: identifier },
+      { phone: identifier },
+      { email: identifier },
+    ],
+  });
+
+  if (!user || !(await comparePassword(data.password, user.password as string, user.plain_password as string))) {
+    const err = new Error("Invalid employee username, phone or password");
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  if (user.is_active === false || user.status === "frozen" || user.status === "suspended") {
+    const err = new Error("Employee account is currently inactive. Please contact your shop owner.");
+    (err as any).statusCode = 403;
+    throw err;
+  }
+
+  // Update last login timestamp
+  await db.collection("users").updateOne(
+    { _id: user._id as any },
+    { $set: { last_login_at: new Date().toISOString() } }
+  );
+
+  const token = await signToken({ userId: user._id as any as string, email: user.email as string, role: "employee" });
+  const cookieStore = await cookies();
+  cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+  const mapped = await mapUser(db, user._id as any as string);
+  return { user: mapped, token };
+}
+
 function sanitizeInput(text: string): string {
   if (!text) return "";
   return text
@@ -3159,6 +3204,201 @@ export async function dismissAdminPopupFn(input: { data: { popupId: string } }) 
     owner_id: session.ownerId,
     dismissed_at: new Date().toISOString(),
   });
+
+  return { success: true };
+}
+
+// ─── Shop-Level Employee Management ──────────────────────────────────────────
+
+export async function listShopEmployeesFn() {
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Employees cannot manage employee accounts");
+  }
+  const db = await getDb();
+  const employees = await db
+    .collection("users")
+    .find({ owner_id: session.ownerId, role: "employee" })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  return employees.map((emp) => ({
+    id: emp._id as any as string,
+    full_name: (emp.full_name as string) || "",
+    username: (emp.username as string) || "",
+    phone: (emp.phone as string) || "",
+    email: (emp.email as string) || "",
+    designation: (emp.designation as string) || "Sales Staff",
+    permissions: (emp.permissions as PermissionSet) || DEFAULT_EMPLOYEE_PERMISSIONS,
+    is_active: emp.is_active !== false,
+    created_at: (emp.created_at as string) || "",
+    last_login_at: (emp.last_login_at as string) || "",
+  }));
+}
+
+export async function createShopEmployeeFn(input: {
+  data: {
+    fullName: string;
+    username: string;
+    phone?: string;
+    email?: string;
+    password: string;
+    designation?: string;
+    permissions?: PermissionSet;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Only shop owners can create employee accounts");
+  }
+  const db = await getDb();
+
+  const fullName = (data.fullName || "").trim();
+  const username = (data.username || "").trim().toLowerCase().replace(/\s+/g, "");
+  const phone = (data.phone || data.username || "").trim();
+  const password = (data.password || "").trim();
+  const designation = (data.designation || "").trim() || "Sales Staff";
+
+  if (!fullName) {
+    throw new Error("Employee full name is required");
+  }
+  if (!username || username.length < 3) {
+    throw new Error("Username/phone must be at least 3 characters");
+  }
+  if (!password || password.length < 4) {
+    throw new Error("Password must be at least 4 characters");
+  }
+
+  // Check unique username or phone within this shop (or globally)
+  const existing = await db.collection("users").findOne({
+    $or: [
+      { username: username },
+      { email: `${username}@employee.local` },
+      ...(data.email ? [{ email: data.email.trim().toLowerCase() }] : []),
+    ],
+  });
+
+  if (existing) {
+    throw new Error(`An account with username '${username}' already exists. Please choose a different username.`);
+  }
+
+  const passwordHash = await hashPassword(password);
+  const employeeId = crypto.randomUUID();
+
+  const ownerUser = await db.collection("users").findOne({ _id: session.userId as any });
+  const biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+
+  const employeeDoc = {
+    _id: employeeId as any,
+    owner_id: session.ownerId,
+    business_id: (biz?._id as any as string) || session.businessId,
+    business_name: biz?.name || ownerUser?.business_name || "Dream Fashion",
+    role: "employee",
+    full_name: fullName,
+    username: username,
+    phone: phone,
+    email: data.email?.trim().toLowerCase() || `${username}@employee.local`,
+    designation: designation,
+    password_hash: passwordHash,
+    password: passwordHash,
+    permissions: data.permissions || DEFAULT_EMPLOYEE_PERMISSIONS,
+    is_active: true,
+    activated: true,
+    status: "active",
+    created_at: new Date().toISOString(),
+  };
+
+  await db.collection("users").insertOne(employeeDoc as any);
+
+  return {
+    success: true,
+    employee: {
+      id: employeeId,
+      full_name: fullName,
+      username: username,
+      phone: phone,
+      email: employeeDoc.email,
+      designation: designation,
+      permissions: employeeDoc.permissions,
+      is_active: true,
+      created_at: employeeDoc.created_at,
+    },
+  };
+}
+
+export async function updateShopEmployeeFn(input: {
+  data: {
+    employeeId: string;
+    fullName?: string;
+    phone?: string;
+    designation?: string;
+    password?: string;
+    permissions?: PermissionSet;
+    isActive?: boolean;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Only shop owners can update employee accounts");
+  }
+  const db = await getDb();
+
+  const employee = await db.collection("users").findOne({
+    _id: data.employeeId as any,
+    owner_id: session.ownerId,
+    role: "employee",
+  });
+
+  if (!employee) {
+    throw new Error("Employee not found in your business");
+  }
+
+  const updateFields: any = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.fullName !== undefined) updateFields.full_name = data.fullName.trim();
+  if (data.phone !== undefined) updateFields.phone = data.phone.trim();
+  if (data.designation !== undefined) updateFields.designation = data.designation.trim();
+  if (data.permissions !== undefined) updateFields.permissions = data.permissions;
+  if (data.isActive !== undefined) {
+    updateFields.is_active = Boolean(data.isActive);
+    updateFields.status = data.isActive ? "active" : "frozen";
+  }
+
+  if (data.password && data.password.trim().length >= 4) {
+    const newHash = await hashPassword(data.password.trim());
+    updateFields.password_hash = newHash;
+    updateFields.password = newHash;
+  }
+
+  await db.collection("users").updateOne(
+    { _id: data.employeeId as any },
+    { $set: updateFields }
+  );
+
+  return { success: true };
+}
+
+export async function deleteShopEmployeeFn(input: { data: { employeeId: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Only shop owners can delete employee accounts");
+  }
+  const db = await getDb();
+
+  const res = await db.collection("users").deleteOne({
+    _id: data.employeeId as any,
+    owner_id: session.ownerId,
+    role: "employee",
+  });
+
+  if (res.deletedCount === 0) {
+    throw new Error("Employee not found or already removed");
+  }
 
   return { success: true };
 }

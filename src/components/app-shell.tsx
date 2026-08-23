@@ -219,12 +219,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   const perms = resolvePermissions(user.role, user.permissions);
-  const isEmployee = user.role === "employee";
-  const sidebarGroups = filterGroups(desktopNavGroups, perms).map(group => ({
-    ...group,
-    items: group.items.filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues" || item.to === "/customers")))
-  })).filter(group => group.items.length > 0);
-  const bottomNav = filterNav(mobileNav, perms).filter(item => !(isEmployee && (item.to === "/somiti" || item.to === "/parties" || item.to === "/dues" || item.to === "/customers")));
+  const sidebarGroups = filterGroups(desktopNavGroups, perms);
+  const bottomNav = filterNav(mobileNav, perms);
   const brandName = user.business_name || "HakimQzz";
   const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "HZ";
 

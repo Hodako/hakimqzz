@@ -2,17 +2,18 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   ShoppingCart, Receipt, PiggyBank, DollarSign,
   Banknote, BarChart3, Settings, FileText, Users,
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
-  Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2
+  Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2,
+  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, Eye, EyeOff, Lock, User, Shield, AlertTriangle
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { canAccess, resolvePermissions } from "@/lib/permissions";
+import { canAccess, resolvePermissions, type PermissionSet, DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,14 +23,28 @@ import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { createProfileFn, switchProfileFn, importProfileModuleFn, createSaleFn, createExpenseFn, createPurchaseFn, createCashboxFn } from "@/lib/rpc";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  createProfileFn,
+  switchProfileFn,
+  importProfileModuleFn,
+  createSaleFn,
+  createExpenseFn,
+  createPurchaseFn,
+  createCashboxFn,
+  listShopEmployeesFn,
+  createShopEmployeeFn,
+  updateShopEmployeeFn,
+  deleteShopEmployeeFn
+} from "@/lib/rpc";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { getProducts } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { ProductSearchSelect } from "@/components/product-search";
 import { PWAInstallButton } from "@/components/pwa-install-button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 const businessLinks = [
   { to: "/sms",            labelKey: "sms_management",  desc: "Send bulk SMS, offers & auto triggers", icon: MessageSquare, perm: "sales"      as const },
@@ -2252,6 +2267,418 @@ export default function MorePage() {
     );
   };
 
+  // ─── Employee Management Section (Shop Owner only) ────────────────────────
+  const [addEmpModalOpen, setAddEmpModalOpen] = useState(false);
+  const [editEmpModalOpen, setEditEmpModalOpen] = useState(false);
+  const [resetEmpModalOpen, setResetEmpModalOpen] = useState(false);
+  const [deleteEmpModalOpen, setDeleteEmpModalOpen] = useState(false);
+  const [selectedEmp, setSelectedEmp] = useState<any>(null);
+
+  const [empFullName, setEmpFullName] = useState("");
+  const [empUsername, setEmpUsername] = useState("");
+  const [empPhone, setEmpPhone] = useState("");
+  const [empPassword, setEmpPassword] = useState("");
+  const [empDesignation, setEmpDesignation] = useState("Sales Staff");
+  const [empPermissions, setEmpPermissions] = useState<PermissionSet>(DEFAULT_EMPLOYEE_PERMISSIONS);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [newEmpPassword, setNewEmpPassword] = useState("");
+
+  const employeesQuery = useQuery({
+    queryKey: ["shop-employees"],
+    queryFn: listShopEmployeesFn,
+    enabled: user?.role === "owner",
+  });
+
+  const shopEmployees = employeesQuery.data ?? [];
+
+  const handleOpenAddEmployee = () => {
+    setEmpFullName("");
+    setEmpUsername("");
+    setEmpPhone("");
+    setEmpPassword("");
+    setEmpDesignation(lang === "bn" ? "বিক্রয় কর্মী" : "Sales Staff");
+    setEmpPermissions({
+      dashboard: true,
+      products: true,
+      sales: true,
+      parties: false,
+      purchases: false,
+      expenses: false,
+      cashbox: false,
+      settings: false,
+      reports: false,
+    });
+    setAddEmpModalOpen(true);
+  };
+
+  const handleOpenEditEmployee = (emp: any) => {
+    setSelectedEmp(emp);
+    setEmpFullName(emp.full_name || "");
+    setEmpPhone(emp.phone || "");
+    setEmpDesignation(emp.designation || "Sales Staff");
+    setEmpPermissions(emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS);
+    setEditEmpModalOpen(true);
+  };
+
+  const handleOpenResetPassword = (emp: any) => {
+    setSelectedEmp(emp);
+    setNewEmpPassword("");
+    setResetEmpModalOpen(true);
+  };
+
+  const handleSaveNewEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empFullName.trim() || !empUsername.trim() || !empPassword.trim()) {
+      toast.error(lang === "bn" ? "সকল প্রয়োজনীয় তথ্য পূরণ করুন" : "Please fill all required fields");
+      return;
+    }
+    setEmpSaving(true);
+    try {
+      await createShopEmployeeFn({
+        data: {
+          fullName: empFullName.trim(),
+          username: empUsername.trim().toLowerCase(),
+          phone: empPhone.trim() || empUsername.trim(),
+          password: empPassword.trim(),
+          designation: empDesignation.trim(),
+          permissions: empPermissions,
+        },
+      });
+      toast.success(lang === "bn" ? "নতুন কর্মচারী সফলভাবে যুক্ত হয়েছে!" : "Employee account created successfully!");
+      setAddEmpModalOpen(false);
+      qc.invalidateQueries({ queryKey: ["shop-employees"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create employee");
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmp) return;
+    setEmpSaving(true);
+    try {
+      await updateShopEmployeeFn({
+        data: {
+          employeeId: selectedEmp.id,
+          fullName: empFullName.trim(),
+          phone: empPhone.trim(),
+          designation: empDesignation.trim(),
+          permissions: empPermissions,
+        },
+      });
+      toast.success(lang === "bn" ? "কর্মচারীর তথ্য ও পারমিশন আপডেট হয়েছে!" : "Employee updated successfully!");
+      setEditEmpModalOpen(false);
+      qc.invalidateQueries({ queryKey: ["shop-employees"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update employee");
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const handleSaveResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmp || !newEmpPassword || newEmpPassword.length < 4) {
+      toast.error(lang === "bn" ? "কমপক্ষে ৪ ডিজিটের পাসওয়ার্ড দিন" : "Password must be at least 4 characters");
+      return;
+    }
+    setEmpSaving(true);
+    try {
+      await updateShopEmployeeFn({
+        data: {
+          employeeId: selectedEmp.id,
+          password: newEmpPassword.trim(),
+        },
+      });
+      toast.success(lang === "bn" ? "পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে!" : "Password reset successfully!");
+      setResetEmpModalOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reset password");
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async (emp: any) => {
+    try {
+      const newStatus = !emp.is_active;
+      await updateShopEmployeeFn({
+        data: {
+          employeeId: emp.id,
+          isActive: newStatus,
+        },
+      });
+      toast.success(
+        newStatus
+          ? (lang === "bn" ? "কর্মচারী একাউন্ট সক্রিয় করা হয়েছে" : "Employee activated")
+          : (lang === "bn" ? "কর্মচারী একাউন্ট নিষ্ক্রিয় করা হয়েছে" : "Employee deactivated")
+      );
+      qc.invalidateQueries({ queryKey: ["shop-employees"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to change status");
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!selectedEmp) return;
+    setEmpSaving(true);
+    try {
+      await deleteShopEmployeeFn({
+        data: {
+          employeeId: selectedEmp.id,
+        },
+      });
+      toast.success(lang === "bn" ? "কর্মচারী মুছে ফেলা হয়েছে" : "Employee deleted");
+      setDeleteEmpModalOpen(false);
+      qc.invalidateQueries({ queryKey: ["shop-employees"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete employee");
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const renderEmployeeManagement = () => {
+    if (user?.role !== "owner") return null;
+
+    return (
+      <Card className="p-4 sm:p-5 rounded-2xl bg-card border-border/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3.5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <UserCheck className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  {lang === "bn" ? "কর্মচারী ব্যবস্থাপনা ও পারমিশন" : "Employee Management & Permissions"}
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    {shopEmployees.length} {lang === "bn" ? "জন" : "Staff"}
+                  </Badge>
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {lang === "bn"
+                    ? "দোকানের কর্মচারীদের একাউন্ট তৈরি, এক্সেস পারমিশন নিয়ন্ত্রণ ও পাসওয়ার্ড পরিবর্তন করুন।"
+                    : "Create staff accounts, configure granular module permissions, and manage shop access."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            onClick={handleOpenAddEmployee}
+            className="h-9 px-3 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 beveled-button shrink-0"
+          >
+            <UserPlus className="size-4" />
+            <span>{lang === "bn" ? "নতুন কর্মচারী যুক্ত করুন" : "Add Employee"}</span>
+          </Button>
+        </div>
+
+        {/* Employee List View */}
+        {employeesQuery.isLoading ? (
+          <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+            <Loader2 className="size-5 animate-spin text-primary" />
+            <span>{lang === "bn" ? "কর্মচারীদের তালিকা লোড হচ্ছে..." : "Loading employees list..."}</span>
+          </div>
+        ) : shopEmployees.length === 0 ? (
+          <div className="py-8 text-center border border-dashed border-border/70 rounded-xl space-y-2.5 bg-muted/20">
+            <div className="p-3 bg-muted/60 rounded-full inline-block text-muted-foreground">
+              <Users className="size-6 opacity-60" />
+            </div>
+            <div className="space-y-1 max-w-sm mx-auto px-4">
+              <p className="text-xs font-bold text-foreground">
+                {lang === "bn" ? "এখনও কোনো কর্মচারী যুক্ত করা হয়নি" : "No employees added yet"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {lang === "bn"
+                  ? "আপনার বিক্রয় কর্মী বা ক্যাশিয়ারের জন্য নতুন একাউন্ট খুলুন যাতে তারা নির্দিষ্ট মডিউল পরিচালনা করতে পারে।"
+                  : "Add your sales staff or cashier to grant them restricted POS and module access."}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleOpenAddEmployee}
+              className="text-xs rounded-xl gap-1.5 h-8 mt-1"
+            >
+              <Plus className="size-3.5" />
+              <span>{lang === "bn" ? "প্রথম কর্মচারী যোগ করুন" : "Add First Employee"}</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+            {shopEmployees.map((emp: any) => {
+              const p = emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS;
+              const grantedCount = Object.values(p).filter(Boolean).length;
+
+              return (
+                <div
+                  key={emp.id}
+                  className="p-3.5 sm:p-4 rounded-xl bg-muted/30 border border-border/70 hover:border-border transition-all space-y-3 flex flex-col justify-between"
+                >
+                  <div className="space-y-2.5">
+                    {/* Header: Name, Designation & Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar className="size-10 rounded-xl border border-border/80 shadow-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-sm shrink-0">
+                          <AvatarFallback className="rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                            {(emp.full_name || "EM").slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <h4 className="text-xs sm:text-sm font-bold text-foreground truncate">
+                            {emp.full_name}
+                          </h4>
+                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {emp.designation || (lang === "bn" ? "বিক্রয় কর্মী" : "Sales Staff")}
+                            </span>
+                            <span>•</span>
+                            <span className="font-mono text-[10px]">@{emp.username}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge
+                          variant={emp.is_active ? "outline" : "secondary"}
+                          className={`text-[10px] font-medium rounded-md px-1.5 py-0.5 ${
+                            emp.is_active
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                              : "bg-zinc-500/15 text-zinc-500 border-zinc-500/30"
+                          }`}
+                        >
+                          {emp.is_active
+                            ? (lang === "bn" ? "সক্রিয়" : "Active")
+                            : (lang === "bn" ? "নিষ্ক্রিয়" : "Inactive")}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Contact details */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-background/60 p-2 rounded-lg border border-border/50 font-mono">
+                      <div className="truncate">
+                        <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Phone</span>
+                        <span className="text-foreground">{emp.phone || "—"}</span>
+                      </div>
+                      <div className="truncate">
+                        <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Permissions</span>
+                        <span className="text-foreground font-sans font-medium">{grantedCount} modules</span>
+                      </div>
+                    </div>
+
+                    {/* Permissions Badges */}
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {p.sales && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                          🛒 POS Sales
+                        </span>
+                      )}
+                      {p.products && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/20">
+                          📦 Stock/Products
+                        </span>
+                      )}
+                      {p.purchases && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                          🛍️ Purchases
+                        </span>
+                      )}
+                      {p.expenses && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                          💸 Expenses
+                        </span>
+                      )}
+                      {p.cashbox && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                          💵 Cashbox
+                        </span>
+                      )}
+                      {p.parties && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                          👥 Parties/Dues
+                        </span>
+                      )}
+                      {p.reports && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/20">
+                          📈 Reports
+                        </span>
+                      )}
+                      {p.settings && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20">
+                          ⚙️ Settings
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenEditEmployee(emp)}
+                        className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
+                        title="Edit permissions and details"
+                      >
+                        <Edit className="size-3" />
+                        <span>{lang === "bn" ? "পারমিশন" : "Edit"}</span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenResetPassword(emp)}
+                        className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
+                        title="Change employee password"
+                      >
+                        <Key className="size-3 text-amber-500" />
+                        <span>{lang === "bn" ? "পাসওয়ার্ড" : "Password"}</span>
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleToggleStatus(emp)}
+                        className={`h-7.5 px-2 text-[11px] rounded-lg ${
+                          emp.is_active
+                            ? "text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                            : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                        }`}
+                      >
+                        {emp.is_active
+                          ? (lang === "bn" ? "নিষ্ক্রিয় করুন" : "Deactivate")
+                          : (lang === "bn" ? "সক্রিয় করুন" : "Activate")}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedEmp(emp);
+                          setDeleteEmpModalOpen(true);
+                        }}
+                        className="h-7.5 px-2 text-[11px] rounded-lg text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-6">
       {/* Profile Header */}
@@ -2328,6 +2755,7 @@ export default function MorePage() {
 
           <TabsContent value="menu" className="space-y-5 outline-none mt-0">
             {renderMobileOperations()}
+            {renderEmployeeManagement()}
             {renderSignOut()}
           </TabsContent>
 
@@ -2344,6 +2772,7 @@ export default function MorePage() {
           {renderOperations()}
           {renderThemeCustomization()}
           {renderBackdateManager()}
+          {renderEmployeeManagement()}
           {renderSignOut()}
         </div>
       )}
@@ -2423,6 +2852,432 @@ export default function MorePage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── 1. Add Employee Dialog ─── */}
+      <Dialog open={addEmpModalOpen} onOpenChange={setAddEmpModalOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif flex items-center gap-2">
+              <UserPlus className="size-5 text-emerald-600" />
+              <span>{lang === "bn" ? "নতুন কর্মচারী যুক্ত করুন" : "Add New Employee"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {lang === "bn"
+                ? "কর্মচারীর তথ্য এবং নির্ধারিত এক্সেস পারমিশন নির্বাচন করুন।"
+                : "Enter employee credentials and configure access permissions."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveNewEmployee} className="space-y-4 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারীর পুরো নাম *" : "Full Name *"}</Label>
+              <Input
+                required
+                placeholder="e.g. Rahim Ahmed"
+                value={empFullName}
+                onChange={(e) => setEmpFullName(e.target.value)}
+                className="h-8.5 text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "ইউজারনেম (লগইনের জন্য) *" : "Username (For Login) *"}</Label>
+                <Input
+                  required
+                  placeholder="e.g. rahim"
+                  value={empUsername}
+                  onChange={(e) => setEmpUsername(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "মোবাইল নম্বর *" : "Phone Number *"}</Label>
+                <Input
+                  required
+                  placeholder="e.g. 01700000000"
+                  value={empPhone}
+                  onChange={(e) => setEmpPhone(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "লগইন পাসওয়ার্ড *" : "Login Password *"}</Label>
+                <Input
+                  required
+                  type="password"
+                  placeholder="e.g. 123456"
+                  value={empPassword}
+                  onChange={(e) => setEmpPassword(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "পদবী (Designation)" : "Designation"}</Label>
+                <Input
+                  placeholder="e.g. Sales Staff, Cashier"
+                  value={empDesignation}
+                  onChange={(e) => setEmpDesignation(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Granular Permissions Box */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <ShieldCheck className="size-4 text-emerald-600" />
+                <span>{lang === "bn" ? "মডিউল এক্সেস পারমিশন নির্ধারণ করুন:" : "Module Access Permissions:"}</span>
+              </Label>
+
+              <div className="space-y-2 p-3 bg-muted/40 rounded-xl border border-border/70 text-xs">
+                {/* POS Sales */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold block text-foreground">🛒 POS Sales & Orders</span>
+                    <span className="text-[10.5px] text-muted-foreground">Make sales, print invoices & search products</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.sales}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, sales: val }))}
+                  />
+                </div>
+
+                {/* Stock & Products */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📦 Product Catalog & Stock</span>
+                    <span className="text-[10.5px] text-muted-foreground">View stock quantity and barcode prices</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.products}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, products: val }))}
+                  />
+                </div>
+
+                {/* Dashboard */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📊 Dashboard Overview</span>
+                    <span className="text-[10.5px] text-muted-foreground">View daily transaction summaries</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.dashboard}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, dashboard: val }))}
+                  />
+                </div>
+
+                {/* Purchases */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">🛍️ Purchases & Stock In</span>
+                    <span className="text-[10.5px] text-muted-foreground">Log supplier product restocks</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.purchases}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, purchases: val }))}
+                  />
+                </div>
+
+                {/* Expenses */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">💸 Expenses & Overheads</span>
+                    <span className="text-[10.5px] text-muted-foreground">Record tea, shop rent & staff expense</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.expenses}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, expenses: val }))}
+                  />
+                </div>
+
+                {/* Cashbox */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">💵 Cash Management & Ledger</span>
+                    <span className="text-[10.5px] text-muted-foreground">Cashbox in/out and drawer balance</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.cashbox}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, cashbox: val }))}
+                  />
+                </div>
+
+                {/* Parties / Dues */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">👥 Customers, Dues & Suppliers</span>
+                    <span className="text-[10.5px] text-muted-foreground">Customer balances & due collections</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.parties}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, parties: val }))}
+                  />
+                </div>
+
+                {/* Reports */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📈 Profit & Sales Reports</span>
+                    <span className="text-[10.5px] text-muted-foreground">Sales analytics, profits & loss margins</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.reports}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, reports: val }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddEmpModalOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={empSaving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+                {empSaving ? "…" : (lang === "bn" ? "কর্মচারী সেভ করুন" : "Save Employee")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── 2. Edit Employee & Permissions Dialog ─── */}
+      <Dialog open={editEmpModalOpen} onOpenChange={setEditEmpModalOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif flex items-center gap-2">
+              <Edit className="size-5 text-primary" />
+              <span>{lang === "bn" ? "কর্মচারী পারমিশন ও তথ্য এডিট" : "Edit Employee Permissions"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs font-mono">
+              @{selectedEmp?.username} ({selectedEmp?.full_name})
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateEmployee} className="space-y-4 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "পুরো নাম *" : "Full Name *"}</Label>
+              <Input
+                required
+                value={empFullName}
+                onChange={(e) => setEmpFullName(e.target.value)}
+                className="h-8.5 text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "মোবাইল নম্বর" : "Phone"}</Label>
+                <Input
+                  value={empPhone}
+                  onChange={(e) => setEmpPhone(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "পদবী (Designation)" : "Designation"}</Label>
+                <Input
+                  value={empDesignation}
+                  onChange={(e) => setEmpDesignation(e.target.value)}
+                  className="h-8.5 text-xs rounded-xl"
+                />
+              </div>
+            </div>
+
+            {/* Granular Permissions Box */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <ShieldCheck className="size-4 text-emerald-600" />
+                <span>{lang === "bn" ? "মডিউল এক্সেস পারমিশন পরিবর্তন করুন:" : "Modify Access Permissions:"}</span>
+              </Label>
+
+              <div className="space-y-2 p-3 bg-muted/40 rounded-xl border border-border/70 text-xs">
+                {/* POS Sales */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold block text-foreground">🛒 POS Sales & Orders</span>
+                    <span className="text-[10.5px] text-muted-foreground">Make sales & search items</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.sales}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, sales: val }))}
+                  />
+                </div>
+
+                {/* Stock & Products */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📦 Product Catalog & Stock</span>
+                    <span className="text-[10.5px] text-muted-foreground">View stock quantity</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.products}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, products: val }))}
+                  />
+                </div>
+
+                {/* Dashboard */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📊 Dashboard Overview</span>
+                    <span className="text-[10.5px] text-muted-foreground">View daily transaction summaries</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.dashboard}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, dashboard: val }))}
+                  />
+                </div>
+
+                {/* Purchases */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">🛍️ Purchases & Stock In</span>
+                    <span className="text-[10.5px] text-muted-foreground">Log supplier product restocks</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.purchases}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, purchases: val }))}
+                  />
+                </div>
+
+                {/* Expenses */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">💸 Expenses & Overheads</span>
+                    <span className="text-[10.5px] text-muted-foreground">Record tea, shop rent & staff expense</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.expenses}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, expenses: val }))}
+                  />
+                </div>
+
+                {/* Cashbox */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">💵 Cash Management & Ledger</span>
+                    <span className="text-[10.5px] text-muted-foreground">Cashbox in/out and drawer balance</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.cashbox}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, cashbox: val }))}
+                  />
+                </div>
+
+                {/* Parties / Dues */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">👥 Customers, Dues & Suppliers</span>
+                    <span className="text-[10.5px] text-muted-foreground">Customer balances & due collections</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.parties}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, parties: val }))}
+                  />
+                </div>
+
+                {/* Reports */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                  <div>
+                    <span className="font-semibold block text-foreground">📈 Profit & Sales Reports</span>
+                    <span className="text-[10.5px] text-muted-foreground">Sales analytics, profits & loss margins</span>
+                  </div>
+                  <Switch
+                    checked={empPermissions.reports}
+                    onCheckedChange={(val) => setEmpPermissions((prev) => ({ ...prev, reports: val }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditEmpModalOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={empSaving} className="bg-primary text-white font-semibold">
+                {empSaving ? "…" : (lang === "bn" ? "পারমিশন আপডেট করুন" : "Update Permissions")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── 3. Reset Password Dialog ─── */}
+      <Dialog open={resetEmpModalOpen} onOpenChange={setResetEmpModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif flex items-center gap-2">
+              <Key className="size-5 text-amber-500" />
+              <span>{lang === "bn" ? "পাসওয়ার্ড রিসেট করুন" : "Reset Password"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs font-mono">
+              Employee: @{selectedEmp?.username} ({selectedEmp?.full_name})
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveResetPassword} className="space-y-4 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "নতুন পাসওয়ার্ড *" : "New Password *"}</Label>
+              <Input
+                required
+                type="password"
+                placeholder="At least 4 characters"
+                value={newEmpPassword}
+                onChange={(e) => setNewEmpPassword(e.target.value)}
+                className="h-8.5 text-xs rounded-xl font-mono"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setResetEmpModalOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={empSaving || !newEmpPassword} className="bg-amber-600 hover:bg-amber-500 text-white font-semibold">
+                {empSaving ? "…" : (lang === "bn" ? "পাসওয়ার্ড পরিবর্তন করুন" : "Change Password")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── 4. Delete Employee Confirmation Dialog ─── */}
+      <Dialog open={deleteEmpModalOpen} onOpenChange={setDeleteEmpModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-serif text-destructive flex items-center gap-2">
+              <AlertTriangle className="size-5 text-destructive" />
+              <span>{lang === "bn" ? "কর্মচারী মুছে ফেলবেন?" : "Delete Employee Account?"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {lang === "bn"
+                ? `আপনি কি নিশ্চিত যে '${selectedEmp?.full_name}' (@${selectedEmp?.username}) এর একাউন্ট মুছে ফেলতে চান?`
+                : `Are you sure you want to delete '${selectedEmp?.full_name}' (@${selectedEmp?.username})?`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setDeleteEmpModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={empSaving}
+              onClick={handleDeleteEmployee}
+              className="font-semibold"
+            >
+              {empSaving ? "…" : (lang === "bn" ? "হ্যাঁ, মুছে ফেলুন" : "Yes, Delete")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
