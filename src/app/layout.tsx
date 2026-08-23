@@ -88,6 +88,29 @@ export default function RootLayout({
                   doc.style.setProperty('--sidebar-primary', val);
                 } catch (e) {}
 
+                // Early recovery for stale chunk load errors (deployments / cache mismatch)
+                window.addEventListener('error', function(e) {
+                  var m = (e && e.message) || '';
+                  if (m.indexOf('ChunkLoadError') !== -1 || m.indexOf('Loading chunk') !== -1) {
+                    if (typeof caches !== 'undefined') {
+                      caches.keys().then(function(keys) {
+                        keys.forEach(function(k) { caches.delete(k); });
+                      });
+                    }
+                    if ('serviceWorker' in navigator) {
+                      navigator.serviceWorker.getRegistrations().then(function(regs) {
+                        regs.forEach(function(r) { r.unregister(); });
+                      });
+                    }
+                    var last = sessionStorage.getItem('last_chunk_reload');
+                    var now = Date.now();
+                    if (!last || (now - Number(last) > 4000)) {
+                      sessionStorage.setItem('last_chunk_reload', String(now));
+                      window.location.reload();
+                    }
+                  }
+                });
+
                 // Register PWA Service Worker for phone browsers & standalone mode
                 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
                   window.addEventListener('load', function() {

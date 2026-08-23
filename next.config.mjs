@@ -17,7 +17,7 @@ const nextConfig = {
         },
       }
     : {
-        // Allow camera access via HTTP headers for mobile WebView + browsers
+        // Allow camera access via HTTP headers for mobile WebView + browsers & optimize chunk cache
         async headers() {
           return [
             {
@@ -26,6 +26,24 @@ const nextConfig = {
                 {
                   key: "Permissions-Policy",
                   value: "camera=*, microphone=(), geolocation=()",
+                },
+              ],
+            },
+            {
+              source: "/_next/static/:path*",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+            {
+              source: "/sw.js",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "no-cache, no-store, must-revalidate",
                 },
               ],
             },
