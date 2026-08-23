@@ -32,13 +32,21 @@ export default async function StorefrontPage(props: PageProps) {
     const db = await getDb();
     const cleanSlug = (shopName || "").toLowerCase().trim();
 
-    // Query business by slug
-    let business = await db.collection("businesses").findOne({ slug: cleanSlug });
+    // Query business by slug or case-insensitive regex
+    const nameVariations = [
+      cleanSlug,
+      cleanSlug.replace(/-/g, " "),
+      cleanSlug.replace(/_/g, " "),
+      cleanSlug.replace(/\s+/g, ""),
+    ];
 
-    // Fallback: Query business by name
-    if (!business) {
-      business = await db.collection("businesses").findOne({ name: shopName });
-    }
+    let business = await db.collection("businesses").findOne({
+      $or: [
+        { slug: { $in: nameVariations } },
+        { name: { $regex: new RegExp(`^${cleanSlug.replace(/[-_]/g, "[-\\s_]?")}$`, "i") } },
+        { name: shopName },
+      ],
+    });
 
     // Safety check: if no business found, show clean storefront 404
     if (!business) {

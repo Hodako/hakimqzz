@@ -47,6 +47,12 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("role") === "employee" || params.get("tab") === "employee") {
+        setActiveTab("employee");
+      }
+    }
   }, []);
 
   useEffect(() => {

@@ -19,7 +19,7 @@ import {
   deleteLicenseFn,
 } from "@/lib/rpc-admin";
 import Link from "next/link";
-import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer, MessageSquare } from "lucide-react";
+import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer, MessageSquare, Store, Sparkles } from "lucide-react";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
@@ -50,8 +50,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-
-
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
 export default function SettingsPage() {
@@ -62,6 +60,7 @@ export default function SettingsPage() {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const [busy, setBusy] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "printing" | "sheets" | "security">("profile");
 
   // KPI Configuration state
   const [kpiConfig, setKpiConfig] = useState({
@@ -498,612 +497,395 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">{user?.email}</p>
       </div>
 
+      {/* Top Segmented Navigation Tabs */}
+      <div className="flex items-center gap-1.5 p-1 bg-muted/60 dark:bg-muted/30 border border-border/80 rounded-2xl overflow-x-auto scrollbar-none">
+        {[
+          { id: "profile", label: lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile", icon: Store },
+          { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & UI", icon: Sparkles },
+          { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Invoice", icon: Printer },
+          { id: "sheets", label: lang === "bn" ? "ক্লাউড ব্যাকআপ" : "Cloud & Sheets", icon: FileSpreadsheet },
+          { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = settingsTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setSettingsTab(tab.id as any)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+                isActive
+                  ? "bg-card text-foreground shadow-xs border border-border/60"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <Icon className={`size-3.5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {isOwner && biz && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <Card className="glass-card p-5 space-y-4">
-          <h2 className="font-semibold">Business Profile</h2>
-          <form onSubmit={saveBusiness} className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Company Name</Label>
-              <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" />
+        <div className="space-y-6">
+          {/* TAB 1: SHOP PROFILE */}
+          {settingsTab === "profile" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <Card className="lg:col-span-8 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <Store className="size-4 text-primary" />
+                      <span>{lang === "bn" ? "দোকানের মূল তথ্য" : "Business Profile & Contact"}</span>
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {lang === "bn" ? "দোকানের নাম, ঠিকানা এবং যোগাযোগের তথ্য পরিচালনা করুন" : "Manage company identity, phone numbers, and official address"}
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={saveBusiness} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Company / Shop Name</Label>
+                      <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" className="h-10 rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Business Category</Label>
+                      <select name="business_type" defaultValue={biz.business_type} className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize">
+                        {BUSINESS_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ঠিকানা (Shop Address)" : "Official Shop Address"}</Label>
+                    <Textarea name="address" defaultValue={biz.address || ""} placeholder={lang === "bn" ? "দোকানের ঠিকানা লিখুন..." : "e.g., House 12, Road 4, Dhanmondi, Dhaka"} className="text-xs min-h-[70px] rounded-xl" />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ফোন নম্বরসমূহ (Phone Numbers)" : "Shop Phone Numbers"}</Label>
+                      <Input name="phone_numbers" defaultValue={biz.phone_numbers || ""} placeholder="+8801700000000, +8801800000000" className="h-10 rounded-xl text-xs" />
+                      <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "একাধিক নম্বর কমা (,) দিয়ে আলাদা করুন" : "Separate multiple numbers with commas"}</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ইমেইলসমূহ (Emails)" : "Shop Emails"}</Label>
+                      <Input name="emails" defaultValue={biz.emails || user?.email || ""} placeholder="info@shop.com" className="h-10 rounded-xl text-xs" />
+                      <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসে দেখানোর জন্য কমা (,) ব্যবহার করুন" : "Displayed in invoice headers"}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button type="submit" disabled={busy} className="h-10 px-6 rounded-xl beveled-button">
+                      {busy ? "Saving..." : t("save")}
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+
+              {/* Logo Card */}
+              <Card className="lg:col-span-4 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <span>Shop Branding & Logo</span>
+                  </h3>
+                  <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-muted/30 text-center space-y-3">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="size-24 rounded-2xl object-cover border border-border/80 shadow-xs bg-white" />
+                    ) : (
+                      <div className="size-24 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+                        <Store className="size-10" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-foreground">Upload Custom Logo</p>
+                      <p className="text-[10px] text-muted-foreground">PNG, JPG, WEBP up to 5MB</p>
+                    </div>
+                    <label className="cursor-pointer inline-flex items-center justify-center h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                      Choose File & Crop
+                      <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-muted/40 border border-border/60 text-[11px] text-muted-foreground space-y-1">
+                  <p className="font-semibold text-foreground">Direct URL:</p>
+                  <Input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="/logo.png" className="h-8 text-xs font-mono" />
+                </div>
+              </Card>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "দোকানের ঠিকানা (Shop Address)" : "Shop Address"}</Label>
-              <Textarea name="address" defaultValue={biz.address || ""} placeholder={lang === "bn" ? "দোকানের ঠিকানা লিখুন..." : "e.g., House 12, Road 4, Dhanmondi, Dhaka"} className="text-xs min-h-[60px]" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "দোকানের ফোন নম্বরসমূহ (Phone Numbers)" : "Shop Phone Numbers (Multiple)"}</Label>
-              <Input name="phone_numbers" defaultValue={biz.phone_numbers || ""} placeholder={lang === "bn" ? "যেমন: +8801700000000, +8801800000000" : "e.g. +8801700000000, +8801800000000"} className="text-xs" />
-              <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "একাধিক নম্বর কমা (,) দিয়ে সেপারেট করুন" : "Separate multiple numbers with comma (,)"}</p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "দোকানের ইমেইলসমূহ (Emails)" : "Shop Emails (Multiple)"}</Label>
-              <Input name="emails" defaultValue={biz.emails || user?.email || ""} placeholder={lang === "bn" ? "যেমন: info@shop.com, support@shop.com" : "e.g. info@shop.com, support@shop.com"} className="text-xs" />
-              <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসে দেখানোর জন্য কমা (,) দিয়ে সেপারেট করুন" : "Separate multiple emails with comma (,)"}</p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Logo URL</Label>
-              <Input name="logo_url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="/logo.png" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Upload Logo</Label>
-              <Input type="file" accept="image/*" onChange={handleFileChange} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Business Type</Label>
-              <select name="business_type" defaultValue={biz.business_type} className="w-full h-9 rounded-md border border-input bg-input px-3 text-sm">
-                {BUSINESS_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Employee License Limit</Label>
-              <Input name="employee_limit" type="number" min={1} defaultValue={biz.employee_limit} placeholder="5" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t("appearance")}</Label>
-              <select
-                name="theme_mode"
-                value={theme}
-                onChange={e => setTheme(e.target.value as ThemeMode)}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-sm"
-              >
-                <option value="light">{t("theme_light")}</option>
-                <option value="dark">{t("theme_dark")}</option>
-                <option value="system">{t("theme_system")}</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t("accent_color")}</Label>
-              <select
-                value={accentColor}
-                onChange={e => setAccentColor(e.target.value as AccentColor)}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-sm capitalize"
-              >
-                <option value="emerald">emerald (green)</option>
-                <option value="indigo">indigo</option>
-                <option value="violet">violet</option>
-                <option value="blue">blue</option>
-                <option value="rose">rose (red)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "ইউআই থিম ও ডিজাইন সিস্টেম (UI Design System Preset)" : "UI Design System Preset"}</Label>
-              <select
-                onChange={e => {
-                  const val = e.target.value;
-                  const saved = localStorage.getItem("hz_custom_theme");
-                  const current = saved ? JSON.parse(saved) : {};
-                  let isMat = false;
-                  let styleVal = val;
-                  if (val === "material") {
-                    isMat = true;
-                    styleVal = "default";
-                  }
-                  const updated = { ...current, uiStyle: styleVal, isMaterialUI: isMat };
-                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
-                  window.dispatchEvent(new Event("hz-theme-updated"));
-                  toast.success(lang === "bn" ? "থিম ডিজাইন আপডেট হয়েছে!" : "UI Theme preset applied!");
-                }}
-                defaultValue={(() => {
-                  if (typeof window === "undefined") return "default";
-                  try {
-                    const saved = localStorage.getItem("hz_custom_theme");
-                    const cfg = saved ? JSON.parse(saved) : {};
-                    if (cfg.isMaterialUI) return "material";
-                    return cfg.uiStyle || "default";
-                  } catch (e) { return "default"; }
-                })()}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
-              >
-                <option value="default">✨ Default Modern Fintech</option>
-                <option value="material">🎨 Material UI Mode (Raised & Elevation)</option>
-                <option value="glassmorphism">💎 Glassmorphism (Translucent Blur)</option>
-                <option value="morphism">⚪ Neumorphism (Soft Morphism)</option>
-                <option value="brutalism">⬛ Brutalism (High Contrast & Hard Borders)</option>
-                <option value="new-brutalism">🟡 Neo-Brutalism (Modern Pop Art)</option>
-                <option value="cyberpunk">⚡ Cyberpunk Neon</option>
-                <option value="flowerism">🌸 Flowerism (Blossom Pastel)</option>
-                <option value="minimalist">▫️ Minimalist Clean</option>
-                <option value="forest">🌲 Nature Forest</option>
-                <option value="luxury">👑 Luxury Gold</option>
-                <option value="feather">🪶 Feather UI</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "ফন্ট সাইজ (UI Base Font Size)" : "UI Base Font Size"}</Label>
-              <select
-                onChange={e => {
-                  const val = e.target.value;
-                  const saved = localStorage.getItem("hz_custom_theme");
-                  const current = saved ? JSON.parse(saved) : {};
-                  const updated = { ...current, fontSize: val };
-                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
-                  window.dispatchEvent(new Event("hz-theme-updated"));
-                  toast.success(lang === "bn" ? `ফন্ট সাইজ পরিবর্তন হয়েছে (${val})` : `Font size updated to ${val}`);
-                }}
-                defaultValue={(() => {
-                  if (typeof window === "undefined") return "14px";
-                  try {
-                    const saved = localStorage.getItem("hz_custom_theme");
-                    const cfg = saved ? JSON.parse(saved) : {};
-                    return cfg.fontSize || "14px";
-                  } catch (e) { return "14px"; }
-                })()}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
-              >
-                <option value="11px">11px (Extra Small / Ultra Compact)</option>
-                <option value="12px">12px (Small Compact)</option>
-                <option value="13px">13px (Medium Small)</option>
-                <option value="14px">14px (Default Standard)</option>
-                <option value="15px">15px (Large)</option>
-                <option value="16px">16px (Extra Large)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "বর্ডার ও এজ স্টাইল (Border Edges Style)" : "Border Corner Edges Style"}</Label>
-              <select
-                onChange={e => {
-                  const val = e.target.value;
-                  const saved = localStorage.getItem("hz_custom_theme");
-                  const current = saved ? JSON.parse(saved) : {};
-                  const updated = { ...current, borderRadius: val };
-                  localStorage.setItem("hz_custom_theme", JSON.stringify(updated));
-                  window.dispatchEvent(new Event("hz-theme-updated"));
-                  toast.success(lang === "bn" ? `এজ বর্ডার স্টাইল আপডেট হয়েছে!` : `Border edges style updated!`);
-                }}
-                defaultValue={(() => {
-                  if (typeof window === "undefined") return "none";
-                  try {
-                    const saved = localStorage.getItem("hz_custom_theme");
-                    const cfg = saved ? JSON.parse(saved) : {};
-                    return cfg.borderRadius || "none";
-                  } catch (e) { return "none"; }
-                })()}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs"
-              >
-                <option value="none">📐 Sharp Edges (0px Sharp Default)</option>
-                <option value="small">🔹 Small Curve (4px)</option>
-                <option value="medium">🔷 Medium Curve (8px)</option>
-                <option value="large">⚪ Rounded (16px)</option>
-                <option value="full">🔘 Full Pill (9999px)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t("bg_style")}</Label>
-              <select
-                value={bgStyle}
-                onChange={e => setBgStyle(e.target.value as BgStyle)}
-                className="w-full h-9 rounded-md border border-input bg-input px-3 text-sm capitalize"
-              >
-                <option value="default">default gradient</option>
-                <option value="warm">warm glow</option>
-                <option value="cool">cool glow</option>
-                <option value="clean">solid clean</option>
-                <option value="glass">glassmorphism</option>
-              </select>
-            </div>
-            <div className="border-t border-border pt-3 mt-3 space-y-3">
-              <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Invoice Customize Settings</h3>
-              <div className="space-y-1">
-                <Label className="text-xs">Invoice Watermark Text</Label>
-                <Input name="invoice_watermark" defaultValue={biz.invoice_watermark || ""} placeholder="PAID" />
-              </div>
-              <div className="space-y-1 flex items-center justify-between">
-                <Label className="text-xs">Enable Watermark</Label>
-                <select name="invoice_watermark_enabled" defaultValue={String(biz.invoice_watermark_enabled)} className="h-8 rounded border border-input bg-input px-2 text-xs w-28">
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Invoice Terms & Conditions / Footer Notes</Label>
-                <textarea name="invoice_terms" defaultValue={biz.invoice_terms || ""} className="w-full min-h-[60px] rounded-md border border-input bg-input p-2 text-xs" placeholder="e.g. No refund after 7 days" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Invoice Print Theme Color</Label>
-                <select name="invoice_color" defaultValue={biz.invoice_color || "black"} className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize">
-                  <option value="black">black</option>
-                  <option value="emerald">emerald (green)</option>
-                  <option value="indigo">indigo</option>
-                  <option value="rose">rose (red)</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস ফন্ট সাইজ (Invoice Print Font Size)" : "Invoice Print Font Size (PDF & Print)"}</Label>
-                <div className="grid grid-cols-2 gap-2">
+          )}
+
+          {/* TAB 2: APPEARANCE & UI THEME */}
+          {settingsTab === "appearance" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
+                  <Label className="text-xs font-bold">{t("appearance")}</Label>
                   <select
-                    value={fontSize}
-                    onChange={(e) => setFontSize(e.target.value)}
-                    className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
+                    value={theme}
+                    onChange={e => setTheme(e.target.value as ThemeMode)}
+                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs"
                   >
-                    <option value="12px">12px (Small Compact)</option>
-                    <option value="14px">14px (Standard Medium)</option>
-                    <option value="15px">15px (Default Recommended)</option>
-                    <option value="16px">16px (Extra Large HD 16px)</option>
-                    <option value="18px">18px (Ultra Large HD 18px)</option>
-                    <option value="20px">20px (Super Large 20px)</option>
-                    <option value="22px">22px (Max Preset 22px)</option>
-                    <option value="24px">24px (Extra Max 24px)</option>
-                    <option value="26px">26px (Max Super Size 26px)</option>
+                    <option value="light">{t("theme_light")}</option>
+                    <option value="dark">{t("theme_dark")}</option>
+                    <option value="system">{t("theme_system")}</option>
                   </select>
-                  <Input
-                    id="invoice_font_size_custom_input"
-                    name="invoice_font_size"
-                    value={fontSize}
-                    onChange={(e) => setFontSize(e.target.value)}
-                    placeholder="Custom e.g. 26px"
-                    className="h-9 text-xs"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ড্রপডাউন থেকে বা ম্যানুয়ালি পছন্দের সাইজ টাইপ করুন (যেমন: 18px, 22px, 26px)" : "Select preset or manually type any custom font size up to 26px (e.g. 18px, 22px, 26px)"}</p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস জুম / স্কেল (Invoice Document Zoom & Scale)" : "Invoice Document Scale & Size Zoom"}</Label>
-                <div className="grid grid-cols-2 gap-2">
+                </Card>
+
+                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
+                  <Label className="text-xs font-bold">{t("accent_color")}</Label>
                   <select
-                    value={fontScale}
-                    onChange={(e) => setFontScale(e.target.value)}
-                    className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
+                    value={accentColor}
+                    onChange={e => setAccentColor(e.target.value as AccentColor)}
+                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize"
                   >
-                    <option value="80%">80% (Compact Small)</option>
-                    <option value="100%">100% (Standard Normal)</option>
-                    <option value="120%">120% (Medium 1.2x)</option>
-                    <option value="150%">150% (Big 1.5x Large)</option>
-                    <option value="180%">180% (Extra Big 1.8x)</option>
-                    <option value="200%">200% (Double Size 2.0x Giant)</option>
-                    <option value="250%">250% (Max Big 2.5x)</option>
+                    <option value="emerald">emerald (green)</option>
+                    <option value="indigo">indigo</option>
+                    <option value="violet">violet</option>
+                    <option value="blue">blue</option>
+                    <option value="rose">rose (red)</option>
                   </select>
-                  <Input
-                    id="invoice_scale_custom_input"
-                    name="invoice_scale"
-                    value={fontScale}
-                    onChange={(e) => setFontScale(e.target.value)}
-                    placeholder="Custom e.g. 150%"
-                    className="h-9 text-xs"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসের সামগ্রিক আকার বড় বা ছোট করতে স্কেল বেছে নিন (যেমন: 120%, 150%, 200%)" : "Resize or turn invoice big according to document size (e.g. 120%, 150%, 200%)"}</p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস ভার্টিকাল স্পেসিং (Invoice Vertical Line Spacing)" : "Invoice Vertical Line Spacing & Padding"}</Label>
-                <div className="grid grid-cols-2 gap-2">
+                </Card>
+
+                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
+                  <Label className="text-xs font-bold">{t("bg_style")}</Label>
                   <select
-                    value={lineSpacing}
-                    onChange={(e) => setLineSpacing(e.target.value)}
-                    className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize"
+                    value={bgStyle}
+                    onChange={e => setBgStyle(e.target.value as BgStyle)}
+                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize"
                   >
-                    <option value="2px">2px (Compact Tight)</option>
-                    <option value="4px">4px (Standard 4px)</option>
-                    <option value="6px">6px (Relaxed 6px - Recommended)</option>
-                    <option value="8px">8px (Spaced 8px)</option>
-                    <option value="10px">10px (Loose 10px)</option>
-                    <option value="12px">12px (Extra Loose 12px)</option>
+                    <option value="default">default gradient</option>
+                    <option value="warm">warm glow</option>
+                    <option value="cool">cool glow</option>
+                    <option value="clean">solid clean</option>
+                    <option value="glass">glassmorphism</option>
                   </select>
-                  <Input
-                    id="invoice_line_spacing_custom_input"
-                    name="invoice_line_spacing"
-                    value={lineSpacing}
-                    onChange={(e) => setLineSpacing(e.target.value)}
-                    placeholder="Custom e.g. 8px"
-                    className="h-9 text-xs"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসের প্রতিটি আইটেম ও লাইনের মাঝে উল্লম্ব ফাঁকা জায়গা পরিবর্তন করুন (যেমন: 6px, 8px, 10px)" : "Adjust vertical gap/padding between invoice items & table rows (e.g. 6px, 8px, 10px)"}</p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "ইনভয়েস পেপার সাইজ (Invoice Page Size)" : "Invoice Paper Size / Document Format"}</Label>
-                <select name="invoice_page_size" defaultValue={biz.invoice_page_size || "80mm"} className="w-full h-9 rounded-md border border-input bg-input px-3 text-xs capitalize">
-                  <option value="80mm">80mm POS Thermal Receipt (Receipt Printer)</option>
-                  <option value="A4">A4 Full Page Document</option>
-                  <option value="A5">A5 Half Sheet</option>
-                  <option value="custom">Custom Width & Height</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "কাস্টম প্রস্থ (Width mm/px)" : "Custom Page Width"}</Label>
-                  <Input name="invoice_page_width" defaultValue={biz.invoice_page_width || ""} placeholder="e.g. 80mm or 210mm" className="h-8 text-xs mt-1" />
-                </div>
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "কাস্টম উচ্চতা (Height mm/px)" : "Custom Page Height"}</Label>
-                  <Input name="invoice_page_height" defaultValue={biz.invoice_page_height || ""} placeholder="e.g. auto or 297mm" className="h-8 text-xs mt-1" />
-                </div>
+                </Card>
               </div>
 
-              {/* POS Thermal Printer Paper & Canvas Customizer */}
-              <div className="border-t border-border pt-3 mt-3 space-y-3">
-                <div className="flex items-center gap-2">
+              {/* KPI & Dashboard Customizer */}
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center gap-2.5 border-b border-border/60 pb-3">
+                  <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                    <LayoutGrid className="size-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-sm sm:text-base text-foreground">{lang === "bn" ? "কেপিআই এবং ড্যাশবোর্ড কাস্টমাইজেশন" : "KPI & Dashboard Layout Customizer"}</h2>
+                    <p className="text-xs text-muted-foreground">{lang === "bn" ? "ড্যাশবোর্ড কার্ডের উচ্চতা, শার্পনেস এবং বর্ডার শৈলী পরিবর্তন করুন" : "Customize dashboard card height, corner curves, and borders"}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Box Height / Size</Label>
+                    <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
+                      {["small", "standard", "large"].map(sz => (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => updateKpiConfig({ size: sz as any })}
+                          className={`py-1.5 rounded-lg text-center text-xs font-bold capitalize transition-all ${
+                            kpiConfig.size === sz ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Corner Curvature</Label>
+                    <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
+                      {["none", "md", "full"].map(cr => (
+                        <button
+                          key={cr}
+                          type="button"
+                          onClick={() => updateKpiConfig({ curve: cr as any })}
+                          className={`py-1.5 rounded-lg text-center text-xs font-bold capitalize transition-all ${
+                            (kpiConfig.curve || "none") === cr ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {cr}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Card Border Theme</Label>
+                    <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
+                      {["subtle", "bold", "emerald", "none"].map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => updateKpiConfig({ borderStyle: b as any })}
+                          className={`py-1 rounded-lg text-center text-xs font-bold capitalize transition-all ${
+                            kpiConfig.borderStyle === b ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Card Theme Style</Label>
+                    <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
+                      {["glass", "flat", "bordered", "gradient"].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => updateKpiConfig({ variant: v as any })}
+                          className={`py-1 rounded-lg text-center text-xs font-bold capitalize transition-all ${
+                            kpiConfig.variant === v ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 3: POS & INVOICE PRINTING */}
+          {settingsTab === "printing" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center gap-2 border-b border-border/60 pb-3">
                   <Printer className="size-4 text-primary" />
-                  <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider">
-                    {lang === "bn" ? "পিওএস থার্মাল প্রিন্টার পেপার সাইজ (POS Paper Settings)" : "POS Thermal Printer & Paper Settings"}
+                  <h3 className="font-bold text-sm sm:text-base text-foreground">
+                    {lang === "bn" ? "পিওএস থার্মাল প্রিন্টার পেপার কনফিগ" : "POS Thermal Printer Settings"}
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "পেপার প্রস্থ (Paper Width)" : "Paper Width (mm)"}</Label>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Paper Width (mm)</Label>
                     <Input
                       type="number"
-                      className="h-8 text-xs mt-1"
+                      className="h-10 rounded-xl text-xs"
                       value={posConfig.widthMm}
                       onChange={(e) => updatePosConfig({ widthMm: Number(e.target.value) || 58 })}
                       placeholder="58"
                     />
-                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 58 mm (POS রুল)" : "Default: 58 mm"}</p>
+                    <p className="text-[10px] text-muted-foreground">Standard: 58mm or 80mm</p>
                   </div>
 
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "পেপার উচ্চতা (Paper Height)" : "Paper Height (mm)"}</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Paper Height (mm)</Label>
                     <Input
                       type="number"
-                      className="h-8 text-xs mt-1"
+                      className="h-10 rounded-xl text-xs"
                       value={posConfig.heightMm === "auto" ? 40 : posConfig.heightMm}
                       onChange={(e) => updatePosConfig({ heightMm: Number(e.target.value) || 40 })}
                       placeholder="40"
                     />
-                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 40 mm" : "Default: 40 mm"}</p>
+                    <p className="text-[10px] text-muted-foreground">Continuous roll default: 40</p>
                   </div>
 
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "ক্যানভাস সাইজ (Canvas Width)" : "Canvas Width (mm)"}</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Canvas Width (mm)</Label>
                     <Input
                       type="number"
-                      className="h-8 text-xs mt-1"
+                      className="h-10 rounded-xl text-xs"
                       value={posConfig.canvasWidthMm}
                       onChange={(e) => updatePosConfig({ canvasWidthMm: Number(e.target.value) || 82 })}
                       placeholder="82"
                     />
-                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 82 mm ক্যানভাস" : "Default: 82 mm"}</p>
                   </div>
 
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">{lang === "bn" ? "দুই পাশের মার্জিন (Side Margin)" : "Side Margin (mm)"}</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Side Margin (mm)</Label>
                     <Input
                       type="number"
-                      className="h-8 text-xs mt-1"
+                      className="h-10 rounded-xl text-xs"
                       value={posConfig.marginMm}
                       onChange={(e) => updatePosConfig({ marginMm: Number(e.target.value) ?? 1 })}
                       placeholder="1"
                     />
-                    <p className="text-[9px] text-muted-foreground mt-0.5">{lang === "bn" ? "ডিফল্ট: 1 mm উভয় পাশে" : "Default: 1 mm margin"}</p>
                   </div>
                 </div>
-              </div>
-            </div>
-            <Button type="submit" disabled={busy} className="w-full sm:w-auto mt-4">{busy ? "…" : t("save")}</Button>
-          </form>
-        </Card>
+              </Card>
 
-        {/* ── KPI & DASHBOARD CUSTOMIZER ──────────────────────── */}
-        <Card className="glass-card p-5 space-y-4 border border-primary/20">
-          <div className="flex items-center gap-2.5">
-            <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-              <LayoutGrid className="size-4" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm sm:text-base">{lang === "bn" ? "কেপিআই এবং ড্যাশবোর্ড কাস্টমাইজেশন" : "KPI & Dashboard Box Customizer"}</h2>
-              <p className="text-xs text-muted-foreground">{lang === "bn" ? "ড্যাশবোর্ডের কেপিআই বক্সের আকার (উচ্চতা), শার্পনেস এবং বর্ডার শৈলী পরিবর্তন করুন" : "Customize KPI box heights, corner sharpness, borders, and layouts"}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            {/* Box Size */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">{lang === "bn" ? "কেপিআই বক্সের সাইজ (উচ্চতা)" : "KPI Box Height & Size"}</Label>
-              <div className="grid grid-cols-6 gap-1 bg-muted rounded-xl p-1 text-xs">
-                {[
-                  { id: "xxs", label: "XXS" },
-                  { id: "xs", label: "XS" },
-                  { id: "small", label: "Small" },
-                  { id: "standard", label: "Med" },
-                  { id: "large", label: "Large" },
-                  { id: "xl", label: "XL" },
-                ].map(sz => (
-                  <button
-                    key={sz.id}
-                    type="button"
-                    onClick={() => updateKpiConfig({ size: sz.id as any })}
-                    className={`py-1.5 rounded-lg text-center text-[11px] font-bold transition-all ${
-                      kpiConfig.size === sz.id
-                        ? "bg-background text-primary shadow-sm ring-1 ring-primary/40"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {sz.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Box Sharpness / Corner Curve */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">{lang === "bn" ? "কর্নার শার্পনেস (Sharpness / Curve)" : "Corner Sharpness & Curve"}</Label>
-              <div className="grid grid-cols-6 gap-1 bg-muted rounded-xl p-1 text-xs">
-                {[
-                  { id: "none", label: "Sharp" },
-                  { id: "sm", label: "Small" },
-                  { id: "md", label: "Med" },
-                  { id: "lg", label: "Round" },
-                  { id: "xl", label: "XL" },
-                  { id: "full", label: "Pill" },
-                ].map(cr => (
-                  <button
-                    key={cr.id}
-                    type="button"
-                    onClick={() => updateKpiConfig({ curve: cr.id as any })}
-                    className={`py-1.5 rounded-lg text-center text-[10px] font-bold transition-all ${
-                      (kpiConfig.curve || "none") === cr.id
-                        ? "bg-background text-primary shadow-sm ring-1 ring-primary/40"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {cr.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Border Style */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">{lang === "bn" ? "বর্ডার স্টাইল" : "Border Style"}</Label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { id: "subtle", label: "Subtle" },
-                  { id: "bold", label: "Bold" },
-                  { id: "pink", label: "Pink" },
-                  { id: "emerald", label: "Emerald" },
-                  { id: "amber", label: "Gold" },
-                  { id: "indigo", label: "Indigo" },
-                  { id: "dashed", label: "Dashed" },
-                  { id: "none", label: "None" },
-                ].map(b => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => updateKpiConfig({ borderStyle: b.id as any })}
-                    className={`p-1.5 rounded-xl border text-[10px] font-bold text-center transition-all ${
-                      kpiConfig.borderStyle === b.id
-                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
-                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Card Design Variant */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">{lang === "bn" ? "কার্ড ভ্যারিয়েন্ট" : "Card Theme Variant"}</Label>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                {[
-                  { id: "glass", label: "Glass" },
-                  { id: "flat", label: "Flat" },
-                  { id: "bordered", label: "Bordered" },
-                  { id: "neon", label: "Neon" },
-                  { id: "gradient", label: "Gradient" },
-                ].map(v => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => updateKpiConfig({ variant: v.id as any })}
-                    className={`p-1.5 rounded-xl border text-[10px] font-bold text-center transition-all ${
-                      kpiConfig.variant === v.id
-                        ? "border-primary bg-primary/15 text-primary shadow-sm ring-1 ring-primary/40"
-                        : "border-border bg-background/50 text-muted-foreground hover:bg-muted/50"
-                    }`}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* SMS Gateway Quick Card */}
-        <Card className="glass-card p-5 space-y-4 border-emerald-500/20 bg-emerald-500/5 relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
-                <div className="p-2 bg-emerald-500/10 rounded-lg">
-                  <MessageSquare className="size-6" />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg">{lang === "bn" ? "এসএমএস সিস্টেম ও বার্তা প্যানেল" : "SMS System & Gateway"}</h2>
-                  <p className="text-xs text-muted-foreground">{lang === "bn" ? "বাল্ক এসএমএস, কাস্টমার অফার ও অটোমেটিক মেসেজ" : "Bulk messaging, supplier notices, customer offers & post-purchase auto SMS"}</p>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {lang === "bn"
-                ? "এসএমএস গেটওয়ের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার, সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
-                : "Manage SMS balance, dispatch marketing campaigns, and configure automatic post-sale notifications."}
-            </p>
-          </div>
-          <div className="pt-2">
-            <Link href="/sms">
-              <Button
-                type="button"
-                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />
-                {lang === "bn" ? "এসএমএস প্যানেল খুলুন" : "Open SMS Panel"}
-              </Button>
-            </Link>
-          </div>
-        </Card>
-
-          {!isUnlocked ? (
-            <Card className="glass-card p-5 space-y-4 border-amber-500/20 bg-amber-500/5 relative overflow-hidden flex flex-col justify-between min-h-[350px]">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="space-y-4 flex-1 flex flex-col justify-center">
-                <div className="flex items-center gap-3 text-amber-500">
-                  <div className="p-2 bg-amber-500/10 rounded-lg">
-                    <Lock className="size-6 animate-pulse" />
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <h3 className="font-bold text-sm sm:text-base text-foreground border-b border-border/60 pb-3">
+                  Invoice Header & Watermark
+                </h3>
+                <form onSubmit={saveBusiness} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Watermark Text</Label>
+                      <Input name="invoice_watermark" defaultValue={biz.invoice_watermark || ""} placeholder="PAID" className="h-10 rounded-xl text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Enable Watermark</Label>
+                      <select name="invoice_watermark_enabled" defaultValue={String(biz.invoice_watermark_enabled)} className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
                   </div>
-                  <h2 className="font-semibold text-lg">Safety & API Settings</h2>
-                </div>
-                <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-                  Configure Google Sheets integration, generate employee license keys, and perform data resets. Password verification is required.
-                </p>
-                <div className="flex items-start gap-2.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 mt-4">
-                  <ShieldAlert className="size-4 shrink-0 mt-0.5" />
-                  <span>Only the business owner can access safety controls. Access is locked by default.</span>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full mt-6 border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium"
-                onClick={() => setIsUnlockDialogOpen(true)}
-              >
-                Unlock Safety Settings
-              </Button>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              <Card className="glass-card p-5 space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-                <div className="flex items-center gap-2.5 text-emerald-500">
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Invoice Terms & Conditions (Footer)</Label>
+                    <Textarea name="invoice_terms" defaultValue={biz.invoice_terms || ""} className="min-h-[70px] rounded-xl text-xs" placeholder="e.g. Sold items are exchangeable within 7 days with invoice." />
+                  </div>
+
+                  <Button type="submit" disabled={busy} className="h-10 px-6 rounded-xl beveled-button">
+                    {busy ? "Saving..." : "Save Invoice Settings"}
+                  </Button>
+                </form>
+              </Card>
+            </div>
+          )}
+
+          {/* TAB 4: CLOUD BACKUP & GOOGLE SHEETS */}
+          {settingsTab === "sheets" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400 border-b border-border/60 pb-3">
                   <FileSpreadsheet className="size-5" />
-                  <h2 className="font-semibold">Google Sheets Integration</h2>
+                  <h2 className="font-bold text-base text-foreground">Google Sheets Real-Time Sync</h2>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Synchronize your transactions, products, sales, expenses, and purchases to Google Sheets in real-time.
+                  Synchronize your transactions, products, sales, expenses, and purchases directly to Google Sheets.
                 </p>
                 <form onSubmit={saveGoogleSheetsConfig} className="space-y-3.5">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Spreadsheet ID</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Spreadsheet ID</Label>
                     <Input
                       name="google_sheets_spreadsheet_id"
                       defaultValue={biz.google_sheets_spreadsheet_id}
                       placeholder="e.g. 1a2b3c4d5e6f7g..."
-                      className="font-mono text-xs"
+                      className="font-mono text-xs h-10 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Service Account Credentials JSON</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Service Account JSON</Label>
                     <Textarea
                       name="google_sheets_credentials_json"
                       defaultValue={biz.google_sheets_credentials_json}
                       placeholder='{ "type": "service_account", ... }'
-                      className="font-mono text-xs min-h-[100px] h-[120px] bg-transparent"
+                      className="font-mono text-xs min-h-[110px] rounded-xl"
                     />
                   </div>
                   <div className="flex gap-2.5 pt-1">
-                    <Button type="submit" disabled={isSheetsSaving} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                      {isSheetsSaving ? "Saving..." : "Save Config"}
+                    <Button type="submit" disabled={isSheetsSaving} className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
+                      {isSheetsSaving ? "Saving..." : "Save Google Config"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleBulkExport}
                       disabled={isBulkExporting || !biz.google_sheets_spreadsheet_id || !biz.google_sheets_credentials_json}
-                      size="sm"
-                      className="border-emerald-600/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      className="h-10 rounded-xl border-emerald-600/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
                     >
                       {isBulkExporting ? (
                         <>
@@ -1118,289 +900,142 @@ export default function SettingsPage() {
                 </form>
               </Card>
 
-              <Card className="glass-card p-5 space-y-4">
-                <div className="flex items-center gap-2.5 text-blue-500">
-                  <Key className="size-5" />
-                  <h2 className="font-semibold">Employee Licenses</h2>
+              {/* SMS Gateway Panel Shortcut */}
+              <Card className="p-5 sm:p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/20 shadow-xs space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 bg-emerald-500/10 rounded-xl">
+                      <MessageSquare className="size-6" />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-base text-foreground">{lang === "bn" ? "এসএমএস সিস্টেম ও বার্তা প্যানেল" : "SMS Gateway & Campaigns"}</h2>
+                      <p className="text-xs text-muted-foreground">{lang === "bn" ? "বাল্ক এসএমএস ও অটোমেটিক বার্তা" : "Broadcast SMS and purchase auto-notifications"}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {lang === "bn"
+                      ? "এসএমএস গেটওয়ের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার ও সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
+                      : "Send marketing campaigns, check SMS balance, and configure automatic customer purchase receipts."}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">1 license = 1 employee. Share the generated key during their signup/activation.</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="bg-blue-600/10 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400 hover:bg-blue-600/20"
-                  onClick={async () => {
-                    try {
-                      const res = await createEmployeeLicenseFn({ data: { permissions: DEFAULT_EMPLOYEE_PERMISSIONS } });
-                      toast.success(`Employee key generated: ${res.key}`);
-                      qc.invalidateQueries({ queryKey: ["business-settings"] });
-                    } catch (err: unknown) {
-                      toast.error(err instanceof Error ? err.message : String(err));
-                    }
-                  }}
-                >
-                  Generate Employee License
-                </Button>
-                <div className="divide-y divide-border rounded-md border overflow-hidden bg-background/50 max-h-[200px] overflow-y-auto">
-                  {(settings.data?.employeeLicenses ?? []).length === 0 ? (
-                    <div className="p-3 text-center text-xs text-muted-foreground">No license keys generated yet.</div>
-                  ) : (
-                    (settings.data?.employeeLicenses ?? []).map((l: any) => (
-                      <div key={l.id} className="p-2 flex items-center justify-between gap-2 text-xs">
-                        <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px] truncate">{l.id}</code>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={l.used ? "text-muted-foreground" : "text-emerald-500 font-semibold"}>
-                            {l.used ? "Used" : "Open"}
-                          </span>
-                          {!l.used && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-6 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              aria-label={t("delete_license")}
-                              onClick={async () => {
-                                try {
-                                  await deleteLicenseFn({ data: { licenseKey: l.id } });
-                                  qc.invalidateQueries({ queryKey: ["business-settings"] });
-                                  toast.success("License deleted");
-                                } catch (err: unknown) {
-                                  toast.error(err instanceof Error ? err.message : String(err));
-                                }
-                              }}
-                            >
-                              <Trash2 className="size-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <Link href="/sms">
+                  <Button type="button" className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    {lang === "bn" ? "এসএমএস প্যানেল খুলুন" : "Open SMS Panel"}
+                  </Button>
+                </Link>
               </Card>
+            </div>
+          )}
+
+          {/* TAB 5: SECURITY & FACTORY RESET */}
+          {settingsTab === "security" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Change Password */}
+              <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/60 pb-3">
+                  <Key className="size-5" />
+                  <h2 className="font-bold text-base text-foreground">Change Account Password</h2>
+                </div>
+                <form onSubmit={handleUpdateMyPassword} className="space-y-3.5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Current Password</Label>
+                    <Input name="currentPassword" type="password" required placeholder="••••••••" className="h-10 rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">New Password</Label>
+                    <Input name="newPassword" type="password" required placeholder="Min 6 characters" className="h-10 rounded-xl text-xs" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Confirm New Password</Label>
+                    <Input name="confirmPassword" type="password" required placeholder="Re-enter password" className="h-10 rounded-xl text-xs" />
+                  </div>
+                  <Button type="submit" disabled={pwBusy} className="w-full h-10 rounded-xl beveled-button mt-2">
+                    {pwBusy ? "Updating..." : "Update Password"}
+                  </Button>
+                </form>
+              </Card>
+
+              {/* Danger Zone & Reset */}
+              <div className="lg:col-span-7">
+                {!isUnlocked ? (
+                  <Card className="p-6 rounded-3xl bg-amber-500/5 border border-amber-500/20 shadow-xs space-y-4 flex flex-col justify-between h-full">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 text-amber-500">
+                        <div className="p-2 bg-amber-500/10 rounded-xl">
+                          <Lock className="size-6 animate-pulse" />
+                        </div>
+                        <h2 className="font-bold text-base text-foreground">Administrative Reset Controls</h2>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        To protect your business data against accidental deletion, dangerous reset operations require your owner password.
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                        <ShieldAlert className="size-4 shrink-0" />
+                        <span>Owner authentication required to access reset actions.</span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-11 rounded-xl border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold"
+                      onClick={() => setIsUnlockDialogOpen(true)}
+                    >
+                      Unlock Danger Zone
+                    </Button>
+                  </Card>
+                ) : (
+                  <Card className="p-5 sm:p-6 rounded-3xl bg-red-500/5 border border-red-500/20 shadow-xs space-y-4">
+                    <div className="flex items-center gap-2 text-red-500 border-b border-red-500/20 pb-3">
+                      <ShieldAlert className="size-5 animate-pulse" />
+                      <h2 className="font-bold text-base text-foreground">Danger Zone: Selective Data Resets</h2>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {[
+                        { type: "cashbox", title: "Cashbox", desc: "Clear all cash ledger history" },
+                        { type: "products", title: "Products", desc: "Clear catalog & inventory items" },
+                        { type: "sales", title: "Sales & Invoices", desc: "Clear sales, returns, and profits" },
+                        { type: "purchases", title: "Purchases", desc: "Clear purchase intake records" },
+                        { type: "somiti", title: "Samity", desc: "Clear samity ledger records" },
+                        { type: "expenses", title: "Expenses", desc: "Clear all expense entries" },
+                        { type: "parties", title: "Customers & Debts", desc: "Clear customer dues & profiles" },
+                        { type: "all", title: "Factory Reset", desc: "Wipe all business data completely" },
+                      ].map((item) => (
+                        <div key={item.type} className="p-3 rounded-xl bg-card border border-border/80 flex flex-col justify-between space-y-2">
+                          <div>
+                            <p className="font-bold text-xs text-foreground">{item.title}</p>
+                            <p className="text-[10px] text-muted-foreground">{item.desc}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="w-full h-7.5 rounded-lg text-xs font-semibold"
+                            onClick={() => {
+                              setResetType(item.type as any);
+                              setConfirmText("");
+                            }}
+                          >
+                            Reset {item.title}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {isOwner && (settings.data?.employees ?? []).length > 0 && (
-        <Card className="glass-card p-5 space-y-4">
-          <h2 className="font-semibold">Team & Privileges</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {(settings.data?.employees ?? []).map((emp: any) => (
-            <EmployeePermissions
-              key={emp.id}
-              employee={emp}
-              onSave={async perms => {
-                await updateEmployeePermissionsFn({ data: { employeeId: emp.id, permissions: perms } });
-                qc.invalidateQueries({ queryKey: ["business-settings"] });
-                toast.success(t("save"));
-              }}
-            />
-          ))}
-          </div>
-        </Card>
-      )}
-
-      {isOwner && isUnlocked && (
-        <Card className="glass-card p-5 space-y-4 border-red-500/20 bg-red-500/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="flex items-center gap-2.5 text-red-500">
-            <ShieldAlert className="size-5 animate-pulse" />
-            <h2 className="font-semibold text-lg">Danger Zone</h2>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Perform administrative resets on specific modules or clear all data. These actions are irreversible and will affect both local and synced spreadsheet data.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 pt-2">
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cashbox</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all cash inflow/outflow history and reset balance to 0.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("cashbox");
-                  setConfirmText("");
-                }}
-              >
-                Reset Cashbox
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Products</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Clear catalog list, categories, stock levels, and item configurations.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("products");
-                  setConfirmText("");
-                }}
-              >
-                Reset Products
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales, Profits & Losses</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all invoice histories, returns records, and accumulated profit & loss logs.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("sales");
-                  setConfirmText("");
-                }}
-              >
-                Reset Sales & Profits
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Purchases</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all purchase records, stock intakes, and supplier purchases logs.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("purchases");
-                  setConfirmText("");
-                }}
-              >
-                Reset Purchases
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Samity / Somiti</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all samity contribution/withdrawal records and reset samity ledger.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("somiti");
-                  setConfirmText("");
-                }}
-              >
-                Reset Samity
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Expenses</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all business expense history and related category logs.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("expenses");
-                  setConfirmText("");
-                }}
-              >
-                Reset Expenses
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-border bg-background/40 flex flex-col justify-between space-y-3">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customers & Debts</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Delete all customer profiles, party details, and outstanding debt history.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600/10 text-red-600 hover:bg-red-600 hover:text-white"
-                onClick={() => {
-                  setResetType("parties");
-                  setConfirmText("");
-                }}
-              >
-                Reset Customers & Debts
-              </Button>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-red-500/20 bg-red-500/10 flex flex-col justify-between space-y-3 sm:col-span-2 md:col-span-1">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">Factory Reset</h3>
-                <p className="text-[11px] text-muted-foreground mt-1">Reset everything. Wipes all data: products, sales, purchases, parties, expenses, cashbox, and more.</p>
-              </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="w-full bg-red-600 text-white hover:bg-red-700"
-                onClick={() => {
-                  setResetType("all");
-                  setConfirmText("");
-                }}
-              >
-                Factory Reset All Data
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {!isOwner && (
-        <Card className="glass-card p-5 text-sm text-muted-foreground max-w-2xl">
-          Employee account — contact your business owner for settings changes.
+        <Card className="p-6 rounded-3xl bg-card border border-border/80 shadow-xs text-sm text-muted-foreground max-w-xl">
+          {lang === "bn"
+            ? "কর্মচারী একাউন্ট — সেটিংস পরিবর্তনের জন্য আপনার দোকান মালিকের সাথে যোগাযোগ করুন।"
+            : "Staff employee account — please contact your shop owner to update business settings."}
         </Card>
       )}
-
-      {/* Change Password Card for all users */}
-      <Card className="glass-card p-5 space-y-4 max-w-md">
-        <div className="flex items-center gap-2.5 text-primary">
-          <Key className="size-5" />
-          <h2 className="font-semibold text-base">Change Account Password</h2>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Update your login password. Your new password must be at least 6 characters long.
-        </p>
-        <form onSubmit={handleUpdateMyPassword} className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Current Password</Label>
-            <Input name="currentPassword" type="password" required placeholder="••••••••" className="h-9 text-xs" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">New Password</Label>
-            <Input name="newPassword" type="password" required placeholder="New password" className="h-9 text-xs" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Confirm New Password</Label>
-            <Input name="confirmPassword" type="password" required placeholder="Confirm new password" className="h-9 text-xs" />
-          </div>
-          <Button type="submit" disabled={pwBusy} className="w-full mt-2 h-9 text-xs beveled-button">
-            {pwBusy ? "Updating..." : "Update Password"}
-          </Button>
-        </form>
-      </Card>
 
       {/* Password Verification Dialog */}
       <Dialog open={isUnlockDialogOpen} onOpenChange={setIsUnlockDialogOpen}>

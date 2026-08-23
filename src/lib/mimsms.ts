@@ -143,13 +143,15 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
     try {
       raw = JSON.parse(str);
     } catch {
-      const isBlocked = str.toLowerCase().includes("black") || str.toLowerCase().includes("ip");
-      const isOk = str.toLowerCase().includes("success") || str.toLowerCase().includes("ok");
+      const strLower = str.toLowerCase();
+      const isBlocked = strLower.includes("black") || strLower.includes("ip") || strLower.includes("whitelist");
+      const isDenied = strLower.includes("denied") || strLower.includes("unauthor") || strLower.includes("reject");
+      const isOk = (strLower.includes("success") || strLower.includes('"status":"success"')) && !isBlocked && !isDenied;
       return {
-        statusCode: isBlocked ? "403" : isOk ? "200" : String(httpStatus),
+        statusCode: isBlocked ? "403" : isDenied ? "401" : isOk ? "200" : String(httpStatus),
         status: isOk ? "Success" : "Failed",
         responseResult: str,
-        isSuccess: isOk && !isBlocked,
+        isSuccess: isOk,
         isIpBlocked: isBlocked,
       };
     }
@@ -158,9 +160,9 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
   if (typeof raw !== "object" || raw === null) {
     return {
       statusCode: String(httpStatus),
-      status: httpStatus < 400 ? "Success" : "Failed",
+      status: "Failed",
       responseResult: String(raw ?? httpText),
-      isSuccess: httpStatus < 400,
+      isSuccess: false,
     };
   }
 
@@ -201,32 +203,47 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
     raw.error ??
     raw.Details ??
     raw.details ??
-    (rawStatus.toLowerCase() === "success" || statusCode === "200" ? "SMS Send Successfuly" : `Status ${statusCode}`)
+    (rawStatus.toLowerCase() === "success" && statusCode === "200" ? "SMS Send Successfuly" : `Status ${statusCode}`)
   );
 
-  // Critical fix: In MiMSMS v2, Failed responses also return a trxnId (e.g. status 206 "Invalid Mobile Number" has trxnId: "A8XCTVMJPEGDI30").
-  // Therefore, isSuccess MUST require statusCode === "200" AND status !== "Failed" AND no error_Data!
-  const hasErrors = (Array.isArray(errorDataList) && errorDataList.length > 0) || raw.success_Data === null && statusCode !== "200";
-  const isFailedStatus =
-    rawStatus.toLowerCase() === "failed" ||
-    rawStatus.toLowerCase() === "error" ||
-    rawStatus.toLowerCase() === "unauthorized" ||
-    (statusCode !== "200" && statusCode !== "0");
+  const resultLower = responseResult.toLowerCase();
+  const rawStatusLower = rawStatus.toLowerCase();
 
-  const isSuccess = !isFailedStatus && !hasErrors && (
-    rawStatus.toLowerCase() === "success" ||
-    rawStatus.toLowerCase() === "scheduled" ||
-    statusCode === "200"
-  );
+  const isDeniedOrBlocked =
+    resultLower.includes("black") ||
+    resultLower.includes("whitelist") ||
+    resultLower.includes("denied") ||
+    resultLower.includes("reject") ||
+    resultLower.includes("unauthor") ||
+    resultLower.includes("invalid") ||
+    resultLower.includes("block") ||
+    resultLower.includes("error") ||
+    resultLower.includes("fail") ||
+    resultLower.includes("not allowed") ||
+    resultLower.includes("exceed") ||
+    rawStatusLower.includes("fail") ||
+    rawStatusLower.includes("error") ||
+    rawStatusLower.includes("denied") ||
+    rawStatusLower.includes("unauthor") ||
+    statusCode !== "200";
+
+  const hasErrors = (Array.isArray(errorDataList) && errorDataList.length > 0) || (raw.success_Data === null && statusCode !== "200");
+
+  const isSuccess =
+    !isDeniedOrBlocked &&
+    !hasErrors &&
+    (statusCode === "200" || statusCode === "0") &&
+    (rawStatusLower === "success" || rawStatusLower === "scheduled");
 
   const isIpBlocked =
-    responseResult.toLowerCase().includes("black") ||
-    responseResult.toLowerCase().includes("ip") ||
-    rawStatus.toLowerCase().includes("black");
+    resultLower.includes("black") ||
+    resultLower.includes("ip") ||
+    resultLower.includes("whitelist") ||
+    rawStatusLower.includes("black");
 
   return {
     statusCode,
-    status: isSuccess ? (rawStatus.toLowerCase() === "scheduled" ? "Scheduled" : "Success") : "Failed",
+    status: isSuccess ? (rawStatusLower === "scheduled" ? "Scheduled" : "Success") : "Failed",
     trxnId: trxnId ? String(trxnId) : undefined,
     trackingId: trackingId ? String(trackingId) : undefined,
     balance: balance !== undefined && balance !== null ? String(balance) : undefined,
@@ -241,7 +258,7 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
 }
 
 /**
- * Send Single SMS via POST /V2/SMS with GET /V2/Send fallback
+ * Send Single SMS via POST /V2/SMS
  */
 export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMSResponse> {
   const { apiKey, userName, senderName, mobileNumber, message, transactionType = "T", campaignName } = params;
@@ -272,7 +289,6 @@ export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMS
     payload.campaignName = campaignName;
   }
 
-  // Attempt 1: POST /V2/SMS
   try {
     const res = await fetch(`${BASE_URL}/V2/SMS`, {
       method: "POST",
@@ -291,34 +307,7 @@ export async function sendSingleSms(params: SendSingleSmsParams): Promise<MiMSMS
       json = rawText;
     }
 
-    const normalized = normalizeMiMSMSResponse(json, res.status, res.statusText);
-    if (normalized.isSuccess) {
-      return normalized;
-    }
-
-    // If POST rejected with Unauthorized or 400, attempt GET fallback
-    console.warn("MiMSMS POST /V2/SMS returned non-success, trying GET /V2/Send fallback...", normalized);
-  } catch (err: any) {
-    console.warn("MiMSMS POST /V2/SMS network error, trying GET fallback...", err?.message);
-  }
-
-  // Attempt 2: GET /V2/Send fallback
-  try {
-    const getUrl = `${BASE_URL}/V2/Send?apiKey=${encodeURIComponent(cleanApiKey)}&userName=${encodeURIComponent(cleanUserName)}&senderName=${encodeURIComponent(cleanSenderName)}&transactionType=${encodeURIComponent(transactionType || "T")}&mobileNumber=${encodeURIComponent(sanitizedNumber)}&message=${encodeURIComponent(message)}${campaignName ? `&campaignName=${encodeURIComponent(campaignName)}` : ""}`;
-    const getRes = await fetch(getUrl, {
-      method: "GET",
-      headers: { Accept: "application/json, text/plain, */*" },
-    });
-
-    const rawText = await getRes.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(rawText);
-    } catch {
-      json = rawText;
-    }
-
-    return normalizeMiMSMSResponse(json, getRes.status, getRes.statusText);
+    return normalizeMiMSMSResponse(json, res.status, res.statusText);
   } catch (err: any) {
     return {
       statusCode: "500",
