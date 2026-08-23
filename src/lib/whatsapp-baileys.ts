@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import os from "os";
 import QRCode from "qrcode";
 import { getDb } from "@/lib/db";
 
@@ -25,14 +26,112 @@ if (!g.__whatsappSessions) {
 
 const sessions = g.__whatsappSessions;
 
-const SESSION_BASE_DIR = path.join(process.cwd(), ".whatsapp_sessions");
-
-function ensureSessionDir(businessId: string): string {
-  const dir = path.join(SESSION_BASE_DIR, businessId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+/**
+ * Determine a guaranteed writable directory for Baileys session storage.
+ * In serverless environments (e.g. Vercel, AWS Lambda where process.cwd() is read-only /var/task),
+ * this falls back to os.tmpdir() (/tmp).
+ */
+function getBaseSessionDir(): string {
+  // First try os.tmpdir() to guarantee writability across all environments
+  const tmpBase = path.join(os.tmpdir(), "hakimqzz_whatsapp_sessions");
+  try {
+    if (!fs.existsSync(tmpBase)) {
+      fs.mkdirSync(tmpBase, { recursive: true });
+    }
+    return tmpBase;
+  } catch (tmpErr) {
+    console.warn("[WhatsApp] Failed to create in tmpdir, trying local:", tmpErr);
   }
+
+  // Fallback to local cwd
+  const localBase = path.join(process.cwd(), ".whatsapp_sessions");
+  try {
+    if (!fs.existsSync(localBase)) {
+      fs.mkdirSync(localBase, { recursive: true });
+    }
+    return localBase;
+  } catch (localErr) {
+    console.error("[WhatsApp] Failed to create local session directory:", localErr);
+    return tmpBase;
+  }
+}
+
+/**
+ * Ensure business session directory exists and restore credentials from MongoDB if available
+ */
+async function ensureSessionDir(businessId: string): Promise<string> {
+  const baseDir = getBaseSessionDir();
+  const dir = path.join(baseDir, businessId);
+
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (e) {
+    // If still fails, fallback to direct /tmp
+    const directTmp = path.join(os.tmpdir(), `wa_${businessId}`);
+    if (!fs.existsSync(directTmp)) {
+      fs.mkdirSync(directTmp, { recursive: true });
+    }
+    return directTmp;
+  }
+
+  // Check if creds exist locally. If not, try restoring from MongoDB
+  const credsPath = path.join(dir, "creds.json");
+  if (!fs.existsSync(credsPath)) {
+    try {
+      const db = await getDb();
+      const savedSession = await db.collection("whatsapp_sessions").findOne({ business_id: businessId });
+      if (savedSession && savedSession.files) {
+        for (const [filename, content] of Object.entries(savedSession.files)) {
+          if (typeof content === "string") {
+            fs.writeFileSync(path.join(dir, filename), content, "utf-8");
+          }
+        }
+        console.log(`[WhatsApp] Restored session files for ${businessId} from database.`);
+      }
+    } catch (dbErr) {
+      console.warn("[WhatsApp] Could not restore session from database:", dbErr);
+    }
+  }
+
   return dir;
+}
+
+/**
+ * Backup session files to MongoDB for multi-instance persistence
+ */
+async function backupSessionToDb(businessId: string, sessionDir: string) {
+  try {
+    if (!fs.existsSync(sessionDir)) return;
+    const fileNames = fs.readdirSync(sessionDir);
+    const files: Record<string, string> = {};
+
+    for (const file of fileNames) {
+      const filePath = path.join(sessionDir, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isFile() && stat.size < 500000) {
+        files[file] = fs.readFileSync(filePath, "utf-8");
+      }
+    }
+
+    if (Object.keys(files).length > 0) {
+      const db = await getDb();
+      await db.collection("whatsapp_sessions").updateOne(
+        { business_id: businessId },
+        {
+          $set: {
+            business_id: businessId,
+            files,
+            updated_at: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    }
+  } catch (err) {
+    console.warn("[WhatsApp] Failed to backup session files to database:", err);
+  }
 }
 
 /**
@@ -60,11 +159,23 @@ export function formatToWhatsAppJid(rawPhone: string): string {
 export async function getWhatsAppStatus(businessId: string) {
   const session = sessions.get(businessId);
   if (!session) {
-    // Check if session directory exists with credentials
-    const sessionDir = path.join(SESSION_BASE_DIR, businessId);
+    const baseDir = getBaseSessionDir();
+    const sessionDir = path.join(baseDir, businessId);
     const credsPath = path.join(sessionDir, "creds.json");
-    if (fs.existsSync(credsPath)) {
-      // Credentials exist, start session in background
+
+    // Check disk or MongoDB
+    let hasSavedCreds = fs.existsSync(credsPath);
+    if (!hasSavedCreds) {
+      try {
+        const db = await getDb();
+        const saved = await db.collection("whatsapp_sessions").findOne({ business_id: businessId });
+        if (saved?.files?.["creds.json"]) {
+          hasSavedCreds = true;
+        }
+      } catch (_) {}
+    }
+
+    if (hasSavedCreds) {
       startWhatsAppSession(businessId).catch(() => {});
       return {
         status: "connecting",
@@ -107,7 +218,7 @@ export async function startWhatsAppSession(businessId: string) {
     };
   }
 
-  const sessionDir = ensureSessionDir(businessId);
+  const sessionDir = await ensureSessionDir(businessId);
 
   // Dynamic import Baileys and Pino for Next.js ESM compatibility
   const baileys = await import("@whiskeysockets/baileys");
@@ -148,7 +259,10 @@ export async function startWhatsAppSession(businessId: string) {
 
     sessionData.sock = sock;
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", async () => {
+      await saveCreds();
+      backupSessionToDb(businessId, sessionDir).catch(() => {});
+    });
 
     sock.ev.on("connection.update", async (update: any) => {
       const { connection, lastDisconnect, qr } = update;
@@ -189,6 +303,7 @@ export async function startWhatsAppSession(businessId: string) {
         sessionData.lastUpdated = Date.now();
 
         console.log(`[WhatsApp] Business ${businessId} connected as ${cleanPhone}`);
+        backupSessionToDb(businessId, sessionDir).catch(() => {});
       }
 
       if (connection === "close") {
@@ -210,6 +325,8 @@ export async function startWhatsAppSession(businessId: string) {
           // Clear credentials
           try {
             fs.rmSync(sessionDir, { recursive: true, force: true });
+            const db = await getDb();
+            await db.collection("whatsapp_sessions").deleteOne({ business_id: businessId });
           } catch (_) {}
         }
         sessionData.lastUpdated = Date.now();
@@ -245,11 +362,14 @@ export async function disconnectWhatsAppSession(businessId: string) {
 
   sessions.delete(businessId);
 
-  const sessionDir = path.join(SESSION_BASE_DIR, businessId);
+  const baseDir = getBaseSessionDir();
+  const sessionDir = path.join(baseDir, businessId);
   try {
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
     }
+    const db = await getDb();
+    await db.collection("whatsapp_sessions").deleteOne({ business_id: businessId });
   } catch (_) {}
 
   return { success: true };
