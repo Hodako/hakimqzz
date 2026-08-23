@@ -753,6 +753,88 @@ export default function SmsPage() {
         </div>
       </div>
 
+      {/* ─── WhatsApp Web Quick Switcher & Pairing Banner (PC & Mobile) ───────── */}
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-background border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="size-10 sm:size-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0">
+            <MessageCircle className="size-5 sm:size-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
+                {lang === "bn" ? "হোয়াটসঅ্যাপ ওয়েব মেসেজিং" : "WhatsApp Web Messaging Engine"}
+              </h4>
+              <Badge
+                variant="outline"
+                className={`text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  waStatus?.status === "connected"
+                    ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                    : waStatus?.status === "qr_ready"
+                    ? "bg-amber-500/15 text-amber-600 border-amber-500/30 animate-pulse"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {waStatus?.status === "connected"
+                  ? `🟢 ${lang === "bn" ? "সংযুক্ত:" : "Connected:"} +${waStatus.phone || ""}`
+                  : waStatus?.status === "qr_ready"
+                  ? `🟡 ${lang === "bn" ? "কিউআর স্ক্যান করুন" : "QR Ready — Scan Now"}`
+                  : `⚪ ${lang === "bn" ? "যুক্ত নেই" : "Disconnected"}`}
+              </Badge>
+            </div>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
+              {waStatus?.status === "connected"
+                ? (lang === "bn"
+                    ? "হোয়াটসঅ্যাপ সংযুক্ত আছে। কোনো এসএমএস ক্রেডিট খরচ ছাড়াই ফ্রি মেসেজ পাঠান।"
+                    : "WhatsApp connected! Send unlimited free messages to customer & supplier numbers.")
+                : (lang === "bn"
+                    ? "হোয়াটসঅ্যাপের মাধ্যমে ফ্রিতে মেসেজ পাঠাতে কিউআর কোড স্ক্যান করে মোবাইল লিংক করুন।"
+                    : "Scan the QR code with WhatsApp on your phone to send 100% free messages.")}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+          {waStatus?.status === "connected" ? (
+            <>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setDirectChannel("whatsapp");
+                  setActiveTab("direct");
+                }}
+                className="h-8 sm:h-9 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Send className="size-3.5" />
+                <span>{lang === "bn" ? "বার্তা লিখুন" : "Send WhatsApp"}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setActiveTab("whatsapp")}
+                className="h-8 sm:h-9 px-3 rounded-xl border-border text-xs gap-1"
+              >
+                <QrCode className="size-3.5" />
+                <span>{lang === "bn" ? "ডিভাইস" : "Device"}</span>
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setActiveTab("whatsapp");
+                if (waStatus?.status !== "qr_ready") {
+                  handleStartWhatsApp();
+                }
+              }}
+              className="h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+            >
+              <QrCode className="size-3.5" />
+              <span>{lang === "bn" ? "কিউআর স্ক্যান করুন" : "Scan QR & Connect"}</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Main Feature Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3 sm:space-y-6">
         {/* Mobile View: Clean Dropdown Button with Short Titles */}

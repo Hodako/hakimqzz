@@ -3814,3 +3814,106 @@ export async function sendWhatsAppCampaignFn(input: {
   );
 }
 
+// ── Google Sheets OAuth Integration Server Actions ─────────────────────────
+
+export async function connectGoogleSheetsOAuthFn(input: {
+  data: {
+    accessToken: string;
+    googleEmail?: string;
+    spreadsheetId?: string;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Only owners can configure Google Sheets integration");
+  }
+  const db = await getDb();
+  const biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+  if (!biz) throw new Error("Business not found");
+
+  let spreadsheetId = data.spreadsheetId?.trim() || (biz.google_sheets_spreadsheet_id as string | undefined);
+
+  // If no spreadsheet ID exists, auto-create one via Google Sheets API
+  if (!spreadsheetId) {
+    const shopName = biz.name || "HakimQzz Shop";
+    const createRes = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${data.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `HakimQzz - ${shopName} Live Database`,
+        },
+        sheets: [
+          { properties: { title: "Products" } },
+          { properties: { title: "Sales" } },
+          { properties: { title: "Purchases" } },
+          { properties: { title: "Expenses" } },
+          { properties: { title: "Cashbox" } },
+        ],
+      }),
+    });
+
+    if (createRes.ok) {
+      const createdData = await createRes.json();
+      spreadsheetId = createdData.spreadsheetId;
+    } else {
+      const errText = await createRes.text();
+      console.warn("Could not auto-create spreadsheet via Google Sheets API:", errText);
+    }
+  }
+
+  const updateFields: Record<string, any> = {
+    google_sheets_access_token: data.accessToken,
+    google_sheets_connected_email: data.googleEmail || null,
+    google_sheets_sync_enabled: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (spreadsheetId) {
+    updateFields.google_sheets_spreadsheet_id = spreadsheetId;
+  }
+
+  await db.collection("businesses").updateOne(
+    { _id: biz._id as any },
+    { $set: updateFields }
+  );
+
+  // Automatically trigger bulk export if spreadsheetId is ready
+  if (spreadsheetId) {
+    try {
+      await bulkExportToGoogleSheets(session.ownerId);
+    } catch (e) {
+      console.warn("Initial bulk export notice:", e);
+    }
+  }
+
+  return {
+    success: true,
+    spreadsheetId,
+    spreadsheetUrl: spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}` : null,
+  };
+}
+
+export async function disconnectGoogleSheetsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("businesses").updateOne(
+    { owner_id: session.ownerId },
+    {
+      $unset: {
+        google_sheets_access_token: "",
+        google_sheets_connected_email: "",
+      },
+      $set: {
+        google_sheets_sync_enabled: false,
+        updated_at: new Date().toISOString(),
+      },
+    }
+  );
+  return { success: true };
+}
+

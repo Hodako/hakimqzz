@@ -451,6 +451,9 @@ export async function getBusinessSettingsFn() {
       invoice_line_spacing: (business.invoice_line_spacing as string) || "6px",
       google_sheets_spreadsheet_id: (business.google_sheets_spreadsheet_id as string) || "",
       google_sheets_credentials_json: (business.google_sheets_credentials_json as string) || "",
+      google_sheets_connected_email: (business.google_sheets_connected_email as string) || "",
+      google_sheets_sync_enabled: Boolean(business.google_sheets_sync_enabled),
+      has_google_auth: Boolean(business.google_sheets_access_token),
     } : null,
     role: session.role,
     permissions: session.permissions,
@@ -492,6 +495,8 @@ export async function updateBusinessSettingsFn(input: {
     invoice_line_spacing?: string;
     google_sheets_spreadsheet_id?: string;
     google_sheets_credentials_json?: string;
+    google_sheets_connected_email?: string;
+    google_sheets_sync_enabled?: boolean;
   }
 }) {
   const { data } = input;

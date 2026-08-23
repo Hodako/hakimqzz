@@ -30,6 +30,23 @@ async function getAccessToken(clientEmail: string, privateKey: string): Promise<
   return tokenData.access_token as string;
 }
 
+async function getEffectiveToken(biz: any): Promise<string | null> {
+  if (biz.google_sheets_access_token) {
+    return biz.google_sheets_access_token as string;
+  }
+  if (biz.google_sheets_credentials_json) {
+    try {
+      const creds = JSON.parse(biz.google_sheets_credentials_json.trim());
+      if (creds.client_email && creds.private_key) {
+        return await getAccessToken(creds.client_email, creds.private_key);
+      }
+    } catch {
+      console.error("Failed to parse Google Sheets Credentials JSON");
+    }
+  }
+  return null;
+}
+
 export async function appendRowToGoogleSheet(
   ownerId: string,
   tabName: string,
@@ -42,24 +59,10 @@ export async function appendRowToGoogleSheet(
     if (!biz) return;
 
     const spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
-    const credsStr = biz.google_sheets_credentials_json as string | undefined;
+    if (!spreadsheetId) return;
 
-    if (!spreadsheetId || !credsStr) return;
-
-    let creds: { client_email?: string; private_key?: string };
-    try {
-      creds = JSON.parse(credsStr.trim());
-    } catch {
-      console.error("Failed to parse Google Sheets Credentials JSON");
-      return;
-    }
-
-    const clientEmail = creds.client_email;
-    const privateKey = creds.private_key;
-
-    if (!clientEmail || !privateKey) return;
-
-    const token = await getAccessToken(clientEmail, privateKey);
+    const token = await getEffectiveToken(biz);
+    if (!token) return;
 
     // Google values.append endpoint
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${tabName}'!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
@@ -141,27 +144,15 @@ export async function bulkExportToGoogleSheets(ownerId: string) {
   if (!biz) throw new Error("Business not found");
 
   const spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
-  const credsStr = biz.google_sheets_credentials_json as string | undefined;
 
-  if (!spreadsheetId || !credsStr) {
-    throw new Error("Google Sheets Spreadsheet ID or Service Account Credentials JSON are missing.");
+  if (!spreadsheetId) {
+    throw new Error("Google Sheets Spreadsheet ID is missing. Connect your Google account or provide a Spreadsheet ID.");
   }
 
-  let creds: { client_email?: string; private_key?: string };
-  try {
-    creds = JSON.parse(credsStr.trim());
-  } catch {
-    throw new Error("Invalid Credentials JSON format.");
+  const token = await getEffectiveToken(biz);
+  if (!token) {
+    throw new Error("Google Sheets authorization token or Service Account credentials missing.");
   }
-
-  const clientEmail = creds.client_email;
-  const privateKey = creds.private_key;
-
-  if (!clientEmail || !privateKey) {
-    throw new Error("Credentials JSON is missing client_email or private_key.");
-  }
-
-  const token = await getAccessToken(clientEmail, privateKey);
 
   // Queries
   const products = await db.collection("products").find({ owner_id: ownerId }).toArray();

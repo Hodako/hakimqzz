@@ -1,6 +1,5 @@
 "use client";
 
-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -15,13 +15,28 @@ import {
   getBusinessSettingsFn,
   updateBusinessSettingsFn,
   createEmployeeLicenseFn,
-  updateEmployeePermissionsFn,
   deleteLicenseFn,
 } from "@/lib/rpc-admin";
 import Link from "next/link";
-import { Trash2, Lock, Unlock, ShieldAlert, Database, FileSpreadsheet, Key, RefreshCw, AlertTriangle, LayoutGrid, Printer, MessageSquare, Store, Sparkles } from "lucide-react";
+import {
+  Trash2,
+  Lock,
+  Unlock,
+  ShieldAlert,
+  Database,
+  FileSpreadsheet,
+  Key,
+  RefreshCw,
+  AlertTriangle,
+  Printer,
+  Store,
+  Sparkles,
+  ExternalLink,
+  Plus,
+  Copy,
+  Users,
+} from "lucide-react";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
-import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
 import {
   uploadImageFn,
@@ -36,7 +51,11 @@ import {
   resetExpensesFn,
   resetPartiesFn,
   changeMyPasswordFn,
+  connectGoogleSheetsOAuthFn,
+  disconnectGoogleSheetsFn,
 } from "@/lib/rpc";
+import { auth } from "@/lib/firebase";
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { useTheme, type ThemeMode, type AccentColor, type BgStyle } from "@/hooks/use-theme";
 import { SpeedLoader } from "@/components/speed-loader";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -52,15 +71,17 @@ import {
 
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
+type SettingsTab = "profile" | "printing" | "sheets" | "licenses" | "appearance" | "security";
+
 export default function SettingsPage() {
   const { lang, t } = useT();
-  const { user, refresh, updateUser } = useAuth();
+  const { user, refresh } = useAuth();
   const { theme, setTheme, accentColor, setAccentColor, bgStyle, setBgStyle } = useTheme();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const [busy, setBusy] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"profile" | "appearance" | "printing" | "sheets" | "security">("profile");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
 
   // KPI Configuration state
   const [kpiConfig, setKpiConfig] = useState({
@@ -198,75 +219,161 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    if (!isDragging) return;
     const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
-      setPan({
-        x: panStart.x + dx,
-        y: panStart.y + dy,
-      });
+      setPan({ x: panStart.x + dx, y: panStart.y + dy });
     };
+
     const handleMouseUp = () => {
       setIsDragging(false);
     };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, dragStart, panStart]);
 
-  useEffect(() => {
-    if (!isTouchDragging) return;
     const handleTouchMove = (e: TouchEvent) => {
-      if (e.cancelable) e.preventDefault();
+      if (!isTouchDragging) return;
       const touch = e.touches[0];
       if (!touch) return;
       const dx = touch.clientX - touchDragStart.x;
       const dy = touch.clientY - touchDragStart.y;
-      setPan({
-        x: touchPanStart.x + dx,
-        y: touchPanStart.y + dy,
-      });
+      setPan({ x: touchPanStart.x + dx, y: touchPanStart.y + dy });
     };
+
     const handleTouchEnd = () => {
       setIsTouchDragging(false);
     };
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd);
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+    if (isTouchDragging) {
+      window.addEventListener("touchmove", handleTouchMove);
+      window.addEventListener("touchend", handleTouchEnd);
+    }
+
     return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isTouchDragging, touchDragStart, touchPanStart]);
+  }, [isDragging, dragStart, panStart, isTouchDragging, touchDragStart, touchPanStart]);
 
-  async function handleUpdateMyPassword(e: React.FormEvent<HTMLFormElement>) {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    setCropImageName(file.name);
+    setCropImageType(file.type);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCropSave = async () => {
+    if (!cropImageSrc || !imageRef.current) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 256, 256);
+
+    const img = imageRef.current;
+    const renderedWidth = imgSize.width * zoom;
+    const renderedHeight = imgSize.height * zoom;
+    const drawX = pan.x;
+    const drawY = pan.y;
+
+    ctx.drawImage(img, drawX, drawY, renderedWidth, renderedHeight);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const croppedFile = new File([blob], cropImageName || "logo.png", { type: cropImageType });
+
+      const loadId = toast.loading("Uploading cropped logo...");
+      try {
+        const formData = new FormData();
+        formData.append("file", croppedFile);
+        const res = await uploadImageFn(formData);
+
+        if (res.url) {
+          setLogoUrl(res.url);
+          await updateBusinessSettingsFn({
+            data: { logo_url: res.url },
+          });
+          qc.invalidateQueries({ queryKey: ["business-settings"] });
+          toast.success("Logo uploaded and updated successfully!", { id: loadId });
+        } else {
+          toast.error("Upload failed", { id: loadId });
+        }
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to upload image", { id: loadId });
+      } finally {
+        setCropImageSrc(null);
+      }
+    }, cropImageType);
+  };
+
+  async function saveBusiness(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!isOwner) return;
     const fd = new FormData(e.currentTarget);
-    const currentPassword = String(fd.get("currentPassword") || "").trim();
-    const newPassword = String(fd.get("newPassword") || "").trim();
-    const confirmPassword = String(fd.get("confirmPassword") || "").trim();
-
-    if (newPassword.length < 6) {
-      toast.error("New password must be at least 6 characters long.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match.");
-      return;
-    }
-
-    setPwBusy(true);
+    setBusy(true);
     try {
-      await changeMyPasswordFn({ data: { currentPassword, newPassword } });
-      toast.success("Password updated successfully!");
-      e.currentTarget.reset();
+      await updateBusinessSettingsFn({
+        data: {
+          name: String(fd.get("name") || "").trim(),
+          address: String(fd.get("address") || "").trim(),
+          phone_numbers: String(fd.get("phone_numbers") || "").trim(),
+          emails: String(fd.get("emails") || "").trim(),
+          business_type: String(fd.get("business_type") || "retail").trim(),
+          invoice_terms: String(fd.get("invoice_terms") || "").trim(),
+          invoice_watermark: String(fd.get("invoice_watermark") || "").trim(),
+          invoice_watermark_enabled: fd.get("invoice_watermark_enabled") === "on",
+          logo_url: logoUrl || biz?.logo_url || "/logo.png",
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+      toast.success(lang === "bn" ? "দোকান প্রোফাইল সংরক্ষিত হয়েছে!" : "Business profile saved successfully!");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
-      setPwBusy(false);
+      setBusy(false);
+    }
+  }
+
+  async function saveInvoiceStyling(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!isOwner) return;
+    setBusy(true);
+    try {
+      await updateBusinessSettingsFn({
+        data: {
+          invoice_font_size: fontSize,
+          invoice_scale: fontScale,
+          invoice_line_spacing: lineSpacing,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+      toast.success(lang === "bn" ? "ইনভয়েস সেটিংস সংরক্ষিত হয়েছে!" : "Invoice settings saved successfully!");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -283,6 +390,64 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : "Incorrect owner password.");
     } finally {
       setUnlockLoading(false);
+    }
+  }
+
+  // Google OAuth Connect for Sheets
+  async function handleConnectGoogleOAuth() {
+    if (!isOwner) return;
+    setIsSheetsSaving(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/spreadsheets");
+      provider.addScope("https://www.googleapis.com/auth/drive.file");
+      
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken;
+      const email = result.user?.email || undefined;
+
+      if (!token) {
+        const idToken = await result.user.getIdToken();
+        await connectGoogleSheetsOAuthFn({
+          data: {
+            accessToken: idToken,
+            googleEmail: email,
+          },
+        });
+      } else {
+        await connectGoogleSheetsOAuthFn({
+          data: {
+            accessToken: token,
+            googleEmail: email,
+          },
+        });
+      }
+
+      toast.success(
+        lang === "bn"
+          ? "গুগল শিট সফলভাবে সংযুক্ত এবং সিঙ্ক হয়েছে!"
+          : "Google Sheets successfully connected & synced with your Google account!"
+      );
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to connect Google account for Sheets");
+    } finally {
+      setIsSheetsSaving(false);
+    }
+  }
+
+  async function handleDisconnectGoogleSheets() {
+    if (!isOwner) return;
+    setIsSheetsSaving(true);
+    try {
+      await disconnectGoogleSheetsFn();
+      toast.success(lang === "bn" ? "গুগল শিট সংযোগ বিচ্ছিন্ন করা হয়েছে" : "Google Sheets disconnected");
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to disconnect Google Sheets");
+    } finally {
+      setIsSheetsSaving(false);
     }
   }
 
@@ -320,6 +485,28 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleGenerateLicense() {
+    if (!isOwner) return;
+    setBusy(true);
+    try {
+      const res = await createEmployeeLicenseFn({
+        data: {
+          permissions: DEFAULT_EMPLOYEE_PERMISSIONS,
+        },
+      });
+      toast.success(
+        lang === "bn"
+          ? `নতুন কর্মচারী লাইসেন্স কি তৈরি হয়েছে: ${res.key}`
+          : `New employee license key generated: ${res.key}`
+      );
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to generate employee license key");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleResetAction() {
     if (!resetType || !isOwner) return;
     if (confirmText !== "CONFIRM") {
@@ -348,14 +535,14 @@ export default function SettingsPage() {
         toast.success("Expenses data reset successfully!");
       } else if (resetType === "parties") {
         await resetPartiesFn();
-        toast.success("Customer, Party, and Debt data reset successfully!");
+        toast.success("Parties and Customer debts reset successfully!");
       } else if (resetType === "all") {
         await resetAllDataFn();
-        toast.success("All business data reset to factory settings!");
+        toast.success("Factory Reset Complete: All business records cleared.");
       }
-      qc.invalidateQueries({ queryKey: ["business-settings"] });
       setResetType(null);
       setConfirmText("");
+      qc.invalidateQueries();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -363,164 +550,92 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveBusiness(e: React.FormEvent<HTMLFormElement>) {
+  async function handleUpdateMyPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!isOwner) return;
     const fd = new FormData(e.currentTarget);
-    setBusy(true);
-    try {
-      await updateBusinessSettingsFn({
-        data: {
-          name: String(fd.get("name") || "HakimQzz"),
-          address: String(fd.get("address") || ""),
-          phone_numbers: String(fd.get("phone_numbers") || ""),
-          emails: String(fd.get("emails") || ""),
-          invoice_page_size: String(fd.get("invoice_page_size") || "80mm"),
-          invoice_page_width: String(fd.get("invoice_page_width") || ""),
-          invoice_page_height: String(fd.get("invoice_page_height") || ""),
-          logo_url: logoUrl || "/logo.png",
-          business_type: String(fd.get("business_type") || "retail"),
-          theme: "green",
-          employee_limit: Number(fd.get("employee_limit")) || 5,
-          invoice_watermark: String(fd.get("invoice_watermark") || ""),
-          invoice_watermark_enabled: fd.get("invoice_watermark_enabled") === "true",
-          invoice_terms: String(fd.get("invoice_terms") || ""),
-          invoice_color: String(fd.get("invoice_color") || "black"),
-          invoice_font_size: (() => {
-            const raw = String(fd.get("invoice_font_size") || "22px").trim();
-            if (!raw) return "22px";
-            return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
-          })(),
-          invoice_scale: (() => {
-            const raw = String(fd.get("invoice_scale") || "100%").trim();
-            if (!raw) return "100%";
-            return raw.endsWith("%") ? raw : `${raw}%`;
-          })(),
-          invoice_line_spacing: (() => {
-            const raw = String(fd.get("invoice_line_spacing") || "6px").trim();
-            if (!raw) return "6px";
-            return raw.toLowerCase().endsWith("px") ? raw : `${raw}px`;
-          })(),
-        },
-      });
-      await refresh();
-      qc.invalidateQueries({ queryKey: ["business-settings"] });
-      toast.success(t("save"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+    const currentPassword = String(fd.get("currentPassword") || "").trim();
+    const newPassword = String(fd.get("newPassword") || "").trim();
+    const confirmPassword = String(fd.get("confirmPassword") || "").trim();
+
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
     }
-  }
-
-  async function uploadLogo(file: File) {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = (reader.result as string).split(",")[1];
-        const { url } = await uploadImageFn({ data: { base64, fileName: file.name } });
-        // Immediately update the logo in auth context so AppLogo re-renders right away
-        updateUser({ logo_url: url });
-        setLogoUrl(url);
-        await updateBusinessSettingsFn({ data: { logo_url: url } });
-        await refresh();
-        qc.invalidateQueries({ queryKey: ["business-settings"] });
-        toast.success(t("save"));
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : String(err));
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
-    if (!validTypes.includes(file.type)) {
-      toast.error("Please upload a valid image file (PNG, JPG, WEBP, GIF, SVG).");
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
-    setCropImageName(file.name);
-    setCropImageType(file.type);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCropImageSrc(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  };
-
-  const handleCropSave = () => {
-    const img = imageRef.current;
-    const viewport = viewportRef.current;
-    if (!img || !viewport) return;
-
-    const imgRect = img.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (cropImageType === "image/jpeg" || cropImageType === "image/jpg") {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, 512, 512);
+    setPwBusy(true);
+    try {
+      await changeMyPasswordFn({
+        data: {
+          currentPassword,
+          newPassword,
+        },
+      });
+      toast.success("Password changed successfully!");
+      (e.target as HTMLFormElement).reset();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setPwBusy(false);
     }
+  }
 
-    const S = 512 / viewportRect.width;
-    const dx = (imgRect.left - viewportRect.left) * S;
-    const dy = (imgRect.top - viewportRect.top) * S;
-    const dw = imgRect.width * S;
-    const dh = imgRect.height * S;
+  if (settings.isLoading) {
+    return <SpeedLoader fullScreen={false} />;
+  }
 
-    ctx.drawImage(img, dx, dy, dw, dh);
-
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const file = new File([blob], cropImageName, { type: cropImageType });
-      setCropImageSrc(null);
-      void uploadLogo(file);
-    }, cropImageType);
-  };
-
-  if (settings.isLoading && !settings.data) return <SpeedLoader fullScreen={false} />;
+  const navTabs: { id: SettingsTab; label: string; icon: any; count?: number }[] = [
+    { id: "profile", label: lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile", icon: Store },
+    { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Printing", icon: Printer },
+    { id: "sheets", label: lang === "bn" ? "গুগল শিট ও ক্লাউড" : "Google Sheets & Cloud", icon: FileSpreadsheet },
+    { id: "licenses", label: lang === "bn" ? "কর্মচারী লাইসেন্স কি" : "Staff License Keys", icon: Key, count: settings.data?.employeeLicenses?.length },
+    { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & Themes", icon: Sparkles },
+    { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
+  ];
 
   return (
-    <div className={`space-y-6 pb-8 ${isMobile ? "max-w-lg" : "max-w-5xl"} mx-auto`}>
-      <div>
-        <h1 className="text-2xl font-serif font-bold">{t("settings")}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{user?.email}</p>
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2.5">
+            <Store className="size-6 text-primary" />
+            <span>{lang === "bn" ? "সিস্টেম সেটিংস ও কনফিগারেশন" : "System Settings & Business Hub"}</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            {lang === "bn"
+              ? "দোকানের প্রোফাইল, প্রিন্টার ফরম্যাট, গুগল শিট ব্যাকআপ, কর্মচারী লাইসেন্স এবং নিরাপত্তা পরিচালনা করুন"
+              : "Manage shop branding, thermal printing, Google Sheets sync, staff licenses, and database resets"}
+          </p>
+        </div>
       </div>
 
-      {/* Top Segmented Navigation Tabs */}
-      <div className="flex items-center gap-1.5 p-1 bg-muted/60 dark:bg-muted/30 border border-border/80 rounded-2xl overflow-x-auto scrollbar-none">
-        {[
-          { id: "profile", label: lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile", icon: Store },
-          { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & UI", icon: Sparkles },
-          { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Invoice", icon: Printer },
-          { id: "sheets", label: lang === "bn" ? "ক্লাউড ব্যাকআপ" : "Cloud & Sheets", icon: FileSpreadsheet },
-          { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
-        ].map((tab) => {
+      {/* Modern Desktop Segmented Tab Bar */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-muted/60 dark:bg-muted/30 border border-border/80 rounded-2xl overflow-x-auto scrollbar-none shadow-xs">
+        {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = settingsTab === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setSettingsTab(tab.id as any)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+              onClick={() => setSettingsTab(tab.id)}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                 isActive
-                  ? "bg-card text-foreground shadow-xs border border-border/60"
+                  ? "bg-card text-foreground shadow-sm border border-border/60"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
               }`}
             >
-              <Icon className={`size-3.5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              <Icon className={`size-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
               <span>{tab.label}</span>
+              {tab.count !== undefined && tab.count > 0 && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                  {tab.count}
+                </Badge>
+              )}
             </button>
           );
         })}
@@ -528,9 +643,9 @@ export default function SettingsPage() {
 
       {isOwner && biz && (
         <div className="space-y-6">
-          {/* TAB 1: SHOP PROFILE */}
+          {/* ── TAB 1: SHOP PROFILE & BRANDING ──────────────────────────────── */}
           {settingsTab === "profile" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <Card className="lg:col-span-8 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
                 <div className="flex items-center justify-between border-b border-border/60 pb-3">
                   <div>
@@ -558,379 +673,708 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ঠিকানা (Shop Address)" : "Official Shop Address"}</Label>
-                    <Textarea name="address" defaultValue={biz.address || ""} placeholder={lang === "bn" ? "দোকানের ঠিকানা লিখুন..." : "e.g., House 12, Road 4, Dhanmondi, Dhaka"} className="text-xs min-h-[70px] rounded-xl" />
-                  </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ফোন নম্বরসমূহ (Phone Numbers)" : "Shop Phone Numbers"}</Label>
-                      <Input name="phone_numbers" defaultValue={biz.phone_numbers || ""} placeholder="+8801700000000, +8801800000000" className="h-10 rounded-xl text-xs" />
-                      <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "একাধিক নম্বর কমা (,) দিয়ে আলাদা করুন" : "Separate multiple numbers with commas"}</p>
+                      <Label className="text-xs font-semibold">Official Phone Number(s)</Label>
+                      <Input name="phone_numbers" defaultValue={biz.phone_numbers} placeholder="+8801700000000" className="h-10 rounded-xl text-xs" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ইমেইলসমূহ (Emails)" : "Shop Emails"}</Label>
-                      <Input name="emails" defaultValue={biz.emails || user?.email || ""} placeholder="info@shop.com" className="h-10 rounded-xl text-xs" />
-                      <p className="text-[10px] text-muted-foreground">{lang === "bn" ? "ইনভয়েসে দেখানোর জন্য কমা (,) ব্যবহার করুন" : "Displayed in invoice headers"}</p>
+                      <Label className="text-xs font-semibold">Official Email</Label>
+                      <Input name="emails" defaultValue={biz.emails} placeholder="support@shop.com" className="h-10 rounded-xl text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Store Address</Label>
+                    <Input name="address" defaultValue={biz.address} placeholder="Road #1, Block #A, Dhaka" className="h-10 rounded-xl text-xs" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Invoice Terms & Policy (Shown on Printed Receipts)</Label>
+                    <Textarea
+                      name="invoice_terms"
+                      defaultValue={biz.invoice_terms}
+                      placeholder="e.g. Sold items can be exchanged within 7 days with original invoice."
+                      className="text-xs min-h-[70px] rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80">
+                    <div className="space-y-0.5">
+                      <Label className="text-xs font-semibold">Invoice Background Watermark</Label>
+                      <p className="text-[11px] text-muted-foreground">Print store watermark on PDF & Thermal receipts</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        name="invoice_watermark"
+                        defaultValue={biz.invoice_watermark}
+                        placeholder="e.g. PAID / ORIGINAL"
+                        className="h-8 w-36 text-xs rounded-lg uppercase"
+                      />
+                      <Switch name="invoice_watermark_enabled" defaultChecked={biz.invoice_watermark_enabled} />
                     </div>
                   </div>
 
                   <div className="pt-2">
-                    <Button type="submit" disabled={busy} className="h-10 px-6 rounded-xl beveled-button">
-                      {busy ? "Saving..." : t("save")}
+                    <Button type="submit" disabled={busy} className="h-10 px-6 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-sm">
+                      {busy ? "Saving..." : "Save Business Profile"}
                     </Button>
                   </div>
                 </form>
               </Card>
 
-              {/* Logo Card */}
-              <Card className="lg:col-span-4 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <span>Shop Branding & Logo</span>
-                  </h3>
-                  <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border rounded-2xl bg-muted/30 text-center space-y-3">
-                    {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="size-24 rounded-2xl object-cover border border-border/80 shadow-xs bg-white" />
-                    ) : (
-                      <div className="size-24 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
-                        <Store className="size-10" />
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold text-foreground">Upload Custom Logo</p>
-                      <p className="text-[10px] text-muted-foreground">PNG, JPG, WEBP up to 5MB</p>
-                    </div>
-                    <label className="cursor-pointer inline-flex items-center justify-center h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
-                      Choose File & Crop
-                      <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                    </label>
-                  </div>
+              {/* Shop Logo & Cropper Preview */}
+              <Card className="lg:col-span-4 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4 flex flex-col items-center text-center">
+                <div className="w-full border-b border-border/60 pb-3 text-left">
+                  <h3 className="font-bold text-sm text-foreground">Official Store Logo</h3>
+                  <p className="text-xs text-muted-foreground">Uploaded square logo appears on POS receipts and invoices</p>
                 </div>
 
-                <div className="p-3 rounded-xl bg-muted/40 border border-border/60 text-[11px] text-muted-foreground space-y-1">
-                  <p className="font-semibold text-foreground">Direct URL:</p>
-                  <Input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="/logo.png" className="h-8 text-xs font-mono" />
+                <div className="size-36 rounded-2xl border border-border/80 bg-muted/40 p-2 flex items-center justify-center overflow-hidden shadow-inner relative group">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Store Logo" className="max-h-full max-w-full object-contain rounded-lg" />
+                  ) : (
+                    <Store className="size-12 text-muted-foreground/50" />
+                  )}
+                </div>
+
+                <div className="w-full space-y-2">
+                  <label className="block w-full">
+                    <span className="sr-only">Choose Logo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="block w-full text-xs text-muted-foreground file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                    />
+                  </label>
+                  <p className="text-[10px] text-muted-foreground">Supports PNG, JPG, WEBP. Drag and zoom in the cropper modal.</p>
                 </div>
               </Card>
             </div>
           )}
 
-          {/* TAB 2: APPEARANCE & UI THEME */}
-          {settingsTab === "appearance" && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
-                  <Label className="text-xs font-bold">{t("appearance")}</Label>
-                  <select
-                    value={theme}
-                    onChange={e => setTheme(e.target.value as ThemeMode)}
-                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs"
-                  >
-                    <option value="light">{t("theme_light")}</option>
-                    <option value="dark">{t("theme_dark")}</option>
-                    <option value="system">{t("theme_system")}</option>
-                  </select>
-                </Card>
-
-                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
-                  <Label className="text-xs font-bold">{t("accent_color")}</Label>
-                  <select
-                    value={accentColor}
-                    onChange={e => setAccentColor(e.target.value as AccentColor)}
-                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize"
-                  >
-                    <option value="emerald">emerald (green)</option>
-                    <option value="indigo">indigo</option>
-                    <option value="violet">violet</option>
-                    <option value="blue">blue</option>
-                    <option value="rose">rose (red)</option>
-                  </select>
-                </Card>
-
-                <Card className="p-5 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
-                  <Label className="text-xs font-bold">{t("bg_style")}</Label>
-                  <select
-                    value={bgStyle}
-                    onChange={e => setBgStyle(e.target.value as BgStyle)}
-                    className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize"
-                  >
-                    <option value="default">default gradient</option>
-                    <option value="warm">warm glow</option>
-                    <option value="cool">cool glow</option>
-                    <option value="clean">solid clean</option>
-                    <option value="glass">glassmorphism</option>
-                  </select>
-                </Card>
-              </div>
-
-              {/* KPI & Dashboard Customizer */}
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                <div className="flex items-center gap-2.5 border-b border-border/60 pb-3">
-                  <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                    <LayoutGrid className="size-4" />
-                  </div>
-                  <div>
-                    <h2 className="font-bold text-sm sm:text-base text-foreground">{lang === "bn" ? "কেপিআই এবং ড্যাশবোর্ড কাস্টমাইজেশন" : "KPI & Dashboard Layout Customizer"}</h2>
-                    <p className="text-xs text-muted-foreground">{lang === "bn" ? "ড্যাশবোর্ড কার্ডের উচ্চতা, শার্পনেস এবং বর্ডার শৈলী পরিবর্তন করুন" : "Customize dashboard card height, corner curves, and borders"}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Box Height / Size</Label>
-                    <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
-                      {["small", "standard", "large"].map(sz => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => updateKpiConfig({ size: sz as any })}
-                          className={`py-1.5 rounded-lg text-center text-xs font-bold capitalize transition-all ${
-                            kpiConfig.size === sz ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {sz}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Corner Curvature</Label>
-                    <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
-                      {["none", "md", "full"].map(cr => (
-                        <button
-                          key={cr}
-                          type="button"
-                          onClick={() => updateKpiConfig({ curve: cr as any })}
-                          className={`py-1.5 rounded-lg text-center text-xs font-bold capitalize transition-all ${
-                            (kpiConfig.curve || "none") === cr ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {cr}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Card Border Theme</Label>
-                    <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
-                      {["subtle", "bold", "emerald", "none"].map(b => (
-                        <button
-                          key={b}
-                          type="button"
-                          onClick={() => updateKpiConfig({ borderStyle: b as any })}
-                          className={`py-1 rounded-lg text-center text-xs font-bold capitalize transition-all ${
-                            kpiConfig.borderStyle === b ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {b}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Card Theme Style</Label>
-                    <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-xl text-xs">
-                      {["glass", "flat", "bordered", "gradient"].map(v => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => updateKpiConfig({ variant: v as any })}
-                          className={`py-1 rounded-lg text-center text-xs font-bold capitalize transition-all ${
-                            kpiConfig.variant === v ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* TAB 3: POS & INVOICE PRINTING */}
+          {/* ── TAB 2: POS PRINTING & INVOICE CUSTOMIZATION ───────────────────── */}
           {settingsTab === "printing" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
-                <div className="flex items-center gap-2 border-b border-border/60 pb-3">
-                  <Printer className="size-4 text-primary" />
-                  <h3 className="font-bold text-sm sm:text-base text-foreground">
-                    {lang === "bn" ? "পিওএস থার্মাল প্রিন্টার পেপার কনফিগ" : "POS Thermal Printer Settings"}
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Paper Width (mm)</Label>
-                    <Input
-                      type="number"
-                      className="h-10 rounded-xl text-xs"
-                      value={posConfig.widthMm}
-                      onChange={(e) => updatePosConfig({ widthMm: Number(e.target.value) || 58 })}
-                      placeholder="58"
-                    />
-                    <p className="text-[10px] text-muted-foreground">Standard: 58mm or 80mm</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Paper Height (mm)</Label>
-                    <Input
-                      type="number"
-                      className="h-10 rounded-xl text-xs"
-                      value={posConfig.heightMm === "auto" ? 40 : posConfig.heightMm}
-                      onChange={(e) => updatePosConfig({ heightMm: Number(e.target.value) || 40 })}
-                      placeholder="40"
-                    />
-                    <p className="text-[10px] text-muted-foreground">Continuous roll default: 40</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Canvas Width (mm)</Label>
-                    <Input
-                      type="number"
-                      className="h-10 rounded-xl text-xs"
-                      value={posConfig.canvasWidthMm}
-                      onChange={(e) => updatePosConfig({ canvasWidthMm: Number(e.target.value) || 82 })}
-                      placeholder="82"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Side Margin (mm)</Label>
-                    <Input
-                      type="number"
-                      className="h-10 rounded-xl text-xs"
-                      value={posConfig.marginMm}
-                      onChange={(e) => updatePosConfig({ marginMm: Number(e.target.value) ?? 1 })}
-                      placeholder="1"
-                    />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                <h3 className="font-bold text-sm sm:text-base text-foreground border-b border-border/60 pb-3">
-                  Invoice Header & Watermark
-                </h3>
-                <form onSubmit={saveBusiness} className="space-y-4 text-xs">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Watermark Text</Label>
-                      <Input name="invoice_watermark" defaultValue={biz.invoice_watermark || ""} placeholder="PAID" className="h-10 rounded-xl text-xs" />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-primary">
+                    <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+                      <Printer className="size-5" />
                     </div>
+                    <div>
+                      <h2 className="text-base font-bold text-foreground">POS Thermal Printer & Paper Size</h2>
+                      <p className="text-xs text-muted-foreground">Configure receipt paper width, thermal margins, and typography</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Paper Size Selector */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Receipt Paper Size</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { width: 58, label: "58 mm", desc: "Small POS" },
+                      { width: 80, label: "80 mm", desc: "Standard POS (Recommended)" },
+                      { width: 210, label: "A4 Page", desc: "Standard PDF Invoice" },
+                    ].map((p) => {
+                      const isSelected = posConfig.widthMm === p.width;
+                      return (
+                        <button
+                          key={p.width}
+                          type="button"
+                          onClick={() => updatePosConfig({ widthMm: p.width })}
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-primary/10 border-primary text-primary shadow-xs"
+                              : "bg-muted/30 border-border/80 text-foreground hover:bg-muted/60"
+                          }`}
+                        >
+                          <p className="font-bold text-xs">{p.label}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{p.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Typography Controls */}
+                <form onSubmit={saveInvoiceStyling} className="space-y-4 pt-2 border-t border-border/60">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Enable Watermark</Label>
-                      <select name="invoice_watermark_enabled" defaultValue={String(biz.invoice_watermark_enabled)} className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs">
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
+                      <Label className="text-xs font-semibold">Store Title Size</Label>
+                      <select
+                        value={fontSize}
+                        onChange={e => setFontSize(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                      >
+                        <option value="18px">18px (Compact)</option>
+                        <option value="20px">20px (Normal)</option>
+                        <option value="22px">22px (Default)</option>
+                        <option value="26px">26px (Large)</option>
+                        <option value="30px">30px (Extra Large)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Receipt Scale</Label>
+                      <select
+                        value={fontScale}
+                        onChange={e => setFontScale(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                      >
+                        <option value="90%">90% (Dense)</option>
+                        <option value="100%">100% (Normal)</option>
+                        <option value="110%">110% (Spacious)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Line Spacing</Label>
+                      <select
+                        value={lineSpacing}
+                        onChange={e => setLineSpacing(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                      >
+                        <option value="4px">4px (Tight)</option>
+                        <option value="6px">6px (Standard)</option>
+                        <option value="8px">8px (Relaxed)</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Invoice Terms & Conditions (Footer)</Label>
-                    <Textarea name="invoice_terms" defaultValue={biz.invoice_terms || ""} className="min-h-[70px] rounded-xl text-xs" placeholder="e.g. Sold items are exchangeable within 7 days with invoice." />
-                  </div>
-
-                  <Button type="submit" disabled={busy} className="h-10 px-6 rounded-xl beveled-button">
-                    {busy ? "Saving..." : "Save Invoice Settings"}
+                  <Button type="submit" disabled={busy} className="h-9 px-5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-sm">
+                    {busy ? "Saving..." : "Save Print Formatting"}
                   </Button>
                 </form>
+              </Card>
+
+              {/* Receipt Preview */}
+              <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Printer className="size-4 text-primary" />
+                  <span>Live Receipt Preview ({posConfig.widthMm}mm)</span>
+                </h3>
+                
+                <div className="p-4 rounded-2xl bg-white text-black font-mono text-[11px] border border-border shadow-xs space-y-2">
+                  <div className="text-center space-y-0.5">
+                    <p className="font-bold text-xs" style={{ fontSize }}>{biz.name || "HakimQzz Shop"}</p>
+                    <p className="text-[10px] text-gray-600">{biz.address || "Road #1, Dhaka"}</p>
+                    <p className="text-[10px] text-gray-600">Mob: {biz.phone_numbers || "+8801700000000"}</p>
+                  </div>
+                  <div className="border-b border-dashed border-gray-400 my-1" />
+                  <div className="flex justify-between text-[10px]">
+                    <span>Inv: #INV-2026-001</span>
+                    <span>Date: 23/08/2026</span>
+                  </div>
+                  <div className="border-b border-dashed border-gray-400 my-1" />
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>1x Premium T-Shirt</span>
+                      <span className="font-bold">৳850</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>2x Casual Denim Pants</span>
+                      <span className="font-bold">৳2,400</span>
+                    </div>
+                  </div>
+                  <div className="border-b border-dashed border-gray-400 my-1" />
+                  <div className="flex justify-between font-bold text-xs">
+                    <span>Total Amount:</span>
+                    <span>৳3,250</span>
+                  </div>
+                  <div className="text-center text-[9px] text-gray-500 pt-1">
+                    {biz.invoice_terms || "Thank you for shopping with us!"}
+                  </div>
+                </div>
               </Card>
             </div>
           )}
 
-          {/* TAB 4: CLOUD BACKUP & GOOGLE SHEETS */}
+          {/* ── TAB 3: GOOGLE SHEETS & CLOUD SYNC ────────────────────────────── */}
           {settingsTab === "sheets" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400 border-b border-border/60 pb-3">
-                  <FileSpreadsheet className="size-5" />
-                  <h2 className="font-bold text-base text-foreground">Google Sheets Real-Time Sync</h2>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Synchronize your transactions, products, sales, expenses, and purchases directly to Google Sheets.
-                </p>
-                <form onSubmit={saveGoogleSheetsConfig} className="space-y-3.5">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Spreadsheet ID</Label>
-                    <Input
-                      name="google_sheets_spreadsheet_id"
-                      defaultValue={biz.google_sheets_spreadsheet_id}
-                      placeholder="e.g. 1a2b3c4d5e6f7g..."
-                      className="font-mono text-xs h-10 rounded-xl"
-                    />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                      <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <FileSpreadsheet className="size-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-foreground">
+                          {lang === "bn" ? "গুগল শিট অটোমেটিক সিঙ্ক" : "Google Sheets Real-Time Sync"}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          {lang === "bn" ? "গুগল অ্যাকাউন্টের মাধ্যমে ১-ক্লিকে শিট সংযুক্ত করুন" : "One-click connect with your Google account using Google OAuth"}
+                        </p>
+                      </div>
+                    </div>
+                    {biz.google_sheets_spreadsheet_id && (
+                      <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-xs font-semibold">
+                        {lang === "bn" ? "🟢 সক্রিয়" : "🟢 Active"}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Service Account JSON</Label>
-                    <Textarea
-                      name="google_sheets_credentials_json"
-                      defaultValue={biz.google_sheets_credentials_json}
-                      placeholder='{ "type": "service_account", ... }'
-                      className="font-mono text-xs min-h-[110px] rounded-xl"
-                    />
+
+                  {/* Google OAuth One-Click Integration Box */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <svg className="size-4" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                          </svg>
+                          <span className="font-bold text-xs sm:text-sm text-foreground">
+                            {lang === "bn" ? "গুগল অ্যাকাউন্ট সাইন-ইন (Google OAuth)" : "Google Account Sign-In (OAuth)"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {biz.google_sheets_connected_email
+                            ? `Connected as ${biz.google_sheets_connected_email}`
+                            : (lang === "bn"
+                                ? "কোনো জটিল কি (JSON Key) ছাড়াই সরাসরি আপনার গুগল অ্যাকাউন্টের সাথে শিট তৈরি ও ব্যাকআপ করুন।"
+                                : "Automatically creates and connects a Google Spreadsheet to your Google account.")}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {biz.google_sheets_connected_email || biz.has_google_auth ? (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={isSheetsSaving}
+                            onClick={handleDisconnectGoogleSheets}
+                            className="rounded-xl text-xs h-9 px-3"
+                          >
+                            Disconnect
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            disabled={isSheetsSaving}
+                            onClick={handleConnectGoogleOAuth}
+                            className="rounded-xl text-xs font-bold h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm gap-2"
+                          >
+                            {isSheetsSaving ? (
+                              <>
+                                <RefreshCw className="size-3.5 animate-spin" />
+                                <span>Connecting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="size-3.5 fill-current" viewBox="0 0 24 24">
+                                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                </svg>
+                                <span>Connect with Google</span>
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {biz.google_sheets_spreadsheet_id && (
+                      <div className="pt-2 border-t border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs text-foreground font-medium truncate">
+                          <span className="text-muted-foreground">Spreadsheet ID:</span>
+                          <span className="font-mono text-[11px] bg-background/80 px-2 py-0.5 rounded-md border border-border/60 truncate max-w-[200px]">
+                            {biz.google_sheets_spreadsheet_id}
+                          </span>
+                        </div>
+                        <a
+                          href={`https://docs.google.com/spreadsheets/d/${biz.google_sheets_spreadsheet_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1 hover:underline shrink-0"
+                        >
+                          <span>Open in Google Sheets</span>
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2.5 pt-1">
-                    <Button type="submit" disabled={isSheetsSaving} className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
-                      {isSheetsSaving ? "Saving..." : "Save Google Config"}
-                    </Button>
+
+                  {/* Sync Controls & One-Click Export */}
+                  <div className="pt-2 flex flex-col sm:flex-row gap-3">
                     <Button
                       type="button"
-                      variant="outline"
                       onClick={handleBulkExport}
-                      disabled={isBulkExporting || !biz.google_sheets_spreadsheet_id || !biz.google_sheets_credentials_json}
-                      className="h-10 rounded-xl border-emerald-600/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      disabled={isBulkExporting || !biz.google_sheets_spreadsheet_id}
+                      className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 flex-1 shadow-sm"
                     >
                       {isBulkExporting ? (
                         <>
-                          <RefreshCw className="size-3.5 mr-1.5 animate-spin" />
-                          Syncing...
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          <span>Syncing Database to Google Sheets...</span>
                         </>
                       ) : (
-                        "Sync All Existing Data"
+                        <>
+                          <RefreshCw className="size-3.5" />
+                          <span>Sync All Existing Data Now</span>
+                        </>
                       )}
                     </Button>
                   </div>
-                </form>
+
+                  {/* Manual Configuration Fallback */}
+                  <details className="text-xs group border border-border/60 rounded-2xl p-3 bg-muted/20">
+                    <summary className="font-semibold cursor-pointer text-muted-foreground group-open:text-foreground flex items-center justify-between">
+                      <span>Advanced: Manual Service Account Key (JSON)</span>
+                      <span className="text-[10px] text-muted-foreground">Click to toggle</span>
+                    </summary>
+                    <form onSubmit={saveGoogleSheetsConfig} className="space-y-3 pt-3 mt-2 border-t border-border/40">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Custom Spreadsheet ID</Label>
+                        <Input
+                          name="google_sheets_spreadsheet_id"
+                          defaultValue={biz.google_sheets_spreadsheet_id}
+                          placeholder="1a2b3c4d5e6f7g..."
+                          className="font-mono text-xs h-9 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium">Service Account JSON</Label>
+                        <Textarea
+                          name="google_sheets_credentials_json"
+                          defaultValue={biz.google_sheets_credentials_json}
+                          placeholder='{ "type": "service_account", ... }'
+                          className="font-mono text-xs min-h-[90px] rounded-xl"
+                        />
+                      </div>
+                      <Button type="submit" disabled={isSheetsSaving} size="sm" className="rounded-xl h-8 px-4 text-xs font-semibold">
+                        Save Manual Config
+                      </Button>
+                    </form>
+                  </details>
+                </Card>
+
+                {/* Sync Status Info Card */}
+                <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Database className="size-4 text-primary" />
+                    <span>Real-Time Sync Modules</span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    When Google Sheets is active, every transaction creates live rows in separate tabs in your spreadsheet automatically:
+                  </p>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      { name: "Sales Tab", desc: "Customer invoices, sell prices, profits, and dues" },
+                      { name: "Products Tab", desc: "Product catalog, stock levels, buy & sell prices" },
+                      { name: "Purchases Tab", desc: "Stock restocks, supplier purchases & unit costs" },
+                      { name: "Expenses Tab", desc: "Daily operational expenses and categorized notes" },
+                      { name: "Cashbox Tab", desc: "Inflow / outflow cash transactions & running balance" },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 p-2 rounded-xl bg-muted/40 border border-border/60">
+                        <div className="size-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                        <div>
+                          <span className="font-bold text-foreground">{item.name}:</span>{" "}
+                          <span className="text-muted-foreground">{item.desc}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 4: EMPLOYEE LICENSES & KEYS ──────────────────────────────── */}
+          {settingsTab === "licenses" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2.5 text-primary">
+                      <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+                        <Key className="size-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-foreground">
+                          {lang === "bn" ? "কর্মচারী লাইসেন্স কি ব্যবস্থাপনা" : "Employee License Keys"}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          {lang === "bn" ? "কর্মচারীদের ব্যবহারের জন্য অ্যাক্টিভেশন লাইসেন্স কি তৈরি করুন" : "Generate and assign license keys for staff accounts"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={busy}
+                      onClick={handleGenerateLicense}
+                      className="rounded-xl h-9 px-4 bg-primary text-primary-foreground font-bold text-xs gap-1.5 shadow-sm"
+                    >
+                      <Plus className="size-3.5" />
+                      <span>{lang === "bn" ? "নতুন কি তৈরি করুন" : "Generate License Key"}</span>
+                    </Button>
+                  </div>
+
+                  {/* License Keys List */}
+                  <div className="space-y-3">
+                    {settings.data?.employeeLicenses && settings.data.employeeLicenses.length > 0 ? (
+                      <div className="space-y-2">
+                        {settings.data.employeeLicenses.map((lic: any) => (
+                          <div
+                            key={lic.id}
+                            className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 border border-border/80"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-xs sm:text-sm text-foreground bg-background px-2.5 py-1 rounded-lg border border-border">
+                                  {lic.id}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-semibold ${
+                                    lic.used
+                                      ? "bg-muted text-muted-foreground border-muted-foreground/30"
+                                      : "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                                  }`}
+                                >
+                                  {lic.used ? "Used" : "Available"}
+                                </Badge>
+                              </div>
+                              {lic.created_at && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  Created: {new Date(lic.created_at).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(lic.id);
+                                  toast.success("License key copied to clipboard!");
+                                }}
+                                className="h-8 px-2.5 rounded-lg text-xs gap-1"
+                              >
+                                <Copy className="size-3" />
+                                <span>Copy</span>
+                              </Button>
+                              {!lic.used && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await deleteLicenseFn({ data: { licenseKey: lic.id } });
+                                      toast.success("License key deleted");
+                                      qc.invalidateQueries({ queryKey: ["business-settings"] });
+                                    } catch (e: any) {
+                                      toast.error(e.message || "Failed to delete license");
+                                    }
+                                  }}
+                                  className="h-8 px-2 text-destructive hover:bg-destructive/10 rounded-lg"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 space-y-2 border border-dashed border-border/80 rounded-2xl">
+                        <Key className="size-8 text-muted-foreground mx-auto opacity-50" />
+                        <p className="text-xs text-muted-foreground">No license keys generated yet.</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleGenerateLicense}
+                          disabled={busy}
+                          className="rounded-xl text-xs h-8"
+                        >
+                          Generate First License Key
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Staff Invitation Quick Link */}
+                <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Users className="size-4 text-primary" />
+                    <span>Email Invitations & Active Staff</span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    You can also invite employees directly by email. When they register or log in, they will receive an automatic popup invitation to join your company.
+                  </p>
+                  <Link href="/more">
+                    <Button type="button" className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-xs gap-2">
+                      <span>Manage Staff & Invitations in More</span>
+                      <ExternalLink className="size-3.5" />
+                    </Button>
+                  </Link>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB 5: APPEARANCE & THEMES ───────────────────────────────────── */}
+          {settingsTab === "appearance" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="border-b border-border/60 pb-3">
+                  <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <Sparkles className="size-4 text-primary" />
+                    <span>{lang === "bn" ? "থিম ও ডিসপ্লে মোড" : "Theme Mode & Colors"}</span>
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Customize UI theme mode and system accent colors</p>
+                </div>
+
+                {/* Theme Mode */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Theme Mode</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["light", "dark", "system"] as ThemeMode[]).map(mode => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setTheme(mode)}
+                        className={`p-3 rounded-2xl border text-center font-bold text-xs capitalize transition-all cursor-pointer ${
+                          theme === mode
+                            ? "bg-primary/10 border-primary text-primary shadow-xs"
+                            : "bg-muted/30 border-border/80 text-foreground hover:bg-muted/60"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Accent Colors */}
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs font-semibold">System Accent Color</Label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {[
+                      { id: "emerald", label: "Emerald", color: "#10b981" },
+                      { id: "violet", label: "Violet", color: "#8b5cf6" },
+                      { id: "rose", label: "Rose", color: "#f43f5e" },
+                      { id: "cyan", label: "Cyan", color: "#06b6d4" },
+                      { id: "amber", label: "Amber", color: "#f59e0b" },
+                    ].map(acc => (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => setAccentColor(acc.id as AccentColor)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                          accentColor === acc.id
+                            ? "border-primary bg-primary/10 text-primary shadow-xs"
+                            : "border-border/80 bg-muted/20 text-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        <span className="size-3.5 rounded-full" style={{ backgroundColor: acc.color }} />
+                        <span>{acc.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Background Pattern */}
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs font-semibold">Background Texture</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(["clean", "mesh", "dots", "grid"] as BgStyle[]).map(bg => (
+                      <button
+                        key={bg}
+                        type="button"
+                        onClick={() => setBgStyle(bg)}
+                        className={`p-2.5 rounded-xl border text-center text-xs capitalize font-semibold transition-all cursor-pointer ${
+                          bgStyle === bg
+                            ? "bg-primary/10 border-primary text-primary shadow-xs"
+                            : "bg-muted/30 border-border/80 text-foreground hover:bg-muted/60"
+                        }`}
+                      >
+                        {bg}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </Card>
 
-              {/* SMS Gateway Panel Shortcut */}
-              <Card className="p-5 sm:p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/20 shadow-xs space-y-4 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
-                    <div className="p-2 bg-emerald-500/10 rounded-xl">
-                      <MessageSquare className="size-6" />
-                    </div>
-                    <div>
-                      <h2 className="font-bold text-base text-foreground">{lang === "bn" ? "এসএমএস সিস্টেম ও বার্তা প্যানেল" : "SMS Gateway & Campaigns"}</h2>
-                      <p className="text-xs text-muted-foreground">{lang === "bn" ? "বাল্ক এসএমএস ও অটোমেটিক বার্তা" : "Broadcast SMS and purchase auto-notifications"}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {lang === "bn"
-                      ? "এসএমএস গেটওয়ের মাধ্যমে আপনার ব্যবসায়ের সকল কাস্টমার ও সাপ্লায়ারদের এসএমএস পাঠান এবং বিক্রির পর অটোমেটিক বার্তা সক্রিয় করুন।"
-                      : "Send marketing campaigns, check SMS balance, and configure automatic customer purchase receipts."}
-                  </p>
+              {/* KPI Configuration */}
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="border-b border-border/60 pb-3">
+                  <h2 className="text-base font-bold text-foreground">Dashboard KPI Summary Cards</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Customize metric card grid layout and visual styling</p>
                 </div>
-                <Link href="/sms">
-                  <Button type="button" className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    {lang === "bn" ? "এসএমএস প্যানেল খুলুন" : "Open SMS Panel"}
-                  </Button>
-                </Link>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Grid Columns</Label>
+                    <select
+                      value={kpiConfig.columns}
+                      onChange={e => updateKpiConfig({ columns: parseInt(e.target.value) })}
+                      className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                    >
+                      <option value={1}>1 Column</option>
+                      <option value={2}>2 Columns</option>
+                      <option value={3}>3 Columns</option>
+                      <option value={4}>4 Columns</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Card Size</Label>
+                    <select
+                      value={kpiConfig.size}
+                      onChange={e => updateKpiConfig({ size: e.target.value })}
+                      className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                    >
+                      <option value="small">Compact</option>
+                      <option value="medium">Standard</option>
+                      <option value="large">Spacious</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Surface Style</Label>
+                    <select
+                      value={kpiConfig.variant}
+                      onChange={e => updateKpiConfig({ variant: e.target.value })}
+                      className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                    >
+                      <option value="solid">Solid</option>
+                      <option value="glass">Glass / Frosted</option>
+                      <option value="outline">Outlined</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Corner Curvature</Label>
+                    <select
+                      value={kpiConfig.curve}
+                      onChange={e => updateKpiConfig({ curve: e.target.value })}
+                      className="w-full h-9 rounded-xl border border-input bg-input px-2 text-xs"
+                    >
+                      <option value="none">Rounded</option>
+                      <option value="soft">Soft</option>
+                      <option value="pill">Pill</option>
+                    </select>
+                  </div>
+                </div>
               </Card>
             </div>
           )}
 
-          {/* TAB 5: SECURITY & FACTORY RESET */}
+          {/* ── TAB 6: SECURITY & DATA RESETS ────────────────────────────────── */}
           {settingsTab === "security" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Change Password */}
               <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
                 <div className="flex items-center gap-2 text-primary border-b border-border/60 pb-3">
@@ -950,7 +1394,7 @@ export default function SettingsPage() {
                     <Label className="text-xs font-semibold">Confirm New Password</Label>
                     <Input name="confirmPassword" type="password" required placeholder="Re-enter password" className="h-10 rounded-xl text-xs" />
                   </div>
-                  <Button type="submit" disabled={pwBusy} className="w-full h-10 rounded-xl beveled-button mt-2">
+                  <Button type="submit" disabled={pwBusy} className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs mt-2 shadow-sm">
                     {pwBusy ? "Updating..." : "Update Password"}
                   </Button>
                 </form>
@@ -978,7 +1422,7 @@ export default function SettingsPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full h-11 rounded-xl border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold"
+                      className="w-full h-11 rounded-xl border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold cursor-pointer"
                       onClick={() => setIsUnlockDialogOpen(true)}
                     >
                       Unlock Danger Zone
@@ -1010,7 +1454,7 @@ export default function SettingsPage() {
                             type="button"
                             variant="destructive"
                             size="sm"
-                            className="w-full h-7.5 rounded-lg text-xs font-semibold"
+                            className="w-full h-7.5 rounded-lg text-xs font-semibold cursor-pointer"
                             onClick={() => {
                               setResetType(item.type as any);
                               setConfirmText("");
@@ -1046,7 +1490,7 @@ export default function SettingsPage() {
               Verify Owner Password
             </DialogTitle>
             <DialogDescription>
-              Please enter your login password to unlock Safety & API settings.
+              Please enter your login password to unlock Safety & Reset settings.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleVerifyPassword} className="space-y-4 py-2">
@@ -1082,7 +1526,7 @@ export default function SettingsPage() {
               Confirm Data Reset
             </DialogTitle>
             <DialogDescription className="text-xs">
-              This action is <span className="font-semibold text-red-500">permanent</span>. All selected files and entries will be deleted.
+              This action is <span className="font-semibold text-red-500">permanent</span>. All selected entries will be deleted.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -1190,33 +1634,6 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function EmployeePermissions({
-  employee,
-  onSave,
-}: {
-  employee: { id: string; email: string; full_name: string; permissions: PermissionSet };
-  onSave: (p: PermissionSet) => Promise<void>;
-}) {
-  const [perms, setPerms] = useState<PermissionSet>(employee.permissions || DEFAULT_EMPLOYEE_PERMISSIONS);
-
-  const modules: (keyof PermissionSet)[] = ["dashboard", "products", "sales", "parties", "purchases", "expenses", "cashbox", "settings", "reports"];
-
-  return (
-    <div className="border border-border rounded-lg p-3 space-y-2">
-      <div className="font-medium text-sm">{employee.full_name || employee.email}</div>
-      <div className="grid grid-cols-2 gap-2">
-        {modules.map(m => (
-          <label key={m} className="flex items-center justify-between text-xs capitalize">
-            {m}
-            <Switch checked={perms[m]} onCheckedChange={v => setPerms(p => ({ ...p, [m]: v }))} />
-          </label>
-        ))}
-      </div>
-      <Button size="sm" variant="outline" onClick={() => onSave(perms)}>Save permissions</Button>
     </div>
   );
 }
