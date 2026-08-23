@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FormattedAiText } from "@/components/formatted-ai-text";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -459,12 +460,16 @@ export default function AiAuditsPage() {
                     </div>
 
                     {/* Financial Chat Bubble */}
-                    <Card className={`p-3 sm:p-4 max-w-[88%] sm:max-w-[82%] rounded-2xl ${
+                    <Card className={`p-3.5 sm:p-4 max-w-[88%] sm:max-w-[82%] rounded-2xl ${
                       isUser 
                         ? "bg-primary text-primary-foreground rounded-tr-none border-0 shadow-md" 
-                        : "bg-muted/70 text-foreground rounded-tl-none border-border/50 shadow-sm"
+                        : "bg-card text-foreground rounded-tl-none border-border/80 shadow-sm"
                     }`}>
-                      {isUser ? <p className="leading-relaxed text-[11px] sm:text-xs whitespace-pre-wrap">{m.content}</p> : renderMessageContent(m.content)}
+                      {isUser ? (
+                        <p className="leading-relaxed text-xs whitespace-pre-wrap">{m.content}</p>
+                      ) : (
+                        <FormattedAiText content={m.content} lang={lang} />
+                      )}
                     </Card>
                   </div>
                 );

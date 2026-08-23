@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Sparkles, Send, X, MessageSquare, Bot, AlertTriangle, HelpCircle } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -8,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { FormattedAiText } from "@/components/formatted-ai-text";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -18,6 +20,7 @@ export function FloatingAiChat() {
   const { lang, t } = useT();
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -51,8 +54,9 @@ export function FloatingAiChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Only show for owner (admin) role on desktop/PC — hide AI overlay on mobile phones
-  if (!user || user.role !== "owner" || isMobile) {
+  // Strictly only show on PC/desktop and ONLY on the Home Page (/dashboard or /)
+  const isHomePage = pathname === "/dashboard" || pathname === "/" || pathname === "";
+  if (!user || user.role !== "owner" || isMobile || !isHomePage) {
     return null;
   }
 
@@ -435,12 +439,16 @@ export function FloatingAiChat() {
                       </div>
 
                       {/* Bubble */}
-                      <Card className={`p-3 max-w-[80%] rounded-2xl text-[11px] ${
+                      <Card className={`p-3 max-w-[85%] rounded-2xl text-xs ${
                         isUser 
                           ? "bg-primary text-primary-foreground rounded-tr-none border-0" 
-                          : "bg-muted/75 text-foreground rounded-tl-none border-border/40"
+                          : "bg-card text-foreground rounded-tl-none border-border/80 shadow-sm"
                       }`}>
-                        {isUser ? <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p> : renderMessageContent(m.content)}
+                        {isUser ? (
+                          <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                        ) : (
+                          <FormattedAiText content={m.content} lang={lang} />
+                        )}
                       </Card>
                     </div>
                   );
