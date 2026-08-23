@@ -1,0 +1,101 @@
+const CACHE_NAME = "dreamfashion-v5";
+const ASSETS_TO_CACHE = [
+  "/",
+  "/manifest.json",
+  "/logo.png",
+  "/apple-touch-icon.png",
+  "/icon-512.png",
+  "/login_illustration.jpg",
+  "/dashboard",
+  "/sales",
+  "/purchases",
+  "/expenses",
+  "/customers",
+  "/more",
+  "/cash-management",
+  "/somiti",
+  "/reports",
+  "/dues",
+  "/trackback"
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      const requests = ASSETS_TO_CACHE.map(url => new Request(url, { cache: "reload" }));
+      return cache.addAll(requests);
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+
+  // Exclude Next.js hot-reloads, API calls, and chrome extensions
+  if (
+    url.pathname.includes("/_next/webpack-hmr") ||
+    url.pathname.includes("/api/") ||
+    !url.protocol.startsWith("http")
+  ) {
+    return;
+  }
+
+  const isHashedAsset = url.pathname.includes("/_next/static/");
+
+  if (isHashedAsset) {
+    // Cache-First strategy for Next.js hashed static assets (JS, CSS, fonts)
+    event.respondWith(
+      caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+  } else {
+    // Network-First strategy for pages, images, logo, manifest
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch((err) => {
+          // If offline and network request fails, fall back to cached version
+          return caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            throw err;
+          });
+        })
+    );
+  }
+});

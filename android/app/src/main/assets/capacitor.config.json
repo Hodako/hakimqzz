@@ -1,0 +1,27 @@
+{
+	"appId": "com.dreamfashion.app",
+	"appName": "Dream Fashion",
+	"webDir": "out",
+	"server": {
+		"url": "https://hakim.qzz.io",
+		"cleartext": true
+	},
+	"bundledWebRuntime": false,
+	"overrideUserAgent": "Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
+	"plugins": {
+		"CapacitorCookies": {
+			"enabled": true
+		},
+		"Keyboard": {
+			"resize": "none"
+		}
+	},
+	"android": {
+		"allowMixedContent": true,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": false
+	},
+	"ios": {
+		"contentInset": "automatic"
+	}
+}
