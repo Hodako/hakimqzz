@@ -7,11 +7,10 @@ const hostname = "0.0.0.0";
 const app = next({ dev, hostname });
 const handle = app.getRequestHandler();
 
-// Listen on primary port 80, secondary port 445, and dev/fallback port 8080
+// Listen exclusively on primary port 80 and secondary port 445
 const requestedPorts = [
   parseInt(process.env.PORT || "80", 10),
   parseInt(process.env.ALT_PORT || "445", 10),
-  8080,
 ];
 
 // Remove duplicate ports
