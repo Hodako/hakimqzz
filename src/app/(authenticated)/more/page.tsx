@@ -9,7 +9,7 @@ import {
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
   Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2,
-  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, Eye, EyeOff, Lock, User, Shield, AlertTriangle
+  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,7 +34,10 @@ import {
   listShopEmployeesFn,
   createShopEmployeeFn,
   updateShopEmployeeFn,
-  deleteShopEmployeeFn
+  deleteShopEmployeeFn,
+  inviteEmployeeByEmailFn,
+  listEmployeeInvitationsFn,
+  cancelEmployeeInvitationFn,
 } from "@/lib/rpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -2275,6 +2278,7 @@ export default function MorePage() {
   const [selectedEmp, setSelectedEmp] = useState<any>(null);
 
   const [empFullName, setEmpFullName] = useState("");
+  const [empEmail, setEmpEmail] = useState("");
   const [empUsername, setEmpUsername] = useState("");
   const [empPhone, setEmpPhone] = useState("");
   const [empPassword, setEmpPassword] = useState("");
@@ -2282,6 +2286,8 @@ export default function MorePage() {
   const [empPermissions, setEmpPermissions] = useState<PermissionSet>(DEFAULT_EMPLOYEE_PERMISSIONS);
   const [empSaving, setEmpSaving] = useState(false);
   const [newEmpPassword, setNewEmpPassword] = useState("");
+  const [addEmpMode, setAddEmpMode] = useState<"invite" | "manual">("invite");
+  const [employeeTab, setEmployeeTab] = useState<"active" | "invitations">("active");
 
   const employeesQuery = useQuery({
     queryKey: ["shop-employees"],
@@ -2289,13 +2295,22 @@ export default function MorePage() {
     enabled: user?.role === "owner",
   });
 
+  const invitationsQuery = useQuery({
+    queryKey: ["shop-employee-invitations"],
+    queryFn: listEmployeeInvitationsFn,
+    enabled: user?.role === "owner",
+  });
+
   const shopEmployees = employeesQuery.data ?? [];
+  const employeeInvitations = invitationsQuery.data ?? [];
 
   const handleOpenAddEmployee = () => {
     setEmpFullName("");
+    setEmpEmail("");
     setEmpUsername("");
     setEmpPhone("");
     setEmpPassword("");
+    setAddEmpMode("invite");
     setEmpDesignation(lang === "bn" ? "বিক্রয় কর্মী" : "Sales Staff");
     setEmpPermissions({
       dashboard: true,
@@ -2328,29 +2343,70 @@ export default function MorePage() {
 
   const handleSaveNewEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empFullName.trim() || !empUsername.trim() || !empPassword.trim()) {
-      toast.error(lang === "bn" ? "সকল প্রয়োজনীয় তথ্য পূরণ করুন" : "Please fill all required fields");
-      return;
-    }
     setEmpSaving(true);
     try {
-      await createShopEmployeeFn({
-        data: {
-          fullName: empFullName.trim(),
-          username: empUsername.trim().toLowerCase(),
-          phone: empPhone.trim() || empUsername.trim(),
-          password: empPassword.trim(),
-          designation: empDesignation.trim(),
-          permissions: empPermissions,
-        },
-      });
-      toast.success(lang === "bn" ? "নতুন কর্মচারী সফলভাবে যুক্ত হয়েছে!" : "Employee account created successfully!");
-      setAddEmpModalOpen(false);
-      qc.invalidateQueries({ queryKey: ["shop-employees"] });
+      if (addEmpMode === "invite") {
+        if (!empEmail.trim() || !empEmail.includes("@")) {
+          toast.error(lang === "bn" ? "সঠিক ইমেইল এড্রেস লিখুন" : "Please enter a valid employee email address");
+          return;
+        }
+
+        await inviteEmployeeByEmailFn({
+          data: {
+            email: empEmail.trim().toLowerCase(),
+            fullName: empFullName.trim(),
+            designation: empDesignation.trim(),
+            permissions: empPermissions,
+            phone: empPhone.trim(),
+          },
+        });
+
+        toast.success(
+          lang === "bn"
+            ? `কর্মচারী আমন্ত্রণ পাঠানো হয়েছে! ইউজার '${empEmail.trim()}' লগইন বা একাউন্ট তৈরি করলেই পপআপ দেখতে পাবেন।`
+            : `Employee invitation sent! When '${empEmail.trim()}' logs in or registers, they will receive an invitation popup.`
+        );
+        setAddEmpModalOpen(false);
+        qc.invalidateQueries({ queryKey: ["shop-employee-invitations"] });
+        qc.invalidateQueries({ queryKey: ["shop-employees"] });
+        setEmployeeTab("invitations");
+      } else {
+        if (!empFullName.trim() || !empUsername.trim() || !empPassword.trim()) {
+          toast.error(lang === "bn" ? "সকল প্রয়োজনীয় তথ্য পূরণ করুন" : "Please fill all required fields");
+          return;
+        }
+
+        await createShopEmployeeFn({
+          data: {
+            fullName: empFullName.trim(),
+            username: empUsername.trim().toLowerCase(),
+            phone: empPhone.trim() || empUsername.trim(),
+            password: empPassword.trim(),
+            designation: empDesignation.trim(),
+            permissions: empPermissions,
+          },
+        });
+
+        toast.success(lang === "bn" ? "নতুন কর্মচারী সফলভাবে যুক্ত হয়েছে!" : "Employee account created successfully!");
+        setAddEmpModalOpen(false);
+        qc.invalidateQueries({ queryKey: ["shop-employees"] });
+      }
     } catch (err: any) {
-      toast.error(err.message || "Failed to create employee");
+      toast.error(err.message || "Failed to add employee");
     } finally {
       setEmpSaving(false);
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    try {
+      await cancelEmployeeInvitationFn({
+        data: { invitationId },
+      });
+      toast.success(lang === "bn" ? "আমন্ত্রণ বাতিল করা হয়েছে" : "Invitation cancelled successfully");
+      qc.invalidateQueries({ queryKey: ["shop-employee-invitations"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel invitation");
     }
   };
 
@@ -2453,15 +2509,12 @@ export default function MorePage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                  {lang === "bn" ? "কর্মচারী ব্যবস্থাপনা ও পারমিশন" : "Employee Management & Permissions"}
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    {shopEmployees.length} {lang === "bn" ? "জন" : "Staff"}
-                  </Badge>
+                  {lang === "bn" ? "কর্মচারী ব্যবস্থাপনা ও আমন্ত্রণ" : "Employee Management & Invitations"}
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   {lang === "bn"
-                    ? "দোকানের কর্মচারীদের একাউন্ট তৈরি, এক্সেস পারমিশন নিয়ন্ত্রণ ও পাসওয়ার্ড পরিবর্তন করুন।"
-                    : "Create staff accounts, configure granular module permissions, and manage shop access."}
+                    ? "ইমেইল দিয়ে কর্মচারী আমন্ত্রণ পাঠান, পারমিশন নিয়ন্ত্রণ করুন এবং একাউন্ট পরিচালনা করুন।"
+                    : "Invite employees by email, configure granular module permissions, and manage staff accounts."}
                 </p>
               </div>
             </div>
@@ -2470,210 +2523,354 @@ export default function MorePage() {
           <Button
             size="sm"
             onClick={handleOpenAddEmployee}
-            className="h-9 px-3 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 beveled-button shrink-0"
+            className="h-9 px-3.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 beveled-button shrink-0 shadow-md"
           >
             <UserPlus className="size-4" />
-            <span>{lang === "bn" ? "নতুন কর্মচারী যুক্ত করুন" : "Add Employee"}</span>
+            <span>{lang === "bn" ? "নতুন কর্মচারী যোগ / আমন্ত্রণ" : "Add / Invite Employee"}</span>
           </Button>
         </div>
 
-        {/* Employee List View */}
-        {employeesQuery.isLoading ? (
-          <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
-            <Loader2 className="size-5 animate-spin text-primary" />
-            <span>{lang === "bn" ? "কর্মচারীদের তালিকা লোড হচ্ছে..." : "Loading employees list..."}</span>
-          </div>
-        ) : shopEmployees.length === 0 ? (
-          <div className="py-8 text-center border border-dashed border-border/70 rounded-xl space-y-2.5 bg-muted/20">
-            <div className="p-3 bg-muted/60 rounded-full inline-block text-muted-foreground">
-              <Users className="size-6 opacity-60" />
-            </div>
-            <div className="space-y-1 max-w-sm mx-auto px-4">
-              <p className="text-xs font-bold text-foreground">
-                {lang === "bn" ? "এখনও কোনো কর্মচারী যুক্ত করা হয়নি" : "No employees added yet"}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {lang === "bn"
-                  ? "আপনার বিক্রয় কর্মী বা ক্যাশিয়ারের জন্য নতুন একাউন্ট খুলুন যাতে তারা নির্দিষ্ট মডিউল পরিচালনা করতে পারে।"
-                  : "Add your sales staff or cashier to grant them restricted POS and module access."}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleOpenAddEmployee}
-              className="text-xs rounded-xl gap-1.5 h-8 mt-1"
-            >
-              <Plus className="size-3.5" />
-              <span>{lang === "bn" ? "প্রথম কর্মচারী যোগ করুন" : "Add First Employee"}</span>
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
-            {shopEmployees.map((emp: any) => {
-              const p = emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS;
-              const grantedCount = Object.values(p).filter(Boolean).length;
+        {/* Section Segmented Tabs (Active Employees vs Pending Invitations) */}
+        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 w-fit text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setEmployeeTab("active")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+              employeeTab === "active"
+                ? "bg-card text-foreground shadow-xs border border-border/80"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Users className="size-3.5 text-emerald-600" />
+            <span>{lang === "bn" ? "সক্রিয় কর্মচারী" : "Active Staff"}</span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+              {shopEmployees.length}
+            </Badge>
+          </button>
 
-              return (
-                <div
-                  key={emp.id}
-                  className="p-3.5 sm:p-4 rounded-xl bg-muted/30 border border-border/70 hover:border-border transition-all space-y-3 flex flex-col justify-between"
+          <button
+            type="button"
+            onClick={() => setEmployeeTab("invitations")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+              employeeTab === "invitations"
+                ? "bg-card text-primary shadow-xs border border-primary/30 font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Mail className="size-3.5 text-blue-500" />
+            <span>{lang === "bn" ? "ইমেইল আমন্ত্রণসমূহ" : "Pending Invitations"}</span>
+            {employeeInvitations.filter((i: any) => i.status === "pending").length > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 h-4 bg-amber-500 hover:bg-amber-500 text-white">
+                {employeeInvitations.filter((i: any) => i.status === "pending").length}
+              </Badge>
+            )}
+          </button>
+        </div>
+
+        {/* TAB 1: ACTIVE EMPLOYEES */}
+        {employeeTab === "active" && (
+          <>
+            {employeesQuery.isLoading ? (
+              <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                <Loader2 className="size-5 animate-spin text-primary" />
+                <span>{lang === "bn" ? "কর্মচারীদের তালিকা লোড হচ্ছে..." : "Loading employees list..."}</span>
+              </div>
+            ) : shopEmployees.length === 0 ? (
+              <div className="py-8 text-center border border-dashed border-border/70 rounded-xl space-y-2.5 bg-muted/20">
+                <div className="p-3 bg-muted/60 rounded-full inline-block text-muted-foreground">
+                  <Users className="size-6 opacity-60" />
+                </div>
+                <div className="space-y-1 max-w-sm mx-auto px-4">
+                  <p className="text-xs font-bold text-foreground">
+                    {lang === "bn" ? "এখনও কোনো কর্মচারী যুক্ত করা হয়নি" : "No employees active yet"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {lang === "bn"
+                      ? "ইমেইল দিয়ে আপনার কর্মচারীকে আমন্ত্রণ জানান অথবা সরাসরি ইউজারনেম পাসওয়ার্ড দিয়ে একাউন্ট তৈরি করুন।"
+                      : "Invite your staff via email or create login credentials directly."}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenAddEmployee}
+                  className="text-xs rounded-xl gap-1.5 h-8 mt-1"
                 >
-                  <div className="space-y-2.5">
-                    {/* Header: Name, Designation & Status */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Avatar className="size-10 rounded-xl border border-border/80 shadow-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-sm shrink-0">
-                          <AvatarFallback className="rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
-                            {(emp.full_name || "EM").slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <h4 className="text-xs sm:text-sm font-bold text-foreground truncate">
-                            {emp.full_name}
-                          </h4>
-                          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                              {emp.designation || (lang === "bn" ? "বিক্রয় কর্মী" : "Sales Staff")}
-                            </span>
-                            <span>•</span>
-                            <span className="font-mono text-[10px]">@{emp.username}</span>
+                  <Plus className="size-3.5" />
+                  <span>{lang === "bn" ? "প্রথম কর্মচারী যোগ করুন" : "Add First Employee"}</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                {shopEmployees.map((emp: any) => {
+                  const p = emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS;
+                  const grantedCount = Object.values(p).filter(Boolean).length;
+
+                  return (
+                    <div
+                      key={emp.id}
+                      className="p-3.5 sm:p-4 rounded-xl bg-muted/30 border border-border/70 hover:border-border transition-all space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2.5">
+                        {/* Header: Name, Designation & Status */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Avatar className="size-10 rounded-xl border border-border/80 shadow-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-sm shrink-0">
+                              <AvatarFallback className="rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                                {(emp.full_name || "EM").slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <h4 className="text-xs sm:text-sm font-bold text-foreground truncate">
+                                {emp.full_name}
+                              </h4>
+                              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
+                                <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                  {emp.designation || (lang === "bn" ? "বিক্রয় কর্মী" : "Sales Staff")}
+                                </span>
+                                {emp.email && !emp.email.endsWith("@employee.local") && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="font-mono text-[10px]">{emp.email}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge
+                              variant={emp.is_active ? "outline" : "secondary"}
+                              className={`text-[10px] font-medium rounded-md px-1.5 py-0.5 ${
+                                emp.is_active
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                                  : "bg-zinc-500/15 text-zinc-500 border-zinc-500/30"
+                              }`}
+                            >
+                              {emp.is_active
+                                ? (lang === "bn" ? "সক্রিয়" : "Active")
+                                : (lang === "bn" ? "নিষ্ক্রিয়" : "Inactive")}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Contact details */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] bg-background/60 p-2 rounded-lg border border-border/50 font-mono">
+                          <div className="truncate">
+                            <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Phone / User</span>
+                            <span className="text-foreground">{emp.phone || emp.username || "—"}</span>
+                          </div>
+                          <div className="truncate">
+                            <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Permissions</span>
+                            <span className="text-foreground font-sans font-medium">{grantedCount} modules</span>
+                          </div>
+                        </div>
+
+                        {/* Permissions Badges */}
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {p.sales && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                              🛒 POS Sales
+                            </span>
+                          )}
+                          {p.products && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/20">
+                              📦 Products
+                            </span>
+                          )}
+                          {p.purchases && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                              🛍️ Purchases
+                            </span>
+                          )}
+                          {p.expenses && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                              💸 Expenses
+                            </span>
+                          )}
+                          {p.cashbox && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                              💵 Cashbox
+                            </span>
+                          )}
+                          {p.parties && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                              👥 Parties
+                            </span>
+                          )}
+                          {p.reports && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/20">
+                              📈 Reports
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Badge
-                          variant={emp.is_active ? "outline" : "secondary"}
-                          className={`text-[10px] font-medium rounded-md px-1.5 py-0.5 ${
-                            emp.is_active
-                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-                              : "bg-zinc-500/15 text-zinc-500 border-zinc-500/30"
-                          }`}
-                        >
-                          {emp.is_active
-                            ? (lang === "bn" ? "সক্রিয়" : "Active")
-                            : (lang === "bn" ? "নিষ্ক্রিয়" : "Inactive")}
-                        </Badge>
+                      {/* Actions Footer */}
+                      <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenEditEmployee(emp)}
+                            className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
+                            title="Edit permissions and details"
+                          >
+                            <Edit className="size-3" />
+                            <span>{lang === "bn" ? "পারমিশন" : "Edit"}</span>
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenResetPassword(emp)}
+                            className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
+                            title="Change employee password"
+                          >
+                            <Key className="size-3 text-amber-500" />
+                            <span>{lang === "bn" ? "পাসওয়ার্ড" : "Password"}</span>
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleStatus(emp)}
+                            className={`h-7.5 px-2 text-[11px] rounded-lg ${
+                              emp.is_active
+                                ? "text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                                : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                            }`}
+                          >
+                            {emp.is_active
+                              ? (lang === "bn" ? "নিষ্ক্রিয় করুন" : "Deactivate")
+                              : (lang === "bn" ? "সক্রিয় করুন" : "Activate")}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedEmp(emp);
+                              setDeleteEmpModalOpen(true);
+                            }}
+                            className="h-7.5 px-2 text-[11px] rounded-lg text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
 
-                    {/* Contact details */}
-                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-background/60 p-2 rounded-lg border border-border/50 font-mono">
-                      <div className="truncate">
-                        <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Phone</span>
-                        <span className="text-foreground">{emp.phone || "—"}</span>
-                      </div>
-                      <div className="truncate">
-                        <span className="text-muted-foreground block text-[9px] uppercase font-sans font-semibold">Permissions</span>
-                        <span className="text-foreground font-sans font-medium">{grantedCount} modules</span>
-                      </div>
-                    </div>
-
-                    {/* Permissions Badges */}
-                    <div className="flex flex-wrap gap-1 pt-0.5">
-                      {p.sales && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                          🛒 POS Sales
-                        </span>
-                      )}
-                      {p.products && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/20">
-                          📦 Stock/Products
-                        </span>
-                      )}
-                      {p.purchases && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-                          🛍️ Purchases
-                        </span>
-                      )}
-                      {p.expenses && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-                          💸 Expenses
-                        </span>
-                      )}
-                      {p.cashbox && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                          💵 Cashbox
-                        </span>
-                      )}
-                      {p.parties && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
-                          👥 Parties/Dues
-                        </span>
-                      )}
-                      {p.reports && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/20">
-                          📈 Reports
-                        </span>
-                      )}
-                      {p.settings && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20">
-                          ⚙️ Settings
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions Footer */}
-                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenEditEmployee(emp)}
-                        className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
-                        title="Edit permissions and details"
-                      >
-                        <Edit className="size-3" />
-                        <span>{lang === "bn" ? "পারমিশন" : "Edit"}</span>
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenResetPassword(emp)}
-                        className="h-7.5 px-2 text-[11px] rounded-lg gap-1"
-                        title="Change employee password"
-                      >
-                        <Key className="size-3 text-amber-500" />
-                        <span>{lang === "bn" ? "পাসওয়ার্ড" : "Password"}</span>
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleToggleStatus(emp)}
-                        className={`h-7.5 px-2 text-[11px] rounded-lg ${
-                          emp.is_active
-                            ? "text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-                            : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                        }`}
-                      >
-                        {emp.is_active
-                          ? (lang === "bn" ? "নিষ্ক্রিয় করুন" : "Deactivate")
-                          : (lang === "bn" ? "সক্রিয় করুন" : "Activate")}
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setSelectedEmp(emp);
-                          setDeleteEmpModalOpen(true);
-                        }}
-                        className="h-7.5 px-2 text-[11px] rounded-lg text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+        {/* TAB 2: PENDING EMAIL INVITATIONS */}
+        {employeeTab === "invitations" && (
+          <>
+            {invitationsQuery.isLoading ? (
+              <div className="py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                <Loader2 className="size-5 animate-spin text-primary" />
+                <span>Loading invitations...</span>
+              </div>
+            ) : employeeInvitations.length === 0 ? (
+              <div className="py-8 text-center border border-dashed border-border/70 rounded-xl space-y-2 bg-muted/20">
+                <div className="p-3 bg-muted/60 rounded-full inline-block text-muted-foreground">
+                  <Mail className="size-6 opacity-60" />
                 </div>
-              );
-            })}
-          </div>
+                <div className="space-y-1 max-w-sm mx-auto px-4">
+                  <p className="text-xs font-bold text-foreground">
+                    {lang === "bn" ? "কোন পেন্ডিং আমন্ত্রণ নেই" : "No pending invitations"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {lang === "bn"
+                      ? "কর্মচারীর ইমেইল দিয়ে আমন্ত্রণ পাঠালে তারা লগইন করার পর পপআপে আমন্ত্রণ গ্রহণ করতে পারবে।"
+                      : "Send invitations to staff email addresses. When they login, an invitation popup will appear."}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenAddEmployee}
+                  className="text-xs rounded-xl gap-1.5 h-8 mt-1"
+                >
+                  <UserPlus className="size-3.5 text-emerald-600" />
+                  <span>{lang === "bn" ? "ইমেইলে আমন্ত্রণ পাঠান" : "Invite Employee by Email"}</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                {employeeInvitations.map((inv: any) => {
+                  const dateStr = inv.created_at ? new Date(inv.created_at).toLocaleDateString() : "";
+                  const isPending = inv.status === "pending";
+
+                  return (
+                    <div
+                      key={inv.id}
+                      className="p-3.5 rounded-xl bg-card border border-border/80 shadow-xs space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+                              <Mail className="size-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs sm:text-sm font-bold text-foreground truncate font-mono">
+                                {inv.employee_email}
+                              </h4>
+                              <p className="text-[11px] text-muted-foreground">
+                                {inv.employee_name ? `${inv.employee_name} • ` : ""}{inv.designation || "Sales Staff"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                              isPending
+                                ? "bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse"
+                                : inv.status === "accepted"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                : "bg-red-500/10 text-red-600 border-red-500/30"
+                            }`}
+                          >
+                            {isPending ? "Pending Invite" : inv.status}
+                          </Badge>
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground">
+                          {lang === "bn" ? "আমন্ত্রণ পাঠানোর তারিখ:" : "Sent on:"} {dateStr}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs">
+                        <span className="text-[11px] text-muted-foreground">
+                          {isPending ? "Waiting for employee to login" : `Status: ${inv.status}`}
+                        </span>
+
+                        {isPending && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleCancelInvitation(inv.id)}
+                            className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 rounded-lg gap-1"
+                          >
+                            <Trash2 className="size-3" />
+                            <span>{lang === "bn" ? "বাতিল করুন" : "Cancel"}</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </Card>
     );
@@ -2861,74 +3058,148 @@ export default function MorePage() {
           <DialogHeader>
             <DialogTitle className="text-base font-serif flex items-center gap-2">
               <UserPlus className="size-5 text-emerald-600" />
-              <span>{lang === "bn" ? "নতুন কর্মচারী যুক্ত করুন" : "Add New Employee"}</span>
+              <span>{lang === "bn" ? "নতুন কর্মচারী যোগ / আমন্ত্রণ" : "Add / Invite Employee"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
               {lang === "bn"
-                ? "কর্মচারীর তথ্য এবং নির্ধারিত এক্সেস পারমিশন নির্বাচন করুন।"
-                : "Enter employee credentials and configure access permissions."}
+                ? "কর্মচারীর ইমেইল দিয়ে আমন্ত্রণ পাঠান অথবা সরাসরি লগইন একাউন্ট তৈরি করুন।"
+                : "Invite staff by email or create direct credentials with module permissions."}
             </DialogDescription>
           </DialogHeader>
 
+          {/* Mode Switcher */}
+          <div className="flex items-center gap-2 p-1 bg-muted/60 rounded-xl border border-border/80 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setAddEmpMode("invite")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                addEmpMode === "invite"
+                  ? "bg-card text-emerald-600 shadow-xs border border-emerald-500/30 font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Mail className="size-3.5" />
+              <span>{lang === "bn" ? "ইমেইলে আমন্ত্রণ (সুপারিশকৃত)" : "Invite via Email (Recommended)"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddEmpMode("manual")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                addEmpMode === "manual"
+                  ? "bg-card text-foreground shadow-xs border border-border/80 font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <KeyRound className="size-3.5" />
+              <span>{lang === "bn" ? "সরাসরি একাউন্ট" : "Direct Account"}</span>
+            </button>
+          </div>
+
           <form onSubmit={handleSaveNewEmployee} className="space-y-4 pt-1">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারীর পুরো নাম *" : "Full Name *"}</Label>
-              <Input
-                required
-                placeholder="e.g. Rahim Ahmed"
-                value={empFullName}
-                onChange={(e) => setEmpFullName(e.target.value)}
-                className="h-8.5 text-xs rounded-xl"
-              />
-            </div>
+            {addEmpMode === "invite" ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11.5px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                  💡 {lang === "bn"
+                    ? "কর্মচারীর জিমেইল/ইমেইল লিখুন। সেই ইমেইল দিয়ে ইউজার লগইন বা সাইন-আপ করলেই সাথে সাথে এই দোকানে যুক্ত হওয়ার জন্য এক্সেপ্ট/রিজেক্ট পপআপ দেখতে পাবেন।"
+                    : "Enter employee's email. When they sign up or log in with this email, they will automatically receive a popup invitation to accept becoming an employee of your shop."}
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">{lang === "bn" ? "ইউজারনেম (লগইনের জন্য) *" : "Username (For Login) *"}</Label>
-                <Input
-                  required
-                  placeholder="e.g. rahim"
-                  value={empUsername}
-                  onChange={(e) => setEmpUsername(e.target.value)}
-                  className="h-8.5 text-xs rounded-xl font-mono"
-                />
-              </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারীর ইমেইল এড্রেস *" : "Employee Email Address *"}</Label>
+                  <Input
+                    required
+                    type="email"
+                    placeholder="e.g. staff.employee@gmail.com"
+                    value={empEmail}
+                    onChange={(e) => setEmpEmail(e.target.value)}
+                    className="h-9 text-xs rounded-xl font-mono"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">{lang === "bn" ? "মোবাইল নম্বর *" : "Phone Number *"}</Label>
-                <Input
-                  required
-                  placeholder="e.g. 01700000000"
-                  value={empPhone}
-                  onChange={(e) => setEmpPhone(e.target.value)}
-                  className="h-8.5 text-xs rounded-xl font-mono"
-                />
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারীর নাম (ঐচ্ছিক)" : "Full Name (Optional)"}</Label>
+                    <Input
+                      placeholder="e.g. Rahim Ahmed"
+                      value={empFullName}
+                      onChange={(e) => setEmpFullName(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl"
+                    />
+                  </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">{lang === "bn" ? "লগইন পাসওয়ার্ড *" : "Login Password *"}</Label>
-                <Input
-                  required
-                  type="password"
-                  placeholder="e.g. 123456"
-                  value={empPassword}
-                  onChange={(e) => setEmpPassword(e.target.value)}
-                  className="h-8.5 text-xs rounded-xl font-mono"
-                />
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "পদবী (Designation)" : "Designation"}</Label>
+                    <Input
+                      placeholder="e.g. Sales Staff, Cashier"
+                      value={empDesignation}
+                      onChange={(e) => setEmpDesignation(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl"
+                    />
+                  </div>
+                </div>
               </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারীর পুরো নাম *" : "Full Name *"}</Label>
+                  <Input
+                    required
+                    placeholder="e.g. Rahim Ahmed"
+                    value={empFullName}
+                    onChange={(e) => setEmpFullName(e.target.value)}
+                    className="h-8.5 text-xs rounded-xl"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">{lang === "bn" ? "পদবী (Designation)" : "Designation"}</Label>
-                <Input
-                  placeholder="e.g. Sales Staff, Cashier"
-                  value={empDesignation}
-                  onChange={(e) => setEmpDesignation(e.target.value)}
-                  className="h-8.5 text-xs rounded-xl"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "ইউজারনেম (লগইনের জন্য) *" : "Username (For Login) *"}</Label>
+                    <Input
+                      required
+                      placeholder="e.g. rahim"
+                      value={empUsername}
+                      onChange={(e) => setEmpUsername(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "মোবাইল নম্বর *" : "Phone Number *"}</Label>
+                    <Input
+                      required
+                      placeholder="e.g. 01700000000"
+                      value={empPhone}
+                      onChange={(e) => setEmpPhone(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "লগইন পাসওয়ার্ড *" : "Login Password *"}</Label>
+                    <Input
+                      required
+                      type="password"
+                      placeholder="e.g. 123456"
+                      value={empPassword}
+                      onChange={(e) => setEmpPassword(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">{lang === "bn" ? "পদবী (Designation)" : "Designation"}</Label>
+                    <Input
+                      placeholder="e.g. Sales Staff, Cashier"
+                      value={empDesignation}
+                      onChange={(e) => setEmpDesignation(e.target.value)}
+                      className="h-8.5 text-xs rounded-xl"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Granular Permissions Box */}
             <div className="space-y-2 pt-1">

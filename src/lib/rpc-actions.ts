@@ -3419,6 +3419,271 @@ export async function deleteShopEmployeeFn(input: { data: { employeeId: string }
   return { success: true };
 }
 
+// ─── Employee Email Invitations & Joining System ──────────────────────────────
+
+export async function inviteEmployeeByEmailFn(input: {
+  data: {
+    email: string;
+    fullName?: string;
+    designation?: string;
+    permissions?: PermissionSet;
+    phone?: string;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role === "employee") {
+    throw new Error("Access denied: Only business owners can invite employees");
+  }
+  const db = await getDb();
+
+  const cleanEmail = (data.email || "").trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    throw new Error("A valid employee email address is required");
+  }
+
+  if (cleanEmail === session.email.toLowerCase().trim()) {
+    throw new Error("You cannot invite yourself as an employee");
+  }
+
+  const ownerUser = await db.collection("users").findOne({ _id: session.userId as any });
+  const biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+  const businessName = biz?.name || ownerUser?.business_name || "Dream Fashion";
+  const businessId = (biz?._id as any as string) || session.businessId;
+
+  // Check if this email is already an active employee in this business
+  const existingEmployee = await db.collection("users").findOne({
+    email: cleanEmail,
+    business_id: businessId,
+    role: "employee",
+  });
+
+  if (existingEmployee) {
+    throw new Error(`User with email '${cleanEmail}' is already an employee of ${businessName}`);
+  }
+
+  // Cancel any existing pending invitation for this email and business
+  await db.collection("employee_invitations").deleteMany({
+    employee_email: cleanEmail,
+    business_id: businessId,
+    status: "pending",
+  });
+
+  const invitationId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const invitationDoc = {
+    _id: invitationId as any,
+    business_id: businessId,
+    business_name: businessName,
+    owner_id: session.ownerId,
+    owner_name: ownerUser?.full_name || ownerUser?.username || "Shop Owner",
+    owner_email: ownerUser?.email || session.email,
+    employee_email: cleanEmail,
+    employee_name: data.fullName?.trim() || "",
+    phone: data.phone?.trim() || "",
+    designation: data.designation?.trim() || "Sales Staff",
+    permissions: data.permissions || DEFAULT_EMPLOYEE_PERMISSIONS,
+    status: "pending",
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.collection("employee_invitations").insertOne(invitationDoc as any);
+
+  // If user already exists in the system, link a pending notification
+  const existingUser = await db.collection("users").findOne({ email: cleanEmail });
+  if (existingUser) {
+    await db.collection("users").updateOne(
+      { _id: existingUser._id },
+      {
+        $set: {
+          has_pending_invitation: true,
+          last_invitation_at: now,
+        },
+      }
+    );
+  }
+
+  return {
+    success: true,
+    invitation: {
+      id: invitationId,
+      business_name: businessName,
+      employee_email: cleanEmail,
+      employee_name: invitationDoc.employee_name,
+      designation: invitationDoc.designation,
+      permissions: invitationDoc.permissions,
+      status: "pending",
+      created_at: now,
+    },
+  };
+}
+
+export async function listEmployeeInvitationsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+
+  const invites = await db
+    .collection("employee_invitations")
+    .find({ owner_id: session.ownerId })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  return invites.map((inv) => ({
+    id: inv._id as any as string,
+    business_id: (inv.business_id as string) || "",
+    business_name: (inv.business_name as string) || "",
+    employee_email: (inv.employee_email as string) || "",
+    employee_name: (inv.employee_name as string) || "",
+    designation: (inv.designation as string) || "Sales Staff",
+    permissions: (inv.permissions as PermissionSet) || DEFAULT_EMPLOYEE_PERMISSIONS,
+    status: (inv.status as "pending" | "accepted" | "rejected" | "cancelled") || "pending",
+    created_at: (inv.created_at as string) || "",
+    accepted_at: (inv.accepted_at as string) || "",
+    rejected_at: (inv.rejected_at as string) || "",
+  }));
+}
+
+export async function cancelEmployeeInvitationFn(input: { data: { invitationId: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const res = await db.collection("employee_invitations").deleteOne({
+    _id: data.invitationId as any,
+    owner_id: session.ownerId,
+  });
+
+  if (res.deletedCount === 0) {
+    throw new Error("Invitation not found or already removed");
+  }
+
+  return { success: true };
+}
+
+export async function getMyPendingEmployeeInvitationsFn() {
+  const session = await requireSession().catch(() => null);
+  if (!session || !session.email) {
+    return [];
+  }
+  const db = await getDb();
+  const cleanEmail = session.email.toLowerCase().trim();
+
+  const pendingInvites = await db
+    .collection("employee_invitations")
+    .find({
+      employee_email: cleanEmail,
+      status: "pending",
+    })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  return pendingInvites.map((inv) => ({
+    id: inv._id as any as string,
+    business_id: (inv.business_id as string) || "",
+    business_name: (inv.business_name as string) || "",
+    owner_name: (inv.owner_name as string) || "Shop Owner",
+    owner_email: (inv.owner_email as string) || "",
+    designation: (inv.designation as string) || "Sales Staff",
+    permissions: (inv.permissions as PermissionSet) || DEFAULT_EMPLOYEE_PERMISSIONS,
+    created_at: (inv.created_at as string) || "",
+  }));
+}
+
+export async function respondToEmployeeInvitationFn(input: {
+  data: {
+    invitationId: string;
+    action: "accept" | "reject";
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const cleanEmail = session.email.toLowerCase().trim();
+
+  const invitation = await db.collection("employee_invitations").findOne({
+    _id: data.invitationId as any,
+    employee_email: cleanEmail,
+    status: "pending",
+  });
+
+  if (!invitation) {
+    throw new Error("Invitation not found or has already been processed");
+  }
+
+  const now = new Date().toISOString();
+
+  if (data.action === "accept") {
+    // Mark invitation as accepted
+    await db.collection("employee_invitations").updateOne(
+      { _id: invitation._id },
+      {
+        $set: {
+          status: "accepted",
+          accepted_at: now,
+          updated_at: now,
+        },
+      }
+    );
+
+    // Update the current user account to be employee of this business
+    await db.collection("users").updateOne(
+      { _id: session.userId as any },
+      {
+        $set: {
+          role: "employee",
+          business_id: invitation.business_id,
+          owner_id: invitation.owner_id,
+          business_name: invitation.business_name,
+          designation: invitation.designation || "Sales Staff",
+          permissions: invitation.permissions || DEFAULT_EMPLOYEE_PERMISSIONS,
+          is_active: true,
+          status: "active",
+          has_pending_invitation: false,
+          joined_company_at: now,
+          updated_at: now,
+        },
+      }
+    );
+
+    const mappedUser = await mapUser(db, session.userId);
+
+    return {
+      success: true,
+      action: "accepted",
+      businessName: invitation.business_name,
+      user: mappedUser,
+    };
+  } else {
+    // Mark invitation as rejected
+    await db.collection("employee_invitations").updateOne(
+      { _id: invitation._id },
+      {
+        $set: {
+          status: "rejected",
+          rejected_at: now,
+          updated_at: now,
+        },
+      }
+    );
+
+    await db.collection("users").updateOne(
+      { _id: session.userId as any },
+      {
+        $set: {
+          has_pending_invitation: false,
+        },
+      }
+    );
+
+    return {
+      success: true,
+      action: "rejected",
+    };
+  }
+}
+
 // ── WhatsApp Web Integration Server Actions ─────────────────────────
 
 export async function getWhatsAppStatusFn() {

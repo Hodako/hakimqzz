@@ -285,4 +285,9 @@ export const listShopEmployeesFn = makeReadAction("listShopEmployeesFn");
 export const createShopEmployeeFn = makeWriteAction("createShopEmployeeFn");
 export const updateShopEmployeeFn = makeWriteAction("updateShopEmployeeFn");
 export const deleteShopEmployeeFn = makeWriteAction("deleteShopEmployeeFn");
+export const inviteEmployeeByEmailFn = makeWriteAction("inviteEmployeeByEmailFn");
+export const listEmployeeInvitationsFn = makeReadAction("listEmployeeInvitationsFn");
+export const cancelEmployeeInvitationFn = makeWriteAction("cancelEmployeeInvitationFn");
+export const getMyPendingEmployeeInvitationsFn = makeReadAction("getMyPendingEmployeeInvitationsFn");
+export const respondToEmployeeInvitationFn = makeWriteAction("respondToEmployeeInvitationFn");
 
