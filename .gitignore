@@ -6,13 +6,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Dependencies
+# Dependencies & Build Outputs
 node_modules
 dist
 dist-ssr
 .output
 .next
 out
+tsconfig.tsbuildinfo
 
 # Environment variables
 .env
@@ -21,18 +22,27 @@ out
 .env.production
 .env.development
 
-# Editor
+# Editor & OS
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 
-# Vercel & Wrangler
+# Vercel & Cloudflare Wrangler
 .vercel
 .wrangler
 
-# Binaries & APKs
+# Android & Mobile Native Build Artifacts (Keep Server Repo Lightweight)
+android/
+android-app/
+ios/
+.gradle/
 *.apk
+*.aab
+*.jar
+*.keystore
+*.jks
 
 # Subprojects
 Classic-World/
