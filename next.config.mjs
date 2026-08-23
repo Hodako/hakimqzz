@@ -18,6 +18,12 @@ const nextConfig = {
     "0.0.0.0:3141",
     "127.0.0.1:3141",
   ],
+  // Prevent OOM SIGKILL by running build in single-process mode with minimal memory
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
+  productionBrowserSourceMaps: false,
   ...(isStatic
     ? {
         output: "export",
