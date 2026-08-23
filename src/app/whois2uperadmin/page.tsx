@@ -37,6 +37,7 @@ import {
   updateMasterSmsSettingsFn,
   checkMasterSmsBalanceFn,
   directSendSmsAsAdminFn,
+  getServerIpInfoFn,
 } from "@/lib/rpc-admin";
 import {
   Trash2,
@@ -69,6 +70,11 @@ import {
   ExternalLink,
   Plus,
   Radio,
+  Globe,
+  Copy,
+  Server,
+  Wifi,
+  Check,
 } from "lucide-react";
 import { SpeedLoader } from "@/components/speed-loader";
 import { fmtDateTime } from "@/lib/format";
@@ -89,6 +95,7 @@ export default function SuperAdminPage() {
   const [bizPage, setBizPage] = useState(1);
   const [usersPage, setUsersPage] = useState(1);
   const [popupsPage, setPopupsPage] = useState(1);
+  const [copiedIp, setCopiedIp] = useState(false);
 
   // ─── Modal States ─────────────────────────────────────────────────────────
 
@@ -207,12 +214,20 @@ export default function SuperAdminPage() {
     enabled: auth.data?.authenticated === true,
   });
 
+  const serverIp = useQuery({
+    queryKey: ["server-ip-info"],
+    queryFn: getServerIpInfoFn,
+    enabled: auth.data?.authenticated === true,
+    staleTime: 60000,
+  });
+
   const handleRefreshAll = () => {
     qc.invalidateQueries({ queryKey: ["platform-stats"] });
     qc.invalidateQueries({ queryKey: ["platform-activities"] });
     qc.invalidateQueries({ queryKey: ["businesses-admin"] });
     qc.invalidateQueries({ queryKey: ["users-admin"] });
     qc.invalidateQueries({ queryKey: ["admin-popups-list"] });
+    qc.invalidateQueries({ queryKey: ["server-ip-info"] });
     toast.success("Surveillance dashboard refreshed!");
   };
 
@@ -323,6 +338,27 @@ export default function SuperAdminPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {serverIp.data?.publicIp && (
+            <button
+              type="button"
+              onClick={() => {
+                if (serverIp.data?.publicIp && serverIp.data.publicIp !== "Not Detected") {
+                  navigator.clipboard.writeText(serverIp.data.publicIp);
+                  setCopiedIp(true);
+                  toast.success(`Server IP copied: ${serverIp.data.publicIp}`);
+                  setTimeout(() => setCopiedIp(false), 2500);
+                }
+              }}
+              title="Click to copy server public IP"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-mono font-medium hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            >
+              <Globe className="size-3.5 text-emerald-500" />
+              <span className="hidden sm:inline text-muted-foreground text-[10px] uppercase font-sans font-bold">IP:</span>
+              <span>{serverIp.data.publicIp}</span>
+              {copiedIp ? <Check className="size-3 text-emerald-600 ml-0.5" /> : <Copy className="size-3 text-muted-foreground ml-0.5 opacity-70" />}
+            </button>
+          )}
+
           <Button size="sm" variant="outline" onClick={handleRefreshAll} className="h-8 text-xs rounded-xl gap-1.5">
             <RefreshCw className="size-3.5" />
             <span className="hidden sm:inline">Refresh</span>
@@ -862,6 +898,142 @@ export default function SuperAdminPage() {
         {/* ─── TAB 4: MASTER SMS GATEWAY & POPUPS ────────────────────── */}
         {activeTab === "sms_gateway" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Server IP & MiMSMS Whitelist Assistant Banner */}
+            <Card className="lg:col-span-2 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-sky-500/10 border border-emerald-500/30 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      <Server className="size-5" />
+                    </div>
+                    <h3 className="text-base font-bold text-foreground">
+                      Server Public IP & Whitelist Assistant
+                    </h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This is your application server's outbound Public IP address. Whitelist this exact IP in your MiMSMS Developer Portal to authorize live SMS dispatch.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      qc.invalidateQueries({ queryKey: ["server-ip-info"] });
+                      toast.success("Refreshing server IP...");
+                    }}
+                    disabled={serverIp.isFetching}
+                    className="h-9 text-xs rounded-xl gap-1.5"
+                  >
+                    <RefreshCw className={`size-3.5 ${serverIp.isFetching ? "animate-spin" : ""}`} />
+                    <span>Check IP</span>
+                  </Button>
+
+                  <a
+                    href="https://sms.mimsms.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs"
+                  >
+                    <span>MiMSMS Portal</span>
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {/* IP Display Box */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div className="md:col-span-2 p-4 rounded-xl bg-card/90 dark:bg-card/70 border border-emerald-500/20 shadow-inner space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="size-3.5 text-emerald-500" />
+                      Server Outbound Public IP (Add to Whitelist)
+                    </span>
+                    {serverIp.data?.publicIp && serverIp.data.publicIp !== "Not Detected" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live Public IP
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 bg-muted/40 p-2.5 rounded-lg font-mono text-sm sm:text-base font-bold text-foreground">
+                    <span className="truncate selection:bg-emerald-500 selection:text-white">
+                      {serverIp.isLoading ? "Detecting server IP..." : (serverIp.data?.publicIp || "Unavailable")}
+                    </span>
+
+                    {serverIp.data?.publicIp && serverIp.data.publicIp !== "Not Detected" && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          navigator.clipboard.writeText(serverIp.data?.publicIp || "");
+                          setCopiedIp(true);
+                          toast.success(`Server IP copied: ${serverIp.data?.publicIp}`);
+                          setTimeout(() => setCopiedIp(false), 2500);
+                        }}
+                        className="h-8 px-3 text-xs gap-1.5 rounded-lg beveled-button"
+                      >
+                        {copiedIp ? (
+                          <>
+                            <Check className="size-3.5 text-emerald-600" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3.5" />
+                            <span>Copy IP</span>
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="text-[11px] text-muted-foreground leading-relaxed pt-1 space-y-1">
+                    <p className="font-medium text-foreground/90">
+                      📋 Steps to whitelist on MiMSMS:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-0.5 pl-1">
+                      <li>Log in to <strong className="text-foreground">sms.mimsms.com</strong></li>
+                      <li>Navigate to <strong className="text-foreground">Utility → Developer</strong></li>
+                      <li>Paste this IP (<strong className="text-foreground font-mono">{serverIp.data?.publicIp || "..."}</strong>) into the <strong className="text-foreground">IP Whitelist</strong> box and click <strong className="text-foreground">Save</strong></li>
+                      <li>Wait 1–3 minutes for the MiMSMS firewall rules to propagate</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Server Diagnostics Box */}
+                <div className="p-4 rounded-xl bg-card/90 dark:bg-card/70 border border-border/70 space-y-2.5 text-xs">
+                  <span className="font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                    <Wifi className="size-3.5 text-primary" />
+                    Host Info & Interfaces
+                  </span>
+
+                  <div className="space-y-1.5 font-mono text-[11px]">
+                    <div className="flex justify-between border-b border-border/50 pb-1">
+                      <span className="text-muted-foreground">Hostname:</span>
+                      <span className="font-semibold text-foreground truncate max-w-[120px]">{serverIp.data?.hostname || "localhost"}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-border/50 pb-1">
+                      <span className="text-muted-foreground">Platform:</span>
+                      <span className="font-semibold text-foreground">{serverIp.data?.platform || "Node.js"}</span>
+                    </div>
+                    {serverIp.data?.localIps && serverIp.data.localIps.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        <span className="text-muted-foreground block text-[10px]">Local Interfaces:</span>
+                        {serverIp.data.localIps.slice(0, 3).map((lip: string, idx: number) => (
+                          <div key={idx} className="p-1 rounded bg-muted/50 text-[10px] text-foreground truncate">
+                            {lip}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
             {/* Master MiMSMS Gateway Configuration */}
             <Card className="p-5 sm:p-6 rounded-2xl bg-card border-border/80 shadow-xs space-y-4">
               <div className="space-y-1">

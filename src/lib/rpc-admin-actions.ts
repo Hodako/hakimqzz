@@ -927,6 +927,53 @@ export async function updateMasterSmsSettingsFn(input: {
   return { success: true };
 }
 
+export async function getServerIpInfoFn() {
+  await requireSuperAdminSession();
+  const os = await import("os");
+
+  let publicIp = "";
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch("https://api.ipify.org?format=json", { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      publicIp = data.ip || "";
+    }
+  } catch (_) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch("https://icanhazip.com", { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        publicIp = (await res.text()).trim();
+      }
+    } catch (_) {}
+  }
+
+  const localIps: string[] = [];
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === "IPv4" && !net.internal) {
+          localIps.push(`${name}: ${net.address}`);
+        }
+      }
+    }
+  } catch (_) {}
+
+  return {
+    publicIp: publicIp || "Not Detected",
+    localIps,
+    hostname: os.hostname(),
+    platform: `${os.type()} ${os.arch()}`,
+    time: new Date().toISOString(),
+  };
+}
+
 export async function checkMasterSmsBalanceFn() {
   await requireSuperAdminSession();
   const db = await getDb();
