@@ -824,6 +824,7 @@ export async function cancelCourierOrderFn(input: { data: { id: string } }) {
         $set: {
           courier_status: "cancelled",
           returned: true,
+          profit: 0,
           cancelled_at: nowStr,
           updated_at: nowStr,
         }
@@ -1241,6 +1242,130 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
     console.error("Error in deleteReturnFn:", err);
     return { success: false, error: err.message || String(err) };
   }
+}
+
+export async function exchangeProductsFn(input: {
+  data: {
+    returned_product_id: string;
+    returned_qty: number;
+    returned_price: number;
+    new_product_id: string;
+    new_qty: number;
+    new_sell_price: number;
+    party_id?: string | null;
+    customer_name?: string | null;
+    note?: string | null;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const returnedProduct = await db.collection("products").findOne({ _id: data.returned_product_id as any, owner_id: session.ownerId });
+  if (!returnedProduct) throw new Error("Returned product not found");
+
+  const newProduct = await db.collection("products").findOne({ _id: data.new_product_id as any, owner_id: session.ownerId });
+  if (!newProduct) throw new Error("New product chosen for exchange not found");
+
+  const retQty = Number(data.returned_qty) || 1;
+  const newQty = Number(data.new_qty) || 1;
+  const retPrice = Number(data.returned_price) || Number(returnedProduct.sell_price) || 0;
+  const newPrice = Number(data.new_sell_price) || Number(newProduct.sell_price) || 0;
+
+  // Check if new product has sufficient stock
+  const currentNewStock = (newProduct.stock as number) ?? 0;
+  if (currentNewStock < newQty) {
+    throw new Error(`Insufficient stock for ${newProduct.name}. Available: ${currentNewStock}`);
+  }
+
+  // 1. Restock the returned product
+  await db.collection("products").updateOne(
+    { _id: returnedProduct._id },
+    { $inc: { stock: retQty } }
+  );
+
+  // 2. Reduce stock of the newly taken product
+  await db.collection("products").updateOne(
+    { _id: newProduct._id },
+    { $inc: { stock: -newQty } }
+  );
+
+  const totalReturnedValue = retPrice * retQty;
+  const totalNewValue = newPrice * newQty;
+  const cashDifference = totalNewValue - totalReturnedValue;
+
+  const now = new Date().toISOString();
+  const exchangeId = crypto.randomUUID();
+
+  // 3. Record the exchange transaction in "returns" and "sales"
+  const returnRecord = {
+    _id: `ex_ret_${exchangeId}` as any,
+    owner_id: session.ownerId,
+    exchange_id: exchangeId,
+    product_id: returnedProduct._id,
+    product_name: returnedProduct.name,
+    qty: retQty,
+    return_price: retPrice,
+    amount: totalReturnedValue,
+    note: `Exchange for ${newProduct.name}${data.note ? ` (${data.note})` : ""}`,
+    created_at: now,
+  };
+  await db.collection("returns").insertOne(returnRecord as any);
+
+  // Profit calculation for the newly taken item:
+  const newBuyPrice = Number(newProduct.buy_price) || 0;
+  const newProfit = (newPrice - newBuyPrice) * newQty;
+
+  const saleRecord = {
+    _id: `ex_sale_${exchangeId}` as any,
+    owner_id: session.ownerId,
+    exchange_id: exchangeId,
+    product_id: newProduct._id,
+    product_name: `${newProduct.name} [Exchanged with ${returnedProduct.name}]`,
+    qty: newQty,
+    buy_price: newBuyPrice,
+    sell_price: newPrice,
+    profit: newProfit,
+    type: "exchange",
+    party_id: data.party_id || null,
+    paid_amount: totalNewValue,
+    due_amount: 0,
+    note: `Exchange adjustment: Returned ${returnedProduct.name} (Value: ৳${totalReturnedValue}). Cash diff: ৳${cashDifference >= 0 ? `+${cashDifference}` : cashDifference}`,
+    created_at: now,
+  };
+  await db.collection("sales").insertOne(saleRecord as any);
+
+  // 4. Adjust Cashbox
+  if (cashDifference > 0) {
+    // Customer pays the difference -> Inflow
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "deposit",
+      amount: cashDifference,
+      note: `Product Exchange Cash Inflow: Returned ${returnedProduct.name}, Took ${newProduct.name} (INV-${exchangeId.slice(-6).toUpperCase()})`,
+      ref_id: exchangeId,
+      created_at: now,
+    });
+  } else if (cashDifference < 0) {
+    // Shop refunds difference to customer -> Outflow
+    const refundAmt = Math.abs(cashDifference);
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "withdraw",
+      amount: refundAmt,
+      note: `Product Exchange Refund Outflow: Returned ${returnedProduct.name}, Took ${newProduct.name} (INV-${exchangeId.slice(-6).toUpperCase()})`,
+      ref_id: exchangeId,
+      created_at: now,
+    });
+  }
+
+  return {
+    success: true,
+    exchangeId,
+    returnedProduct: returnedProduct.name,
+    newProduct: newProduct.name,
+    cashDifference,
+    totalReturnedValue,
+    totalNewValue,
+  };
 }
 
 // ─── Purchases ───────────────────────────────────────────────────────────────

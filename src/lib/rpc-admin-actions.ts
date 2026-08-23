@@ -551,6 +551,27 @@ export async function updateEmployeePermissionsFn(input: { data: { employeeId: s
   return { success: true };
 }
 
+export async function removeEmployeeFn(input: { data: { employeeId: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  if (session.role !== "owner") throw new Error("Only owner can remove staff members");
+  const db = await getDb();
+  await db.collection("users").updateOne(
+    { _id: data.employeeId as any, owner_id: session.ownerId, role: "employee" },
+    {
+      $set: {
+        role: "user",
+        business_id: null,
+        owner_id: null,
+        status: "inactive",
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      },
+    }
+  );
+  return { success: true };
+}
+
 export async function deleteLicenseFn(input: { data: { licenseKey: string } }) {
   const { data } = input;
   const db = await getDb();

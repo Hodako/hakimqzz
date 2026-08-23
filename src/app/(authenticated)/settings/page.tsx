@@ -14,8 +14,7 @@ import { toast } from "sonner";
 import {
   getBusinessSettingsFn,
   updateBusinessSettingsFn,
-  createEmployeeLicenseFn,
-  deleteLicenseFn,
+  removeEmployeeFn,
 } from "@/lib/rpc-admin";
 import Link from "next/link";
 import {
@@ -25,7 +24,6 @@ import {
   ShieldAlert,
   Database,
   FileSpreadsheet,
-  Key,
   RefreshCw,
   AlertTriangle,
   Printer,
@@ -33,11 +31,15 @@ import {
   Sparkles,
   ExternalLink,
   Plus,
-  Copy,
+  Mail,
+  UserPlus,
   Users,
+  Shield,
+  Clock,
+  CheckCircle,
 } from "lucide-react";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
-import { DEFAULT_EMPLOYEE_PERMISSIONS } from "@/lib/permissions";
+import { DEFAULT_EMPLOYEE_PERMISSIONS, type PermissionSet } from "@/lib/permissions";
 import {
   uploadImageFn,
   verifyOwnerPasswordFn,
@@ -53,6 +55,9 @@ import {
   changeMyPasswordFn,
   connectGoogleSheetsOAuthFn,
   disconnectGoogleSheetsFn,
+  sendEmployeeInvitationFn,
+  listEmployeeInvitationsFn,
+  cancelEmployeeInvitationFn,
 } from "@/lib/rpc";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
@@ -71,7 +76,7 @@ import {
 
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
-type SettingsTab = "profile" | "printing" | "sheets" | "licenses" | "appearance" | "security";
+type SettingsTab = "profile" | "printing" | "sheets" | "staff" | "appearance" | "security";
 
 export default function SettingsPage() {
   const { lang, t } = useT();
@@ -79,9 +84,18 @@ export default function SettingsPage() {
   const { theme, setTheme, accentColor, setAccentColor, bgStyle, setBgStyle } = useTheme();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
+  
   const settings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
+  const invitations = useQuery({ queryKey: ["employee-invitations"], queryFn: listEmployeeInvitationsFn });
+
   const [busy, setBusy] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
+
+  // Invite Employee Form State
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteDesignation, setInviteDesignation] = useState("Sales Staff");
+  const [inviteSending, setInviteSending] = useState(false);
 
   // KPI Configuration state
   const [kpiConfig, setKpiConfig] = useState({
@@ -485,25 +499,59 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleGenerateLicense() {
+  // Handle Sending Staff Invitation by Email
+  async function handleSendStaffInvitation(e: React.FormEvent) {
+    e.preventDefault();
     if (!isOwner) return;
-    setBusy(true);
+    if (!inviteEmail.trim()) {
+      toast.error("Please enter employee email");
+      return;
+    }
+
+    setInviteSending(true);
     try {
-      const res = await createEmployeeLicenseFn({
+      await sendEmployeeInvitationFn({
         data: {
+          email: inviteEmail.trim(),
+          fullName: inviteName.trim() || undefined,
+          designation: inviteDesignation,
           permissions: DEFAULT_EMPLOYEE_PERMISSIONS,
         },
       });
       toast.success(
         lang === "bn"
-          ? `নতুন কর্মচারী লাইসেন্স কি তৈরি হয়েছে: ${res.key}`
-          : `New employee license key generated: ${res.key}`
+          ? `${inviteEmail} ঠিকানায় আমন্ত্রণ সফলভাবে পাঠানো হয়েছে!`
+          : `Staff invitation successfully sent to ${inviteEmail}!`
       );
+      setInviteEmail("");
+      setInviteName("");
+      qc.invalidateQueries({ queryKey: ["employee-invitations"] });
       qc.invalidateQueries({ queryKey: ["business-settings"] });
     } catch (err: any) {
-      toast.error(err?.message || "Failed to generate employee license key");
+      toast.error(err?.message || "Failed to send employee invitation");
     } finally {
-      setBusy(false);
+      setInviteSending(false);
+    }
+  }
+
+  async function handleCancelInvitation(invitationId: string) {
+    try {
+      await cancelEmployeeInvitationFn({ data: { invitationId } });
+      toast.success("Invitation cancelled");
+      qc.invalidateQueries({ queryKey: ["employee-invitations"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to cancel invitation");
+    }
+  }
+
+  async function handleRemoveEmployee(employeeId: string) {
+    if (!confirm("Are you sure you want to remove this employee from your shop?")) return;
+    try {
+      await removeEmployeeFn({ data: { employeeId } });
+      toast.success("Staff access removed");
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove employee");
     }
   }
 
@@ -587,11 +635,14 @@ export default function SettingsPage() {
     return <SpeedLoader fullScreen={false} />;
   }
 
+  const pendingInvites = (invitations.data || []).filter((inv: any) => inv.status === "pending");
+  const activeEmployees = settings.data?.employees || [];
+
   const navTabs: { id: SettingsTab; label: string; icon: any; count?: number }[] = [
     { id: "profile", label: lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile", icon: Store },
     { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Printing", icon: Printer },
     { id: "sheets", label: lang === "bn" ? "গুগল শিট ও ক্লাউড" : "Google Sheets & Cloud", icon: FileSpreadsheet },
-    { id: "licenses", label: lang === "bn" ? "কর্মচারী লাইসেন্স কি" : "Staff License Keys", icon: Key, count: settings.data?.employeeLicenses?.length },
+    { id: "staff", label: lang === "bn" ? "কর্মচারী ও আমন্ত্রণ" : "Staff & Invitations", icon: Users, count: activeEmployees.length + pendingInvites.length },
     { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & Themes", icon: Sparkles },
     { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
   ];
@@ -607,8 +658,8 @@ export default function SettingsPage() {
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             {lang === "bn"
-              ? "দোকানের প্রোফাইল, প্রিন্টার ফরম্যাট, গুগল শিট ব্যাকআপ, কর্মচারী লাইসেন্স এবং নিরাপত্তা পরিচালনা করুন"
-              : "Manage shop branding, thermal printing, Google Sheets sync, staff licenses, and database resets"}
+              ? "দোকানের প্রোফাইল, প্রিন্টার ফরম্যাট, গুগল শিট ব্যাকআপ, কর্মচারী আমন্ত্রণ এবং নিরাপত্তা পরিচালনা করুন"
+              : "Manage shop branding, thermal printing, Google Sheets sync, employee invitations, and database resets"}
           </p>
         </div>
       </div>
@@ -1086,141 +1137,195 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ── TAB 4: EMPLOYEE LICENSES & KEYS ──────────────────────────────── */}
-          {settingsTab === "licenses" && (
+          {/* ── TAB 4: EMPLOYEE INVITATIONS & STAFF ACCESS ──────────────────── */}
+          {settingsTab === "staff" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                {/* Send Employee Invitation Form */}
+                <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
                   <div className="flex items-center justify-between border-b border-border/60 pb-3">
                     <div className="flex items-center gap-2.5 text-primary">
                       <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
-                        <Key className="size-5" />
+                        <UserPlus className="size-5" />
                       </div>
                       <div>
                         <h2 className="text-base font-bold text-foreground">
-                          {lang === "bn" ? "কর্মচারী লাইসেন্স কি ব্যবস্থাপনা" : "Employee License Keys"}
+                          {lang === "bn" ? "নতুন কর্মচারী আমন্ত্রণ" : "Invite Employee by Email"}
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                          {lang === "bn" ? "কর্মচারীদের ব্যবহারের জন্য অ্যাক্টিভেশন লাইসেন্স কি তৈরি করুন" : "Generate and assign license keys for staff accounts"}
+                          {lang === "bn"
+                            ? "কর্মচারীর ইমেইল দিয়ে আমন্ত্রণ পাঠান। তিনি লগইন করলেই একাউন্টে নোটিফিকেশন পাবেন।"
+                            : "Enter staff email. When they log in or create an account, they get a joining popup."}
                         </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSendStaffInvitation} className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Employee Email Address *</Label>
+                      <Input
+                        type="email"
+                        required
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="employee@gmail.com"
+                        className="h-10 rounded-xl text-xs"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Full Name (Optional)</Label>
+                        <Input
+                          value={inviteName}
+                          onChange={e => setInviteName(e.target.value)}
+                          placeholder="e.g. Shakil Ahmed"
+                          className="h-10 rounded-xl text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Role / Designation</Label>
+                        <select
+                          value={inviteDesignation}
+                          onChange={e => setInviteDesignation(e.target.value)}
+                          className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs"
+                        >
+                          <option value="Sales Staff">Sales Staff</option>
+                          <option value="Cashier">Cashier</option>
+                          <option value="Store Manager">Store Manager</option>
+                          <option value="Inventory Officer">Inventory Officer</option>
+                        </select>
                       </div>
                     </div>
 
                     <Button
-                      type="button"
-                      disabled={busy}
-                      onClick={handleGenerateLicense}
-                      className="rounded-xl h-9 px-4 bg-primary text-primary-foreground font-bold text-xs gap-1.5 shadow-sm"
+                      type="submit"
+                      disabled={inviteSending || !inviteEmail.trim()}
+                      className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs gap-2 shadow-sm mt-2"
                     >
-                      <Plus className="size-3.5" />
-                      <span>{lang === "bn" ? "নতুন কি তৈরি করুন" : "Generate License Key"}</span>
+                      {inviteSending ? (
+                        <>
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          <span>Sending Invitation...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="size-3.5" />
+                          <span>{lang === "bn" ? "আমন্ত্রণ পাঠান" : "Send Staff Invitation"}</span>
+                        </>
+                      )}
                     </Button>
+                  </form>
+                </Card>
+
+                {/* Pending Email Invitations */}
+                <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-amber-500" />
+                      <h3 className="font-bold text-sm text-foreground">
+                        {lang === "bn" ? "অপেক্ষারত আমন্ত্রণসমূহ" : "Pending Email Invitations"}
+                      </h3>
+                    </div>
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs">
+                      {pendingInvites.length} Pending
+                    </Badge>
                   </div>
 
-                  {/* License Keys List */}
-                  <div className="space-y-3">
-                    {settings.data?.employeeLicenses && settings.data.employeeLicenses.length > 0 ? (
-                      <div className="space-y-2">
-                        {settings.data.employeeLicenses.map((lic: any) => (
-                          <div
-                            key={lic.id}
-                            className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 border border-border/80"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-xs sm:text-sm text-foreground bg-background px-2.5 py-1 rounded-lg border border-border">
-                                  {lic.id}
-                                </span>
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] font-semibold ${
-                                    lic.used
-                                      ? "bg-muted text-muted-foreground border-muted-foreground/30"
-                                      : "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
-                                  }`}
-                                >
-                                  {lic.used ? "Used" : "Available"}
-                                </Badge>
-                              </div>
-                              {lic.created_at && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  Created: {new Date(lic.created_at).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(lic.id);
-                                  toast.success("License key copied to clipboard!");
-                                }}
-                                className="h-8 px-2.5 rounded-lg text-xs gap-1"
-                              >
-                                <Copy className="size-3" />
-                                <span>Copy</span>
-                              </Button>
-                              {!lic.used && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    try {
-                                      await deleteLicenseFn({ data: { licenseKey: lic.id } });
-                                      toast.success("License key deleted");
-                                      qc.invalidateQueries({ queryKey: ["business-settings"] });
-                                    } catch (e: any) {
-                                      toast.error(e.message || "Failed to delete license");
-                                    }
-                                  }}
-                                  className="h-8 px-2 text-destructive hover:bg-destructive/10 rounded-lg"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              )}
+                  {pendingInvites.length > 0 ? (
+                    <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+                      {pendingInvites.map((inv: any) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80 text-xs"
+                        >
+                          <div className="space-y-0.5 min-w-0 pr-2">
+                            <p className="font-bold text-foreground truncate">{inv.employee_email}</p>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                              <span>{inv.designation || "Staff"}</span>
+                              {inv.created_at && <span>• {new Date(inv.created_at).toLocaleDateString()}</span>}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 space-y-2 border border-dashed border-border/80 rounded-2xl">
-                        <Key className="size-8 text-muted-foreground mx-auto opacity-50" />
-                        <p className="text-xs text-muted-foreground">No license keys generated yet.</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleGenerateLicense}
-                          disabled={busy}
-                          className="rounded-xl text-xs h-8"
-                        >
-                          Generate First License Key
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </Card>
 
-                {/* Staff Invitation Quick Link */}
-                <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                    <Users className="size-4 text-primary" />
-                    <span>Email Invitations & Active Staff</span>
-                  </h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    You can also invite employees directly by email. When they register or log in, they will receive an automatic popup invitation to join your company.
-                  </p>
-                  <Link href="/more">
-                    <Button type="button" className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-xs gap-2">
-                      <span>Manage Staff & Invitations in More</span>
-                      <ExternalLink className="size-3.5" />
-                    </Button>
-                  </Link>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelInvitation(inv.id)}
+                            className="h-8 px-2.5 rounded-xl text-destructive hover:bg-destructive/10 text-xs font-semibold shrink-0"
+                          >
+                            Revoke
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 space-y-1.5 border border-dashed border-border/80 rounded-2xl">
+                      <Mail className="size-6 text-muted-foreground mx-auto opacity-50" />
+                      <p className="text-xs text-muted-foreground">No pending invitations.</p>
+                    </div>
+                  )}
                 </Card>
               </div>
+
+              {/* Active Staff Members Table */}
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-primary">
+                    <Users className="size-5" />
+                    <div>
+                      <h3 className="font-bold text-sm text-foreground">
+                        {lang === "bn" ? "সক্রিয় কর্মচারীবৃন্দ" : "Active Staff Members"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">Employees with access to this shop</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs">
+                    {activeEmployees.length} Active Staff
+                  </Badge>
+                </div>
+
+                {activeEmployees.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {activeEmployees.map((emp: any) => (
+                      <div
+                        key={emp.id}
+                        className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-foreground truncate">
+                              {emp.full_name || emp.email.split("@")[0]}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 px-1.5 py-0 h-4">
+                              Active
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate">{emp.email}</p>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveEmployee(emp.id)}
+                          className="h-8 px-2 text-destructive hover:bg-destructive/10 rounded-xl shrink-0"
+                          title="Remove Staff Access"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 space-y-1.5 border border-dashed border-border/80 rounded-2xl">
+                    <Users className="size-7 text-muted-foreground mx-auto opacity-50" />
+                    <p className="text-xs text-muted-foreground">No active employees joined yet.</p>
+                    <p className="text-[11px] text-muted-foreground">Send an invitation above to add your team members.</p>
+                  </div>
+                )}
+              </Card>
             </div>
           )}
 
@@ -1378,7 +1483,7 @@ export default function SettingsPage() {
               {/* Change Password */}
               <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
                 <div className="flex items-center gap-2 text-primary border-b border-border/60 pb-3">
-                  <Key className="size-5" />
+                  <Shield className="size-5" />
                   <h2 className="font-bold text-base text-foreground">Change Account Password</h2>
                 </div>
                 <form onSubmit={handleUpdateMyPassword} className="space-y-3.5">

@@ -158,6 +158,7 @@ export const cancelCourierOrderFn = makeWriteAction("cancelCourierOrderFn");
 
 export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
 export const createReturnFn = makeWriteAction("createReturnFn");
+export const exchangeProductsFn = makeWriteAction("exchangeProductsFn");
 export const createDirectProductReturnFn = makeWriteAction("createDirectProductReturnFn");
 export const createPartyReturnFn = makeWriteAction("createPartyReturnFn");
 export const deleteReturnFn = makeWriteAction("deleteReturnFn");
@@ -286,10 +287,12 @@ export const createShopEmployeeFn = makeWriteAction("createShopEmployeeFn");
 export const updateShopEmployeeFn = makeWriteAction("updateShopEmployeeFn");
 export const deleteShopEmployeeFn = makeWriteAction("deleteShopEmployeeFn");
 export const inviteEmployeeByEmailFn = makeWriteAction("inviteEmployeeByEmailFn");
+export const sendEmployeeInvitationFn = makeWriteAction("sendEmployeeInvitationFn");
 export const listEmployeeInvitationsFn = makeReadAction("listEmployeeInvitationsFn");
 export const cancelEmployeeInvitationFn = makeWriteAction("cancelEmployeeInvitationFn");
 export const getMyPendingEmployeeInvitationsFn = makeReadAction("getMyPendingEmployeeInvitationsFn");
 export const respondToEmployeeInvitationFn = makeWriteAction("respondToEmployeeInvitationFn");
+export const removeEmployeeFn = makeWriteAction("removeEmployeeFn");
 
 // ── Google Sheets OAuth Integration ──────────────────────────────────────
 export const connectGoogleSheetsOAuthFn = makeWriteAction("connectGoogleSheetsOAuthFn");

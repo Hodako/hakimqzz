@@ -7,7 +7,7 @@ import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { FAB } from "@/components/ui/fab";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -21,7 +21,7 @@ import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { deleteProductFn, archiveProductFn, createDirectProductReturnFn, createSaleFn } from "@/lib/rpc";
+import { deleteProductFn, archiveProductFn, createDirectProductReturnFn, createSaleFn, exchangeProductsFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -62,6 +62,8 @@ export default function ProductsPage() {
   const [showCartPanel, setShowCartPanel] = useState(false);
   const [returnProduct, setReturnProduct] = useState<Product | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [exchangeProduct, setExchangeProduct] = useState<Product | null>(null);
+  const [exchangeOpen, setExchangeOpen] = useState(false);
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
@@ -384,6 +386,19 @@ export default function ProductsPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-[10px] sm:text-xs text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 gap-1 font-semibold"
+            title={lang === "bn" ? "কাস্টমারের সাথে পণ্য পরিবর্তন" : "Exchange Product"}
+            onClick={() => {
+              setExchangeProduct(null);
+              setExchangeOpen(true);
+            }}
+          >
+            <ArrowLeftRight className="size-3.5 text-emerald-600" />
+            <span>{lang === "bn" ? "এক্সচেঞ্জ" : "Exchange"}</span>
+          </Button>
           <Button size="sm" variant="outline" className="h-8 text-[10px] sm:text-xs" onClick={() => setBuyOpen(true)}>{t("buy")}</Button>
         </div>
       </div>
@@ -670,6 +685,10 @@ export default function ProductsPage() {
                 setReturnProduct(p);
                 setReturnOpen(true);
               }}
+              onExchange={() => {
+                setExchangeProduct(p);
+                setExchangeOpen(true);
+              }}
             />
           );
         })}
@@ -707,6 +726,19 @@ export default function ProductsPage() {
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ["products"] });
           qc.invalidateQueries({ queryKey: ["sales"] });
+        }}
+      />
+      <ExchangeProductDialog
+        open={exchangeOpen}
+        onOpenChange={setExchangeOpen}
+        products={productsData?.filter(p => !p.archived) || []}
+        preselectedProduct={exchangeProduct}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ["products"] });
+          qc.invalidateQueries({ queryKey: ["sales"] });
+          qc.invalidateQueries({ queryKey: ["returns"] });
+          qc.invalidateQueries({ queryKey: ["cashbox"] });
+          qc.invalidateQueries({ queryKey: ["cashbox-balance"] });
         }}
       />
 
@@ -760,6 +792,7 @@ function ProductCard({
   onRestore,
   onDelete,
   onLongPress,
+  onExchange,
   t,
   isMobile,
   isPinned,
@@ -774,6 +807,7 @@ function ProductCard({
   onRestore: () => void;
   onDelete: () => void;
   onLongPress: () => void;
+  onExchange?: () => void;
   t: (k: any) => string;
   isMobile: boolean;
   isPinned: boolean;
@@ -822,6 +856,9 @@ function ProductCard({
             </button>
             <button onClick={() => { setContextMenuOpen(false); onDirectSell(); }} disabled={p.stock <= 0} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors disabled:opacity-50">
               💰 {t("sell")} (Direct)
+            </button>
+            <button onClick={() => { setContextMenuOpen(false); onExchange && onExchange(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 flex items-center gap-3 font-medium text-emerald-600 dark:text-emerald-400 transition-colors">
+              🔄 Exchange Item / পণ্য পরিবর্তন
             </button>
             <button onClick={() => { setContextMenuOpen(false); onEdit(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
               ✏️ {t("edit")}
@@ -1093,6 +1130,272 @@ function ReturnDialog({
             </Button>
             <Button type="submit" disabled={busy} className="bg-destructive hover:bg-destructive/90 text-white font-medium">
               {busy ? "..." : "Confirm Return"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ExchangeProductDialog({
+  open,
+  onOpenChange,
+  products,
+  preselectedProduct,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  products: Product[];
+  preselectedProduct: Product | null;
+  onSuccess: () => void;
+}) {
+  const { lang, t } = useT();
+  const [returnedProductId, setReturnedProductId] = useState("");
+  const [returnedQty, setReturnedQty] = useState("1");
+  const [returnedPrice, setReturnedPrice] = useState("");
+
+  const [newProductId, setNewProductId] = useState("");
+  const [newQty, setNewQty] = useState("1");
+  const [newSellPrice, setNewSellPrice] = useState("");
+
+  const [customerName, setCustomerName] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (preselectedProduct) {
+      setReturnedProductId(preselectedProduct.id);
+      setReturnedPrice(String(preselectedProduct.sell_price || "0"));
+    } else if (products.length > 0 && !returnedProductId) {
+      setReturnedProductId(products[0].id);
+      setReturnedPrice(String(products[0].sell_price || "0"));
+    }
+  }, [preselectedProduct, products, open]);
+
+  // When returned product changes, auto-set return price
+  const handleReturnedProductChange = (prodId: string) => {
+    setReturnedProductId(prodId);
+    const prod = products.find(p => p.id === prodId);
+    if (prod) {
+      setReturnedPrice(String(prod.sell_price || "0"));
+    }
+  };
+
+  // When new product changes, auto-set sell price
+  const handleNewProductChange = (prodId: string) => {
+    setNewProductId(prodId);
+    const prod = products.find(p => p.id === prodId);
+    if (prod) {
+      setNewSellPrice(String(prod.sell_price || "0"));
+    }
+  };
+
+  const returnedTotal = (Number(returnedQty) || 0) * (Number(returnedPrice) || 0);
+  const newTotal = (Number(newQty) || 0) * (Number(newSellPrice) || 0);
+  const cashDifference = newTotal - returnedTotal;
+
+  const chosenNewProduct = products.find(p => p.id === newProductId);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!returnedProductId || !newProductId) {
+      toast.error("Please select both returned and replacement products");
+      return;
+    }
+    setBusy(true);
+    try {
+      await exchangeProductsFn({
+        data: {
+          returned_product_id: returnedProductId,
+          returned_qty: Number(returnedQty) || 1,
+          returned_price: Number(returnedPrice) || 0,
+          new_product_id: newProductId,
+          new_qty: Number(newQty) || 1,
+          new_sell_price: Number(newSellPrice) || 0,
+          customer_name: customerName.trim() || null,
+          note: note.trim() || null,
+        },
+      });
+      toast.success(
+        lang === "bn"
+          ? "পণ্য পরিবর্তন সফলভাবে সম্পন্ন হয়েছে!"
+          : "Product exchanged successfully!"
+      );
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: any) {
+      toast.error(err.message || String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-3xl p-5 sm:p-6 bg-card border-border shadow-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+              <ArrowLeftRight className="size-4" />
+            </div>
+            <span>{lang === "bn" ? "পণ্য এক্সচেঞ্জ / পরিবর্তন" : "Exchange Product with Customer"}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {/* Section 1: Customer Returned Product */}
+          <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                <span>🔄 1. কাস্টমার যা ফেরত দিচ্ছে (Returned Item)</span>
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Select Returned Product *</Label>
+              <select
+                required
+                value={returnedProductId}
+                onChange={e => handleReturnedProductChange(e.target.value)}
+                className="w-full h-9 rounded-xl border border-input bg-input px-3 text-xs"
+              >
+                <option value="">-- Choose Product --</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} (Stock: {p.stock}, Sell: ৳{p.sell_price})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Return Qty *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  required
+                  value={returnedQty}
+                  onChange={e => setReturnedQty(e.target.value)}
+                  className="h-9 rounded-xl text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Return Unit Price (৳) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={returnedPrice}
+                  onChange={e => setReturnedPrice(e.target.value)}
+                  className="h-9 rounded-xl text-xs font-num"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Replacement Product Taken by Customer */}
+          <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span>✨ 2. কাস্টমার নতুন যা নিচ্ছে (Replacement Item)</span>
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">Select New Replacement Item *</Label>
+              <select
+                required
+                value={newProductId}
+                onChange={e => handleNewProductChange(e.target.value)}
+                className="w-full h-9 rounded-xl border border-input bg-input px-3 text-xs"
+              >
+                <option value="">-- Choose Replacement Product --</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                    {p.name} (Available: {p.stock}, Sell: ৳{p.sell_price}) {p.stock <= 0 ? "[Out of stock]" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">New Qty *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max={chosenNewProduct ? chosenNewProduct.stock : undefined}
+                  required
+                  value={newQty}
+                  onChange={e => setNewQty(e.target.value)}
+                  className="h-9 rounded-xl text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">New Unit Price (৳) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={newSellPrice}
+                  onChange={e => setNewSellPrice(e.target.value)}
+                  className="h-9 rounded-xl text-xs font-num"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Live Financial Difference & Cashbox Impact */}
+          <div className="p-3.5 rounded-2xl bg-card border border-border space-y-2 text-xs">
+            <div className="flex justify-between text-muted-foreground">
+              <span>ফেরত মূল্যের মোট (Returned Value):</span>
+              <span className="font-bold text-foreground font-num">৳{returnedTotal}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>নতুন পণ্যের মোট (New Value):</span>
+              <span className="font-bold text-foreground font-num">৳{newTotal}</span>
+            </div>
+            <div className="pt-2 border-t border-border flex items-center justify-between font-bold">
+              <span>ক্যাশ সমন্বয় / Cash Adjustment:</span>
+              {cashDifference > 0 ? (
+                <span className="text-emerald-600 dark:text-emerald-400 font-num">
+                  + ৳{cashDifference} (কাস্টমার ক্যাশ দেবে / Inflow)
+                </span>
+              ) : cashDifference < 0 ? (
+                <span className="text-destructive font-num">
+                  - ৳{Math.abs(cashDifference)} (কাস্টমারকে ফেরত দিন / Outflow)
+                </span>
+              ) : (
+                <span className="text-muted-foreground font-num">৳0 (সমান মূল্য / Even)</span>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Customer Name or Note (Optional)</Label>
+            <Input
+              placeholder="e.g. Size exchange for Md Rahim / Phone"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              className="h-9 rounded-xl text-xs"
+            />
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={busy || !returnedProductId || !newProductId}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm"
+            >
+              {busy ? "Processing..." : "Confirm Product Exchange"}
             </Button>
           </DialogFooter>
         </form>

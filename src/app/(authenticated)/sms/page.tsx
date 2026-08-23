@@ -213,10 +213,42 @@ export default function SmsPage() {
   const [suppPersonalized, setSuppPersonalized] = useState(true);
   const [suppSending, setSuppSending] = useState(false);
 
-  // WhatsApp Integration State
+  // Master Channel & WhatsApp Integration State
+  const [masterChannel, setMasterChannel] = useState<"sms" | "whatsapp">("sms");
   const [directChannel, setDirectChannel] = useState<"sms" | "whatsapp">("sms");
   const [custChannel, setCustChannel] = useState<"sms" | "whatsapp">("sms");
   const [suppChannel, setSuppChannel] = useState<"sms" | "whatsapp">("sms");
+
+  // Client-Side WhatsApp Campaign Queue state (Bypasses server IP bans)
+  const [waQueue, setWaQueue] = useState<Array<{ name: string; phone: string; message: string; due?: number }>>([]);
+  const [waQueueIndex, setWaQueueIndex] = useState(0);
+  const [waQueueOpen, setWaQueueOpen] = useState(false);
+
+  const handleToggleMasterChannel = (ch: "sms" | "whatsapp") => {
+    setMasterChannel(ch);
+    setDirectChannel(ch);
+    setCustChannel(ch);
+    setSuppChannel(ch);
+    toast.info(
+      ch === "whatsapp"
+        ? (lang === "bn" ? "হোয়াটসঅ্যাপ মোড সক্রিয় (১০০% ফ্রি বার্তা)" : "Switched to WhatsApp Mode (100% Free)")
+        : (lang === "bn" ? "এসএমএস গেটওয়ে মোড সক্রিয়" : "Switched to SMS Gateway Mode")
+    );
+  };
+
+  const openClientWhatsApp = (rawPhone: string, messageText: string) => {
+    const clean = sanitizeBdPhoneNumber(rawPhone);
+    if (!clean) {
+      toast.error("Invalid phone number: " + rawPhone);
+      return false;
+    }
+    const isMobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const url = isMobile
+      ? `https://wa.me/${clean}?text=${encodeURIComponent(messageText)}`
+      : `https://web.whatsapp.com/send?phone=${clean}&text=${encodeURIComponent(messageText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return true;
+  };
 
   const [waDirectRecipient, setWaDirectRecipient] = useState("");
   const [waDirectMessage, setWaDirectMessage] = useState("");
@@ -541,6 +573,70 @@ export default function SmsPage() {
     }
   };
 
+  // Launch Client-Side Safe WhatsApp Queue for Customers
+  const handleStartCustomerWhatsAppClient = () => {
+    if (!custMessage.trim()) {
+      toast.error(lang === "bn" ? "দয়া করে বার্তা লিখুন" : "Please enter message text");
+      return;
+    }
+    const targetList = custTargetMode === "all" ? validCustomers : custTargetMode === "dues" ? customersWithDues : validCustomers.filter(c => selectedCustIds.includes(c.id));
+    if (!targetList.length) {
+      toast.error(lang === "bn" ? "কোন কাস্টমার পাওয়া যায়নি" : "No valid customers available");
+      return;
+    }
+
+    const queueItems = targetList.map(c => {
+      let text = custMessage;
+      if (custPersonalized) {
+        text = text
+          .replace(/{customer_name}|{name}/gi, c.name || "Customer")
+          .replace(/{phone}/gi, c.phone || "")
+          .replace(/{shop_name}/gi, smsSettings?.senderName || "Dream Fashion");
+      }
+      return {
+        name: c.name,
+        phone: String(c.phone || ""),
+        message: text,
+      };
+    });
+
+    setWaQueue(queueItems);
+    setWaQueueIndex(0);
+    setWaQueueOpen(true);
+  };
+
+  // Launch Client-Side Safe WhatsApp Queue for Suppliers
+  const handleStartSupplierWhatsAppClient = () => {
+    if (!suppMessage.trim()) {
+      toast.error(lang === "bn" ? "দয়া করে বার্তা লিখুন" : "Please enter message text");
+      return;
+    }
+    const targetList = suppTargetMode === "all" ? validParties : validParties.filter(p => selectedSuppIds.includes(p.id));
+    if (!targetList.length) {
+      toast.error(lang === "bn" ? "কোন সাপ্লায়ার পাওয়া যায়নি" : "No valid suppliers available");
+      return;
+    }
+
+    const queueItems = targetList.map(p => {
+      let text = suppMessage;
+      if (suppPersonalized) {
+        text = text
+          .replace(/{supplier_name}|{name}/gi, p.name || "Supplier")
+          .replace(/{phone}/gi, p.phone || "")
+          .replace(/{shop_name}/gi, smsSettings?.senderName || "Dream Fashion");
+      }
+      return {
+        name: p.name,
+        phone: String(p.phone || ""),
+        message: text,
+      };
+    });
+
+    setWaQueue(queueItems);
+    setWaQueueIndex(0);
+    setWaQueueOpen(true);
+  };
+
   // Action: Send Supplier Campaign
   const handleSendSupplierCampaign = async () => {
     if (!suppMessage.trim()) {
@@ -674,16 +770,23 @@ export default function SmsPage() {
   };
 
   // Filtered Logs
+  const [logChannelFilter, setLogChannelFilter] = useState<"all" | "sms" | "whatsapp">("all");
   const filteredLogs = useMemo(() => {
-    if (!logSearch.trim()) return smsLogs;
+    let list = smsLogs;
+    if (logChannelFilter === "sms") {
+      list = list.filter((l: any) => !l.channel || l.channel === "sms");
+    } else if (logChannelFilter === "whatsapp") {
+      list = list.filter((l: any) => l.channel === "whatsapp");
+    }
+    if (!logSearch.trim()) return list;
     const q = logSearch.toLowerCase();
-    return smsLogs.filter((l: any) =>
+    return list.filter((l: any) =>
       (l.message && l.message.toLowerCase().includes(q)) ||
       (l.recipients_summary && l.recipients_summary.toLowerCase().includes(q)) ||
       (l.campaign_title && l.campaign_title.toLowerCase().includes(q)) ||
       (l.status && l.status.toLowerCase().includes(q))
     );
-  }, [smsLogs, logSearch]);
+  }, [smsLogs, logSearch, logChannelFilter]);
 
   const hasConfig = Boolean(smsSettings?.apiKey && smsSettings?.userName && smsSettings?.senderName);
 
@@ -753,7 +856,7 @@ export default function SmsPage() {
         </div>
       </div>
 
-      {/* ─── WhatsApp Web Quick Switcher & Pairing Banner (PC & Mobile) ───────── */}
+      {/* ─── Global Channel Master Switcher (SMS vs WhatsApp) ────────────── */}
       <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-background border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="size-10 sm:size-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0">
@@ -762,76 +865,69 @@ export default function SmsPage() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5">
-                {lang === "bn" ? "হোয়াটসঅ্যাপ ওয়েব মেসেজিং" : "WhatsApp Web Messaging Engine"}
+                {lang === "bn" ? "মেসেজিং চ্যানেল মোড নির্বাচন" : "Messaging Channel Master Switch"}
               </h4>
               <Badge
                 variant="outline"
                 className={`text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  waStatus?.status === "connected"
+                  masterChannel === "whatsapp"
                     ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
-                    : waStatus?.status === "qr_ready"
-                    ? "bg-amber-500/15 text-amber-600 border-amber-500/30 animate-pulse"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-blue-500/15 text-blue-600 border-blue-500/30"
                 }`}
               >
-                {waStatus?.status === "connected"
-                  ? `🟢 ${lang === "bn" ? "সংযুক্ত:" : "Connected:"} +${waStatus.phone || ""}`
-                  : waStatus?.status === "qr_ready"
-                  ? `🟡 ${lang === "bn" ? "কিউআর স্ক্যান করুন" : "QR Ready — Scan Now"}`
-                  : `⚪ ${lang === "bn" ? "যুক্ত নেই" : "Disconnected"}`}
+                {masterChannel === "whatsapp" ? "🟢 WhatsApp Mode (100% Free)" : "✉️ SMS Gateway Mode"}
               </Badge>
             </div>
             <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
-              {waStatus?.status === "connected"
+              {masterChannel === "whatsapp"
                 ? (lang === "bn"
-                    ? "হোয়াটসঅ্যাপ সংযুক্ত আছে। কোনো এসএমএস ক্রেডিট খরচ ছাড়াই ফ্রি মেসেজ পাঠান।"
-                    : "WhatsApp connected! Send unlimited free messages to customer & supplier numbers.")
+                    ? "হোয়াটসঅ্যাপ মোড সক্রিয় — কাস্টমার ও সাপ্লায়ারদের ফ্রিতে আনলিমিটেড মেসেজ পাঠান。"
+                    : "WhatsApp mode active — send direct and campaign messages 100% free with zero ban risk.")
                 : (lang === "bn"
-                    ? "হোয়াটসঅ্যাপের মাধ্যমে ফ্রিতে মেসেজ পাঠাতে কিউআর কোড স্ক্যান করে মোবাইল লিংক করুন।"
-                    : "Scan the QR code with WhatsApp on your phone to send 100% free messages.")}
+                    ? "এসএমএস গেটওয়ে সক্রিয় — টেলিকম নেটওয়ার্কের মাধ্যমে যেকোনো বাটন/স্মার্টফোনে অফিসিয়াল এসএমএস পাঠান。"
+                    : "SMS Gateway active — send standard telecom SMS with verified sender ID.")}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-          {waStatus?.status === "connected" ? (
-            <>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setDirectChannel("whatsapp");
-                  setActiveTab("direct");
-                }}
-                className="h-8 sm:h-9 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Send className="size-3.5" />
-                <span>{lang === "bn" ? "বার্তা লিখুন" : "Send WhatsApp"}</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setActiveTab("whatsapp")}
-                className="h-8 sm:h-9 px-3 rounded-xl border-border text-xs gap-1"
-              >
-                <QrCode className="size-3.5" />
-                <span>{lang === "bn" ? "ডিভাইস" : "Device"}</span>
-              </Button>
-            </>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() => {
-                setActiveTab("whatsapp");
-                if (waStatus?.status !== "qr_ready") {
-                  handleStartWhatsApp();
-                }
-              }}
-              className="h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+          <div className="p-1 bg-muted/80 rounded-xl border border-border/80 flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              onClick={() => handleToggleMasterChannel("sms")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                masterChannel === "sms"
+                  ? "bg-card text-blue-600 dark:text-blue-400 shadow-sm border border-blue-500/30"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <QrCode className="size-3.5" />
-              <span>{lang === "bn" ? "কিউআর স্ক্যান করুন" : "Scan QR & Connect"}</span>
-            </Button>
-          )}
+              <Send className="size-3.5" />
+              <span>SMS Gateway</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleMasterChannel("whatsapp")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                masterChannel === "whatsapp"
+                  ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-500/30 font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MessageCircle className="size-3.5 text-emerald-500" />
+              <span>WhatsApp (Free)</span>
+            </button>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setActiveTab("whatsapp")}
+            className="h-8 sm:h-9 px-3 rounded-xl border-border text-xs gap-1"
+            title="Scan QR & Device Link"
+          >
+            <QrCode className="size-3.5" />
+            <span className="hidden sm:inline">{lang === "bn" ? "ডিভাইস" : "Pair Device"}</span>
+          </Button>
         </div>
       </div>
 
@@ -1087,23 +1183,72 @@ export default function SmsPage() {
                     </Select>
                   </div>
 
-                  <Button
-                    onClick={handleSendDirect}
-                    disabled={directSending || !directNumbersList.length || !directMessage.trim()}
-                    className="w-full sm:w-auto rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs sm:text-sm"
-                  >
-                    {directSending ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {directChannel === "whatsapp" ? (
                       <>
-                        <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
-                        {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (!directNumbersList.length) {
+                              toast.error("Please enter at least one valid phone number");
+                              return;
+                            }
+                            if (!directMessage.trim()) {
+                              toast.error("Please enter message content");
+                              return;
+                            }
+                            if (directNumbersList.length === 1) {
+                              openClientWhatsApp(directNumbersList[0], directMessage);
+                            } else {
+                              const queueItems = directNumbersList.map((num, i) => ({
+                                name: `Recipient #${i + 1}`,
+                                phone: num,
+                                message: directMessage,
+                              }));
+                              setWaQueue(queueItems);
+                              setWaQueueIndex(0);
+                              setWaQueueOpen(true);
+                            }
+                          }}
+                          disabled={!directNumbersList.length || !directMessage.trim()}
+                          className="rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{lang === "bn" ? "ব্রাউজার ক্লায়েন্টে পাঠান (Anti-Ban) ↗" : "Send via Browser Client (0 Ban Risk) ↗"}</span>
+                        </Button>
+                        {waStatus?.status === "connected" && (
+                          <Button
+                            type="button"
+                            onClick={handleSendDirect}
+                            disabled={directSending || !directNumbersList.length || !directMessage.trim()}
+                            variant="outline"
+                            className="rounded-xl px-4 h-9 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 font-semibold gap-1.5"
+                          >
+                            {directSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            <span>Send via Linked Device</span>
+                          </Button>
+                        )}
                       </>
                     ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5 mr-2" />
-                        {lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send (${directNumbersList.length})`}
-                      </>
+                      <Button
+                        onClick={handleSendDirect}
+                        disabled={directSending || !directNumbersList.length || !directMessage.trim()}
+                        className="w-full sm:w-auto rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs sm:text-sm"
+                      >
+                        {directSending ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+                            {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5 mr-2" />
+                            {lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send (${directNumbersList.length})`}
+                          </>
+                        )}
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1353,29 +1498,57 @@ export default function SmsPage() {
                         onCheckedChange={setCustPersonalized}
                       />
                       <Label htmlFor="cust-personalized" className="text-xs cursor-pointer">
-                        {lang === "bn" ? "প্রতি কাস্টমারের নামে ব্যক্তিগতকরণ (Personalized Dynamic SMS)" : "Personalize with Customer Name"}
+                        {lang === "bn" ? "প্রতি কাস্টমারের নামে ব্যক্তিগতকরণ (Personalized Dynamic Message)" : "Personalize with Customer Name"}
                       </Label>
                     </div>
 
-                    <Button
-                      onClick={handleSendCustomerCampaign}
-                      disabled={custSending || !custMessage.trim()}
-                      className="w-full sm:w-auto rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                    >
-                      {custSending ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {custChannel === "whatsapp" ? (
                         <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {lang === "bn" ? "ক্যাম্পেইন পাঠানো হচ্ছে..." : "Broadcasting Campaign..."}
+                          <Button
+                            type="button"
+                            onClick={handleStartCustomerWhatsAppClient}
+                            disabled={!custMessage.trim()}
+                            className="rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>{lang === "bn" ? "ব্রাউজার ক্লায়েন্টে পাঠান (Anti-Ban) ↗" : "Send via Browser Client (0 Ban Risk) ↗"}</span>
+                          </Button>
+                          {waStatus?.status === "connected" && (
+                            <Button
+                              type="button"
+                              onClick={handleSendCustomerCampaign}
+                              disabled={custSending || !custMessage.trim()}
+                              variant="outline"
+                              className="rounded-xl px-4 h-9 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 font-semibold gap-1.5"
+                            >
+                              {custSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                              <span>Send via Linked Device</span>
+                            </Button>
+                          )}
                         </>
                       ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {lang === "bn"
-                            ? `পাঠান (${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length})`
-                            : `Send to ${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length} Customers`}
-                        </>
+                        <Button
+                          onClick={handleSendCustomerCampaign}
+                          disabled={custSending || !custMessage.trim()}
+                          className="w-full sm:w-auto rounded-xl px-6 h-9 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs sm:text-sm"
+                        >
+                          {custSending ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              {lang === "bn" ? "ক্যাম্পেইন পাঠানো হচ্ছে..." : "Broadcasting Campaign..."}
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4 mr-2" />
+                              {lang === "bn"
+                                ? `পাঠান (${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length})`
+                                : `Send SMS to ${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length} Customers`}
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1650,29 +1823,57 @@ export default function SmsPage() {
                         onCheckedChange={setSuppPersonalized}
                       />
                       <Label htmlFor="supp-personalized" className="text-xs cursor-pointer">
-                        {lang === "bn" ? "নামসহ ব্যক্তিগতকরণ (Personalized Dynamic SMS)" : "Personalize with Supplier Name"}
+                        {lang === "bn" ? "নামসহ ব্যক্তিগতকরণ (Personalized Dynamic Message)" : "Personalize with Supplier Name"}
                       </Label>
                     </div>
 
-                    <Button
-                      onClick={handleSendSupplierCampaign}
-                      disabled={suppSending || !suppMessage.trim()}
-                      className="w-full sm:w-auto rounded-xl px-6 bg-purple-600 hover:bg-purple-700 text-white font-medium"
-                    >
-                      {suppSending ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {suppChannel === "whatsapp" ? (
                         <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
+                          <Button
+                            type="button"
+                            onClick={handleStartSupplierWhatsAppClient}
+                            disabled={!suppMessage.trim()}
+                            className="rounded-xl px-5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>{lang === "bn" ? "ব্রাউজার ক্লায়েন্টে পাঠান (Anti-Ban) ↗" : "Send via Browser Client (0 Ban Risk) ↗"}</span>
+                          </Button>
+                          {waStatus?.status === "connected" && (
+                            <Button
+                              type="button"
+                              onClick={handleSendSupplierCampaign}
+                              disabled={suppSending || !suppMessage.trim()}
+                              variant="outline"
+                              className="rounded-xl px-4 h-9 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 font-semibold gap-1.5"
+                            >
+                              {suppSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                              <span>Send via Linked Device</span>
+                            </Button>
+                          )}
                         </>
                       ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {lang === "bn"
-                            ? `সাপ্লায়ারদের পাঠান (${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length})`
-                            : `Send to ${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length} Suppliers`}
-                        </>
+                        <Button
+                          onClick={handleSendSupplierCampaign}
+                          disabled={suppSending || !suppMessage.trim()}
+                          className="w-full sm:w-auto rounded-xl px-6 h-9 bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs sm:text-sm"
+                        >
+                          {suppSending ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4 mr-2" />
+                              {lang === "bn"
+                                ? `সাপ্লায়ারদের পাঠান (${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length})`
+                                : `Send SMS to ${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length} Suppliers`}
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1965,8 +2166,38 @@ export default function SmsPage() {
                 </CardDescription>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative w-full sm:w-64">
+              <div className="flex items-center flex-wrap gap-2">
+                <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl border border-border/80 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLogChannelFilter("all")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                      logChannelFilter === "all" ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    All ({smsLogs.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLogChannelFilter("sms")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                      logChannelFilter === "sms" ? "bg-card text-blue-600 dark:text-blue-400 shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    ✉️ SMS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLogChannelFilter("whatsapp")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                      logChannelFilter === "whatsapp" ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    💬 WhatsApp
+                  </button>
+                </div>
+
+                <div className="relative w-full sm:w-56">
                   <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
                     placeholder={lang === "bn" ? "হিস্টোরি খুঁজুন..." : "Filter logs..."}
@@ -2656,6 +2887,96 @@ export default function SmsPage() {
               {lang === "bn" ? "বন্ধ করুন" : "Close"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Client-Side Safe WhatsApp Queue Dispatcher (Zero Server IP Ban Risk) */}
+      <Dialog open={waQueueOpen} onOpenChange={setWaQueueOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-5 sm:p-6 bg-card border-emerald-500/30 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-2 text-base">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <MessageCircle className="size-5" />
+                <span>WhatsApp Client Dispatcher</span>
+              </div>
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs font-semibold">
+                {waQueueIndex + 1} / {waQueue.length}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Direct browser dispatch — 100% safe from Meta server IP blocking.
+            </DialogDescription>
+          </DialogHeader>
+
+          {waQueue[waQueueIndex] ? (
+            <div className="space-y-4 py-2">
+              {/* Progress bar */}
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-300"
+                  style={{ width: `${Math.round(((waQueueIndex + 1) / waQueue.length) * 100)}%` }}
+                />
+              </div>
+
+              {/* Current Contact Card */}
+              <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-foreground text-sm">{waQueue[waQueueIndex].name || "Recipient"}</span>
+                  <span className="font-mono text-emerald-600 font-bold">{waQueue[waQueueIndex].phone}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-background border border-border/60 text-xs text-foreground whitespace-pre-wrap leading-relaxed max-h-[140px] overflow-y-auto font-sans">
+                  {waQueue[waQueueIndex].message}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    openClientWhatsApp(waQueue[waQueueIndex].phone, waQueue[waQueueIndex].message);
+                    if (waQueueIndex + 1 < waQueue.length) {
+                      setWaQueueIndex(i => i + 1);
+                    } else {
+                      toast.success(lang === "bn" ? "সকল হোয়াটসঅ্যাপ মেসেজ পাঠানো হয়েছে!" : "All WhatsApp contacts dispatched!");
+                      setWaQueueOpen(false);
+                    }
+                  }}
+                  className="w-full h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                >
+                  <MessageCircle className="size-4" />
+                  <span>Send to {waQueue[waQueueIndex].name || "Contact"} (Open WhatsApp) ↗</span>
+                </Button>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (waQueueIndex + 1 < waQueue.length) {
+                        setWaQueueIndex(i => i + 1);
+                      } else {
+                        setWaQueueOpen(false);
+                      }
+                    }}
+                    className="rounded-xl text-xs h-8 text-muted-foreground"
+                  >
+                    Skip Contact
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setWaQueueOpen(false)}
+                    className="rounded-xl text-xs h-8 text-destructive hover:bg-destructive/10"
+                  >
+                    Close Campaign
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
