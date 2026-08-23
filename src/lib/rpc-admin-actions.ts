@@ -1021,7 +1021,7 @@ export async function directSendSmsAsAdminFn(input: {
     transactionType: data.routeType || "T",
   });
 
-  const isSuccess = Boolean(res.isSuccess || res.status === "Success" || res.statusCode === "200" || res.trxnId);
+  const isSuccess = Boolean(res.isSuccess && (res.status === "Success" || res.status === "Scheduled" || res.statusCode === "200"));
 
   if (!isSuccess) {
     const isIpBlocked =

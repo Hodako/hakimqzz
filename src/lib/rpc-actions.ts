@@ -2791,7 +2791,13 @@ async function triggerAutoPurchaseSms(
       .replace(/{due_amount}/g, String(dueAmount))
       .replace(/{invoice_id}/g, invoiceId);
 
-    let result: MiMSMSResponse = { statusCode: "200", status: "Success" };
+    let result: MiMSMSResponse = {
+      statusCode: "400",
+      status: "Failed",
+      responseResult: "Master SMS Gateway credentials are not configured.",
+      isSuccess: false,
+    };
+
     if (apiKey && userName) {
       result = await sendSingleSms({
         apiKey,
@@ -2804,7 +2810,9 @@ async function triggerAutoPurchaseSms(
       });
     }
 
-    if (result.status === "Success" || result.statusCode === "200") {
+    const isDelivered = Boolean(result.isSuccess && (result.status === "Success" || result.statusCode === "200"));
+
+    if (isDelivered) {
       await db.collection("businesses").updateOne(
         { owner_id: ownerId },
         { $inc: { sms_credits: -1 } }
@@ -2817,12 +2825,12 @@ async function triggerAutoPurchaseSms(
       owner_id: ownerId,
       recipient_type: "auto_purchase",
       recipient_count: 1,
-      credits_deducted: 1,
-      remaining_credits: Math.max(0, currentCredits - 1),
+      credits_deducted: isDelivered ? 1 : 0,
+      remaining_credits: isDelivered ? Math.max(0, currentCredits - 1) : currentCredits,
       recipients_summary: `${customerName} (${party.phone})`,
       message,
       trxn_ids: result.trxnId ? [result.trxnId] : [],
-      status: result.status === "Success" || result.statusCode === "200" ? "Success" : "Failed",
+      status: isDelivered ? "Success" : "Failed",
       response_summary: result.responseResult || result.status,
       created_at: new Date().toISOString(),
     } as any);
@@ -3010,53 +3018,49 @@ export async function sendSmsCampaignFn(input: {
   }
 
   const transactionType = data.transactionType || "T";
+
+  if (!apiKey || !userName) {
+    throw new Error(
+      "SMS Gateway is not configured. Please configure your MiMSMS API Key and Username in Master Gateway settings."
+    );
+  }
+
   let results: MiMSMSResponse[] = [];
   const trxnIds: string[] = [];
 
-  if (apiKey && userName) {
-    if (data.isPersonalized) {
-      const dynamicData = recipients.map((r) => {
-        const personalMsg = data.message
-          .replace(/{name}/g, r.name)
-          .replace(/{customer_name}/g, r.name)
-          .replace(/{supplier_name}/g, r.name)
-          .replace(/{shop_name}/g, shopName);
-        return {
-          mobileNumber: r.phone,
-          message: personalMsg,
-        };
-      });
+  if (data.isPersonalized) {
+    const dynamicData = recipients.map((r) => {
+      const personalMsg = data.message
+        .replace(/{name}/g, r.name)
+        .replace(/{customer_name}/g, r.name)
+        .replace(/{supplier_name}/g, r.name)
+        .replace(/{shop_name}/g, shopName);
+      return {
+        mobileNumber: r.phone,
+        message: personalMsg,
+      };
+    });
 
-      results = await sendDynamicSms({
-        apiKey,
-        userName,
-        senderName,
-        smsData: dynamicData,
-        transactionType,
-      });
-    } else {
-      const numbers = recipients.map((r) => r.phone);
-      const finalMsg = data.message.replace(/{shop_name}/g, shopName);
-
-      results = await sendBroadcastSms({
-        apiKey,
-        userName,
-        senderName,
-        numbers,
-        message: finalMsg,
-        transactionType,
-        campaignId: data.campaignTitle || "campaign",
-      });
-    }
+    results = await sendDynamicSms({
+      apiKey,
+      userName,
+      senderName,
+      smsData: dynamicData,
+      transactionType,
+    });
   } else {
-    // Simulated delivery when master key not yet entered
-    results = [
-      {
-        statusCode: "200",
-        status: "Success",
-        responseResult: "Simulated Dispatch (Gateway active)",
-      },
-    ];
+    const numbers = recipients.map((r) => r.phone);
+    const finalMsg = data.message.replace(/{shop_name}/g, shopName);
+
+    results = await sendBroadcastSms({
+      apiKey,
+      userName,
+      senderName,
+      numbers,
+      message: finalMsg,
+      transactionType,
+      campaignId: data.campaignTitle || "campaign",
+    });
   }
 
   let successCount = 0;
@@ -3064,7 +3068,7 @@ export async function sendSmsCampaignFn(input: {
   let summary = "";
 
   for (const res of results) {
-    if (res.isSuccess || res.status === "Success" || res.statusCode === "200" || Boolean(res.trxnId)) {
+    if (res.isSuccess && (res.status === "Success" || res.status === "Scheduled" || res.statusCode === "200")) {
       successCount++;
       if (res.trxnId) trxnIds.push(res.trxnId);
     } else {
@@ -3077,10 +3081,11 @@ export async function sendSmsCampaignFn(input: {
 
   const finalStatus = failCount === 0 ? "Success" : successCount > 0 ? "Partial" : "Failed";
 
-  // Deduct credits if sent
+  // Only deduct credits if SMS was actually accepted by MiMSMS
   let remainingCredits = currentCredits;
   if (finalStatus !== "Failed") {
-    remainingCredits = Math.max(0, currentCredits - requiredCredits);
+    const actualDeducted = Math.min(requiredCredits, successCount * Math.max(1, parts));
+    remainingCredits = Math.max(0, currentCredits - actualDeducted);
     await db.collection("businesses").updateOne(
       { owner_id: session.ownerId },
       { $set: { sms_credits: remainingCredits } }
@@ -3093,7 +3098,7 @@ export async function sendSmsCampaignFn(input: {
     owner_id: session.ownerId,
     recipient_type: data.recipientType,
     recipient_count: recipients.length,
-    credits_deducted: requiredCredits,
+    credits_deducted: finalStatus !== "Failed" ? requiredCredits : 0,
     remaining_credits: remainingCredits,
     recipients_summary:
       recipients.length <= 3
@@ -3108,8 +3113,12 @@ export async function sendSmsCampaignFn(input: {
     created_at: new Date().toISOString(),
   } as any);
 
+  if (finalStatus === "Failed") {
+    throw new Error(summary || "MiMSMS rejected the request. Please check recipient number or gateway settings.");
+  }
+
   return {
-    success: finalStatus !== "Failed",
+    success: true,
     status: finalStatus,
     recipientCount: recipients.length,
     creditsDeducted: requiredCredits,

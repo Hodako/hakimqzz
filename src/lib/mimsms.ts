@@ -116,6 +116,7 @@ export function calculateSmsParts(message: string): {
 
 /**
  * Robust response normalizer for MiMSMS backend (supports PascalCase, camelCase, plain-text)
+ * Strictly follows official MiMSMS Bulk SMS API (v2) documentation.
  */
 export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "OK"): MiMSMSResponse {
   if (!raw && httpStatus >= 400) {
@@ -135,7 +136,7 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
         statusCode: "200",
         status: "Success",
         balance: str,
-        responseResult: "Success",
+        responseResult: "Balance Retrieved Successfully",
         isSuccess: true,
       };
     }
@@ -148,7 +149,7 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
         statusCode: isBlocked ? "403" : isOk ? "200" : String(httpStatus),
         status: isOk ? "Success" : "Failed",
         responseResult: str,
-        isSuccess: isOk,
+        isSuccess: isOk && !isBlocked,
         isIpBlocked: isBlocked,
       };
     }
@@ -181,8 +182,17 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
   const trxnId = raw.TrxnId ?? raw.trxnId ?? raw.trxId ?? raw.TrxId ?? raw.TransactionId ?? raw.transactionId ?? raw.trackingId ?? raw.TrackingId;
   const trackingId = raw.TrackingId ?? raw.trackingId ?? trxnId;
   const balance = raw.Balance ?? raw.balance ?? raw.SmsCount ?? raw.smsCount ?? raw.data?.Balance ?? raw.data?.balance;
-  
-  const responseResult = String(
+
+  // Extract detailed error messages from error_Data if returned by MiMSMS
+  const errorDataList: any[] = raw.error_Data ?? raw.Error_Data ?? raw.errors ?? [];
+  let detailedError = "";
+  if (Array.isArray(errorDataList) && errorDataList.length > 0) {
+    detailedError = errorDataList
+      .map((e: any) => `${e.error || e.res_Code || "Error"}${e.errorParm ? ` (${e.errorParm})` : ""}`)
+      .join("; ");
+  }
+
+  const responseResult = detailedError || String(
     raw.ResponseResult ??
     raw.responseResult ??
     raw.Message ??
@@ -191,14 +201,23 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
     raw.error ??
     raw.Details ??
     raw.details ??
-    (rawStatus === "Success" || statusCode === "200" ? "Success" : `Status ${statusCode}`)
+    (rawStatus.toLowerCase() === "success" || statusCode === "200" ? "SMS Send Successfuly" : `Status ${statusCode}`)
   );
 
-  const isSuccess =
+  // Critical fix: In MiMSMS v2, Failed responses also return a trxnId (e.g. status 206 "Invalid Mobile Number" has trxnId: "A8XCTVMJPEGDI30").
+  // Therefore, isSuccess MUST require statusCode === "200" AND status !== "Failed" AND no error_Data!
+  const hasErrors = (Array.isArray(errorDataList) && errorDataList.length > 0) || raw.success_Data === null && statusCode !== "200";
+  const isFailedStatus =
+    rawStatus.toLowerCase() === "failed" ||
+    rawStatus.toLowerCase() === "error" ||
+    rawStatus.toLowerCase() === "unauthorized" ||
+    (statusCode !== "200" && statusCode !== "0");
+
+  const isSuccess = !isFailedStatus && !hasErrors && (
     rawStatus.toLowerCase() === "success" ||
-    statusCode === "200" ||
-    responseResult.toLowerCase() === "success" ||
-    Boolean(trxnId && String(trxnId).length > 0);
+    rawStatus.toLowerCase() === "scheduled" ||
+    statusCode === "200"
+  );
 
   const isIpBlocked =
     responseResult.toLowerCase().includes("black") ||
@@ -207,7 +226,7 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
 
   return {
     statusCode,
-    status: isSuccess ? "Success" : isIpBlocked ? "Failed" : rawStatus,
+    status: isSuccess ? (rawStatus.toLowerCase() === "scheduled" ? "Scheduled" : "Success") : "Failed",
     trxnId: trxnId ? String(trxnId) : undefined,
     trackingId: trackingId ? String(trackingId) : undefined,
     balance: balance !== undefined && balance !== null ? String(balance) : undefined,
@@ -217,7 +236,7 @@ export function normalizeMiMSMSResponse(raw: any, httpStatus = 200, httpText = "
     responseResult,
     isSuccess,
     isIpBlocked,
-    error_Data: raw.error_Data ?? raw.Error_Data ?? raw.errors,
+    error_Data: errorDataList.length > 0 ? errorDataList : undefined,
   };
 }
 
