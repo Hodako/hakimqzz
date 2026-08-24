@@ -1,4 +1,4 @@
-const CACHE_NAME = "hakimqzz-pos-v17";
+const CACHE_NAME = "dreamit-pos-v19";
 
 const PRECACHE_ASSETS = [
   "/manifest.json",

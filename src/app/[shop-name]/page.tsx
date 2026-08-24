@@ -84,7 +84,7 @@ export default async function StorefrontPage(props: PageProps) {
     }));
 
     const businessData = {
-      name: (business.name as string) || "HakimQzz",
+      name: (business.name as string) || "Dream IT",
       logo_url: (business.logo_url as string) || "",
     };
 

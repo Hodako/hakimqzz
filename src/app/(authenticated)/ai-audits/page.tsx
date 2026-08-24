@@ -392,7 +392,7 @@ export default function AiAuditsPage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xs sm:text-sm font-extrabold tracking-tight text-foreground truncate">
-                {lang === "bn" ? "হাকিম ফাইন্যান্সিয়াল অডিট এজেন্ট" : "Hakim Financial Audit AI"}
+                {lang === "bn" ? "ড্রিম আইটি ফাইন্যান্সিয়াল অডিট এজেন্ট" : "Dream IT Financial Audit AI"}
               </h1>
               <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest shrink-0">
                 PRO-BANKING

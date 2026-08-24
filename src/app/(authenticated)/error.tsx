@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { RefreshCw, AlertTriangle, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AuthenticatedError({
@@ -11,51 +11,66 @@ export default function AuthenticatedError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     console.error("[AuthenticatedError]", error);
 
-    // Auto-recovery for chunk loading failures (new deployment or stale client cache)
+    // Auto-recovery for genuine chunk loading failures
     const msg = error?.message || String(error || "");
     if (
       msg.includes("ChunkLoadError") ||
       msg.includes("Loading chunk") ||
-      msg.includes("Failed to fetch") ||
-      msg.includes("dynamically imported module")
+      msg.includes("dynamically imported module") ||
+      msg.includes("Cannot find module")
     ) {
       if (typeof window !== "undefined") {
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.getRegistrations().then((regs) => {
-            regs.forEach((reg) => reg.unregister());
-          });
-        }
-        if (typeof caches !== "undefined") {
-          caches.keys().then((keys) => {
-            keys.forEach((k) => caches.delete(k));
-          });
-        }
         const lastReload = sessionStorage.getItem("last_chunk_reload");
         const now = Date.now();
-        if (!lastReload || now - Number(lastReload) > 5000) {
+        if (!lastReload || now - Number(lastReload) > 8000) {
           sessionStorage.setItem("last_chunk_reload", String(now));
-          window.location.reload();
+          (async () => {
+            try {
+              if ("serviceWorker" in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.allSettled(regs.map((r) => r.unregister()));
+              }
+              if (typeof caches !== "undefined") {
+                const keys = await caches.keys();
+                await Promise.allSettled(keys.map((k) => caches.delete(k)));
+              }
+            } catch (_) {}
+            window.location.reload();
+          })();
         }
       }
     }
   }, [error]);
 
-  const handleHardRefresh = () => {
+  const handleHardRefresh = async () => {
+    setBusy(true);
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("last_chunk_reload");
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.allSettled(regs.map((r) => r.unregister()));
+        }
+        if (typeof caches !== "undefined") {
+          const keys = await caches.keys();
+          await Promise.allSettled(keys.map((k) => caches.delete(k)));
+        }
+      }
+    } catch (_) {}
+
     if (typeof window !== "undefined") {
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistrations().then((regs) => {
-          regs.forEach((reg) => reg.unregister());
-        });
-      }
-      if (typeof caches !== "undefined") {
-        caches.keys().then((keys) => {
-          keys.forEach((k) => caches.delete(k));
-        });
-      }
-      window.location.href = window.location.pathname + "?t=" + Date.now();
+      window.location.replace("/dashboard");
+    }
+  };
+
+  const handleGoHome = () => {
+    if (typeof window !== "undefined") {
+      window.location.replace("/dashboard");
     }
   };
 
@@ -80,18 +95,28 @@ export default function AuthenticatedError({
         <div className="flex flex-col gap-2.5 pt-2">
           <Button
             onClick={handleHardRefresh}
-            className="w-full h-11 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/25 cursor-pointer"
+            disabled={busy}
+            className="w-full h-11 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/25 cursor-pointer disabled:opacity-75"
           >
-            <RefreshCw className="size-4" />
-            <span>রিফ্রেশ ও আপডেট করুন (Reload Page)</span>
+            <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
+            <span>{busy ? "আপডেট হচ্ছে... (Updating...)" : "রিফ্রেশ ও আপডেট করুন (Reload Page)"}</span>
           </Button>
 
           <Button
             variant="outline"
-            onClick={() => reset()}
-            className="w-full h-9 rounded-xl text-xs text-muted-foreground"
+            onClick={handleGoHome}
+            className="w-full h-10 rounded-2xl text-xs flex items-center justify-center gap-2 border border-border"
           >
-            Try Again
+            <Home className="size-3.5 text-muted-foreground" />
+            <span>ড্যাশবোর্ডে প্রবেশ করুন (Go to Dashboard)</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            onClick={() => reset()}
+            className="w-full h-8 rounded-xl text-xs text-muted-foreground"
+          >
+            পুনরায় চেষ্টা করুন (Try Again)
           </Button>
         </div>
       </div>

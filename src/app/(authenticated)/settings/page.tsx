@@ -714,7 +714,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold">Company / Shop Name</Label>
-                      <Input name="name" defaultValue={biz.name} placeholder="HakimQzz" className="h-10 rounded-xl text-xs" />
+                      <Input name="name" defaultValue={biz.name} placeholder="Dream IT POS" className="h-10 rounded-xl text-xs" />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold">Business Category</Label>
@@ -910,7 +910,7 @@ export default function SettingsPage() {
                 
                 <div className="p-4 rounded-2xl bg-white text-black font-mono text-[11px] border border-border shadow-xs space-y-2">
                   <div className="text-center space-y-0.5">
-                    <p className="font-bold text-xs" style={{ fontSize }}>{biz.name || "HakimQzz Shop"}</p>
+                    <p className="font-bold text-xs" style={{ fontSize }}>{biz.name || "Dream IT Shop"}</p>
                     <p className="text-[10px] text-gray-600">{biz.address || "Road #1, Dhaka"}</p>
                     <p className="text-[10px] text-gray-600">Mob: {biz.phone_numbers || "+8801700000000"}</p>
                   </div>
