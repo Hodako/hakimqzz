@@ -58,12 +58,6 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  // Forgot Password State
-  const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotBusy, setForgotBusy] = useState(false);
-  const [forgotSent, setForgotSent] = useState(false);
-
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
@@ -325,36 +319,6 @@ export default function AuthPage() {
     }
   }
 
-  // ─── Forgot Password ───────────────────────────────────────────────────────
-  async function handleForgotPassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (!forgotEmail || !forgotEmail.trim()) {
-      toast.error(lang === "bn" ? "আপনার নিবন্ধিত ইমেইল এড্রেস লিখুন" : "Please enter your registered email");
-      return;
-    }
-
-    setForgotBusy(true);
-    try {
-      await sendPasswordResetEmail(auth, forgotEmail.trim().toLowerCase());
-      setForgotSent(true);
-      toast.success(
-        lang === "bn"
-          ? "পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!"
-          : "Password reset link sent to your email!"
-      );
-    } catch (err: any) {
-      if (err.code === "auth/user-not-found") {
-        toast.error(lang === "bn" ? "এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি" : "No user found with this email address");
-      } else if (err.code === "auth/invalid-email") {
-        toast.error(lang === "bn" ? "সঠিক ইমেইল এড্রেস লিখুন" : "Invalid email address format");
-      } else {
-        toast.error(err.message || "Failed to send reset email");
-      }
-    } finally {
-      setForgotBusy(false);
-    }
-  }
-
   return (
     <div className="min-h-[100dvh] w-full grid grid-cols-1 md:grid-cols-12 bg-background text-foreground select-none">
       {/* ─── Left Panel: Hero Showcase (Desktop only) ────────────────────────── */}
@@ -482,9 +446,6 @@ export default function AuthPage() {
             {mainRole === "employee" ? (
               <div className="space-y-4">
                 <div className="text-center space-y-1">
-                  <div className="inline-flex items-center justify-center size-10 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 mb-1">
-                    <UserCheck className="size-5" />
-                  </div>
                   <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">
                     {empMode === "signin"
                       ? (lang === "bn" ? "কর্মচারী লগইন (মোবাইল / ইমেইল)" : "Employee Sign In")
@@ -524,7 +485,7 @@ export default function AuthPage() {
                   <form onSubmit={handleEmployeeSignIn} className="space-y-3.5 pt-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Smartphone className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <Smartphone className="size-3.5 text-slate-400 dark:text-zinc-500" />
                         <span>{lang === "bn" ? "মোবাইল নম্বর / ইমেইল / ইউজারনেম" : "Phone, Email or Username"}</span>
                       </Label>
                       <Input
@@ -533,14 +494,14 @@ export default function AuthPage() {
                         value={empIdentifier}
                         onChange={(e) => setEmpIdentifier(e.target.value)}
                         placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX, staff@gmail.com বা rahim" : "e.g. 017XXXXXXXX, staff@gmail.com or rahim"}
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                          <Lock className="size-3.5 text-muted-foreground" />
+                          <Lock className="size-3.5 text-slate-400 dark:text-zinc-500" />
                           <span>{t("password")}</span>
                         </Label>
                         <button
@@ -558,8 +519,21 @@ export default function AuthPage() {
                         value={empPassword}
                         onChange={(e) => setEmpPassword(e.target.value)}
                         placeholder={lang === "bn" ? "আপনার পাসওয়ার্ড লিখুন" : "Enter your password"}
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-0.5">
+                      <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                        <input type="checkbox" defaultChecked className="rounded accent-emerald-600 cursor-pointer" />
+                        <span>Remember me</span>
+                      </label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline font-semibold"
+                      >
+                        {lang === "bn" ? "পাসওয়ার্ড ভুলে গেছেন?" : "Forgot password?"}
+                      </Link>
                     </div>
 
                     <Button
@@ -582,7 +556,7 @@ export default function AuthPage() {
                   <form onSubmit={handleEmployeeSignUp} className="space-y-3.5 pt-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <User className="size-3.5 text-muted-foreground" />
+                        <User className="size-3.5 text-slate-400 dark:text-zinc-500" />
                         <span>{lang === "bn" ? "পুরো নাম" : "Full Name"}</span>
                       </Label>
                       <Input
@@ -591,13 +565,13 @@ export default function AuthPage() {
                         value={empFullName}
                         onChange={(e) => setEmpFullName(e.target.value)}
                         placeholder={lang === "bn" ? "আপনার পুরো নাম লিখুন" : "e.g. Md Rahim Khan"}
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Smartphone className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <Smartphone className="size-3.5 text-slate-400 dark:text-zinc-500" />
                         <span>{lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল" : "Phone Number or Email"}</span>
                       </Label>
                       <Input
@@ -606,14 +580,14 @@ export default function AuthPage() {
                         value={empIdentifier}
                         onChange={(e) => setEmpIdentifier(e.target.value)}
                         placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা employee@gmail.com" : "e.g. 017XXXXXXXX or employee@gmail.com"}
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                          <Lock className="size-3.5 text-muted-foreground" />
+                          <Lock className="size-3.5 text-slate-400 dark:text-zinc-500" />
                           <span>{t("password")}</span>
                         </Label>
                         <button
@@ -632,7 +606,7 @@ export default function AuthPage() {
                         value={empPassword}
                         onChange={(e) => setEmpPassword(e.target.value)}
                         placeholder={lang === "bn" ? "কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড" : "Create a password (min 6 characters)"}
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-emerald-500 w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
 
@@ -691,9 +665,6 @@ export default function AuthPage() {
               /* ══════════════════════════════════════════════════════════════════════ */
               <div className="space-y-4">
                 <div className="text-center space-y-1">
-                  <div className="inline-flex items-center justify-center size-10 rounded-2xl bg-primary/10 text-primary border border-primary/20 mb-1">
-                    <Shield className="size-5" />
-                  </div>
                   <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">
                     {ownerMode === "signin"
                       ? (lang === "bn" ? "দোকান মালিক লগইন (মোবাইল / ইমেইল)" : "Shop Owner Sign In")
@@ -733,7 +704,7 @@ export default function AuthPage() {
                   {ownerMode === "signup" && (
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <User className="size-3.5 text-muted-foreground" />
+                        <User className="size-3.5 text-slate-400 dark:text-zinc-500" />
                         <span>{t("full_name")}</span>
                       </Label>
                       <Input
@@ -742,7 +713,7 @@ export default function AuthPage() {
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="e.g. Rahim Ahmed"
-                        className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-primary w-full"
+                        className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
                   )}
@@ -750,7 +721,7 @@ export default function AuthPage() {
                   {/* Phone or Email */}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Smartphone className="size-3.5 text-primary" />
+                      <Smartphone className="size-3.5 text-slate-400 dark:text-zinc-500" />
                       <span>{lang === "bn" ? "মোবাইল নম্বর অথবা ইমেইল এড্রেস" : "Phone Number or Email Address"}</span>
                     </Label>
                     <Input
@@ -759,7 +730,7 @@ export default function AuthPage() {
                       value={ownerIdentifier}
                       onChange={(e) => setOwnerIdentifier(e.target.value)}
                       placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা owner@gmail.com" : "e.g. 017XXXXXXXX or owner@gmail.com"}
-                      className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-primary w-full"
+                      className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                     />
                   </div>
 
@@ -767,7 +738,7 @@ export default function AuthPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Lock className="size-3.5 text-muted-foreground" />
+                        <Lock className="size-3.5 text-slate-400 dark:text-zinc-500" />
                         <span>{t("password")}</span>
                       </Label>
                       <button
@@ -786,7 +757,7 @@ export default function AuthPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={ownerMode === "signup" ? "Create password (min 6 characters)" : "Enter your password"}
-                      className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-primary w-full"
+                      className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                     />
                   </div>
 
@@ -797,17 +768,12 @@ export default function AuthPage() {
                         <input type="checkbox" defaultChecked className="rounded accent-primary cursor-pointer" />
                         <span>Remember me</span>
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForgotEmail(ownerIdentifier.includes("@") ? ownerIdentifier : "");
-                          setForgotSent(false);
-                          setForgotModalOpen(true);
-                        }}
-                        className="text-primary hover:underline font-semibold cursor-pointer"
+                      <Link
+                        href="/forgot-password"
+                        className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline font-semibold"
                       >
                         {lang === "bn" ? "পাসওয়ার্ড ভুলে গেছেন?" : "Forgot password?"}
-                      </button>
+                      </Link>
                     </div>
                   )}
 
@@ -971,97 +937,6 @@ export default function AuthPage() {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── FORGOT PASSWORD MODAL ───────────────────────────────────────────── */}
-      <Dialog open={forgotModalOpen} onOpenChange={setForgotModalOpen}>
-        <DialogContent
-          className="max-w-md rounded-3xl p-5 sm:p-6 bg-white border border-slate-200 shadow-2xl text-slate-900"
-          style={{ backgroundColor: "#FFFFFF" }}
-        >
-          <DialogHeader className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20">
-                <KeyRound className="size-6 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900">
-                  {lang === "bn" ? "পাসওয়ার্ড রিসেট করুন" : "Reset Password"}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500">
-                  {lang === "bn"
-                    ? "পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হবে।"
-                    : "Enter your registered account email to receive a password reset link."}
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          {forgotSent ? (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="space-y-1 text-xs leading-relaxed">
-                  <p className="font-bold text-sm text-emerald-950">
-                    {lang === "bn" ? "ইমেইল সফলভাবে পাঠানো হয়েছে!" : "Password Reset Email Sent!"}
-                  </p>
-                  <p className="text-emerald-800">
-                    {lang === "bn"
-                      ? `${forgotEmail} ঠিকানায় পাসওয়ার্ড পরিবর্তনের লিংক পাঠানো হয়েছে। ইনবক্স অথবা স্প্যাম ফোল্ডার চেক করুন।`
-                      : `A password reset link has been dispatched to ${forgotEmail}. Please check your inbox or spam folder.`}
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => setForgotModalOpen(false)}
-                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-9"
-              >
-                {lang === "bn" ? "ঠিক আছে" : "Got It"}
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={handleForgotPassword} className="space-y-4 pt-1">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
-                  {lang === "bn" ? "নিবন্ধিত ইমেইল এড্রেস" : "Registered Email Address"}
-                </Label>
-                <Input
-                  type="email"
-                  required
-                  placeholder="e.g. yourname@gmail.com"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="h-10 rounded-xl text-xs bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
-                />
-              </div>
-
-              <DialogFooter className="gap-2 pt-2 border-t border-slate-100">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setForgotModalOpen(false)}
-                  className="rounded-xl text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
-                >
-                  {lang === "bn" ? "বাতিল" : "Cancel"}
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={forgotBusy}
-                  size="sm"
-                  className="rounded-xl text-xs bg-primary text-primary-foreground font-bold shadow-sm"
-                >
-                  {forgotBusy ? (
-                    <RefreshCw className="size-3.5 animate-spin" />
-                  ) : (
-                    <span>{lang === "bn" ? "রিসেট লিংক পাঠান" : "Send Reset Link"}</span>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
         </DialogContent>
       </Dialog>
     </div>
