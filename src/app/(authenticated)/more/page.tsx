@@ -9,7 +9,7 @@ import {
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
   Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2,
-  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle
+  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle, Store, Upload
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -38,7 +38,9 @@ import {
   inviteEmployeeByEmailFn,
   listEmployeeInvitationsFn,
   cancelEmployeeInvitationFn,
+  uploadImageFn,
 } from "@/lib/rpc";
+import { updateBusinessSettingsFn, getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
@@ -48,8 +50,10 @@ import { ProductSearchSelect } from "@/components/product-search";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 const businessLinks = [
+  { to: "#shop-profile",   labelKey: "shop_profile",    desc: "Update shop name, logo, address & invoice terms", icon: Store, perm: "settings"   as const },
   { to: "/sms",            labelKey: "sms_management",  desc: "Send bulk SMS, offers & auto triggers", icon: MessageSquare, perm: "sales"      as const },
   { to: "/invoices",       labelKey: "invoice_generator", desc: "Create & customize invoices", icon: FileText,     perm: "sales"      as const },
   { to: "/purchases",      labelKey: "new_purchase",    desc: "Log product inventory buys", icon: ShoppingCart, perm: "purchases"  as const },
@@ -57,7 +61,7 @@ const businessLinks = [
   { to: "/customers",      labelKey: "customers",       desc: "Customer profiles & transaction statistics", icon: Users, perm: "parties" as const },
   { to: "/dues",           labelKey: "due",             desc: "Customer dues & collections history", icon: Banknote, perm: "parties"    as const },
   { to: "/parties",        labelKey: "parties",         desc: "Suppliers, vendors, and partner logs", icon: Users, perm: "parties"    as const },
-  { to: "/settings",       labelKey: "settings",        desc: "Business profile & settings", icon: Settings,     perm: "settings"   as const },
+  { to: "/settings",       labelKey: "settings",        desc: "Advanced settings & configurations", icon: Settings,     perm: "settings"   as const },
 ] as const;
 
 const financeLinks = [
@@ -435,7 +439,7 @@ export default function MorePage() {
               </div>
               <div className="space-y-1">
                 <h4 className="font-bold text-xs text-foreground">
-                  {lang === "bn" ? "হাকিম কিউজেডজেড অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with HakimQzz Audit Agent"}
+                  {lang === "bn" ? "ড্রিম আইটি অডিট এজেন্টের সাথে চ্যাট করুন" : "Chat with Dream IT Audit Agent"}
                 </h4>
                 <p className="text-[10px] text-muted-foreground leading-normal max-w-[240px] mx-auto">
                   {lang === "bn"
@@ -985,6 +989,95 @@ export default function MorePage() {
     }
   };
 
+  // ─── Shop Profile Management State (Available directly in /more) ───
+  const [shopProfileOpen, setShopProfileOpen] = useState(false);
+  const [shopProfileBusy, setShopProfileBusy] = useState(false);
+  const [shopLogoUploading, setShopLogoUploading] = useState(false);
+  const [shopProfileData, setShopProfileData] = useState({
+    name: user?.business_name || "",
+    tagline: "",
+    address: "",
+    phones: "",
+    email: "",
+    logoUrl: "",
+    currency: "৳",
+    invoiceTerms: "",
+  });
+
+  useEffect(() => {
+    if (shopProfileOpen) {
+      setShopProfileData(prev => ({
+        ...prev,
+        name: user?.business_name || prev.name,
+      }));
+      getBusinessSettingsFn().then((res: any) => {
+        if (res?.data) {
+          const b = res.data;
+          setShopProfileData({
+            name: b.name || user?.business_name || "",
+            tagline: b.tagline || "",
+            address: b.address || "",
+            phones: Array.isArray(b.phone_numbers) ? b.phone_numbers.join(", ") : (b.phone_numbers || ""),
+            email: Array.isArray(b.emails) ? b.emails.join(", ") : (b.emails || ""),
+            logoUrl: b.logo_url || "",
+            currency: b.currency || "৳",
+            invoiceTerms: b.invoice_terms || "",
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [shopProfileOpen, user]);
+
+  const handleSaveShopProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setShopProfileBusy(true);
+    try {
+      const phonesArr = shopProfileData.phones.split(",").map(s => s.trim()).filter(Boolean);
+      const emailsArr = shopProfileData.email.split(",").map(s => s.trim()).filter(Boolean);
+      await updateBusinessSettingsFn({
+        data: {
+          name: shopProfileData.name,
+          tagline: shopProfileData.tagline,
+          address: shopProfileData.address,
+          phone_numbers: phonesArr,
+          emails: emailsArr,
+          logo_url: shopProfileData.logoUrl,
+          currency: shopProfileData.currency,
+          invoice_terms: shopProfileData.invoiceTerms,
+        }
+      });
+      qc.invalidateQueries({ queryKey: ["user"] });
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+      toast.success(lang === "bn" ? "দোকানের প্রোফাইল সফলভাবে আপডেট হয়েছে!" : "Shop profile updated successfully!");
+      setShopProfileOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update shop profile");
+    } finally {
+      setShopProfileBusy(false);
+    }
+  };
+
+  const handleShopLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(lang === "bn" ? "লোগো সাইজ ২ মেগাবাইট এর কম হতে হবে" : "Logo must be under 2MB");
+      return;
+    }
+    setShopLogoUploading(true);
+    try {
+      const res = await uploadImageFn(file);
+      if (res.data?.url) {
+        setShopProfileData(prev => ({ ...prev, logoUrl: res.data.url }));
+        toast.success(lang === "bn" ? "লোগো আপলোড সম্পন্ন!" : "Logo uploaded!");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setShopLogoUploading(false);
+    }
+  };
+
   const visibleBiz = businessLinks.filter(item => canAccess(perms, item.perm));
   const visibleFin = financeLinks.filter(item => canAccess(perms, item.perm));
 
@@ -1011,19 +1104,44 @@ export default function MorePage() {
             {lang === "bn" ? "ব্যবসা পরিচালনা" : "Business Operations"}
           </h3>
           <div className="grid grid-cols-2 gap-3">
-            {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => (
-              <Link key={to} href={to} className="block group">
-                <Card className="p-3.5 h-full flex flex-col justify-between gap-3 hover:border-primary/30 transition-all active:scale-[0.98] beveled-card bg-card/60 backdrop-blur-sm">
-                  <div className="size-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary grid place-items-center shrink-0 border border-primary/10 shadow-sm">
-                    <Icon className="size-4.5" />
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors">{t(labelKey as any)}</div>
-                    <p className="text-[9px] text-muted-foreground leading-tight">{desc}</p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+            {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => {
+              if (to === "#shop-profile") {
+                return (
+                  <button
+                    key={to}
+                    type="button"
+                    onClick={() => setShopProfileOpen(true)}
+                    className="block group text-left w-full cursor-pointer"
+                  >
+                    <Card className="p-3.5 h-full flex flex-col justify-between gap-3 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all active:scale-[0.98] beveled-card bg-card/60 backdrop-blur-sm border-emerald-500/30">
+                      <div className="size-9 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 text-emerald-600 grid place-items-center shrink-0 border border-emerald-500/20 shadow-sm">
+                        <Icon className="size-4.5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-600 transition-colors flex items-center justify-between">
+                          <span>{t(labelKey as any)}</span>
+                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">EDIT</span>
+                        </div>
+                        <p className="text-[9px] text-muted-foreground leading-tight">{desc}</p>
+                      </div>
+                    </Card>
+                  </button>
+                );
+              }
+              return (
+                <Link key={to} href={to} className="block group">
+                  <Card className="p-3.5 h-full flex flex-col justify-between gap-3 hover:border-primary/30 transition-all active:scale-[0.98] beveled-card bg-card/60 backdrop-blur-sm">
+                    <div className="size-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary grid place-items-center shrink-0 border border-primary/10 shadow-sm">
+                      <Icon className="size-4.5" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors">{t(labelKey as any)}</div>
+                      <p className="text-[9px] text-muted-foreground leading-tight">{desc}</p>
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1068,20 +1186,46 @@ export default function MorePage() {
           </h3>
           <Card className="overflow-hidden border border-white/20 dark:border-white/5 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm">
             <div className="divide-y divide-zinc-200/50 dark:divide-zinc-800/40">
-              {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => (
-                <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8.5 rounded-xl bg-primary/10 text-primary grid place-items-center border border-primary/15 shadow-sm">
-                      <Icon className="size-4" />
+              {visibleBiz.map(({ to, labelKey, desc, icon: Icon }) => {
+                if (to === "#shop-profile") {
+                  return (
+                    <button
+                      key={to}
+                      type="button"
+                      onClick={() => setShopProfileOpen(true)}
+                      className="w-full flex items-center justify-between p-3.5 hover:bg-emerald-500/5 active:bg-emerald-500/10 transition-all text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="size-8.5 rounded-xl bg-emerald-500/10 text-emerald-600 grid place-items-center border border-emerald-500/20 shadow-sm">
+                          <Icon className="size-4" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <span>{t(labelKey as any)}</span>
+                            <span className="text-[9px] text-emerald-600 font-bold bg-emerald-500/10 px-1 rounded">EDIT</span>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{desc}</p>
+                        </div>
+                      </div>
+                      <span className="text-emerald-600 text-xs font-semibold select-none pr-1">→</span>
+                    </button>
+                  );
+                }
+                return (
+                  <Link key={to} href={to} className="flex items-center justify-between p-3.5 hover:bg-muted/10 active:bg-muted/20 transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className="size-8.5 rounded-xl bg-primary/10 text-primary grid place-items-center border border-primary/15 shadow-sm">
+                        <Icon className="size-4" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{t(labelKey as any)}</div>
+                        <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{t(labelKey as any)}</div>
-                      <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{desc}</p>
-                    </div>
-                  </div>
-                  <span className="text-zinc-400 text-xs font-semibold select-none pr-1">→</span>
-                </Link>
-              ))}
+                    <span className="text-zinc-400 text-xs font-semibold select-none pr-1">→</span>
+                  </Link>
+                );
+              })}
             </div>
           </Card>
         </div>
@@ -2928,12 +3072,25 @@ export default function MorePage() {
                 {user?.role === "owner" ? (lang === "bn" ? "মালিক" : "Owner") : (lang === "bn" ? "কর্মচারী" : "Employee")}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider">
-                {user?.business_name || "Dream Fashion"}
+            <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Store className="size-3.5 text-primary" />
+                <span>{user?.business_name || "Dream IT Shop"}</span>
               </div>
-              <PWAInstallButton variant="outline" className="h-7 text-[11px] px-2.5" />
+              <div className="flex items-center gap-1.5">
+                {user?.role === "owner" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShopProfileOpen(true)}
+                    className="h-7 text-[11px] px-2.5 rounded-lg border-border/80 bg-background/80 hover:bg-muted font-bold text-foreground gap-1 cursor-pointer"
+                  >
+                    <Edit className="size-3 text-primary" />
+                    <span>{lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile"}</span>
+                  </Button>
+                )}
+                <PWAInstallButton variant="outline" className="h-7 text-[11px] px-2.5" />
+              </div>
             </div>
           </div>
         </div>
@@ -3549,6 +3706,147 @@ export default function MorePage() {
               {empSaving ? "…" : (lang === "bn" ? "হ্যাঁ, মুছে ফেলুন" : "Yes, Delete")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Shop Profile Management Dialog (Directly in /more) ─── */}
+      <Dialog open={shopProfileOpen} onOpenChange={setShopProfileOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-6 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xl text-slate-900 dark:text-zinc-100">
+          <DialogHeader className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                <Store className="size-6 text-emerald-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold">
+                  {lang === "bn" ? "দোকানের প্রোফাইল ও বিবরণ" : "Shop Profile & Details"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {lang === "bn"
+                    ? "দোকানের নাম, লোগো, যোগাযোগের নম্বর ও ইনভয়েস বিবরণ হালনাগাদ করুন।"
+                    : "Update your shop name, logo, contacts, and invoice header information."}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveShopProfile} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের নাম *" : "Shop Name *"}</Label>
+              <Input
+                required
+                value={shopProfileData.name}
+                onChange={(e) => setShopProfileData({ ...shopProfileData, name: e.target.value })}
+                placeholder="e.g. Dream Fashion"
+                className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center justify-between">
+                <span>{lang === "bn" ? "দোকানের লোগো (ঐচ্ছিক)" : "Shop Logo (Optional)"}</span>
+                {shopLogoUploading && <span className="text-[10px] text-emerald-600 animate-pulse">Uploading...</span>}
+              </Label>
+              <div className="flex items-center gap-3">
+                {shopProfileData.logoUrl ? (
+                  <div className="relative size-12 rounded-xl border border-border p-1 bg-slate-50 dark:bg-zinc-900 shrink-0">
+                    <img src={shopProfileData.logoUrl} alt="Logo" className="w-full h-full object-contain rounded-lg" />
+                  </div>
+                ) : (
+                  <div className="size-12 rounded-xl border border-dashed border-border bg-slate-50 dark:bg-zinc-900 flex items-center justify-center text-muted-foreground shrink-0">
+                    <ImageIcon className="size-5" />
+                  </div>
+                )}
+                <div className="flex-1 space-y-1.5">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleShopLogoUpload}
+                    className="h-9 rounded-xl text-xs file:mr-2 file:py-0.5 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:bg-emerald-600 file:text-white cursor-pointer"
+                  />
+                  <Input
+                    type="text"
+                    placeholder={lang === "bn" ? "অথবা ছবির URL দিন" : "Or enter image URL"}
+                    value={shopProfileData.logoUrl}
+                    onChange={(e) => setShopProfileData({ ...shopProfileData, logoUrl: e.target.value })}
+                    className="h-8 text-[11px] rounded-lg bg-slate-50 dark:bg-zinc-900"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "ট্যাগলাইন / স্লোগান" : "Tagline"}</Label>
+                <Input
+                  value={shopProfileData.tagline}
+                  onChange={(e) => setShopProfileData({ ...shopProfileData, tagline: e.target.value })}
+                  placeholder="e.g. Quality Products & Service"
+                  className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "মুদ্রা প্রতীক" : "Currency Symbol"}</Label>
+                <Input
+                  value={shopProfileData.currency}
+                  onChange={(e) => setShopProfileData({ ...shopProfileData, currency: e.target.value })}
+                  placeholder="৳"
+                  className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "ফোন নম্বর (কমা দিয়ে একাধিক)" : "Phone Numbers"}</Label>
+                <Input
+                  value={shopProfileData.phones}
+                  onChange={(e) => setShopProfileData({ ...shopProfileData, phones: e.target.value })}
+                  placeholder="017XXXXXXXX, 018XXXXXXXX"
+                  className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "ইমেইল এড্রেস" : "Email Address"}</Label>
+                <Input
+                  value={shopProfileData.email}
+                  onChange={(e) => setShopProfileData({ ...shopProfileData, email: e.target.value })}
+                  placeholder="shop@example.com"
+                  className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "দোকানের ঠিকানা" : "Shop Address"}</Label>
+              <Input
+                value={shopProfileData.address}
+                onChange={(e) => setShopProfileData({ ...shopProfileData, address: e.target.value })}
+                placeholder="e.g. Shop #12, Level 2, Market Plaza, Dhaka"
+                className="h-10 rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "ইনভয়েস শর্তাবলী ও বিবরণ" : "Invoice Terms & Notes"}</Label>
+              <Textarea
+                value={shopProfileData.invoiceTerms}
+                onChange={(e) => setShopProfileData({ ...shopProfileData, invoiceTerms: e.target.value })}
+                placeholder={lang === "bn" ? "যেমন: বিক্রিত পণ্য ফেরত নেওয়া হয় না। ৭ দিনের মধ্যে পরিবর্তন সম্ভব।" : "e.g. Thank you for shopping with us! No cash refund."}
+                className="min-h-[70px] rounded-xl text-xs bg-slate-50 dark:bg-zinc-900"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShopProfileOpen(false)} className="rounded-xl text-xs">
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={shopProfileBusy || !shopProfileData.name.trim()} className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                {shopProfileBusy ? <RefreshCw className="size-3.5 animate-spin mr-1.5" /> : <Check className="size-3.5 mr-1.5" />}
+                <span>{lang === "bn" ? "সংরক্ষণ করুন" : "Save Changes"}</span>
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -241,7 +241,7 @@ export default function SuperAdminPage() {
             <div className="p-3.5 bg-primary/10 rounded-2xl text-primary border border-primary/20 shadow-inner">
               <Shield className="size-8 animate-pulse" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">HakimQzz Super Admin</h1>
+            <h1 className="text-xl font-bold tracking-tight">Dream IT Super Admin</h1>
             <p className="text-xs text-muted-foreground">Authorized platform administration console</p>
           </div>
 
@@ -326,7 +326,7 @@ export default function SuperAdminPage() {
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
-              HakimQzz Super Admin
+              Dream IT Super Admin
               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] font-mono">
                 COMMAND v2.5
               </Badge>

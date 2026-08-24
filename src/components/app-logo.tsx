@@ -60,7 +60,7 @@ export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
 
   let logoSrc = src ?? user?.logo_url ?? "/logo.png";
 
-  const logoAlt = alt ?? user?.business_name ?? "HakimQzz";
+  const logoAlt = alt ?? user?.business_name ?? "Dream IT";
 
   return (
     <img

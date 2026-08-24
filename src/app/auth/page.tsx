@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { loginFn, registerFn, firebaseAuthSyncFn, employeeLoginFn } from "@/lib/rpc";
+import { loginFn, registerFn, firebaseAuthSyncFn, employeeLoginFn, uploadImageFn } from "@/lib/rpc";
+import { updateBusinessSettingsFn } from "@/lib/rpc-admin";
 import type { AuthUser } from "@/hooks/use-auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import {
@@ -21,7 +22,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { KeyRound, Mail, CheckCircle2, RefreshCw, UserCheck, Shield, Lock, User, ArrowRight, Eye, EyeOff, Smartphone, Sparkles } from "lucide-react";
+import { KeyRound, Mail, CheckCircle2, RefreshCw, UserCheck, Shield, Lock, User, ArrowRight, Eye, EyeOff, Smartphone, Sparkles, Store, Image as ImageIcon, HelpCircle } from "lucide-react";
 
 export default function AuthPage() {
   const { user, loading, login } = useAuth();
@@ -38,6 +39,14 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Post-Signup Onboarding State (Shop Name & Logo)
+  const [onboardingUser, setOnboardingUser] = useState<AuthUser | null>(null);
+  const [shopName, setShopName] = useState("");
+  const [shopLogo, setShopLogo] = useState("");
+  const [shopAddress, setShopAddress] = useState("");
+  const [onboardingBusy, setOnboardingBusy] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Employee Auth State (Phone or Email or Username)
   const [empMode, setEmpMode] = useState<"signin" | "signup">("signin");
@@ -67,18 +76,70 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (mounted && !loading) {
-      if (user) {
+      if (user && !onboardingUser) {
         router.replace("/dashboard");
       }
     }
-  }, [user, loading, router, mounted]);
+  }, [user, loading, router, mounted, onboardingUser]);
 
-  if (!mounted || loading || user) return <SpeedLoader />;
+  if ((!mounted || loading) && !onboardingUser) return <SpeedLoader />;
+  if (user && !onboardingUser) return <SpeedLoader />;
 
   function afterAuth(u: AuthUser | null) {
     if (!u) return;
     login(u);
-    router.replace("/dashboard");
+    if (u.role === "owner" && !u.business_name) {
+      setOnboardingUser(u);
+    } else {
+      router.replace("/dashboard");
+    }
+  }
+
+  async function handleCompleteOnboarding(e: React.FormEvent) {
+    e.preventDefault();
+    if (!shopName.trim()) {
+      toast.error(lang === "bn" ? "দোকানের নাম লিখুন" : "Please enter your shop name");
+      return;
+    }
+    setOnboardingBusy(true);
+    try {
+      await updateBusinessSettingsFn({
+        data: {
+          name: shopName.trim(),
+          logo_url: shopLogo.trim() || undefined,
+          address: shopAddress.trim() || undefined,
+        },
+      });
+      toast.success(lang === "bn" ? "দোকানের প্রোফাইল সেটআপ সম্পন্ন হয়েছে!" : "Shop profile configured!");
+      router.replace("/dashboard");
+    } catch (err: any) {
+      toast.error(err?.message || "Profile update failed");
+      router.replace("/dashboard");
+    } finally {
+      setOnboardingBusy(false);
+    }
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await uploadImageFn({ data: { image: base64 } });
+        if (res?.url) {
+          setShopLogo(res.url);
+          toast.success(lang === "bn" ? "লোগো আপলোড সম্পন্ন!" : "Logo uploaded!");
+        }
+      } catch {
+        toast.error("Failed to upload logo");
+      } finally {
+        setLogoUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   // ─── Owner Sign-In (Phone or Email) ───────────────────────────────────────
@@ -148,7 +209,9 @@ export default function AuthPage() {
       });
 
       toast.success(lang === "bn" ? "দোকান মালিক অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!" : "Shop Owner account created successfully!");
-      afterAuth(data.user as AuthUser);
+      const u = data.user as AuthUser;
+      login(u);
+      setOnboardingUser(u);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
     } finally {
@@ -304,9 +367,9 @@ export default function AuthPage() {
 
         {/* Top brand */}
         <div className="flex items-center gap-3 relative z-10 shrink-0">
-          <AppLogo size="md" alt="HakimQzz" />
+          <AppLogo size="md" alt="Dream IT" />
           <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">
-            HakimQzz
+            Dream IT POS
           </span>
         </div>
 
@@ -319,8 +382,8 @@ export default function AuthPage() {
 
           <h2 className="text-3xl lg:text-4xl font-bold font-serif leading-tight text-white">
             {lang === "bn"
-              ? `"HakimQzz" ইনভেন্টরি, সেলস ও একাউন্টিং সলিউশন`
-              : `"HakimQzz" Inventory, Sales & Accounting Solution`}
+              ? `"Dream IT" ইনভেন্টরি, সেলস ও একাউন্টিং বিলিং সফটওয়্যার`
+              : `"Dream IT" POS & Billing Software Solution`}
           </h2>
 
           <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
@@ -331,19 +394,22 @@ export default function AuthPage() {
         </div>
 
         {/* Single Official Attribution Footer (PC Left Panel Only) */}
-        <div className="space-y-1 relative z-10 text-xs text-zinc-400 border-t border-white/10 pt-4 font-balooda shrink-0">
-          <p className="text-zinc-200 font-semibold text-xs">
-            made with love by <span className="font-bold text-white">Azizul Hakim Khan</span>.
-          </p>
+        <div className="space-y-2 relative z-10 text-xs text-zinc-400 border-t border-white/10 pt-4 font-balooda shrink-0">
           <p className="text-[11px] text-zinc-400">
-            @2026 - infinite all rights reserved by <span className="font-bold text-zinc-200">Hakim Qzz</span>.
+            © 2026 Dream IT POS & Billing Software. All rights reserved.
           </p>
-          <p className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5 pt-0.5">
-            <span>Whatsapp Support:</span>
-            <a href="https://wa.me/8801783501427" target="_blank" rel="noopener noreferrer" className="hover:underline text-emerald-400">
-              +8801783501427
+          <div className="pt-0.5 flex items-center gap-2">
+            <a
+              href="https://wa.me/8801783501427"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold transition-all border border-emerald-500/30 cursor-pointer"
+              title="Customer Support"
+            >
+              <HelpCircle className="size-3.5 text-emerald-400" />
+              <span>{lang === "bn" ? "হেল্প ও সাপোর্ট" : "Help & Support"}</span>
             </a>
-          </p>
+          </div>
         </div>
       </div>
 
@@ -352,8 +418,8 @@ export default function AuthPage() {
         {/* Top Header Row */}
         <div className="flex items-center justify-between pb-3 shrink-0">
           <div className="flex items-center gap-2 md:hidden">
-            <AppLogo size="sm" alt="HakimQzz" />
-            <span className="font-serif text-lg font-bold">HakimQzz</span>
+            <AppLogo size="sm" alt="Dream IT" />
+            <span className="font-serif text-lg font-bold">Dream IT</span>
           </div>
 
           <div className="flex gap-1 rounded-full bg-white dark:bg-zinc-900 border border-border/80 p-0.5 text-xs ml-auto shadow-2xs">
@@ -675,7 +741,7 @@ export default function AuthPage() {
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Azizul Hakim"
+                        placeholder="e.g. Rahim Ahmed"
                         className="h-11 sm:h-12 rounded-xl bg-background border-border text-xs sm:text-sm px-3.5 placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-primary w-full"
                       />
                     </div>
@@ -799,9 +865,114 @@ export default function AuthPage() {
 
         {/* Clean, minimal copyright (Mobile view only) */}
         <div className="text-center text-[11px] text-muted-foreground py-2 md:hidden">
-          <span>© 2026 HakimQzz POS. All rights reserved.</span>
+          <span>© 2026 Dream IT POS. All rights reserved.</span>
         </div>
       </div>
+
+      {/* ─── POST-SIGNUP SHOP ONBOARDING MODAL ─────────────────────────────────── */}
+      <Dialog open={!!onboardingUser} onOpenChange={() => {}}>
+        <DialogContent
+          className="max-w-md rounded-3xl p-5 sm:p-6 bg-white border border-slate-200 shadow-2xl text-slate-900"
+          style={{ backgroundColor: "#FFFFFF" }}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                <Store className="size-6 text-emerald-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900">
+                  {lang === "bn" ? "দোকানের প্রোফাইল সেটআপ" : "Setup Shop Profile"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  {lang === "bn"
+                    ? "আপনার ইনভয়েস ও অ্যাকাউন্টের জন্য দোকানের বিবরণ দিন।"
+                    : "Enter your shop details for invoices and billing."}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleCompleteOnboarding} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">
+                {lang === "bn" ? "দোকানের নাম *" : "Shop Name *"}
+              </Label>
+              <Input
+                type="text"
+                required
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                placeholder={lang === "bn" ? "যেমন: ড্রিম ফ্যাশন / ভাই ভাই ট্রেডার্স" : "e.g. Dream Fashion / My Store"}
+                className="h-11 rounded-xl bg-slate-50 border-slate-200 text-slate-900 text-xs sm:text-sm px-3.5 placeholder:text-slate-400"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>{lang === "bn" ? "দোকানের লোগো (ঐচ্ছিক)" : "Shop Logo (Optional)"}</span>
+                {logoUploading && <span className="text-[10px] text-emerald-600 animate-pulse">Uploading...</span>}
+              </Label>
+              <div className="flex items-center gap-3">
+                {shopLogo ? (
+                  <div className="relative size-12 rounded-xl border border-slate-200 p-1 bg-slate-50 shrink-0">
+                    <img src={shopLogo} alt="Logo" className="w-full h-full object-contain rounded-lg" />
+                  </div>
+                ) : (
+                  <div className="size-12 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                    <ImageIcon className="size-5" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="h-10 rounded-xl bg-slate-50 border-slate-200 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:bg-emerald-600 file:text-white cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">
+                {lang === "bn" ? "দোকানের ঠিকানা (ঐচ্ছিক)" : "Shop Address (Optional)"}
+              </Label>
+              <Input
+                type="text"
+                value={shopAddress}
+                onChange={(e) => setShopAddress(e.target.value)}
+                placeholder={lang === "bn" ? "যেমন: ধানমন্ডি, ঢাকা" : "e.g. Dhanmondi, Dhaka"}
+                className="h-11 rounded-xl bg-slate-50 border-slate-200 text-slate-900 text-xs sm:text-sm px-3.5 placeholder:text-slate-400"
+              />
+            </div>
+
+            <DialogFooter className="flex flex-row gap-2 pt-2 sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.replace("/dashboard")}
+                className="flex-1 sm:flex-initial h-10 rounded-xl text-xs text-slate-600 border-slate-200 hover:bg-slate-100 cursor-pointer"
+              >
+                {lang === "bn" ? "পরে করব" : "Skip"}
+              </Button>
+              <Button
+                type="submit"
+                disabled={onboardingBusy || !shopName.trim()}
+                className="flex-1 sm:flex-initial h-10 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+              >
+                {onboardingBusy ? (
+                  <RefreshCw className="size-4 animate-spin mr-1.5" />
+                ) : (
+                  <CheckCircle2 className="size-4 mr-1.5" />
+                )}
+                <span>{lang === "bn" ? "শুরু করুন" : "Get Started"}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── FORGOT PASSWORD MODAL ───────────────────────────────────────────── */}
       <Dialog open={forgotModalOpen} onOpenChange={setForgotModalOpen}>

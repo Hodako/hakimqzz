@@ -55,14 +55,14 @@ export default function ActivatePage() {
           <AppLogo size="lg" />
           <h1 className="text-xl font-serif font-bold">Activate License</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your business or employee license key to activate HakimQzz.
+            Enter your business or employee license key to activate Dream IT POS.
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">License Key</Label>
             <Input
-              placeholder="HZ-XXXX-XXXX-XXXX or EMP-XXXX-XXXX-XXXX"
+              placeholder="DI-XXXX-XXXX-XXXX or EMP-XXXX-XXXX-XXXX"
               value={key}
               onChange={e => setKey(e.target.value.toUpperCase())}
               className="font-mono uppercase"
@@ -74,7 +74,7 @@ export default function ActivatePage() {
 
           <div className="pt-2 text-center">
             <a
-              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20HakimQzz."
+              href="https://wa.me/8801783501427?text=Hello%20Admin,%20I%20need%20a%20license%20key%20for%20Dream%20IT%20POS."
               target="_blank"
               rel="noopener noreferrer"
               style={{ fontFamily: "'Roboto', sans-serif" }}
@@ -87,7 +87,7 @@ export default function ActivatePage() {
             </a>
           </div>
           <div className="pt-3 text-center text-[10px] text-muted-foreground border-t border-border/50">
-            Powered by Dream Fashion
+            Powered by Dream IT
           </div>
         </form>
       </Card>

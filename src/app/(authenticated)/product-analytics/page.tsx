@@ -545,162 +545,167 @@ export default function ProductAnalyticsPage() {
         </div>
       )}
 
-      {/* ─── 5 Interactive KPI Overview Cards ────────────────────────────── */}
+      {/* ─── 5 Interactive KPI Overview Cards (Clean White Style) ─────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* 1. Best Selling Leader */}
-        <Card
+        <div
           onClick={() => { setActiveTab("best_sellers"); setPage(1); }}
-          className={`p-3 sm:p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] shadow-xs flex flex-col justify-between ${
+          className={`p-3 sm:p-4 rounded-xl cursor-pointer transition-all hover:shadow-md bg-white border shadow-sm flex flex-col justify-between ${
             activeTab === "best_sellers"
-              ? "ring-2 ring-emerald-500 bg-gradient-to-br from-emerald-500/20 via-card to-card border-emerald-500"
-              : "bg-gradient-to-br from-emerald-500/10 via-card to-card border-emerald-500/30"
+              ? "border-emerald-500 ring-2 ring-emerald-500/20"
+              : "border-slate-200 hover:border-slate-300"
           }`}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#64748B] uppercase tracking-wider truncate">
               {lang === "bn" ? "শীর্ষ বিক্রিত" : "Top Seller"}
             </span>
-            <div className="size-6 sm:size-7 rounded-lg bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
-              <Flame className="size-3.5 sm:size-4" />
+            <div className="size-6 sm:size-7 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+              <Flame className="size-3.5 sm:size-4 text-emerald-600" />
             </div>
           </div>
-          <div className="mt-1.5 sm:mt-2 space-y-0.5">
-            <h3 className="text-xs sm:text-sm font-bold text-foreground truncate" title={bestSellers[0]?.product.name || "N/A"}>
+          <div className="mt-2 space-y-0.5">
+            <h3 className="text-xs sm:text-sm font-bold text-[#0F172A] truncate" title={bestSellers[0]?.product.name || "N/A"}>
               {bestSellers[0]?.product.name || (lang === "bn" ? "তথ্য নেই" : "No Sales Yet")}
             </h3>
             <div className="flex items-baseline gap-1">
-              <span className="text-base sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+              <span className="text-base sm:text-xl font-bold text-emerald-600">
                 {bestSellers[0]?.piecesSold || 0} {lang === "bn" ? "পিস" : "pcs"}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {fmtMoney(bestSellers[0]?.revenue || 0)} • {lang === "bn" ? "স্টক:" : "Stock:"} <span className="font-semibold text-foreground">{bestSellers[0]?.product.stock ?? 0}</span>
+            <p className="text-[10px] text-[#64748B] truncate">
+              {fmtMoney(bestSellers[0]?.revenue || 0)} • {lang === "bn" ? "স্টক:" : "Stock:"} <span className="font-semibold text-[#0F172A]">{bestSellers[0]?.product.stock ?? 0}</span>
             </p>
           </div>
-        </Card>
+        </div>
 
         {/* 2. Top Trending */}
-        <Card
+        <div
           onClick={() => { setActiveTab("trending"); setPage(1); }}
-          className={`p-3 sm:p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] shadow-xs flex flex-col justify-between ${
+          className={`p-3 sm:p-4 rounded-xl cursor-pointer transition-all hover:shadow-md bg-white border shadow-sm flex flex-col justify-between ${
             activeTab === "trending"
-              ? "ring-2 ring-sky-500 bg-gradient-to-br from-sky-500/20 via-card to-card border-sky-500"
-              : "bg-gradient-to-br from-sky-500/10 via-card to-card border-sky-500/30"
+              ? "border-sky-500 ring-2 ring-sky-500/20"
+              : "border-slate-200 hover:border-slate-300"
           }`}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#64748B] uppercase tracking-wider truncate">
               {lang === "bn" ? "ট্রেন্ডিং" : "Trending"}
             </span>
-            <div className="size-6 sm:size-7 rounded-lg bg-sky-500/20 text-sky-600 flex items-center justify-center shrink-0">
-              <TrendingUp className="size-3.5 sm:size-4" />
+            <div className="size-6 sm:size-7 rounded-lg bg-sky-50 text-sky-600 border border-sky-100 flex items-center justify-center shrink-0">
+              <TrendingUp className="size-3.5 sm:size-4 text-sky-600" />
             </div>
           </div>
-          <div className="mt-1.5 sm:mt-2 space-y-0.5">
-            <h3 className="text-xs sm:text-sm font-bold text-foreground truncate" title={trendingProducts[0]?.product.name || "N/A"}>
+          <div className="mt-2 space-y-0.5">
+            <h3 className="text-xs sm:text-sm font-bold text-[#0F172A] truncate" title={trendingProducts[0]?.product.name || "N/A"}>
               {trendingProducts[0]?.product.name || (lang === "bn" ? "তথ্য নেই" : "No Sales Yet")}
             </h3>
             <div className="flex items-baseline gap-1">
-              <span className="text-base sm:text-xl font-extrabold text-sky-600 dark:text-sky-400">
+              <span className="text-base sm:text-xl font-bold text-sky-600">
                 +{trendingProducts[0]?.velocityGrowth || 0}%
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-[#64748B] truncate">
               {trendingProducts[0]?.piecesSold || 0} {lang === "bn" ? "পিস বিক্রি" : "pcs sold"}
             </p>
           </div>
-        </Card>
+        </div>
 
         {/* 3. Critical & Low Stock */}
-        <Card
+        <div
           onClick={() => { setActiveTab("critical_stock"); setPage(1); }}
-          className={`p-3 sm:p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] shadow-xs flex flex-col justify-between ${
+          className={`p-3 sm:p-4 rounded-xl cursor-pointer transition-all hover:shadow-md bg-white border shadow-sm flex flex-col justify-between ${
             activeTab === "critical_stock"
-              ? "ring-2 ring-amber-500 bg-gradient-to-br from-amber-500/20 via-card to-card border-amber-500"
-              : "bg-gradient-to-br from-amber-500/10 via-card to-card border-amber-500/30"
+              ? "border-amber-500 ring-2 ring-amber-500/20"
+              : "border-slate-200 hover:border-slate-300"
           }`}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#64748B] uppercase tracking-wider truncate">
               {lang === "bn" ? "সংকট স্টক" : "Low Stock"}
             </span>
-            <div className="size-6 sm:size-7 rounded-lg bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
-              <AlertTriangle className="size-3.5 sm:size-4" />
+            <div className="size-6 sm:size-7 rounded-lg bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="size-3.5 sm:size-4 text-amber-600" />
             </div>
           </div>
-          <div className="mt-1.5 sm:mt-2 space-y-0.5">
+          <div className="mt-2 space-y-0.5">
             <div className="flex items-baseline gap-1">
-              <span className="text-base sm:text-2xl font-extrabold text-amber-600 dark:text-amber-400">
+              <span className="text-base sm:text-2xl font-bold text-amber-600">
                 {criticalStockProducts.length}
               </span>
-              <span className="text-[11px] text-muted-foreground">{lang === "bn" ? "আইটেম" : "items"}</span>
+              <span className="text-[11px] text-[#64748B]">{lang === "bn" ? "আইটেম" : "items"}</span>
             </div>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-[#64748B] truncate">
               {criticalStockProducts.filter(p => p.product.stock <= 0).length} {lang === "bn" ? "টি শূন্য স্টকে" : "out of stock"}
             </p>
           </div>
-        </Card>
+        </div>
 
         {/* 4. Slow Moving */}
-        <Card
+        <div
           onClick={() => { setActiveTab("slow_moving"); setPage(1); }}
-          className={`p-3 sm:p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] shadow-xs flex flex-col justify-between ${
+          className={`p-3 sm:p-4 rounded-xl cursor-pointer transition-all hover:shadow-md bg-white border shadow-sm flex flex-col justify-between ${
             activeTab === "slow_moving"
-              ? "ring-2 ring-purple-500 bg-gradient-to-br from-purple-500/20 via-card to-card border-purple-500"
-              : "bg-gradient-to-br from-purple-500/10 via-card to-card border-purple-500/30"
+              ? "border-purple-500 ring-2 ring-purple-500/20"
+              : "border-slate-200 hover:border-slate-300"
           }`}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#64748B] uppercase tracking-wider truncate">
               {lang === "bn" ? "অচল স্টক" : "Dead Stock"}
             </span>
-            <div className="size-6 sm:size-7 rounded-lg bg-purple-500/20 text-purple-600 flex items-center justify-center shrink-0">
-              <Clock className="size-3.5 sm:size-4" />
+            <div className="size-6 sm:size-7 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
+              <Clock className="size-3.5 sm:size-4 text-purple-600" />
             </div>
           </div>
-          <div className="mt-1.5 sm:mt-2 space-y-0.5">
+          <div className="mt-2 space-y-0.5">
             <div className="flex items-baseline gap-1">
-              <span className="text-base sm:text-xl font-extrabold text-purple-600 dark:text-purple-400 truncate">
+              <span className="text-base sm:text-xl font-bold text-purple-600 truncate">
                 {fmtMoney(tiedCapitalInSlowStock)}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-[#64748B] truncate">
               {slowMovingProducts.length} {lang === "bn" ? "টি পণ্যে পুঁজি আবদ্ধ" : "items tied up"}
             </p>
           </div>
-        </Card>
+        </div>
 
         {/* 5. Total Sold vs Stock */}
-        <Card
+        <div
           onClick={() => { setActiveTab("all"); setPage(1); }}
-          className={`col-span-2 sm:col-span-1 p-3 sm:p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.01] shadow-xs flex flex-col justify-between ${
+          className={`col-span-2 sm:col-span-1 p-3 sm:p-4 rounded-xl cursor-pointer transition-all hover:shadow-md bg-white border shadow-sm flex flex-col justify-between ${
             activeTab === "all"
-              ? "ring-2 ring-primary bg-gradient-to-br from-primary/20 via-card to-card border-primary"
-              : "bg-gradient-to-br from-emerald-600/10 via-card to-card border-border/80"
+              ? "border-slate-800 ring-2 ring-slate-800/10"
+              : "border-slate-200 hover:border-slate-300"
           }`}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            <span className="text-[10px] sm:text-[11px] font-semibold text-[#64748B] uppercase tracking-wider truncate">
               {lang === "bn" ? "বিক্রি ও স্টক" : "Sold / In-Stock"}
             </span>
-            <div className="size-6 sm:size-7 rounded-lg bg-emerald-600/20 text-emerald-600 flex items-center justify-center shrink-0">
-              <Package className="size-3.5 sm:size-4" />
+            <div className="size-6 sm:size-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shrink-0">
+              <Package className="size-3.5 sm:size-4 text-emerald-700" />
             </div>
           </div>
-          <div className="mt-1.5 sm:mt-2 space-y-0.5">
+          <div className="mt-2 space-y-0.5">
             <div className="flex items-baseline gap-1">
-              <span className="text-base sm:text-xl font-extrabold text-emerald-700 dark:text-emerald-300">
+              <span className="text-base sm:text-xl font-bold text-[#0F172A]">
                 {totalCatalogPiecesSold}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[11px] text-[#64748B]">
                 / {totalCatalogStockUnits} {lang === "bn" ? "পিস" : "pcs"}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {lang === "bn" ? "মোট লাভ: " : "Profit: "} <span className="font-semibold text-foreground">{fmtMoney(totalCatalogProfit)}</span>
+            <p className="text-[10px] text-[#64748B] truncate">
+              {lang === "bn" ? "মোট লাভ: " : "Profit: "} <span className="font-semibold text-emerald-600">{fmtMoney(totalCatalogProfit)}</span>
             </p>
           </div>
-        </Card>
+        </div>
       </div>
 
       {/* ─── Interactive Multi-View Charts Section ───────────────────────── */}

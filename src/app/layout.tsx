@@ -5,36 +5,36 @@ import "../styles.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://hakim.qzz.io"),
-  title: "HakimQzz POS software",
-  description: "HakimQzz POS software — Automated inventory, sales, accounting, and store management system for any shop.",
-  authors: [{ name: "HakimQzz" }],
+  title: "Dream It pos and billing software",
+  description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
+  authors: [{ name: "Dream IT" }],
   icons: {
     icon: "/logo.png",
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.json",
   openGraph: {
-    title: "HakimQzz POS software",
-    description: "HakimQzz POS software — Automated inventory, sales, accounting, and store management system for any shop.",
+    title: "Dream It pos and billing software",
+    description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
     images: [
       {
         url: "/og-banner.svg",
         width: 1200,
         height: 630,
-        alt: "HakimQzz POS software",
+        alt: "Dream It pos and billing software",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "HakimQzz POS software",
-    description: "HakimQzz POS software — Automated inventory, sales, accounting, and store management system for any shop.",
+    title: "Dream It pos and billing software",
+    description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
     images: ["/og-banner.svg"],
   },
   appleWebApp: {
     capable: true,
-    title: "HakimQzz POS software",
+    title: "Dream IT",
     statusBarStyle: "black-translucent",
   },
 };
