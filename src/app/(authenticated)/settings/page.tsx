@@ -314,32 +314,26 @@ export default function SettingsPage() {
 
     ctx.drawImage(img, drawX, drawY, renderedWidth, renderedHeight);
 
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const croppedFile = new File([blob], cropImageName || "logo.png", { type: cropImageType });
-
-      const loadId = toast.loading("Uploading cropped logo...");
-      try {
-        const formData = new FormData();
-        formData.append("file", croppedFile);
-        const res = await uploadImageFn(formData);
-
-        if (res.url) {
-          setLogoUrl(res.url);
-          await updateBusinessSettingsFn({
-            data: { logo_url: res.url },
-          });
-          qc.invalidateQueries({ queryKey: ["business-settings"] });
-          toast.success("Logo uploaded and updated successfully!", { id: loadId });
-        } else {
-          toast.error("Upload failed", { id: loadId });
-        }
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : "Failed to upload image", { id: loadId });
-      } finally {
-        setCropImageSrc(null);
+    const dataUrl = canvas.toDataURL(cropImageType || "image/png");
+    const loadId = toast.loading("Uploading cropped logo...");
+    try {
+      const res: any = await uploadImageFn({ data: { base64: dataUrl, fileName: cropImageName || "logo.png" } });
+      const url = res?.url || res?.data?.url;
+      if (url) {
+        setLogoUrl(url);
+        await updateBusinessSettingsFn({
+          data: { logo_url: url },
+        });
+        qc.invalidateQueries({ queryKey: ["business-settings"] });
+        toast.success("Logo uploaded and updated successfully!", { id: loadId });
+      } else {
+        toast.error("Upload failed", { id: loadId });
       }
-    }, cropImageType);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload image", { id: loadId });
+    } finally {
+      setCropImageSrc(null);
+    }
   };
 
   async function saveBusiness(e: React.FormEvent<HTMLFormElement>) {

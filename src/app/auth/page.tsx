@@ -123,10 +123,13 @@ export default function AuthPage() {
     reader.onload = async () => {
       try {
         const base64 = reader.result as string;
-        const res = await uploadImageFn({ data: { image: base64 } });
-        if (res?.url) {
-          setShopLogo(res.url);
+        const res: any = await uploadImageFn({ data: { base64, fileName: file.name } });
+        const url = res?.url || res?.data?.url;
+        if (url) {
+          setShopLogo(url);
           toast.success(lang === "bn" ? "লোগো আপলোড সম্পন্ন!" : "Logo uploaded!");
+        } else {
+          toast.error(lang === "bn" ? "লোগো আপলোড ব্যর্থ হয়েছে" : "Upload failed");
         }
       } catch {
         toast.error("Failed to upload logo");

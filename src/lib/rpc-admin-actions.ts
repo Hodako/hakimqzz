@@ -432,9 +432,11 @@ export async function getBusinessSettingsFn() {
     business: business ? {
       id: business._id as any as string,
       name: business.name as string,
+      tagline: (business.tagline as string) || "",
       address: (business.address as string) || "",
       phone_numbers: (business.phone_numbers as string) || (business.phone as string) || "",
       emails: (business.emails as string) || (business.email as string) || "",
+      currency: (business.currency as string) || "৳",
       invoice_page_size: (business.invoice_page_size as string) || "80mm",
       invoice_page_width: (business.invoice_page_width as string) || "",
       invoice_page_height: (business.invoice_page_height as string) || "",
@@ -476,13 +478,15 @@ export async function getBusinessSettingsFn() {
 export async function updateBusinessSettingsFn(input: {
   data: {
     name?: string;
+    tagline?: string;
     address?: string;
-    phone_numbers?: string;
-    emails?: string;
+    phone_numbers?: any;
+    emails?: any;
     invoice_page_size?: string;
     invoice_page_width?: string;
     invoice_page_height?: string;
     logo_url?: string;
+    currency?: string;
     business_type?: string;
     theme?: string;
     employee_limit?: number;
@@ -497,6 +501,7 @@ export async function updateBusinessSettingsFn(input: {
     google_sheets_credentials_json?: string;
     google_sheets_connected_email?: string;
     google_sheets_sync_enabled?: boolean;
+    [key: string]: any;
   }
 }) {
   const { data } = input;
@@ -506,6 +511,12 @@ export async function updateBusinessSettingsFn(input: {
   const business = await db.collection("businesses").findOne({ owner_id: session.ownerId });
   if (!business) throw new Error("Business not found");
   await db.collection("businesses").updateOne({ _id: business._id as any }, { $set: data });
+  if (data.name) {
+    await db.collection("users").updateOne(
+      { _id: session.ownerId as any },
+      { $set: { business_name: data.name } }
+    );
+  }
   return { success: true };
 }
 
