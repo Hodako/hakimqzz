@@ -3704,33 +3704,41 @@ export async function inviteEmployeeByEmailFn(input: {
   const db = await getDb();
 
   const cleanEmail = (data.email || "").trim().toLowerCase();
-  if (!cleanEmail || !cleanEmail.includes("@")) {
-    throw new Error("A valid employee email address is required");
+  if (!cleanEmail) {
+    throw new Error("Employee email or username is required");
   }
 
-  if (cleanEmail === session.email.toLowerCase().trim()) {
+  const sessionEmail = (session.email || "").toLowerCase().trim();
+  if (sessionEmail && cleanEmail === sessionEmail) {
     throw new Error("You cannot invite yourself as an employee");
   }
 
   const ownerUser = await db.collection("users").findOne({ _id: session.userId as any });
   const biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
   const businessName = biz?.name || ownerUser?.business_name || "Dream Fashion";
-  const businessId = (biz?._id as any as string) || session.businessId;
+  const businessId = (biz?._id as any as string) || session.businessId || session.ownerId;
 
   // Check if this email is already an active employee in this business
   const existingEmployee = await db.collection("users").findOne({
-    email: cleanEmail,
+    $or: [
+      { email: cleanEmail },
+      { username: cleanEmail },
+      ...(data.phone ? [{ phone: data.phone.trim() }] : [])
+    ],
     business_id: businessId,
     role: "employee",
   });
 
   if (existingEmployee) {
-    throw new Error(`User with email '${cleanEmail}' is already an employee of ${businessName}`);
+    throw new Error(`User '${cleanEmail}' is already an employee of ${businessName}`);
   }
 
   // Cancel any existing pending invitation for this email and business
   await db.collection("employee_invitations").deleteMany({
-    employee_email: cleanEmail,
+    $or: [
+      { employee_email: cleanEmail },
+      ...(data.phone ? [{ phone: data.phone.trim() }] : [])
+    ],
     business_id: businessId,
     status: "pending",
   });
@@ -3744,7 +3752,7 @@ export async function inviteEmployeeByEmailFn(input: {
     business_name: businessName,
     owner_id: session.ownerId,
     owner_name: ownerUser?.full_name || ownerUser?.username || "Shop Owner",
-    owner_email: ownerUser?.email || session.email,
+    owner_email: ownerUser?.email || session.email || "",
     employee_email: cleanEmail,
     employee_name: data.fullName?.trim() || "",
     phone: data.phone?.trim() || "",
@@ -3758,7 +3766,14 @@ export async function inviteEmployeeByEmailFn(input: {
   await db.collection("employee_invitations").insertOne(invitationDoc as any);
 
   // If user already exists in the system, link a pending notification
-  const existingUser = await db.collection("users").findOne({ email: cleanEmail });
+  const existingUser = await db.collection("users").findOne({
+    $or: [
+      { email: cleanEmail },
+      { username: cleanEmail },
+      ...(data.phone ? [{ phone: data.phone.trim() }] : [])
+    ]
+  });
+
   if (existingUser) {
     await db.collection("users").updateOne(
       { _id: existingUser._id },
@@ -3785,6 +3800,8 @@ export async function inviteEmployeeByEmailFn(input: {
     },
   };
 }
+
+export const sendEmployeeInvitationFn = inviteEmployeeByEmailFn;
 
 export async function listEmployeeInvitationsFn() {
   const session = await requireSession();
@@ -3830,16 +3847,32 @@ export async function cancelEmployeeInvitationFn(input: { data: { invitationId: 
 
 export async function getMyPendingEmployeeInvitationsFn() {
   const session = await requireSession().catch(() => null);
-  if (!session || !session.email) {
+  if (!session) {
     return [];
   }
   const db = await getDb();
-  const cleanEmail = session.email.toLowerCase().trim();
+  const user = await db.collection("users").findOne({ _id: session.userId as any });
+  const cleanEmail = (session.email || user?.email || user?.username || "").toLowerCase().trim();
+  const cleanPhone = (user?.phone || "").trim();
+
+  const orConditions: any[] = [];
+  if (cleanEmail) {
+    orConditions.push({ employee_email: cleanEmail });
+  }
+  if (cleanPhone) {
+    orConditions.push({ phone: cleanPhone });
+    orConditions.push({ employee_email: cleanPhone });
+  }
+  if (user?.username) {
+    orConditions.push({ employee_email: user.username.toLowerCase().trim() });
+  }
+
+  if (orConditions.length === 0) return [];
 
   const pendingInvites = await db
     .collection("employee_invitations")
     .find({
-      employee_email: cleanEmail,
+      $or: orConditions,
       status: "pending",
     })
     .sort({ created_at: -1 })
@@ -3866,12 +3899,22 @@ export async function respondToEmployeeInvitationFn(input: {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
-  const cleanEmail = session.email.toLowerCase().trim();
+  const user = await db.collection("users").findOne({ _id: session.userId as any });
+  const cleanEmail = (session.email || user?.email || user?.username || "").toLowerCase().trim();
+  const cleanPhone = (user?.phone || "").trim();
+
+  const orConditions: any[] = [];
+  if (cleanEmail) orConditions.push({ employee_email: cleanEmail });
+  if (cleanPhone) {
+    orConditions.push({ phone: cleanPhone });
+    orConditions.push({ employee_email: cleanPhone });
+  }
+  if (user?.username) orConditions.push({ employee_email: user.username.toLowerCase().trim() });
 
   const invitation = await db.collection("employee_invitations").findOne({
     _id: data.invitationId as any,
-    employee_email: cleanEmail,
     status: "pending",
+    ...(orConditions.length > 0 ? { $or: orConditions } : {}),
   });
 
   if (!invitation) {
