@@ -9,12 +9,48 @@ const isStaticOrNative = typeof window !== "undefined" && (
   window.location.hostname.includes("web.app")
 );
 
-// For Capacitor/native apps or static hosting use the absolute public URL, for web use relative path
-const API_BASE = (typeof window !== "undefined" && isStaticOrNative) ? (process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io") : "";
+// For Classic-World static SPA (Firebase Hosting) & native apps, point to the live Next.js backend server
+export const API_BASE = (
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (isStaticOrNative ? "https://hakim.qzz.io" : "https://hakim.qzz.io")
+).replace(/\/$/, "");
 
-async function callRemoteRpc(actionName: string, args: any) {
+
+async function callRemoteRpc(actionName: string, args: any): Promise<any> {
   const url = `${API_BASE}/api/rpc`;
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+  let token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+
+  // Auto-sync token with Firebase Auth if token is missing
+  if (!token && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn" && actionName !== "registerFn") {
+    try {
+      const { auth } = await import("@/lib/firebase");
+      if (auth.currentUser?.email) {
+        const syncRes = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            actionName: "firebaseAuthSyncFn",
+            args: {
+              data: {
+                email: auth.currentUser.email,
+                fullName: auth.currentUser.displayName || undefined,
+                photoUrl: auth.currentUser.photoURL || undefined,
+                firebaseUid: auth.currentUser.uid,
+              },
+            },
+          }),
+        });
+        if (syncRes.ok) {
+          const syncJson = await syncRes.json();
+          if (syncJson?.token) {
+            token = syncJson.token;
+            window.localStorage.setItem("auth_token", syncJson.token);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   const activeProfile = typeof window !== "undefined" ? window.localStorage.getItem("active_profile") : null;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -28,7 +64,7 @@ async function callRemoteRpc(actionName: string, args: any) {
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: "POST",
       headers,
       credentials: "include",
@@ -36,6 +72,45 @@ async function callRemoteRpc(actionName: string, args: any) {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+
+    // Auto-refresh token and retry on 401 Unauthorized
+    if (res.status === 401 && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn") {
+      try {
+        const { auth } = await import("@/lib/firebase");
+        if (auth.currentUser?.email) {
+          const retrySync = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({
+              actionName: "firebaseAuthSyncFn",
+              args: {
+                data: {
+                  email: auth.currentUser.email,
+                  fullName: auth.currentUser.displayName || undefined,
+                  photoUrl: auth.currentUser.photoURL || undefined,
+                  firebaseUid: auth.currentUser.uid,
+                },
+              },
+            }),
+          });
+          if (retrySync.ok) {
+            const syncJson = await retrySync.json();
+            if (syncJson?.token) {
+              token = syncJson.token;
+              window.localStorage.setItem("auth_token", syncJson.token);
+              headers["Authorization"] = `Bearer ${token}`;
+              // Retry the original RPC with the refreshed token
+              res = await fetch(url, {
+                method: "POST",
+                headers,
+                credentials: "include",
+                body: JSON.stringify({ actionName, args, token, activeProfile }),
+              });
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     const txt = await res.text();
     if (!res.ok) {
@@ -49,10 +124,8 @@ async function callRemoteRpc(actionName: string, args: any) {
 
     try {
       const result = JSON.parse(txt);
-      if ((actionName === "loginFn" || actionName === "registerFn" || actionName === "employeeLoginFn") && result?.token) {
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem("auth_token", result.token);
-        }
+      if (result?.token && typeof window !== "undefined") {
+        window.localStorage.setItem("auth_token", result.token);
       }
       if (actionName === "switchProfileFn" && args?.data?.profileId) {
         if (typeof window !== "undefined") {
@@ -88,11 +161,19 @@ async function runWriteAction<T>(actionName: string, args: any): Promise<T | any
   }
   try {
     return await callRemoteRpc(actionName, args);
-  } catch (err) {
+  } catch (err: any) {
     if (typeof window !== "undefined") {
-      console.warn(`Write action ${actionName} failed, queuing offline:`, err);
-      queueOfflineAction(actionName, args);
-      return { success: true, offline: true, id: crypto.randomUUID() };
+      const isNetworkError =
+        !navigator.onLine ||
+        err?.message?.includes("timed out") ||
+        err?.message?.includes("Failed to fetch") ||
+        err?.message?.includes("NetworkError");
+
+      if (isNetworkError) {
+        console.warn(`Write action ${actionName} failed due to network error, queuing offline:`, err);
+        queueOfflineAction(actionName, args);
+        return { success: true, offline: true, id: crypto.randomUUID() };
+      }
     }
     throw err;
   }
@@ -174,12 +255,12 @@ export const cancelCourierOrderFn = makeWriteAction("cancelCourierOrderFn");
 
 export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
 export const createReturnFn = makeWriteAction("createReturnFn");
-export const exchangeProductsFn = makeWriteAction("exchangeProductsFn");
 export const createDirectProductReturnFn = makeWriteAction("createDirectProductReturnFn");
 export const createPartyReturnFn = makeWriteAction("createPartyReturnFn");
 export const deleteReturnFn = makeWriteAction("deleteReturnFn");
 
 export const createPurchaseFn = makeWriteAction("createPurchaseFn");
+export const editPurchaseFn = makeWriteAction("editPurchaseFn");
 export const deletePurchaseFn = makeWriteAction("deletePurchaseFn");
 
 export const createExpenseFn = makeWriteAction("createExpenseFn");
@@ -214,13 +295,6 @@ export const resetExpensesFn = makeReadAction("resetExpensesFn");
 export const resetPartiesFn = makeReadAction("resetPartiesFn");
 export const resetAllDataFn = makeReadAction("resetAllDataFn");
 
-// ─── WhatsApp Integration Operations ─────────────────────────────────────────
-export const getWhatsAppStatusFn = makeReadAction("getWhatsAppStatusFn");
-export const startWhatsAppSessionFn = makeReadAction("startWhatsAppSessionFn");
-export const disconnectWhatsAppSessionFn = makeReadAction("disconnectWhatsAppSessionFn");
-export const sendWhatsAppMessageFn = makeReadAction("sendWhatsAppMessageFn");
-export const sendWhatsAppCampaignFn = makeReadAction("sendWhatsAppCampaignFn");
-
 // Register background sync engine with remote HTTP execution map
 const actionsList = [
   "createProductFn", "updateProductFn", "deleteProductFn", "archiveProductFn",
@@ -245,13 +319,7 @@ if (typeof window !== "undefined") {
 }
 
 export async function callAiChat(messages: any[], lang: string) {
-  const isNativeApp = typeof window !== "undefined" && (
-    !!(window as any).Capacitor ||
-    window.location.origin.startsWith("capacitor:") ||
-    window.location.origin.startsWith("file:")
-  );
-  const base = isNativeApp ? (process.env.NEXT_PUBLIC_APP_URL || "https://hakim.qzz.io") : "";
-  const url = `${base}/api/ai-chat`;
+  const url = `${API_BASE}/api/ai-chat`;
   
   const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
   const headers: Record<string, string> = {
@@ -296,12 +364,7 @@ export const deleteSmsLogFn = makeWriteAction("deleteSmsLogFn");
 export const getActiveAdminPopupsFn = makeReadAction("getActiveAdminPopupsFn");
 export const dismissAdminPopupFn = makeWriteAction("dismissAdminPopupFn");
 
-// ── Shop Employee Management & Auth ──────────────────────────────────────
-export const employeeLoginFn = makeWriteAction("employeeLoginFn");
-export const listShopEmployeesFn = makeReadAction("listShopEmployeesFn");
-export const createShopEmployeeFn = makeWriteAction("createShopEmployeeFn");
-export const updateShopEmployeeFn = makeWriteAction("updateShopEmployeeFn");
-export const deleteShopEmployeeFn = makeWriteAction("deleteShopEmployeeFn");
+// ── Employee Email Invitations & Joining ───────────────────────────────────
 export const inviteEmployeeByEmailFn = makeWriteAction("inviteEmployeeByEmailFn");
 export const sendEmployeeInvitationFn = makeWriteAction("sendEmployeeInvitationFn");
 export const listEmployeeInvitationsFn = makeReadAction("listEmployeeInvitationsFn");
