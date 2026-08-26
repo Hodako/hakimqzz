@@ -1,4 +1,4 @@
-const CACHE_NAME = "dreamit-pos-v19";
+const CACHE_NAME = "pos-pwa-v30";
 
 const PRECACHE_ASSETS = [
   "/manifest.json",
@@ -7,7 +7,7 @@ const PRECACHE_ASSETS = [
   "/apple-touch-icon.png",
 ];
 
-// ── Install: Pre-cache static media only (no HTML with chunk manifests) ───
+// ── Install: Pre-cache static assets & skip waiting ──────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
@@ -26,14 +26,14 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// ── Activate: Clean up all obsolete caches immediately ────────────────────
+// ── Activate: Clean up all obsolete caches and claim clients immediately ─────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log("[SW] Deleting obsolete cache:", key);
+            console.log("[PWA SW] Clearing obsolete cache:", key);
             return caches.delete(key);
           }
         })
@@ -43,7 +43,14 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch Handler ─────────────────────────────────────────────────────────
+// ── Message Listener: Handle SKIP_WAITING from client ────────────────────────
+self.addEventListener("message", (event) => {
+  if (event.data && (event.data.type === "SKIP_WAITING" || event.data === "skipWaiting")) {
+    self.skipWaiting();
+  }
+});
+
+// ── Fetch Handler ────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -88,19 +95,20 @@ self.addEventListener("fetch", (event) => {
       fetch(event.request).catch(async () => {
         const cached = await caches.match(event.request);
         if (cached) return cached;
-        // Let it throw naturally so ChunkLoadError triggers auto-recovery
         throw new Error("Chunk load failed from network");
       })
     );
     return;
   }
 
-  // 3. Static Media (Fonts, Images) -> Cache-First
+  // 3. Static Media (Fonts, Images, Icons) -> Cache-First
   const isMediaAsset =
     url.pathname.endsWith(".svg") ||
     url.pathname.endsWith(".png") ||
     url.pathname.endsWith(".jpg") ||
+    url.pathname.endsWith(".jpeg") ||
     url.pathname.endsWith(".webp") ||
+    url.pathname.endsWith(".ico") ||
     url.pathname.endsWith(".woff2") ||
     url.pathname.endsWith(".woff") ||
     url.pathname.endsWith(".ttf") ||
@@ -110,20 +118,32 @@ self.addEventListener("fetch", (event) => {
 
   if (isMediaAsset) {
     event.respondWith(
-      caches.match(event.request).then(async (cached) => {
+      caches.match(event.request).then((cached) => {
         if (cached) return cached;
-        try {
-          const networkRes = await fetch(event.request);
-          if (networkRes && networkRes.status === 200) {
-            const copy = networkRes.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return networkRes;
-        } catch (_) {
-          return new Response("", { status: 404 });
-        }
+        return fetch(event.request)
+          .then((networkRes) => {
+            if (networkRes && networkRes.status === 200) {
+              const copy = networkRes.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            }
+            return networkRes;
+          })
+          .catch(() => new Response("", { status: 408, statusText: "Offline" }));
       })
     );
     return;
   }
+
+  // 4. Default: Network-First
+  event.respondWith(
+    fetch(event.request)
+      .then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const copy = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return networkRes;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });
