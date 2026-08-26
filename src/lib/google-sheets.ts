@@ -55,8 +55,14 @@ export async function appendRowToGoogleSheet(
 ) {
   try {
     const db = await getDb();
-    const biz = await db.collection("businesses").findOne({ owner_id: ownerId });
+    const biz = (await db.collection("businesses").findOne({ owner_id: ownerId })) ||
+                (await db.collection("businesses").findOne({ _id: ownerId as any }));
     if (!biz) return;
+
+    // Feature Turn On / Off toggle check
+    if (biz.google_sheets_sync_enabled === false) {
+      return;
+    }
 
     const spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
     if (!spreadsheetId) return;
@@ -140,13 +146,14 @@ export async function appendRowToGoogleSheet(
 /** Bulk export all existing data to Google Sheet tabs. */
 export async function bulkExportToGoogleSheets(ownerId: string) {
   const db = await getDb();
-  const biz = await db.collection("businesses").findOne({ owner_id: ownerId });
+  const biz = (await db.collection("businesses").findOne({ owner_id: ownerId })) ||
+              (await db.collection("businesses").findOne({ _id: ownerId as any }));
   if (!biz) throw new Error("Business not found");
 
   const spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
 
   if (!spreadsheetId) {
-    throw new Error("Google Sheets Spreadsheet ID is missing. Connect your Google account or provide a Spreadsheet ID.");
+    throw new Error("Google Sheets Spreadsheet ID is missing. Connect your Google account or provide a Spreadsheet ID in Settings.");
   }
 
   const token = await getEffectiveToken(biz);
@@ -160,32 +167,77 @@ export async function bulkExportToGoogleSheets(ownerId: string) {
   const expenses = await db.collection("expenses").find({ owner_id: ownerId }).toArray();
   const cashbox = await db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray();
   const purchases = await db.collection("purchases").find({ owner_id: ownerId }).toArray();
+  const parties = await db.collection("parties").find({ owner_id: ownerId }).toArray();
+  const partyMap = new Map(parties.map(p => [String(p._id), p.name || p.phone || ""]));
 
   const dataSets = [
     {
-      tab: "Products",
-      headers: ["ID", "Name", "Buy Price", "Sell Price", "Stock", "Min Stock", "Category", "Created At"],
-      rows: products.map(p => [p._id, p.name, p.buy_price, p.sell_price, p.stock, p.min_stock ?? 5, p.category || "", p.created_at]),
+      tab: "Sales",
+      headers: ["Sale ID", "Date & Time", "Product Name", "Qty", "Sell Price (৳)", "Total (৳)", "Payment Type", "Customer / Party", "Paid Amount (৳)", "Due Amount (৳)", "Courier Status", "Note"],
+      rows: sales.map(s => [
+        String(s._id),
+        s.created_at ? new Date(s.created_at).toLocaleString("en-GB") : "",
+        s.product_name || "",
+        s.qty ?? 1,
+        s.sell_price ?? 0,
+        (Number(s.sell_price) || 0) * (Number(s.qty) || 1),
+        (s.type || "cash").toUpperCase(),
+        s.party_name || partyMap.get(String(s.party_id)) || (s.party_id ? String(s.party_id) : "Walk-in"),
+        s.paid_amount ?? 0,
+        s.due_amount ?? 0,
+        s.courier_status || (s.type === "online" ? "pending" : "completed"),
+        s.note || ""
+      ]),
     },
     {
-      tab: "Sales",
-      headers: ["ID", "Product Name", "Qty", "Buy Price", "Sell Price", "Profit", "Type", "Party ID", "Paid Amount", "Due Amount", "Created At"],
-      rows: sales.map(s => [s._id, s.product_name, s.qty, s.buy_price, s.sell_price, s.profit, s.type, s.party_id || "", s.paid_amount, s.due_amount, s.created_at]),
+      tab: "Products",
+      headers: ["Product ID", "Product Name", "Buy Price (৳)", "Sell Price (৳)", "Stock Qty", "Min Alert Stock", "Category", "Created At"],
+      rows: products.map(p => [
+        String(p._id),
+        p.name || "",
+        p.buy_price ?? 0,
+        p.sell_price ?? 0,
+        p.stock ?? 0,
+        p.min_stock ?? 5,
+        p.category || "",
+        p.created_at ? new Date(p.created_at).toLocaleString("en-GB") : ""
+      ]),
     },
     {
       tab: "Expenses",
-      headers: ["ID", "Title", "Amount", "Note", "Created At"],
-      rows: expenses.map(e => [e._id, e.title, e.amount, e.note || "", e.created_at]),
+      headers: ["Expense ID", "Expense Title", "Amount (৳)", "Note / Category", "Date & Time"],
+      rows: expenses.map(e => [
+        String(e._id),
+        e.title || "",
+        e.amount ?? 0,
+        e.note || "",
+        e.created_at ? new Date(e.created_at).toLocaleString("en-GB") : ""
+      ]),
     },
     {
       tab: "Cashbox",
-      headers: ["ID", "Kind", "Amount", "Note", "Ref ID", "Created At"],
-      rows: cashbox.map(c => [c._id, c.kind, c.amount, c.note || "", c.ref_id || "", c.created_at]),
+      headers: ["Entry ID", "Kind / Source", "Amount (৳)", "Description / Note", "Reference ID", "Date & Time"],
+      rows: cashbox.map(c => [
+        String(c._id),
+        (c.kind || "").toUpperCase(),
+        c.amount ?? 0,
+        c.note || "",
+        c.ref_id || "",
+        c.created_at ? new Date(c.created_at).toLocaleString("en-GB") : ""
+      ]),
     },
     {
       tab: "Purchases",
-      headers: ["ID", "Product Name", "Qty", "Unit Cost", "Total", "Note", "Created At"],
-      rows: purchases.map(p => [p._id, p.product_name, p.qty, p.unit_cost, p.total, p.note || "", p.created_at]),
+      headers: ["Purchase ID", "Product Name", "Quantity", "Unit Cost (৳)", "Total Cost (৳)", "Supplier / Note", "Date & Time"],
+      rows: purchases.map(p => [
+        String(p._id),
+        p.product_name || "",
+        p.qty ?? 1,
+        p.unit_cost ?? 0,
+        p.total ?? 0,
+        p.note || "",
+        p.created_at ? new Date(p.created_at).toLocaleString("en-GB") : ""
+      ]),
     },
   ];
 
@@ -238,4 +290,6 @@ export async function bulkExportToGoogleSheets(ownerId: string) {
       }),
     });
   }
+
+  return { success: true, count: sales.length };
 }
