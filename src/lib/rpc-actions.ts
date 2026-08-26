@@ -1868,24 +1868,119 @@ export async function getWithdrawalsFn() {
   return items.map((w) => ({ ...w, id: w._id as any as string }));
 }
 
-export async function createWithdrawalFn(input: { data: { amount: number; note?: string | null } }) {
+// ─── Owner's Wallet (Personal & Family Expenses) ─────────────────────────────
+
+export async function getOwnerWalletFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("owner_wallet").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
+  return items.map((e) => ({
+    ...e,
+    id: e._id as any as string,
+    amount: Number(e.amount) || 0,
+  }));
+}
+
+export async function createOwnerWalletEntryFn(input: {
+  data: {
+    amount: number;
+    category?: string;
+    note?: string | null;
+    created_at?: string;
+  };
+}) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
-  await db.collection("owner_withdrawals").insertOne(doc as any);
+  const category = data.category || "personal";
+  const catLabel = category === "family" ? "পরিবার খরচ" : category === "bazar" ? "বাজার খরচ" : category === "home_rent" ? "বাসা ভাড়া" : category === "medical" ? "চিকিৎসা" : "ব্যক্তিগত";
+  const title = `[মালিকের খরচ] ${catLabel}: ${data.note || "ব্যক্তিগত উত্তোলন"}`;
+  const createdAt = data.created_at || new Date().toISOString();
 
-  // Deduct from cashbox — owner withdrawal always takes money out of the cashbox
-  await insertCashboxEntry(db, session.ownerId, {
-    kind: "withdraw",
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
     amount: Number(data.amount) || 0,
-    note: data.note || "Owner Withdrawal",
-    ref_id: id,
-    created_at: doc.created_at,
-  });
+    category,
+    note: data.note || null,
+    created_at: createdAt,
+  };
+
+  await db.collection("owner_wallet").insertOne(doc as any);
+
+  // 1. Deduct from cashbox as withdrawal
+  if (doc.amount > 0) {
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "withdraw",
+      amount: doc.amount,
+      note: title,
+      ref_id: id,
+      created_at: createdAt,
+    });
+
+    // 2. Add to expenses under category "owner_personal" so it deducts from profit
+    const expId = crypto.randomUUID();
+    await db.collection("expenses").insertOne({
+      _id: expId,
+      owner_id: session.ownerId,
+      title,
+      amount: doc.amount,
+      category: "owner_personal",
+      note: `Owner Wallet ID: ${id} - ${data.note || ""}`,
+      created_at: createdAt,
+    } as any);
+  }
 
   return { ...doc, id };
+}
+
+export async function updateOwnerWalletEntryFn(input: {
+  data: {
+    id: string;
+    amount: number;
+    category?: string;
+    note?: string | null;
+  };
+}) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const { id, ...updates } = data;
+  const category = data.category || "personal";
+  const catLabel = category === "family" ? "পরিবার খরচ" : category === "bazar" ? "বাজার খরচ" : category === "home_rent" ? "বাসা ভাড়া" : category === "medical" ? "চিকিৎসা" : "ব্যক্তিগত";
+  const title = `[মালিকের খরচ] ${catLabel}: ${data.note || "ব্যক্তিগত উত্তোলন"}`;
+
+  await db.collection("owner_wallet").updateOne(
+    { _id: id as any, owner_id: session.ownerId },
+    { $set: { ...updates, amount: Number(data.amount) || 0, updated_at: new Date().toISOString() } }
+  );
+
+  // Update linked cashbox entry
+  await db.collection("cashbox_entries").updateOne(
+    { owner_id: session.ownerId, ref_id: id },
+    { $set: { amount: Number(data.amount) || 0, note: title } }
+  );
+
+  // Update linked expense entry
+  await db.collection("expenses").updateMany(
+    { owner_id: session.ownerId, note: { $regex: id } },
+    { $set: { amount: Number(data.amount) || 0, title, note: `Owner Wallet ID: ${id} - ${data.note || ""}` } }
+  );
+
+  return { success: true };
+}
+
+export async function deleteOwnerWalletEntryFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("expenses").deleteMany({ owner_id: session.ownerId, note: { $regex: data.id } });
+  await db.collection("owner_wallet").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+
+  return { success: true };
 }
 
 // ─── Cashbox ──────────────────────────────────────────────────────────────────

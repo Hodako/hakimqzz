@@ -9,7 +9,7 @@ import {
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
   Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2,
-  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle, Store, Upload
+  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle, Store, Upload, Wallet
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -68,6 +68,7 @@ const financeLinks = [
   { to: "/product-analytics", labelKey: "product_analytics", desc: "Top sellers, sales growth, remaining & critical stock intelligence", icon: BarChart2, perm: "reports" as const },
   { to: "/bank",           labelKey: "bank_management", desc: "Bank accounts, loans & installment repayments", icon: Landmark, imageUrl: "https://img.icons8.com/color/48/bank-building.png", perm: "expenses" as const },
   { to: "/expenses",       labelKey: "expenses",        desc: "Record overhead expenses", icon: Receipt, imageUrl: "https://img.icons8.com/color/48/tax.png", perm: "expenses"   as const },
+  { to: "/owners-wallet",  labelKey: "owners_wallet",   desc: "Personal & family expense wallet (cuts cash & profit)", icon: Wallet, imageUrl: "https://img.icons8.com/color/48/wallet--v1.png", perm: "cashbox" as const },
   { to: "/somiti",         labelKey: "somiti",          desc: "Manage Somiti accounts", icon: PiggyBank, imageUrl: "/icons/samity_icon.png",    perm: "expenses"   as const },
   { to: "/cash-management",labelKey: "cash_management", desc: "Cashbox ledger & cashflow", icon: Banknote, imageUrl: "/icons/cashbox_icon.png",     perm: "cashbox"   as const },
   { to: "/profits",        labelKey: "profit",          desc: "Sales margins & net profits", icon: TrendingUp, imageUrl: "/icons/profit_icon.png",  perm: "reports"    as const },

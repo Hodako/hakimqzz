@@ -283,6 +283,11 @@ export const deleteSomitiFn = makeWriteAction("deleteSomitiFn");
 export const renameSomitiFn = makeWriteAction("renameSomitiFn");
 export const deleteSomitiFnByName = makeWriteAction("deleteSomitiFnByName");
 
+export const getOwnerWalletFn = makeReadAction("getOwnerWalletFn");
+export const createOwnerWalletEntryFn = makeWriteAction("createOwnerWalletEntryFn");
+export const updateOwnerWalletEntryFn = makeWriteAction("updateOwnerWalletEntryFn");
+export const deleteOwnerWalletEntryFn = makeWriteAction("deleteOwnerWalletEntryFn");
+
 export const createWithdrawalFn = makeWriteAction("createWithdrawalFn");
 export const createCashboxFn = makeReadAction("createCashboxFn");
 export const updateCashboxFn = makeReadAction("updateCashboxFn");
