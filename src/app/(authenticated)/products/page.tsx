@@ -52,6 +52,7 @@ export default function ProductsPage() {
   const [saleProduct, setSaleProduct] = useState<string | undefined>();
   const [saleOpen, setSaleOpen] = useState(false);
   const [buyOpen, setBuyOpen] = useState(false);
+  const [buyProduct, setBuyProduct] = useState<string | undefined>();
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [search, setSearch] = useState("");
@@ -689,6 +690,10 @@ export default function ProductsPage() {
                 setExchangeProduct(p);
                 setExchangeOpen(true);
               }}
+              onBuy={() => {
+                setBuyProduct(p.id);
+                setBuyOpen(true);
+              }}
             />
           );
         })}
@@ -718,7 +723,14 @@ export default function ProductsPage() {
             : undefined
         }
       />
-      <PurchaseDialog open={buyOpen} onOpenChange={setBuyOpen} />
+      <PurchaseDialog
+        open={buyOpen}
+        onOpenChange={(v) => {
+          setBuyOpen(v);
+          if (!v) setBuyProduct(undefined);
+        }}
+        presetProductId={buyProduct}
+      />
       <ReturnDialog
         open={returnOpen}
         onOpenChange={setReturnOpen}
@@ -797,6 +809,7 @@ function ProductCard({
   isMobile,
   isPinned,
   onTogglePin,
+  onBuy,
 }: {
   p: Product;
   isLowStock: boolean;
@@ -808,6 +821,7 @@ function ProductCard({
   onDelete: () => void;
   onLongPress: () => void;
   onExchange?: () => void;
+  onBuy?: () => void;
   t: (k: any) => string;
   isMobile: boolean;
   isPinned: boolean;
@@ -857,6 +871,11 @@ function ProductCard({
             <button onClick={() => { setContextMenuOpen(false); onDirectSell(); }} disabled={p.stock <= 0} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors disabled:opacity-50">
               💰 {t("sell")} (Direct)
             </button>
+            {onBuy && (
+              <button onClick={() => { setContextMenuOpen(false); onBuy(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-amber-500/10 flex items-center gap-3 font-medium text-amber-700 dark:text-amber-400 transition-colors">
+                🛒 {t("buy")} / Restock (ক্রয়)
+              </button>
+            )}
             <button onClick={() => { setContextMenuOpen(false); onExchange && onExchange(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 flex items-center gap-3 font-medium text-emerald-600 dark:text-emerald-400 transition-colors">
               🔄 Exchange Item / পণ্য পরিবর্তন
             </button>
