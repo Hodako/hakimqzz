@@ -260,6 +260,7 @@ export const deleteSaleFn = makeWriteAction("deleteSaleFn");
 export const editSaleFn = makeWriteAction("editSaleFn");
 export const approveCourierPaymentFn = makeWriteAction("approveCourierPaymentFn");
 export const cancelCourierOrderFn = makeWriteAction("cancelCourierOrderFn");
+export const acceptDigitalPaymentFn = makeWriteAction("acceptDigitalPaymentFn");
 
 export const updateUserAvatarFn = makeWriteAction("updateUserAvatarFn");
 export const createReturnFn = makeWriteAction("createReturnFn");
@@ -315,6 +316,7 @@ const actionsList = [
   "createCustomerFn", "updateCustomerFn", "deleteCustomerFn", "archiveCustomerFn",
   "createPartyReceivableFn", "createPartyPayableFn", "deletePartyReceivableFn", "deletePartyPayableFn",
   "createPayableSettlementFn", "deletePayableSettlementFn", "createSaleFn", "deleteSaleFn", "editSaleFn",
+  "approveCourierPaymentFn", "cancelCourierOrderFn", "acceptDigitalPaymentFn",
   "updateUserAvatarFn", "createReturnFn", "createDirectProductReturnFn", "deleteReturnFn",
   "createPurchaseFn", "deletePurchaseFn", "createExpenseFn", "deleteExpenseFn",
   "createPaymentFn", "deletePaymentFn", "createSomitiFn", "updateSomitiFn", "deleteSomitiFn",

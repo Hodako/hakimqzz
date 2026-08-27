@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ShieldAlert, PhoneCall, MessageCircle, LogOut, Lock } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { EmployeeInvitationModal } from "@/components/employee-invitation-modal";
+import { PinLockModal } from "@/components/pin-lock-modal";
 
 export default function AuthenticatedLayout({
   children,
@@ -114,6 +115,7 @@ export default function AuthenticatedLayout({
 
   return (
     <SidebarProvider>
+      <PinLockModal />
       <EmployeeInvitationModal />
       <AppShell>{children}</AppShell>
     </SidebarProvider>

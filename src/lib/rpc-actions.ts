@@ -89,12 +89,14 @@ async function insertCashboxEntry(
 
 function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
   if (data.type === "credit") return Number(data.paid_amount) || 0;
-  // Cash, bKash, Bank, Nagad, Card, POS payments all deposit into Cashbox
-  if (data.type === "cash" || data.type === "bkash" || data.type === "bank" || data.type === "nagad" || data.type === "card" || data.type === "pos") {
+  // bKash and Bank payments are pending verification until user accepts payment
+  if (data.type === "bkash" || data.type === "bank") return 0;
+  // Online deliveries (courier pending): only if paid_amount > 0
+  if (data.type === "online") return 0;
+  // Cash, Nagad, Card, POS payments deposit directly into Cashbox
+  if (data.type === "cash" || data.type === "nagad" || data.type === "card" || data.type === "pos") {
     return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
   }
-  // Online deliveries (courier pending): only if paid_amount > 0
-  if (data.type === "online") return Number(data.paid_amount) || 0;
   return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
 }
 
@@ -737,16 +739,17 @@ export async function getSalesFn() {
   const customers = await db.collection("customers").find({ _id: { $in: partyIds } }).toArray();
   const parties = await db.collection("parties").find({ _id: { $in: partyIds } }).toArray();
 
-  const partyMap = new Map();
-  customers.forEach(c => partyMap.set(c._id.toString(), c));
-  parties.forEach(p => partyMap.set(p._id.toString(), p));
+  const custMap = new Map();
+  parties.forEach(p => custMap.set(p._id.toString(), p));
+  customers.forEach(c => custMap.set(c._id.toString(), c));
 
   return items.map((s) => {
-    const p = s.party_id ? partyMap.get(s.party_id.toString()) : null;
+    const c = s.party_id ? custMap.get(s.party_id.toString()) : null;
     return {
       ...s,
       id: s._id as any as string,
-      parties: p ? { name: p.name } : null
+      parties: c ? { name: c.name } : null,
+      customer: c ? { id: c._id.toString(), name: c.name, phone: c.phone, address: c.address } : null,
     };
   });
 }
@@ -854,6 +857,50 @@ export async function approveCourierPaymentFn(input: { data: { id: string } }) {
       ref_id: String(s._id),
       created_at: nowStr,
     });
+  }
+
+  return { success: true };
+}
+
+export async function acceptDigitalPaymentFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const sale = await db.collection("sales").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!sale) throw new Error("Sale not found");
+  if (sale.payment_status === "accepted" || sale.payment_accepted) return { success: true, message: "Already accepted" };
+
+  const cartId = sale.cart_id;
+  const salesToAccept = cartId
+    ? await db.collection("sales").find({ cart_id: cartId, owner_id: session.ownerId }).toArray()
+    : [sale];
+
+  const nowStr = new Date().toISOString();
+  for (const s of salesToAccept) {
+    const totalAmount = Number(s.paid_amount) || Number(s.sell_price) || 0;
+    await db.collection("sales").updateOne(
+      { _id: s._id as any, owner_id: session.ownerId },
+      {
+        $set: {
+          payment_status: "accepted",
+          payment_accepted: true,
+          accepted_at: nowStr,
+          updated_at: nowStr,
+        },
+      }
+    );
+
+    // Deposit into Cashbox
+    if (totalAmount > 0) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "sale",
+        amount: totalAmount,
+        note: `Digital Payment Received [${(s.type || "bkash").toUpperCase()}]: ${s.product_name} (INV-${String(s._id).slice(-6).toUpperCase()})`,
+        ref_id: String(s._id),
+        created_at: nowStr,
+      });
+    }
   }
 
   return { success: true };
