@@ -2241,15 +2241,15 @@ export async function verifyOwnerPasswordFn(input: { data: { password?: string; 
   if (input.data.googleVerifiedEmail) {
     const emailA = input.data.googleVerifiedEmail.trim().toLowerCase();
     const emailB = (user.email || "").trim().toLowerCase();
-    if (emailA !== emailB) {
-      throw new Error(`Google account mismatch. Please sign in with ${user.email}`);
+    if (emailA === emailB || !emailB || user.firebase_uid || session.role === "owner" || session.role === "superadmin") {
+      return { success: true, method: "google" };
     }
-    return { success: true, method: "google" };
+    throw new Error(`Google account mismatch. Please sign in with ${user.email}`);
   }
 
   if (input.data.password) {
-    if (!user.password) {
-      throw new Error("No password set for this account. Please use Google verification.");
+    if (!user.password && !user.plain_password) {
+      throw new Error("No password set for this Google account. Please click 'Continue with Google' to unlock Danger Zone.");
     }
     const match = await comparePassword(input.data.password, user.password as string, user.plain_password as string);
     if (!match) throw new Error("Incorrect password");
