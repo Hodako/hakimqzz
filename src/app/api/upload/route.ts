@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { requestStore } from "@/lib/request-store";
 import { requireSession } from "@/lib/session";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     let session: any = null;
     try {
-      session = await requestStore.run({ token: effectiveToken }, async () => {
+      session = await requestStore.run({ token: effectiveToken || undefined }, async () => {
         return await requireSession();
       });
     } catch {

@@ -2485,6 +2485,7 @@ export default function MorePage() {
       cashbox: false,
       settings: false,
       reports: false,
+      danger_zone: false,
     });
     setAddEmpModalOpen(true);
   };

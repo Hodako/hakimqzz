@@ -2360,7 +2360,7 @@ export async function toggleGoogleSheetsSyncFn(input: { data: { enabled: boolean
 export async function bulkExportToGoogleSheetsFn() {
   const session = await requireSession();
   const res = await bulkExportToGoogleSheets(session.ownerId);
-  return { success: true, ...res };
+  return { ...res };
 }
 
 export async function changeMyPasswordFn(input: { data: { currentPassword?: string; newPassword: string } }) {
