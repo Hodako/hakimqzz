@@ -102,7 +102,7 @@ function KPICard({
 }: {
   label: string; value: string; sub?: string;
   icon?: React.ElementType; imageUrl?: string; trend?: string; trendUp?: boolean; color: string;
-  onClick?: () => void; className?: string; imageClassName?: string;
+  onClick?: (e?: any) => void; className?: string; imageClassName?: string;
   align?: "left" | "center" | "right";
   size?: "xxs" | "xs" | "small" | "standard" | "large" | "xl";
   variant?: "glass" | "flat" | "bordered" | "neon" | "gradient";
@@ -411,11 +411,13 @@ export default function Dashboard() {
     owner_wallet: false,
   });
 
-  const handlePrivacyKpiClick = (e: React.MouseEvent, key: string, fallbackPath?: string) => {
+    const handlePrivacyKpiClick = (e: React.MouseEvent, key: string, fallbackPath?: string) => {
     const isHidden = (kpiConfig.hiddenKpis || []).includes(key);
     if (isHidden && !revealedKpis[key]) {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       playTapSound();
       setRevealedKpis(prev => ({ ...prev, [key]: true }));
       toast.info(lang === "bn" ? "পরিমাণ দৃশ্যমান করা হয়েছে" : "Amount revealed", { duration: 900 });
@@ -1383,29 +1385,26 @@ export default function Dashboard() {
         // Define all cards dynamically in a map with Bento Grid & Custom Style options
         const kpiCardsMap: Record<string, React.ReactNode> = {
           total_sales: (
-            <Link
-              href="/sales"
+            <KPICard
               key="total_sales"
-              className={`hidden sm:block cursor-pointer ${isHeroCard("total_sales") ? "sm:col-span-2" : ""}`}
-              onClick={() => playTapSound()}
-            >
-              <KPICard
-                label={lang === "bn" ? "আজকের মোট বিক্রি" : "Today's Total Sales"}
-                value={fmtMoney(totalSalesToday)}
-                sub={dateRangeLabel}
-                imageUrl="/icons/sell_icon.png"
-                icon={ShoppingBag}
-                color="bg-indigo-600"
-                className="h-full w-full"
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-                variant={(kpiConfig.variant || "glass") as any}
-                shadowStyle={(kpiConfig.shadow || "glow") as any}
-                borderStyle={(kpiConfig.borderStyle || "subtle") as any}
-                curve={(kpiConfig.curve || "none") as any}
-                isBentoHero={isHeroCard("total_sales")}
-              />
-            </Link>
+              label={lang === "bn" ? "আজকের মোট বিক্রি" : "Today's Total Sales"}
+              value={fmtMoney(totalSalesToday)}
+              sub={dateRangeLabel}
+              imageUrl="/icons/sell_icon.png"
+              icon={ShoppingBag}
+              color="bg-indigo-600"
+              className="h-full w-full cursor-pointer"
+              align={kpiConfig.align as any}
+              size={kpiConfig.size as any}
+              variant={(kpiConfig.variant || "glass") as any}
+              shadowStyle={(kpiConfig.shadow || "glow") as any}
+              borderStyle={(kpiConfig.borderStyle || "subtle") as any}
+              curve={(kpiConfig.curve || "none") as any}
+              isBentoHero={isHeroCard("total_sales")}
+              isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("total_sales")}
+              isRevealed={revealedKpis["total_sales"] ?? !(kpiConfig.hiddenKpis || []).includes("total_sales")}
+              onClick={() => handlePrivacyKpiClick(null as any, "total_sales", "/sales")}
+            />
           ),
           credit_sale: (
             <KPICard
@@ -1707,10 +1706,10 @@ export default function Dashboard() {
                     const card = kpiCardsMap[key];
                     if (!card) return null;
                     return React.cloneElement(card as React.ReactElement<any>, {
-                      isPrivacyProtected: isHidden,
-                      isRevealed: revealedKpis[key] ?? !isHidden,
-                      onClick: (e: React.MouseEvent) => handlePrivacyKpiClick(e, key, (card as any)?.props?.onClick ? "" : ""),
-                    });
+      isPrivacyProtected: isHidden,
+      isRevealed: revealedKpis[key] ?? !isHidden,
+      onClick: (e: React.MouseEvent) => handlePrivacyKpiClick(e, key, (card as any)?.props?.onClick ? "" : ""),
+    });
                   })}
                 </div>
               </div>
@@ -2056,26 +2055,23 @@ export default function Dashboard() {
           switch (key) {
             case "total_sales":
               return (
-                <Link
-                  href="/sales"
+                <KPICard
                   key="total_sales"
-                  className="block cursor-pointer h-full"
-                  onClick={() => playTapSound()}
-                >
-                  <KPICard
-                    label={lang === "bn" ? "আজকের মোট বিক্রি" : "Today's Total Sales"}
-                    value={fmtMoney(totalSalesToday)}
-                    sub={dateRangeLabel}
-                    imageUrl="/icons/sell_icon.png"
-                    icon={ShoppingBag}
-                    color="bg-indigo-600"
-                    isDesktop={true}
-                    hotkey={hotkey}
-                    className="h-full"
-                    align={kpiConfig.align as any}
-                    size={kpiConfig.size as any}
-                  />
-                </Link>
+                  label={lang === "bn" ? "আজকের মোট বিক্রি" : "Today's Total Sales"}
+                  value={fmtMoney(totalSalesToday)}
+                  sub={dateRangeLabel}
+                  imageUrl="/icons/sell_icon.png"
+                  icon={ShoppingBag}
+                  color="bg-indigo-600"
+                  isDesktop={true}
+                  hotkey={hotkey}
+                  className="h-full cursor-pointer"
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("total_sales")}
+                  isRevealed={revealedKpis["total_sales"] ?? !(kpiConfig.hiddenKpis || []).includes("total_sales")}
+                  onClick={() => handlePrivacyKpiClick(null as any, "total_sales", "/sales")}
+                />
               );
             case "credit_sale":
               return (
@@ -2154,26 +2150,23 @@ export default function Dashboard() {
             case "owner_wallet":
             case "owners_wallet":
               return (
-                <Link
-                  href="/owner-expense"
+                <KPICard
                   key="owner_wallet"
-                  className="block cursor-pointer h-full"
-                  onClick={() => playTapSound()}
-                >
-                  <KPICard
-                    label={lang === "bn" ? "মালিকের খরচ" : "Owner's Expense"}
-                    value={fmtMoney(ownerExpenseTotal)}
-                    sub={lang === "bn" ? `${ownerExpensesFiltered.length} টি ব্যক্তিগত খরচ / উত্তোলন` : `${ownerExpensesFiltered.length} personal withdrawals`}
-                    imageUrl="/icons/wallet.svg"
-                    icon={Wallet}
-                    color="bg-amber-600"
-                    isDesktop={true}
-                    hotkey={hotkey}
-                    className="h-full"
-                    align={kpiConfig.align as any}
-                    size={kpiConfig.size as any}
-                  />
-                </Link>
+                  label={lang === "bn" ? "মালিকের খরচ" : "Owner's Expense"}
+                  value={fmtMoney(ownerExpenseTotal)}
+                  sub={lang === "bn" ? `${ownerExpensesFiltered.length} টি ব্যক্তিগত খরচ / উত্তোলন` : `${ownerExpensesFiltered.length} personal withdrawals`}
+                  imageUrl="/icons/wallet.svg"
+                  icon={Wallet}
+                  color="bg-amber-600"
+                  isDesktop={true}
+                  hotkey={hotkey}
+                  className="h-full cursor-pointer"
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("owner_wallet")}
+                  isRevealed={revealedKpis["owner_wallet"] ?? !(kpiConfig.hiddenKpis || []).includes("owner_wallet")}
+                  onClick={() => handlePrivacyKpiClick(null as any, "owner_wallet", "/owner-expense")}
+                />
               );
             case "online_sell":
               return (
