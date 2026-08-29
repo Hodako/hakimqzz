@@ -24,7 +24,7 @@ import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { ProductSearchSelect } from "@/components/product-search";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -411,27 +411,19 @@ export default function Dashboard() {
     owner_wallet: false,
   });
 
-  const handlePrivacyKpiClick = (e: React.MouseEvent, key: string, path: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    playTapSound();
-
-    if (!revealedKpis[key]) {
+  const handlePrivacyKpiClick = (e: React.MouseEvent, key: string, fallbackPath?: string) => {
+    const isHidden = (kpiConfig.hiddenKpis || []).includes(key);
+    if (isHidden && !revealedKpis[key]) {
+      e.preventDefault();
+      e.stopPropagation();
+      playTapSound();
       setRevealedKpis(prev => ({ ...prev, [key]: true }));
-      const hasShown = typeof sessionStorage !== "undefined" && sessionStorage.getItem(`kpi_hint_${key}`);
-      if (!hasShown) {
-        try {
-          sessionStorage.setItem(`kpi_hint_${key}`, "true");
-        } catch (_) {}
-        toast.info(
-          lang === "bn"
-            ? (key === "profit" ? "লাভের পরিমাণ দৃশ্যমান হয়েছে" : "সমিতি জমার পরিমাণ দৃশ্যমান হয়েছে")
-            : "Amount revealed",
-          { duration: 900 }
-        );
-      }
-    } else {
-      router.push(path);
+      toast.info(lang === "bn" ? "পরিমাণ দৃশ্যমান করা হয়েছে" : "Amount revealed", { duration: 900 });
+      return;
+    }
+    if (fallbackPath) {
+      playTapSound();
+      router.push(fallbackPath);
     }
   };
 
@@ -1710,9 +1702,16 @@ export default function Dashboard() {
             {!collapsed.kpis && (
               <div className="space-y-2.5">
                 <div className={`grid gap-2.5 ${gridColsClass}`}>
-                  {kpiConfig.order
-                    .filter((key) => !(kpiConfig.hiddenKpis || []).includes(key))
-                    .map((key) => kpiCardsMap[key])}
+                  {kpiConfig.order.map((key) => {
+                    const isHidden = (kpiConfig.hiddenKpis || []).includes(key);
+                    const card = kpiCardsMap[key];
+                    if (!card) return null;
+                    return React.cloneElement(card as React.ReactElement<any>, {
+                      isPrivacyProtected: isHidden,
+                      isRevealed: revealedKpis[key] ?? !isHidden,
+                      onClick: (e: React.MouseEvent) => handlePrivacyKpiClick(e, key, (card as any)?.props?.onClick ? "" : ""),
+                    });
+                  })}
                 </div>
               </div>
             )}
