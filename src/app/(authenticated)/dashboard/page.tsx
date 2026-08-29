@@ -488,11 +488,9 @@ export default function Dashboard() {
   const DEFAULT_KPI_ORDER = [
     "total_sales",
     "cash_sale",
-    "sell_kpi",
     "credit_sale",
     "online_sell",
     "owner_wallet",
-    "purchases",
     "profit",
     "loss",
     "expense",
@@ -916,11 +914,10 @@ export default function Dashboard() {
   }, 0);
 
   const cashToday = filteredSales
-    .filter(s => s.type === "cash" || (s.type as string) === "nagad" || (s.type as string) === "hand_cash" || (s.type as string) === "pos")
+    .filter(s => !s.returned && (s.type === "cash" || (s.type as string) === "nagad" || (s.type as string) === "hand_cash" || (s.type as string) === "pos" || s.type === undefined || s.type === null))
     .reduce((a, s) => {
       const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0);
-      const paid = Number(s.paid_amount);
-      return a + (!isNaN(paid) && paid > 0 ? paid : lineTotal);
+      return a + Math.max(lineTotal, 0);
     }, 0);
 
   const bkashToday   = filteredSales.filter(s => s.type === "bkash").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
