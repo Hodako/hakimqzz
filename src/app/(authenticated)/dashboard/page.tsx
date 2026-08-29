@@ -1400,7 +1400,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("total_sales")}
+                  isRevealed={revealedKpis["total_sales"] ?? !(kpiConfig.hiddenKpis || []).includes("total_sales")}
                   onClick={() => handlePrivacyKpiClick(null as any, "total_sales", "/sales")}
                 />
               );
@@ -1419,9 +1420,11 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("cash_sale")}
+                  isRevealed={revealedKpis["cash_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("cash_sale")}
                   onClick={() => {
-                    if (isHidden && !isRevealed) {
+                    const isHidden = (kpiConfig.hiddenKpis || []).includes("cash_sale");
+                    if (isHidden && !revealedKpis["cash_sale"]) {
                       handlePrivacyKpiClick(null as any, "cash_sale");
                     } else {
                       playTapSound();
@@ -1446,9 +1449,11 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("credit_sale")}
+                  isRevealed={revealedKpis["credit_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("credit_sale")}
                   onClick={() => {
-                    if (isHidden && !isRevealed) {
+                    const isHidden = (kpiConfig.hiddenKpis || []).includes("credit_sale");
+                    if (isHidden && !revealedKpis["credit_sale"]) {
                       handlePrivacyKpiClick(null as any, "credit_sale");
                     } else {
                       playTapSound();
@@ -1473,9 +1478,11 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("online_sell")}
+                  isRevealed={revealedKpis["online_sell"] ?? !(kpiConfig.hiddenKpis || []).includes("online_sell")}
                   onClick={() => {
-                    if (isHidden && !isRevealed) {
+                    const isHidden = (kpiConfig.hiddenKpis || []).includes("online_sell");
+                    if (isHidden && !revealedKpis["online_sell"]) {
                       handlePrivacyKpiClick(null as any, "online_sell");
                     } else {
                       playTapSound();
@@ -1520,7 +1527,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("profit")}
+                  isRevealed={revealedKpis["profit"] ?? !(kpiConfig.hiddenKpis || []).includes("profit")}
                   onClick={() => handlePrivacyKpiClick(null as any, "profit", "/profits")}
                 />
               );
@@ -1539,7 +1547,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("loss")}
+                  isRevealed={revealedKpis["loss"] ?? !(kpiConfig.hiddenKpis || []).includes("loss")}
                   onClick={() => handlePrivacyKpiClick(null as any, "loss", "/losses")}
                 />
               );
@@ -1558,7 +1567,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("expense")}
+                  isRevealed={revealedKpis["expense"] ?? !(kpiConfig.hiddenKpis || []).includes("expense")}
                   onClick={() => handlePrivacyKpiClick(null as any, "expense", "/expenses")}
                 />
               );
@@ -1578,7 +1588,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("due")}
+                  isRevealed={revealedKpis["due"] ?? !(kpiConfig.hiddenKpis || []).includes("due")}
                   onClick={() => handlePrivacyKpiClick(null as any, "due", "/dues")}
                 />
               );
@@ -1599,7 +1610,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("cashbox")}
+                  isRevealed={revealedKpis["cashbox"] ?? !(kpiConfig.hiddenKpis || []).includes("cashbox")}
                   onClick={() => handlePrivacyKpiClick(null as any, "cashbox", "/cash-management/cashbox")}
                 />
               );
@@ -1620,7 +1632,8 @@ export default function Dashboard() {
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  {...privacyProps}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("somiti")}
+                  isRevealed={revealedKpis["somiti"] ?? !(kpiConfig.hiddenKpis || []).includes("somiti")}
                   onClick={() => handlePrivacyKpiClick(null as any, "somiti", "/somiti")}
                 />
               );
@@ -2251,12 +2264,12 @@ export default function Dashboard() {
           }
         };
 
+                const gridClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : kpiConfig.columns === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+
         return (
           <div key="kpis" className="space-y-6 col-span-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              {kpiConfig.order
-                .filter((key) => !(kpiConfig.hiddenKpis || []).includes(key))
-                .map((key, idx) => renderDesktopCard(key, idx))}
+            <div className={`grid gap-4 ${gridClass}`}>
+              {kpiConfig.order.map((key, idx) => renderDesktopCard(key, idx))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
