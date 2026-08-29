@@ -150,15 +150,39 @@ export async function bulkExportToGoogleSheets(ownerId: string) {
               (await db.collection("businesses").findOne({ _id: ownerId as any }));
   if (!biz) throw new Error("Business not found");
 
-  const spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
-
-  if (!spreadsheetId) {
-    throw new Error("Google Sheets Spreadsheet ID is missing. Connect your Google account or provide a Spreadsheet ID in Settings.");
-  }
+  let spreadsheetId = biz.google_sheets_spreadsheet_id as string | undefined;
 
   const token = await getEffectiveToken(biz);
   if (!token) {
-    throw new Error("Google Sheets authorization token or Service Account credentials missing.");
+    throw new Error("Google Sheets authorization token or Service Account credentials missing. Please add your credentials in Settings > Google Sheets.");
+  }
+
+  if (!spreadsheetId) {
+    const createRes = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `${biz.shop_name || biz.name || "DreamFashion"} - POS Cloud Records`,
+        },
+      }),
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw new Error(`Failed to create Google Spreadsheet: ${errText}`);
+    }
+
+    const newSheetData = await createRes.json();
+    spreadsheetId = newSheetData.spreadsheetId;
+
+    await db.collection("businesses").updateOne(
+      { _id: biz._id },
+      { $set: { google_sheets_spreadsheet_id: spreadsheetId, google_sheet_id: spreadsheetId, google_sheets_sync_enabled: true } }
+    );
   }
 
   // Queries

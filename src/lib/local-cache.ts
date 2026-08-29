@@ -1,3 +1,4 @@
+const LEGACY_AUTH_KEY = "auth_profile";
 /** Lightweight localStorage cache for instant UI hydration. */
 
 const AUTH_KEY = "hz-auth-profile";
@@ -59,7 +60,21 @@ export function writeAuthProfile(profile: Omit<AuthProfileCache, "updatedAt">) {
 }
 
 export function clearAuthProfile() {
-  if (typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(LEGACY_AUTH_KEY);
+    localStorage.removeItem("user");
+    localStorage.removeItem("auth_profile");
+    localStorage.removeItem("classicworld_auth_profile");
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("active_profile");
+    localStorage.removeItem("app_pin_unlocked");
+    sessionStorage.clear();
+    try {
+      const { clearQueryCache } = require("./query-cache");
+      clearQueryCache();
+    } catch (_) {}
+  }
 }
 
 export function readBrand(): BrandCache | null {

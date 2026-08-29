@@ -435,7 +435,7 @@ export default function ExpensesPage() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
             <Calendar className="size-4 text-primary" />
-            <span>{lang === "bn" ? "তারিখ ফিল্টার (ডিফল্ট: আজ):" : "Date Filter (Default: Today):"}</span>
+            <span>{lang === "bn" ? "তারিখ ফিল্টার:" : "Date Filter:"}</span>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">

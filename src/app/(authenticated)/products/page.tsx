@@ -1073,6 +1073,7 @@ function ReturnDialog({
   const { t } = useT();
   const [qty, setQty] = useState("1");
   const [price, setPrice] = useState("");
+  const [buyDate, setBuyDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -1080,6 +1081,7 @@ function ReturnDialog({
     if (product) {
       setQty("1");
       setPrice(String(product.sell_price || ""));
+      setBuyDate(new Date().toISOString().slice(0, 10));
       setNote("");
     }
   }, [product, open]);
@@ -1089,15 +1091,21 @@ function ReturnDialog({
     if (!product) return;
     setBusy(true);
     try {
+      const returnQty = Number(qty) || 0;
+      const returnPrice = Number(price) || 0;
+      const profitPerUnit = returnPrice - (product.buy_price || 0);
       await createDirectProductReturnFn({
         data: {
           product_id: product.id,
-          qty: Number(qty) || 0,
-          return_price: Number(price) || 0,
+          qty: returnQty,
+          return_price: returnPrice,
+          buy_date: buyDate,
+          return_date: buyDate,
+          profit_adjustment: -(profitPerUnit * returnQty),
           note: note.trim() || null,
         },
       });
-      toast.success("Product returned successfully");
+      toast.success(`Product returned. ৳${(returnPrice * returnQty).toLocaleString()} deducted from cashbox.`);
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
@@ -1122,6 +1130,16 @@ function ReturnDialog({
               required
               value={qty}
               onChange={(e) => setQty(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Original Buy / Sale Date</Label>
+            <Input
+              type="date"
+              required
+              value={buyDate}
+              onChange={(e) => setBuyDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
             />
           </div>
           <div className="space-y-1">

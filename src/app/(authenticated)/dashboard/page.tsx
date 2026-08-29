@@ -13,7 +13,7 @@ import {
   AlertTriangle, ArrowRight
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements, getPurchases, getSomiti } from "@/lib/queries";
+import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements, getPurchases, getSomiti, getReturns } from "@/lib/queries";
 import type { Reminder } from "@/lib/queries";
 import { cashboxBalance } from "@/lib/cashbox-utils";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createReminderFn, toggleReminderFn, deleteReminderFn, approveCourierPaymentFn, cancelCourierOrderFn } from "@/lib/rpc";
+import { createReminderFn, toggleReminderFn, deleteReminderFn, approveCourierPaymentFn, cancelCourierOrderFn, updateBusinessSettingsFn } from "@/lib/rpc";
 import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
 import { playTapSound } from "@/lib/audio";
@@ -376,6 +376,7 @@ export default function Dashboard() {
   const allPayables = useCachedQuery(["all-party-payables"], getAllPartyPayables);
   const allSettlements = useCachedQuery(["all-payable-settlements"], getAllPayableSettlements);
   const { data: reminders = [] } = useCachedQuery(["reminders"], getReminders);
+  const returnsQuery = useCachedQuery(["returns"], getReturns);
 
   const allSales      = sales.data ?? [];
   const allExpenses   = expenses.data ?? [];
@@ -394,12 +395,23 @@ export default function Dashboard() {
   const [showFilter, setShowFilter] = useState(false);
 
   // Fintech-Style Privacy Mask for Sensitive Balance & Profit KPIs
-  const [revealedKpis, setRevealedKpis] = useState<{ profit: boolean; somiti: boolean }>({
+  const [revealedKpis, setRevealedKpis] = useState<Record<string, boolean>>({
     profit: false,
     somiti: false,
+    total_sales: false,
+    cash_sale: false,
+    sell_kpi: false,
+    credit_sale: false,
+    online_sell: false,
+    purchases: false,
+    loss: false,
+    expense: false,
+    due: false,
+    cashbox: false,
+    owner_wallet: false,
   });
 
-  const handlePrivacyKpiClick = (e: React.MouseEvent, key: "profit" | "somiti", path: string) => {
+  const handlePrivacyKpiClick = (e: React.MouseEvent, key: string, path: string) => {
     e.preventDefault();
     e.stopPropagation();
     playTapSound();
@@ -495,7 +507,7 @@ export default function Dashboard() {
   > = {
     total_sales: { nameEn: "Total Sales", nameBn: "আজকের মোট বিক্রয়", badge: "Total", bg: "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400" },
     cash_sale: { nameEn: "Cash Sale", nameBn: "নগদ বিক্রয়", badge: "Cash", bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400" },
-    sell_kpi: { nameEn: "Sell KPI (Collections)", nameBn: "বিক্রয় ও আদায় (Sell KPI)", badge: "Sell KPI", bg: "bg-pink-500/10 border-pink-500/30 text-pink-600 dark:text-pink-400" },
+    sell_kpi: { nameEn: "Sell", nameBn: "বিক্রয়", badge: "Sell", bg: "bg-pink-500/10 border-pink-500/30 text-pink-600 dark:text-pink-400" },
     credit_sale: { nameEn: "Credit Sale", nameBn: "বাকি বিক্রয়", badge: "Credit", bg: "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400" },
     online_sell: { nameEn: "Online Sale", nameBn: "অনলাইন বিক্রয়", badge: "Online", bg: "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400" },
     owner_wallet: { nameEn: "Owner's Expense", nameBn: "মালিকের খরচ", badge: "Owner", bg: "bg-amber-600/10 border-amber-600/30 text-amber-600 dark:text-amber-400" },
@@ -564,6 +576,9 @@ export default function Dashboard() {
       };
       localStorage.setItem("hz_kpi_config", JSON.stringify(updated));
       window.dispatchEvent(new Event("hz-kpi-config-updated"));
+      try {
+        updateBusinessSettingsFn({ data: { kpi_config: updated } });
+      } catch (_) {}
       return updated;
     });
   };
@@ -911,7 +926,9 @@ export default function Dashboard() {
   const bkashToday   = filteredSales.filter(s => s.type === "bkash").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
   const bankToday    = filteredSales.filter(s => (s.type as string) === "bank").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
   const bkashBankCollected = filteredSales.filter(s => (s.type === "bkash" || (s.type as string) === "bank") && ((s as any).payment_status === "accepted" || (s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
-  const bkashBankPending = filteredSales.filter(s => (s.type === "bkash" || (s.type as string) === "bank") && ((s as any).payment_status === "pending" || !(s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
+  const bkashPending = filteredSales.filter(s => s.type === "bkash" && ((s as any).payment_status === "pending" || !(s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
+  const bankPending = filteredSales.filter(s => (s.type as string) === "bank" && ((s as any).payment_status === "pending" || !(s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0)), 0);
+  const bkashBankPending = bkashPending + bankPending;
   const creditToday  = filteredSales.filter(s => s.type === "credit").reduce((a, s) => {
     const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1) - (Number(s.discount) || 0);
     const due = Number(s.due_amount);
@@ -933,7 +950,21 @@ export default function Dashboard() {
     const discount = Number(s.discount) || 0;
     return (sell - buy) * qty - discount;
   };
-  const profitToday  = validFilteredSales.reduce((a, s) => a + calcSaleProfit(s), 0);
+  // Subtract profit from returned products within the active date filter
+  const returnsData = (returnsQuery?.data ?? []) as any[];
+  const returnProfitAdj = returnsData
+    .filter(r => {
+      if (!r.profit_adjustment) return false;
+      const rDate = r.return_date || r.buy_date || "";
+      if (dateFilter.from && rDate < dateFilter.from) return false;
+      if (dateFilter.to && rDate > dateFilter.to) return false;
+      if (!dateFilter.from && !dateFilter.to) {
+        return rDate === new Date().toISOString().slice(0, 10);
+      }
+      return true;
+    })
+    .reduce((sum, r) => sum + Number(r.profit_adjustment || 0), 0);
+  const profitToday  = validFilteredSales.reduce((a, s) => a + calcSaleProfit(s), 0) + returnProfitAdj;
   
   // loss today
   const lossToday = validFilteredSales.filter(s => calcSaleProfit(s) < 0).reduce((a, s) => a + Math.abs(calcSaleProfit(s)), 0);
@@ -1436,10 +1467,18 @@ export default function Dashboard() {
           sell_kpi: (
             <Link href="/sales" className={`block ${isHeroCard("sell_kpi") ? "sm:col-span-2" : ""}`} key="sell_kpi" onClick={() => playTapSound()}>
               <KPICard
-                label={lang === "bn" ? "বিক্রয় ও ডিজিটাল আদায়" : "Sell KPI (Collections)"}
-                value={fmtMoney(cashToday + bkashBankCollected)}
-                sub={lang === "bn" ? `ডিজিটাল: ৳${fmtMoney(bkashBankCollected)} | ক্যাশ: ৳${fmtMoney(cashToday)}` : `Digital: ৳${fmtMoney(bkashBankCollected)} | Cash: ৳${fmtMoney(cashToday)}`}
-                imageUrl="/icons/bkash_logo.png"
+                label={lang === "bn" ? "বিক্রয়" : "Sell"}
+                value={fmtMoney(totalSalesToday)}
+                sub={
+                  bkashPending > 0 || bankPending > 0 || onlinePendingToday > 0
+                    ? (lang === "bn"
+                        ? `পেন্ডিং: বিকাশ ৳${fmtMoney(bkashPending)} • ব্যাংক ৳${fmtMoney(bankPending)} • অনলাইন ৳${fmtMoney(onlinePendingToday)}`
+                        : `Pending: bKash ৳${fmtMoney(bkashPending)} • Bank ৳${fmtMoney(bankPending)} • Online ৳${fmtMoney(onlinePendingToday)}`)
+                    : (lang === "bn"
+                        ? `নগদ আদায়: ৳${fmtMoney(cashToday + bkashBankCollected)}`
+                        : `Collected: ৳${fmtMoney(cashToday + bkashBankCollected)}`)
+                }
+                imageUrl="/icons/sales-kpi.svg"
                 icon={ShoppingBag}
                 color="bg-pink-600"
                 className="h-full w-full"
@@ -1459,6 +1498,7 @@ export default function Dashboard() {
                 label={lang === "bn" ? "মালিকের খরচ" : "Owner's Expense"}
                 value={fmtMoney(ownerExpenseTotal)}
                 sub={lang === "bn" ? `${ownerExpensesFiltered.length} টি ব্যক্তিগত খরচ / উত্তোলন` : `${ownerExpensesFiltered.length} personal withdrawals`}
+                imageUrl="/icons/wallet.svg"
                 icon={Wallet}
                 color="bg-amber-600"
                 className="h-full w-full"
@@ -2093,10 +2133,18 @@ export default function Dashboard() {
                   onClick={() => playTapSound()}
                 >
                   <KPICard
-                    label={lang === "bn" ? "বিক্রয় ও ডিজিটাল আদায়" : "Sell KPI (Collections)"}
-                    value={fmtMoney(cashToday + bkashBankCollected)}
-                    sub={lang === "bn" ? `ডিজিটাল: ৳${fmtMoney(bkashBankCollected)} | ক্যাশ: ৳${fmtMoney(cashToday)}` : `Digital: ৳${fmtMoney(bkashBankCollected)} | Cash: ৳${fmtMoney(cashToday)}`}
-                    imageUrl="/icons/bkash_logo.png"
+                    label={lang === "bn" ? "বিক্রয়" : "Sell"}
+                    value={fmtMoney(totalSalesToday)}
+                    sub={
+                      bkashPending > 0 || bankPending > 0 || onlinePendingToday > 0
+                        ? (lang === "bn"
+                            ? `পেন্ডিং: বিকাশ ৳${fmtMoney(bkashPending)} • ব্যাংক ৳${fmtMoney(bankPending)} • অনলাইন ৳${fmtMoney(onlinePendingToday)}`
+                            : `Pending: bKash ৳${fmtMoney(bkashPending)} • Bank ৳${fmtMoney(bankPending)} • Online ৳${fmtMoney(onlinePendingToday)}`)
+                        : (lang === "bn"
+                            ? `নগদ আদায়: ৳${fmtMoney(cashToday + bkashBankCollected)}`
+                            : `Collected: ৳${fmtMoney(cashToday + bkashBankCollected)}`)
+                    }
+                    imageUrl="/icons/sales-kpi.svg"
                     icon={ShoppingBag}
                     color="bg-pink-600"
                     isDesktop={true}
@@ -2120,6 +2168,7 @@ export default function Dashboard() {
                     label={lang === "bn" ? "মালিকের খরচ" : "Owner's Expense"}
                     value={fmtMoney(ownerExpenseTotal)}
                     sub={lang === "bn" ? `${ownerExpensesFiltered.length} টি ব্যক্তিগত খরচ / উত্তোলন` : `${ownerExpensesFiltered.length} personal withdrawals`}
+                    imageUrl="/icons/wallet.svg"
                     icon={Wallet}
                     color="bg-amber-600"
                     isDesktop={true}

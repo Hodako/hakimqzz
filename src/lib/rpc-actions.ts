@@ -1180,7 +1180,7 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
 }
 
 
-export async function createDirectProductReturnFn(input: { data: { product_id: string; qty: number; return_price: number; note?: string | null } }) {
+export async function createDirectProductReturnFn(input: { data: { product_id: string; qty: number; return_price: number; buy_date?: string; return_date?: string; profit_adjustment?: number; note?: string | null } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
@@ -1190,6 +1190,13 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
   const returnQty = Number(data.qty);
   if (returnQty <= 0) throw new Error("Invalid quantity");
 
+  const returnPrice = Number(data.return_price) || 0;
+  const buyDate = data.buy_date || new Date().toISOString().slice(0, 10);
+  const returnDate = data.return_date || new Date().toISOString().slice(0, 10);
+  const profitAdj = data.profit_adjustment !== undefined
+    ? Number(data.profit_adjustment)
+    : -((returnPrice - (Number(product.buy_price) || 0)) * returnQty);
+
   const id = crypto.randomUUID();
   const doc = {
     _id: id,
@@ -1198,7 +1205,11 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
     product_id: data.product_id,
     product_name: product.name,
     qty: returnQty,
-    return_price: Number(data.return_price) || 0,
+    return_price: returnPrice,
+    buy_price: Number(product.buy_price) || 0,
+    buy_date: buyDate,
+    return_date: returnDate,
+    profit_adjustment: profitAdj,
     note: data.note || null,
     created_at: new Date().toISOString(),
   };
@@ -1209,12 +1220,12 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
     { $set: { stock: ((product.stock as number) ?? 0) + returnQty } }
   );
 
-  const refundAmt = returnQty * (Number(data.return_price) || 0);
+  const refundAmt = returnQty * returnPrice;
   if (refundAmt > 0) {
     await insertCashboxEntry(db, session.ownerId, {
       kind: "withdraw",
       amount: refundAmt,
-      note: `Direct Return: ${product.name} (Qty: ${returnQty})`,
+      note: `Direct Return: ${product.name} (Qty: ${returnQty}, Buy Date: ${buyDate})`,
       ref_id: id,
     });
   }
@@ -1934,6 +1945,7 @@ export async function createOwnerWalletEntryFn(input: {
     category?: string;
     note?: string | null;
     created_at?: string;
+    cut_from_profit?: boolean;
   };
 }) {
   const { data } = input;
@@ -1941,6 +1953,7 @@ export async function createOwnerWalletEntryFn(input: {
   const db = await getDb();
   const id = crypto.randomUUID();
   const category = data.category || "personal";
+  const cutFromProfit = data.cut_from_profit !== false;
   const catLabel = category === "family" ? "পরিবার খরচ" : category === "bazar" ? "বাজার খরচ" : category === "home_rent" ? "বাসা ভাড়া" : category === "medical" ? "চিকিৎসা" : "ব্যক্তিগত";
   const title = `[মালিকের খরচ] ${catLabel}: ${data.note || "ব্যক্তিগত উত্তোলন"}`;
   const createdAt = data.created_at || new Date().toISOString();
@@ -1951,12 +1964,13 @@ export async function createOwnerWalletEntryFn(input: {
     amount: Number(data.amount) || 0,
     category,
     note: data.note || null,
+    cut_from_profit: cutFromProfit,
     created_at: createdAt,
   };
 
   await db.collection("owner_wallet").insertOne(doc as any);
 
-  // 1. Deduct from cashbox as withdrawal
+  // 1. Deduct from cashbox as withdrawal (Always)
   if (doc.amount > 0) {
     await insertCashboxEntry(db, session.ownerId, {
       kind: "withdraw",
@@ -1966,17 +1980,19 @@ export async function createOwnerWalletEntryFn(input: {
       created_at: createdAt,
     });
 
-    // 2. Add to expenses under category "owner_personal" so it deducts from profit
-    const expId = crypto.randomUUID();
-    await db.collection("expenses").insertOne({
-      _id: expId,
-      owner_id: session.ownerId,
-      title,
-      amount: doc.amount,
-      category: "owner_personal",
-      note: `Owner Wallet ID: ${id} - ${data.note || ""}`,
-      created_at: createdAt,
-    } as any);
+    // 2. Add to expenses under category "owner_personal" ONLY if cutFromProfit is true!
+    if (cutFromProfit) {
+      const expId = crypto.randomUUID();
+      await db.collection("expenses").insertOne({
+        _id: expId,
+        owner_id: session.ownerId,
+        title,
+        amount: doc.amount,
+        category: "owner_personal",
+        note: `Owner Wallet ID: ${id} - ${data.note || ""}`,
+        created_at: createdAt,
+      } as any);
+    }
   }
 
   return { ...doc, id };

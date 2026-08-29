@@ -392,3 +392,6 @@ export const removeEmployeeFn = makeWriteAction("removeEmployeeFn");
 export const connectGoogleSheetsOAuthFn = makeWriteAction("connectGoogleSheetsOAuthFn");
 export const disconnectGoogleSheetsFn = makeWriteAction("disconnectGoogleSheetsFn");
 
+
+export const updateBusinessSettingsFn = makeWriteAction("updateBusinessSettingsFn");
+export const getBusinessSettingsFn = makeReadAction("getBusinessSettingsFn");

@@ -6,12 +6,17 @@ import { useState, useEffect } from "react";
 
 interface AppLogoProps {
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   src?: string;
   alt?: string;
 }
 
-const sizes = { sm: "h-8 max-w-[100px]", md: "h-10 max-w-[130px]", lg: "h-14 max-w-[160px]" };
+const sizes = {
+  sm: "h-9.5 sm:h-10.5 max-w-[190px] sm:max-w-[220px]",
+  md: "h-12 sm:h-14 max-w-[260px] sm:max-w-[300px]",
+  lg: "h-16 sm:h-20 max-w-[340px] sm:max-w-[380px]",
+  xl: "h-24 sm:h-28 max-w-[460px] sm:max-w-[500px]",
+};
 
 /** Business logo from settings or default. Can toggle fullscreen on triple click. */
 export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
