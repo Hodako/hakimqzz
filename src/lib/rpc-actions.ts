@@ -2792,12 +2792,12 @@ export async function repairCashboxDbFn() {
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
-  // Keep manual entries (ref_id === null)
+  // Preserve true manual cashbox entries (entries created manually by user with no ref_id)
   const manualEntries = existingCashbox.filter(e => !e.ref_id);
   const newCashboxEntries: any[] = [...manualEntries];
   const seenRefIds = new Set<string>(manualEntries.map(e => e.ref_id).filter(Boolean));
 
-  // 1. Sales
+  // 1. Sales Cash Inflows
   for (const s of sales) {
     if ((s as any).returned) continue;
     const sId = s._id.toString();
@@ -2810,7 +2810,7 @@ export async function repairCashboxDbFn() {
     if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || !s.type) {
       cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
     } else if (s.type === "credit") {
-      cashAmount = !isNaN(paidAmount) ? paidAmount : 0;
+      cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : 0;
     } else if (s.type === "bkash" || (s.type as string) === "bank") {
       if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) {
         cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
@@ -2837,7 +2837,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 2. Returns
+  // 2. Returns (Cash Refunds given back to customers)
   for (const r of returns) {
     const rId = r._id.toString();
     if ((r as any).deduct_type === "payable" || (r as any).deduct_type === "receivable") continue;
@@ -2859,12 +2859,14 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 3. Purchases & Expenses (Deduplicate linked purchases)
+  // 3. Direct Cash Purchases (Credit purchases are NOT paid at purchase time!)
   const purchaseExpenseIds = new Set<string>();
   for (const p of purchases) {
     const pId = p._id.toString();
     const pTotal = Number(p.total) || 0;
-    if (pTotal > 0 && !seenRefIds.has(pId)) {
+    
+    // Only deduct from cashbox if payment_type is CASH / not credit
+    if (p.payment_type !== "credit" && pTotal > 0 && !seenRefIds.has(pId)) {
       seenRefIds.add(pId);
       newCashboxEntries.push({
         _id: crypto.randomUUID() as any,
@@ -2877,6 +2879,7 @@ export async function repairCashboxDbFn() {
       });
     }
 
+    // Map linked expense records to avoid duplicate deduction
     const linkedExp = expenses.find(e => 
       (e.note && e.note.includes(`Purchase ID: ${p._id}`)) ||
       (e.title === `Product Purchase: ${p.product_name}` && Number(e.amount) === pTotal)
@@ -2886,7 +2889,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // General Expenses
+  // 4. Store Operating Expenses (rent, electricity, salaries, tea, etc. - excluding purchase mirrors)
   for (const e of expenses) {
     const eId = e._id.toString();
     if (purchaseExpenseIds.has(eId)) continue;
@@ -2908,27 +2911,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 4. Somiti Entries (ONLY non-initial, non-skipped)
-  for (const som of somiti) {
-    const somId = som._id.toString();
-    if ((som as any).is_initial || (som as any).skipCashbox) continue;
-    const somAmt = Number(som.amount) || 0;
-    if (somAmt > 0 && !seenRefIds.has(somId)) {
-      seenRefIds.add(somId);
-      const cbKind = som.kind === "withdraw" ? "deposit" : "withdraw";
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: cbKind,
-        amount: somAmt,
-        note: som.note ? `Samity: ${som.note}` : "Samity transaction",
-        ref_id: somId,
-        created_at: som.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // 5. Settlements (Supplier payments)
+  // 5. Supplier Settlements (Paying off credit purchases to Mahajans)
   for (const set of settlements) {
     const sId = set._id.toString();
     const amt = Number(set.amount) || 0;
@@ -2946,7 +2929,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 6. Customer Payments (Bokeya recovery)
+  // 6. Customer Bokeya Payments (Dues collected into cashbox)
   for (const pay of payments) {
     const pId = pay._id.toString();
     const amt = Number(pay.amount) || 0;
