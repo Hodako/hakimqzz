@@ -87,17 +87,22 @@ async function insertCashboxEntry(
   return { ...doc, id };
 }
 
-function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number }) {
+function saleCashboxAmount(data: { type: string; sell_price: number; qty: number; paid_amount: number; discount?: number }) {
+  const lineTotal = Math.max(0, (Number(data.sell_price) * (Number(data.qty) || 1)) - (Number(data.discount) || 0));
   if (data.type === "credit") return Number(data.paid_amount) || 0;
   // bKash and Bank payments are pending verification until user accepts payment
   if (data.type === "bkash" || data.type === "bank") return 0;
   // Online deliveries (courier pending): only if paid_amount > 0
   if (data.type === "online") return 0;
   // Cash, Nagad, Card, POS payments deposit directly into Cashbox
-  if (data.type === "cash" || data.type === "nagad" || data.type === "card" || data.type === "pos") {
-    return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
+  if (data.type === "cash" || data.type === "nagad" || data.type === "card" || data.type === "pos" || !data.type) {
+    return data.paid_amount !== undefined && !isNaN(Number(data.paid_amount)) && Number(data.paid_amount) >= 0
+      ? Number(data.paid_amount)
+      : lineTotal;
   }
-  return Number(data.paid_amount) || (Number(data.sell_price) * (Number(data.qty) || 1));
+  return data.paid_amount !== undefined && !isNaN(Number(data.paid_amount)) && Number(data.paid_amount) >= 0
+    ? Number(data.paid_amount)
+    : lineTotal;
 }
 
 async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
@@ -2790,7 +2795,20 @@ export async function repairCashboxDbFn() {
   const db = await getDb();
   const ownerId = session.ownerId;
 
-  const [sales, returns, expenses, purchases, somiti, withdrawals, payments, settlements, existingCashbox] = await Promise.all([
+  const [
+    sales,
+    returns,
+    expenses,
+    purchases,
+    somiti,
+    withdrawals,
+    payments,
+    settlements,
+    bankTransactions,
+    bankLoans,
+    bankLoanPayments,
+    existingCashbox,
+  ] = await Promise.all([
     db.collection("sales").find({ owner_id: ownerId }).toArray(),
     db.collection("returns").find({ owner_id: ownerId }).toArray(),
     db.collection("expenses").find({ owner_id: ownerId }).toArray(),
@@ -2799,26 +2817,30 @@ export async function repairCashboxDbFn() {
     db.collection("owner_withdrawals").find({ owner_id: ownerId }).toArray(),
     db.collection("payments").find({ owner_id: ownerId }).toArray(),
     db.collection("party_payable_settlements").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_transactions").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_loans").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_loan_payments").find({ owner_id: ownerId }).toArray(),
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
-  // Preserve true manual cashbox entries (entries created manually by user with no ref_id)
-  const manualEntries = existingCashbox.filter(e => !e.ref_id);
+  // 1. Preserve true manual cashbox entries (entries created manually by user with no ref_id)
+  const manualEntries = existingCashbox.filter((e) => !e.ref_id);
   const newCashboxEntries: any[] = [...manualEntries];
-  const seenRefIds = new Set<string>(manualEntries.map(e => e.ref_id).filter(Boolean));
+  const seenRefIds = new Set<string>(manualEntries.map((e) => e.ref_id).filter(Boolean));
 
-  // 1. Sales Cash Inflows
+  // 2. Sales Cash Inflows
   for (const s of sales) {
     if ((s as any).returned) continue;
     const sId = s._id.toString();
     const qty = Number(s.qty) || 1;
     const sellPrice = Number(s.sell_price) || 0;
+    const discount = Number((s as any).discount) || 0;
+    const lineTotal = Math.max(0, sellPrice * qty - discount);
     const paidAmount = Number(s.paid_amount);
-    const lineTotal = sellPrice * qty;
 
     let cashAmount = 0;
-    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || !s.type) {
-      cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
+    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
+      cashAmount = !isNaN(paidAmount) && paidAmount >= 0 ? paidAmount : lineTotal;
     } else if (s.type === "credit") {
       cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : 0;
     } else if (s.type === "bkash" || (s.type as string) === "bank") {
@@ -2831,7 +2853,7 @@ export async function repairCashboxDbFn() {
       }
     }
 
-    if (cashAmount > 10000000) continue; // skip abnormal test records
+    if (cashAmount > 100000000) continue; // skip abnormal test records
 
     if (cashAmount > 0 && !seenRefIds.has(sId)) {
       seenRefIds.add(sId);
@@ -2840,14 +2862,14 @@ export async function repairCashboxDbFn() {
         owner_id: ownerId,
         kind: "sale",
         amount: cashAmount,
-        note: `Sale: ${s.product_name || "Product"} (×${qty})`,
+        note: `Sale [${(s.type || "CASH").toUpperCase()}]: ${s.product_name || "Product"} (×${qty})`,
         ref_id: sId,
         created_at: s.created_at || new Date().toISOString(),
       });
     }
   }
 
-  // 2. Returns (Cash Refunds given back to customers)
+  // 3. Returns (Cash Refunds given back to customers)
   for (const r of returns) {
     const rId = r._id.toString();
     if ((r as any).deduct_type === "payable" || (r as any).deduct_type === "receivable") continue;
@@ -2869,14 +2891,14 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 3. Direct Cash Purchases (Credit purchases are NOT paid at purchase time!)
+  // 4. Direct Cash Purchases (Credit & Bank purchases are NOT deducted from cashbox at purchase time!)
   const purchaseExpenseIds = new Set<string>();
   for (const p of purchases) {
     const pId = p._id.toString();
     const pTotal = Number(p.total) || 0;
-    
-    // Only deduct from cashbox if payment_type is CASH / not credit
-    if (p.payment_type !== "credit" && pTotal > 0 && !seenRefIds.has(pId)) {
+
+    // Only deduct from cashbox if payment_type is CASH / not credit and not bank
+    if (p.payment_type !== "credit" && p.payment_type !== "bank" && pTotal > 0 && !seenRefIds.has(pId)) {
       seenRefIds.add(pId);
       newCashboxEntries.push({
         _id: crypto.randomUUID() as any,
@@ -2890,22 +2912,23 @@ export async function repairCashboxDbFn() {
     }
 
     // Map linked expense records to avoid duplicate deduction
-    const linkedExp = expenses.find(e => 
-      (e.note && e.note.includes(`Purchase ID: ${p._id}`)) ||
-      (e.title === `Product Purchase: ${p.product_name}` && Number(e.amount) === pTotal)
+    const linkedExp = expenses.find(
+      (e) =>
+        (e.note && e.note.includes(`Purchase ID: ${p._id}`)) ||
+        (e.title === `Product Purchase: ${p.product_name}` && Number(e.amount) === pTotal)
     );
     if (linkedExp) {
       purchaseExpenseIds.add(linkedExp._id.toString());
     }
   }
 
-  // 4. Store Operating Expenses (rent, electricity, salaries, tea, etc. - excluding purchase mirrors)
+  // 5. Store Operating Expenses (rent, electricity, salaries, tea, etc. - excluding purchase mirrors)
   for (const e of expenses) {
     const eId = e._id.toString();
     if (purchaseExpenseIds.has(eId)) continue;
     if (e.category === "purchase" || e.title?.startsWith("Product Purchase:")) continue;
     const amt = Number(e.amount) || 0;
-    if (amt > 10000000) continue;
+    if (amt > 100000000) continue;
 
     if (amt > 0 && !seenRefIds.has(eId)) {
       seenRefIds.add(eId);
@@ -2921,7 +2944,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 5. Supplier Settlements (Paying off credit purchases to Mahajans)
+  // 6. Supplier Settlements (Paying off credit purchases to Mahajans)
   for (const set of settlements) {
     const sId = set._id.toString();
     const amt = Number(set.amount) || 0;
@@ -2939,7 +2962,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 6. Customer Bokeya Payments (Dues collected into cashbox)
+  // 7. Customer Bokeya Payments (Dues collected into cashbox)
   for (const pay of payments) {
     const pId = pay._id.toString();
     const amt = Number(pay.amount) || 0;
@@ -2957,7 +2980,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 7. Owner Withdrawals
+  // 8. Owner Personal Withdrawals
   for (const w of withdrawals) {
     const wId = w._id.toString();
     const amt = Number(w.amount) || 0;
@@ -2975,6 +2998,92 @@ export async function repairCashboxDbFn() {
     }
   }
 
+  // 9. Somiti (Samity) Deposits & Withdrawals
+  for (const s of somiti) {
+    if ((s as any).skip_cashbox === true || (s as any).is_opening === true) continue;
+    const smId = s._id.toString();
+    const amt = Number(s.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(smId)) {
+      seenRefIds.add(smId);
+      // deposit into somiti cuts from cashbox; withdrawal from somiti adds back to cashbox
+      const cashKind = s.kind === "withdraw" ? "deposit" : "withdraw";
+      const notePrefix = s.kind === "withdraw" ? "Somiti Withdrawal (Back to Cash)" : "Somiti Deposit (Savings)";
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: cashKind,
+        amount: amt,
+        note: s.note ? `${notePrefix}: ${s.note}` : notePrefix,
+        ref_id: smId,
+        created_at: s.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 10. Bank Account Deposits / Withdrawals
+  for (const tx of bankTransactions) {
+    if ((tx as any).sync_cashbox === false) continue;
+    const bId = tx._id.toString();
+    const amt = Number(tx.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(bId)) {
+      seenRefIds.add(bId);
+      const cashKind = tx.type === "deposit" ? "withdraw" : "deposit";
+      const noteText =
+        tx.type === "deposit"
+          ? `Bank Deposit: ${tx.note || "Transfer to bank"}`
+          : `Bank Withdrawal: ${tx.note || "Cash from bank"}`;
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: cashKind,
+        amount: amt,
+        note: noteText,
+        ref_id: bId,
+        created_at: tx.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 11. Bank Loans Disbursed to Cashbox
+  for (const loan of bankLoans) {
+    if ((loan as any).receive_to_cashbox) {
+      const lId = loan._id.toString();
+      const amt = Number(loan.principal_amount) || 0;
+      if (amt > 0 && !seenRefIds.has(lId)) {
+        seenRefIds.add(lId);
+        newCashboxEntries.push({
+          _id: crypto.randomUUID() as any,
+          owner_id: ownerId,
+          kind: "deposit",
+          amount: amt,
+          note: `Bank Loan Disbursement: ${loan.bank_name} (${loan.loan_title})`,
+          ref_id: lId,
+          created_at: loan.created_at || new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  // 12. Bank Loan Installments Paid from Cashbox
+  for (const pmt of bankLoanPayments) {
+    if ((pmt as any).payment_method === "bank") continue; // paid directly from bank, not cashbox
+    const pId = pmt._id.toString();
+    const amt = Number(pmt.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(pId)) {
+      seenRefIds.add(pId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: pmt.note ? `Bank Loan Installment: ${pmt.note}` : "Bank Loan Installment",
+        ref_id: pId,
+        created_at: pmt.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // Write reconciled records
   await db.collection("cashbox_entries").deleteMany({ owner_id: ownerId });
   if (newCashboxEntries.length > 0) {
     await db.collection("cashbox_entries").insertMany(newCashboxEntries as any);
