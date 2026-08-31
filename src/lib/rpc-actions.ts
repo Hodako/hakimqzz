@@ -577,7 +577,7 @@ export async function archiveProductFn(input: { data: { id: string; archived: bo
 export async function getPartiesFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("parties").find({ owner_id: session.ownerId }).sort({ name: 1 }).toArray();
+  const items = await db.collection("parties").find({ owner_id: session.ownerId, type: { $ne: "customer" } }).sort({ name: 1 }).toArray();
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
