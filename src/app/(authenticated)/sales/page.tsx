@@ -437,12 +437,12 @@ export default function SalesPage() {
           <td style="padding:6px 8px;border:1px solid #e2e8f0;">${fmtDateTime(s.created_at)}</td>
           <td style="padding:6px 8px;border:1px solid #e2e8f0;"><b>${s.product_name}</b></td>
           <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:center;">${s.qty}</td>
-          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">৳${fmtMoney(s.sell_price)}</td>
-          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;color:#16a34a;">৳${fmtMoney(s.profit)}</td>
+          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;">${fmtMoney(s.sell_price)}</td>
+          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;color:#16a34a;">${fmtMoney(s.profit)}</td>
           <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:center;">${methodStr}</td>
           <td style="padding:6px 8px;border:1px solid #e2e8f0;">${custName}</td>
-          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;color:#0284c7;">৳${fmtMoney(s.paid_amount)}</td>
-          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;color:${s.due_amount > 0 ? '#d97706' : '#64748b'};">৳${fmtMoney(s.due_amount)}</td>
+          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;color:#0284c7;">${fmtMoney(s.paid_amount)}</td>
+          <td style="padding:6px 8px;border:1px solid #e2e8f0;text-align:right;color:${s.due_amount > 0 ? '#d97706' : '#64748b'};">${fmtMoney(s.due_amount)}</td>
         </tr>
       `;
     }).join("");
@@ -488,19 +488,19 @@ export default function SalesPage() {
           <div class="summary">
             <div class="card">
               <div class="card-title">${isBn ? "মোট বিক্রয়" : "Total Sales"}</div>
-              <div class="card-val">৳${fmtMoney(totalSalesAmount)}</div>
+              <div class="card-val">${fmtMoney(totalSalesAmount)}</div>
             </div>
             <div class="card">
               <div class="card-title">${isBn ? "মোট লাভ" : "Total Profit"}</div>
-              <div class="card-val" style="color:#16a34a;">৳${fmtMoney(totalProfitAmount)}</div>
+              <div class="card-val" style="color:#16a34a;">${fmtMoney(totalProfitAmount)}</div>
             </div>
             <div class="card">
               <div class="card-title">${isBn ? "মোট আদায়" : "Total Collected"}</div>
-              <div class="card-val" style="color:#0284c7;">৳${fmtMoney(totalPaidAmount)}</div>
+              <div class="card-val" style="color:#0284c7;">${fmtMoney(totalPaidAmount)}</div>
             </div>
             <div class="card">
               <div class="card-title">${isBn ? "মোট বাকি" : "Total Due"}</div>
-              <div class="card-val" style="color:#d97706;">৳${fmtMoney(totalDueAmount)}</div>
+              <div class="card-val" style="color:#d97706;">${fmtMoney(totalDueAmount)}</div>
             </div>
           </div>
 

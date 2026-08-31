@@ -1452,11 +1452,11 @@ export default function Dashboard() {
                 ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal")
                 : (bkashPending > 0 || bankPending > 0 || onlinePendingToday > 0
                     ? (lang === "bn"
-                        ? `পেন্ডিং: বিকাশ ৳${fmtMoney(bkashPending)} • ব্যাংক ৳${fmtMoney(bankPending)} • অনলাইন ৳${fmtMoney(onlinePendingToday)}`
-                        : `Pending: bKash ৳${fmtMoney(bkashPending)} • Bank ৳${fmtMoney(bankPending)} • Online ৳${fmtMoney(onlinePendingToday)}`)
+                        ? `পেন্ডিং: বিকাশ ${fmtMoney(bkashPending)} • ব্যাংক ${fmtMoney(bankPending)} • অনলাইন ${fmtMoney(onlinePendingToday)}`
+                        : `Pending: bKash ${fmtMoney(bkashPending)} • Bank ${fmtMoney(bankPending)} • Online ${fmtMoney(onlinePendingToday)}`)
                     : (lang === "bn"
-                        ? `নগদ আদায়: ৳${fmtMoney(cashToday + bkashBankCollected)}`
-                        : `Collected: ৳${fmtMoney(cashToday + bkashBankCollected)}`))
+                        ? `নগদ আদায়: ${fmtMoney(cashToday + bkashBankCollected)}`
+                        : `Collected: ${fmtMoney(cashToday + bkashBankCollected)}`))
             }
             imageUrl="/icons/sales-kpi.svg"
             icon={ShoppingBag}
@@ -1620,7 +1620,7 @@ export default function Dashboard() {
         const cashboxSubText = isHidden && !isRevealed
           ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal")
           : (!dateFilter.from && !dateFilter.to)
-          ? (lang === "bn" ? `আজকের ক্যাশ (মোট: ৳${fmtMoney(cashboxTotal)})` : `Today Cash (Total: ৳${fmtMoney(cashboxTotal)})`)
+          ? (lang === "bn" ? `আজকের ক্যাশ (মোট: ${fmtMoney(cashboxTotal)})` : `Today Cash (Total: ${fmtMoney(cashboxTotal)})`)
           : dateRangeLabel;
 
         return canAccess(perms, "cashbox") ? (

@@ -261,7 +261,7 @@ export default function CashboxDetailsPage() {
                 <div className="h-9 w-32 rounded-md bg-indigo-200/60 dark:bg-indigo-800/40 animate-pulse mt-1" />
               ) : (
                 <div className="text-2xl sm:text-3xl font-bold text-indigo-600 font-serif">
-                  ৳{fmtMoney(Math.max(balance, 0))}
+                  {fmtMoney(balance)}
                 </div>
               )}
             </div>
@@ -273,7 +273,7 @@ export default function CashboxDetailsPage() {
                 : `${rangeLabel} ${lang === "bn" ? "ক্যাশ প্রবাহ" : "Period Net"}`}
             </span>
             <span className={`text-sm sm:text-base font-bold font-serif ${range === "today" || periodNet >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-              {range === "today" ? `+৳${fmtMoney(periodIn)}` : `${periodNet >= 0 ? "+" : "−"}৳${fmtMoney(Math.abs(periodNet))}`}
+              {range === "today" ? `+${fmtMoney(periodIn)}` : `${periodNet >= 0 ? "+" : "−"}${fmtMoney(Math.abs(periodNet))}`}
             </span>
           </div>
         </div>

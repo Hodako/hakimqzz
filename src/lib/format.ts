@@ -1,7 +1,11 @@
 export function fmtMoney(n: number | string | null | undefined): string {
-  const num = typeof n === "string" ? Number(n) : (n ?? 0);
+  if (typeof n === "string" && (n.startsWith("৳") || n.startsWith("-৳") || n.startsWith("+৳"))) {
+    return n;
+  }
+  const num = typeof n === "string" ? Number(n.replace(/[^0-9.-]+/g, "")) : (n ?? 0);
   if (!Number.isFinite(num)) return "৳0";
-  return "৳" + num.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  const formatted = Math.abs(num).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return num < 0 ? `-৳${formatted}` : `৳${formatted}`;
 }
 
 export function fmtDate(d: string | Date | number | null | undefined): string {
