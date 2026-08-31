@@ -560,6 +560,7 @@ export async function deleteProductFn(input: { data: { id: string } }) {
     void deleteImgbbImage(prod.image_url);
   }
 
+  if (prod) { await saveToRecycleBin(db, session.ownerId, "product", data.id, prod.name || "Product", prod, session.email); }
   await db.collection("products").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
 }
@@ -605,6 +606,8 @@ export async function deletePartyFn(input: { data: { id: string } }) {
   const { data } = input;
   const session = await requireSession();
   const db = await getDb();
+  const partyDoc = await db.collection("parties").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (partyDoc) { await saveToRecycleBin(db, session.ownerId, "party", data.id, partyDoc.name || "Customer/Supplier", partyDoc, session.email); }
   await db.collection("parties").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
 }
@@ -982,6 +985,7 @@ export async function deleteSaleFn(input: { data: { id: string } }) {
       await checkCashboxBalanceEffect(db, session.ownerId, -totalSaleDeltaEffect, relatedIds);
     }
 
+    await saveToRecycleBin(db, session.ownerId, "sale", data.id, sale.product_name || "Sale", salesToDelete, session.email);
     for (const s of salesToDelete) {
       if (s.product_id) {
         const qtyToRestore = s.returned ? 0 : (Number(s.qty) || 0);
@@ -1363,7 +1367,9 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
     await db.collection("party_receivables").deleteMany({ owner_id: session.ownerId, ref_id: data.id as any });
     await db.collection("party_payables").deleteMany({ owner_id: session.ownerId, ref_id: data.id as any });
     await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
-    await db.collection("returns").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+    const retDoc = await db.collection("returns").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (retDoc) { await saveToRecycleBin(db, session.ownerId, "return", data.id, retDoc.product_name || "Return", retDoc, session.email); }
+  await db.collection("returns").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
 
     return { success: true };
   } catch (err: any) {
@@ -1592,6 +1598,8 @@ export async function deletePurchaseFn(input: { data: { id: string } }) {
       );
     }
   }
+  const purDoc = await db.collection("purchases").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (purDoc) { await saveToRecycleBin(db, session.ownerId, "purchase", data.id, purDoc.product_name || "Purchase", purDoc, session.email); }
   await db.collection("purchases").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
 
   // Delete cashbox entry directly by purchase ID (new approach — ref_id = purchase ID)
@@ -1737,6 +1745,8 @@ export async function deleteExpenseFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   await db.collection("cashbox_entries").deleteOne({ owner_id: session.ownerId, ref_id: data.id, kind: "expense" });
+  const expDoc = await db.collection("expenses").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (expDoc) { await saveToRecycleBin(db, session.ownerId, "expense", data.id, expDoc.title || "Expense", expDoc, session.email); }
   await db.collection("expenses").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
 }
@@ -4392,3 +4402,219 @@ export async function disconnectGoogleSheetsFn() {
   return { success: true };
 }
 
+
+
+// ─── RECYCLE BIN & COMMAND AUDIT HISTORY ─────────────────────────────────────
+
+export async function saveToRecycleBin(db: any, ownerId: string, entityType: string, entityId: string, title: string, data: any, userEmail?: string) {
+  try {
+    const id = crypto.randomUUID();
+    await db.collection("recycle_bin").insertOne({
+      _id: id,
+      owner_id: ownerId,
+      entity_type: entityType,
+      entity_id: entityId,
+      title: title || `${entityType} #${entityId.slice(0, 8)}`,
+      data: data,
+      deleted_at: new Date().toISOString(),
+      deleted_by: userEmail || "owner",
+    });
+  } catch (err) {
+    console.warn("Failed to save to recycle bin:", err);
+  }
+}
+
+export async function getRecycleBinFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("recycle_bin")
+    .find({ owner_id: session.ownerId })
+    .sort({ deleted_at: -1 })
+    .limit(100)
+    .toArray();
+  return items.map((it: any) => ({ ...it, id: it._id.toString() }));
+}
+
+export async function restoreRecycleItemFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+
+  const item = await db.collection("recycle_bin").findOne({ _id: data.id as any, owner_id: session.ownerId });
+  if (!item) throw new Error("Recycle bin item not found");
+
+  const { entity_type, data: entityData } = item;
+
+  if (entity_type === "product") {
+    const { _id, ...doc } = entityData;
+    await db.collection("products").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+  } else if (entity_type === "sale") {
+    const salesArr = Array.isArray(entityData) ? entityData : [entityData];
+    for (const s of salesArr) {
+      const { _id, ...doc } = s;
+      await db.collection("sales").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+      // Re-deduct product stock
+      if (s.product_id) {
+        await db.collection("products").updateOne({ _id: s.product_id as any }, { $inc: { stock: -Number(s.qty || 1) } });
+      }
+      // Re-insert cashbox entry
+      const paid = Number(s.paid_amount);
+      const total = Number(s.sell_price || 0) * Number(s.qty || 1);
+      const cashAmt = !isNaN(paid) && paid > 0 ? paid : (s.type === "cash" || s.type === "pos" ? total : 0);
+      if (cashAmt > 0) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "sale",
+          amount: cashAmt,
+          note: `Sale: ${s.product_name || "Product"} (Restored)`,
+          ref_id: s._id.toString(),
+        });
+      }
+    }
+  } else if (entity_type === "expense") {
+    const { _id, ...doc } = entityData;
+    await db.collection("expenses").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "expense",
+      amount: Number(entityData.amount || 0),
+      note: entityData.title || "Expense (Restored)",
+      ref_id: entityData._id.toString(),
+    });
+  } else if (entity_type === "purchase") {
+    const { _id, ...doc } = entityData;
+    await db.collection("purchases").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    if (entityData.product_id) {
+      await db.collection("products").updateOne({ _id: entityData.product_id as any }, { $inc: { stock: Number(entityData.qty || 1) } });
+    }
+    if (entityData.payment_type !== "credit") {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "expense",
+        amount: Number(entityData.total || 0),
+        note: `Product Purchase: ${entityData.product_name || "Stock"} (Restored)`,
+        ref_id: entityData._id.toString(),
+      });
+    }
+  } else if (entity_type === "return") {
+    const { _id, ...doc } = entityData;
+    await db.collection("returns").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+  } else if (entity_type === "party") {
+    const { _id, ...doc } = entityData;
+    await db.collection("parties").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+  } else if (entity_type === "cashbox") {
+    const { _id, ...doc } = entityData;
+    await db.collection("cashbox_entries").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+  }
+
+  await db.collection("recycle_bin").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function permanentDeleteRecycleItemFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("recycle_bin").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function emptyRecycleBinFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("recycle_bin").deleteMany({ owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function getCommandHistoryFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const ownerId = session.ownerId;
+
+  const [sales, expenses, purchases, returns, recycle] = await Promise.all([
+    db.collection("sales").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(30).toArray(),
+    db.collection("expenses").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(20).toArray(),
+    db.collection("purchases").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(20).toArray(),
+    db.collection("returns").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(10).toArray(),
+    db.collection("recycle_bin").find({ owner_id: ownerId }).sort({ deleted_at: -1 }).limit(30).toArray(),
+  ]);
+
+  const history: any[] = [];
+
+  sales.forEach((s: any) => {
+    history.push({
+      id: s._id.toString(),
+      action: "SALE_CREATED",
+      title: `Sale: ${s.product_name || "Item"} (×${s.qty || 1})`,
+      amount: (Number(s.sell_price) || 0) * (Number(s.qty) || 1),
+      timestamp: s.created_at || new Date().toISOString(),
+      canUndo: true,
+      undoType: "sale",
+    });
+  });
+
+  expenses.forEach((e: any) => {
+    history.push({
+      id: e._id.toString(),
+      action: "EXPENSE_CREATED",
+      title: `Expense: ${e.title || "Store Expense"}`,
+      amount: Number(e.amount) || 0,
+      timestamp: e.created_at || new Date().toISOString(),
+      canUndo: true,
+      undoType: "expense",
+    });
+  });
+
+  purchases.forEach((p: any) => {
+    history.push({
+      id: p._id.toString(),
+      action: "PURCHASE_CREATED",
+      title: `Purchase: ${p.product_name || "Stock Intake"}`,
+      amount: Number(p.total) || 0,
+      timestamp: p.created_at || new Date().toISOString(),
+      canUndo: true,
+      undoType: "purchase",
+    });
+  });
+
+  returns.forEach((r: any) => {
+    history.push({
+      id: r._id.toString(),
+      action: "RETURN_CREATED",
+      title: `Return Refund: ${r.product_name || "Item"}`,
+      amount: Number(r.amount) || (Number(r.return_price || 0) * Number(r.qty || 1)),
+      timestamp: r.created_at || new Date().toISOString(),
+      canUndo: true,
+      undoType: "return",
+    });
+  });
+
+  recycle.forEach((rc: any) => {
+    history.push({
+      id: rc._id.toString(),
+      action: "ITEM_DELETED",
+      title: `Deleted ${rc.entity_type}: ${rc.title}`,
+      amount: rc.data?.amount || rc.data?.total || rc.data?.sell_price || 0,
+      timestamp: rc.deleted_at || new Date().toISOString(),
+      canUndo: true,
+      undoType: "recycle",
+      recycleId: rc._id.toString(),
+    });
+  });
+
+  history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return history.slice(0, 50);
+}
+
+export async function undoCommandFn(input: { data: { id: string; undoType: string; recycleId?: string } }) {
+  const { data } = input;
+  if (data.undoType === "sale") {
+    return await deleteSaleFn({ data: { id: data.id } });
+  } else if (data.undoType === "expense") {
+    return await deleteExpenseFn({ data: { id: data.id } });
+  } else if (data.undoType === "purchase") {
+    return await deletePurchaseFn({ data: { id: data.id } });
+  } else if (data.undoType === "return") {
+    return await deleteReturnFn({ data: { id: data.id } });
+  } else if (data.undoType === "recycle" && (data.recycleId || data.id)) {
+    return await restoreRecycleItemFn({ data: { id: data.recycleId || data.id } });
+  }
+  return { success: true };
+}

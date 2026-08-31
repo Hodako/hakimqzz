@@ -395,3 +395,11 @@ export const disconnectGoogleSheetsFn = makeWriteAction("disconnectGoogleSheetsF
 
 export const updateBusinessSettingsFn = makeWriteAction("updateBusinessSettingsFn");
 export const getBusinessSettingsFn = makeReadAction("getBusinessSettingsFn");
+
+// ── Recycle Bin & Command History ──────────────────────────────────────────
+export const getRecycleBinFn = makeReadAction("getRecycleBinFn");
+export const restoreRecycleItemFn = makeWriteAction("restoreRecycleItemFn");
+export const permanentDeleteRecycleItemFn = makeWriteAction("permanentDeleteRecycleItemFn");
+export const emptyRecycleBinFn = makeWriteAction("emptyRecycleBinFn");
+export const getCommandHistoryFn = makeReadAction("getCommandHistoryFn");
+export const undoCommandFn = makeWriteAction("undoCommandFn");

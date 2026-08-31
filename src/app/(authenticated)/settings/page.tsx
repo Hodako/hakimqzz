@@ -17,9 +17,20 @@ import {
   removeEmployeeFn,
   updateEmployeePermissionsFn,
 } from "@/lib/rpc-admin";
+import {
+  getRecycleBinFn,
+  restoreRecycleItemFn,
+  permanentDeleteRecycleItemFn,
+  emptyRecycleBinFn,
+  getCommandHistoryFn,
+  undoCommandFn,
+} from "@/lib/rpc";
 import Link from "next/link";
 import {
   Trash2,
+  RotateCcw,
+  History as HistoryIcon,
+  Undo2,
   Lock,
   Unlock,
   ShieldAlert,
@@ -40,7 +51,6 @@ import {
   GripVertical,
   ChevronUp,
   ChevronDown,
-  RotateCcw,
   ArrowUpDown,
   LayoutGrid,
   Users,
@@ -86,7 +96,7 @@ import {
 
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
-type SettingsTab = "profile" | "printing" | "sheets" | "staff" | "appearance" | "security";
+type SettingsTab = "profile" | "printing" | "sheets" | "staff" | "appearance" | "security" | "history";
 
 export default function SettingsPage() {
   const { lang, t } = useT();
@@ -97,6 +107,11 @@ export default function SettingsPage() {
   
   const settings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const invitations = useQuery({ queryKey: ["employee-invitations"], queryFn: listEmployeeInvitationsFn });
+  const recycleBin = useQuery({ queryKey: ["recycle_bin"], queryFn: getRecycleBinFn, enabled: !!user });
+  const commandHistory = useQuery({ queryKey: ["command_history"], queryFn: getCommandHistoryFn, enabled: !!user });
+  const [historySubTab, setHistorySubTab] = useState<"recycle" | "commands">("recycle");
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
@@ -949,6 +964,7 @@ export default function SettingsPage() {
     { id: "staff", label: lang === "bn" ? "কর্মচারী ও আমন্ত্রণ" : "Staff & Invitations", icon: Users, count: activeEmployees.length + pendingInvites.length },
     { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & Themes", icon: Sparkles },
     { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
+    { id: "history", label: lang === "bn" ? "ইতিহাস ও রিসাইকেল বিন" : "History & Recycle Bin", icon: HistoryIcon, count: (Array.isArray(recycleBin.data) ? recycleBin.data : []).length },
   ];
 
   return (
@@ -1982,6 +1998,278 @@ export default function SettingsPage() {
           )}
 
           {/* ── TAB 6: SECURITY & DATA RESETS ────────────────────────────────── */}
+
+          {/* ── TAB 7: HISTORY & RECYCLE BIN (UNDO & RESTORE) ─────────────── */}
+          {settingsTab === "history" && (
+            <div className="space-y-6">
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <HistoryIcon className="size-5 text-primary" />
+                      <span>{lang === "bn" ? "কমান্ড ইতিহাস ও রিসাইকেল বিন (Undo / Restore)" : "Command History & Recycle Bin"}</span>
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {lang === "bn"
+                        ? "ভুলবশত ডিলিট হওয়া যেকোনো আইটেম সহজে পুনরুদ্ধার করুন এবং সাম্প্রতিক কমান্ডগুলো আনডু করুন"
+                        : "Easily restore deleted inventory/sales from the Recycle Bin and undo recent command actions"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {historySubTab === "recycle" && (Array.isArray(recycleBin.data) ? recycleBin.data : []).length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/40 cursor-pointer"
+                        onClick={async () => {
+                          if (!confirm(lang === "bn" ? "আপনি কি রিসাইকেল বিনের সকল ডাটা সম্পূর্ণ খালি করতে চান?" : "Are you sure you want to permanently empty the Recycle Bin?")) return;
+                          try {
+                            await emptyRecycleBinFn();
+                            toast.success(lang === "bn" ? "রিসাইকেল বিন খালি করা হয়েছে" : "Recycle bin emptied");
+                            qc.invalidateQueries({ queryKey: ["recycle_bin"] });
+                          } catch (err: any) {
+                            toast.error(err?.message || "Failed to empty bin");
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3.5 mr-1" />
+                        {lang === "bn" ? "বিন খালি করুন" : "Empty Bin"}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs font-semibold cursor-pointer"
+                      onClick={() => {
+                        qc.invalidateQueries({ queryKey: ["recycle_bin"] });
+                        qc.invalidateQueries({ queryKey: ["command_history"] });
+                        toast.success(lang === "bn" ? "রিফ্রেশ হয়েছে" : "Refreshed");
+                      }}
+                    >
+                      <RotateCcw className="size-3.5 mr-1" />
+                      {lang === "bn" ? "রিফ্রেশ" : "Refresh"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Sub Tab Selector */}
+                <div className="flex gap-2 p-1 bg-muted/60 rounded-xl max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => setHistorySubTab("recycle")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      historySubTab === "recycle"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span>{lang === "bn" ? "রিসাইকেল বিন" : "Recycle Bin"}</span>
+                    {(Array.isArray(recycleBin.data) ? recycleBin.data : []).length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        {(Array.isArray(recycleBin.data) ? recycleBin.data : []).length}
+                      </Badge>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistorySubTab("commands")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      historySubTab === "commands"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <HistoryIcon className="size-3.5" />
+                    <span>{lang === "bn" ? "কমান্ড ইতিহাস (Undo)" : "Command History (Undo)"}</span>
+                    {(Array.isArray(commandHistory.data) ? commandHistory.data : []).length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        {(Array.isArray(commandHistory.data) ? commandHistory.data : []).length}
+                      </Badge>
+                    )}
+                  </button>
+                </div>
+
+                {/* Sub-Tab 1: RECYCLE BIN */}
+                {historySubTab === "recycle" && (
+                  <div className="space-y-3">
+                    {recycleBin.isLoading ? (
+                      <div className="py-12 text-center text-xs text-muted-foreground animate-pulse">
+                        {lang === "bn" ? "রিসাইকেল বিন লোড হচ্ছে..." : "Loading recycle bin..."}
+                      </div>
+                    ) : (Array.isArray(recycleBin.data) ? recycleBin.data : []).length === 0 ? (
+                      <div className="py-12 text-center space-y-2 border border-dashed border-border/80 rounded-2xl bg-muted/20">
+                        <Trash2 className="size-8 text-muted-foreground/40 mx-auto" />
+                        <p className="text-sm font-semibold text-foreground">
+                          {lang === "bn" ? "রিসাইকেল বিন সম্পূর্ণ খালি" : "Recycle Bin is Empty"}
+                        </p>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                          {lang === "bn"
+                            ? "দোকান থেকে কোনো প্রোডাক্ট, সেলস বা খরচ ডিলিট করলে তা এখানে সংরক্ষিত থাকবে যাতে যেকোনো সময় আনডু করা যায়।"
+                            : "Deleted products, sales, expenses, and records will appear here so you can restore them anytime."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(Array.isArray(recycleBin.data) ? recycleBin.data : []).map((item: any) => (
+                          <div
+                            key={item.id}
+                            className="p-4 rounded-2xl bg-muted/30 border border-border/70 flex flex-col justify-between space-y-3 hover:border-primary/40 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="capitalize text-[10px] py-0 px-1.5 font-bold">
+                                    {item.entity_type}
+                                  </Badge>
+                                  <span className="text-xs font-bold text-foreground line-clamp-1">{item.title}</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {lang === "bn" ? "মুছে ফেলার সময়: " : "Deleted: "}
+                                  {new Date(item.deleted_at).toLocaleString(lang === "bn" ? "bn-BD" : "en-US")}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/40">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/40 cursor-pointer"
+                                onClick={async () => {
+                                  if (!confirm(lang === "bn" ? "স্থায়ীভাবে মুছে ফেলতে চান?" : "Delete permanently?")) return;
+                                  try {
+                                    await permanentDeleteRecycleItemFn({ data: { id: item.id } });
+                                    toast.success(lang === "bn" ? "স্থায়ীভাবে ডিলিট করা হয়েছে" : "Permanently deleted");
+                                    qc.invalidateQueries({ queryKey: ["recycle_bin"] });
+                                  } catch (err: any) {
+                                    toast.error(err?.message || "Failed to delete");
+                                  }
+                                }}
+                              >
+                                <Trash2 className="size-3.5 mr-1" />
+                                {lang === "bn" ? "মুছুন" : "Delete"}
+                              </Button>
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={restoringId === item.id}
+                                className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs gap-1.5"
+                                onClick={async () => {
+                                  setRestoringId(item.id);
+                                  try {
+                                    await restoreRecycleItemFn({ data: { id: item.id } });
+                                    toast.success(lang === "bn" ? "আইটেম সফলভাবে পুনরুদ্ধার করা হয়েছে!" : "Item restored successfully!");
+                                    qc.invalidateQueries({ queryKey: ["recycle_bin"] });
+                                    qc.invalidateQueries({ queryKey: ["products"] });
+                                    qc.invalidateQueries({ queryKey: ["sales"] });
+                                    qc.invalidateQueries({ queryKey: ["expenses"] });
+                                    qc.invalidateQueries({ queryKey: ["purchases"] });
+                                    qc.invalidateQueries({ queryKey: ["cashbox"] });
+                                    qc.invalidateQueries({ queryKey: ["returns"] });
+                                    qc.invalidateQueries({ queryKey: ["parties"] });
+                                  } catch (err: any) {
+                                    toast.error(err?.message || "Failed to restore");
+                                  } finally {
+                                    setRestoringId(null);
+                                  }
+                                }}
+                              >
+                                <RotateCcw className={`size-3.5 ${restoringId === item.id ? "animate-spin" : ""}`} />
+                                <span>{lang === "bn" ? "পুনরুদ্ধার করুন (Undo)" : "Restore Item"}</span>
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sub-Tab 2: COMMAND & ACTION HISTORY */}
+                {historySubTab === "commands" && (
+                  <div className="space-y-3">
+                    {commandHistory.isLoading ? (
+                      <div className="py-12 text-center text-xs text-muted-foreground animate-pulse">
+                        {lang === "bn" ? "কমান্ড ইতিহাস লোড হচ্ছে..." : "Loading command history..."}
+                      </div>
+                    ) : (Array.isArray(commandHistory.data) ? commandHistory.data : []).length === 0 ? (
+                      <div className="py-12 text-center space-y-2 border border-dashed border-border/80 rounded-2xl bg-muted/20">
+                        <HistoryIcon className="size-8 text-muted-foreground/40 mx-auto" />
+                        <p className="text-sm font-semibold text-foreground">
+                          {lang === "bn" ? "কোন সাম্প্রতিক কমান্ড ইতিহাস নেই" : "No Recent Commands"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/60 rounded-2xl border border-border/80 bg-card overflow-hidden">
+                        {(Array.isArray(commandHistory.data) ? commandHistory.data : []).map((cmd: any) => (
+                          <div key={cmd.id + cmd.action} className="p-3 sm:p-4 flex items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  cmd.action.startsWith("SALE")
+                                    ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                                    : cmd.action.startsWith("EXPENSE")
+                                    ? "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                                    : cmd.action.startsWith("ITEM_DELETED")
+                                    ? "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                                    : "bg-primary/10 text-primary border border-primary/20"
+                                }`}>
+                                  {cmd.action.replace("_", " ")}
+                                </span>
+                                <p className="text-xs font-bold text-foreground truncate">{cmd.title}</p>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                {new Date(cmd.timestamp).toLocaleString(lang === "bn" ? "bn-BD" : "en-US")}
+                                {cmd.amount > 0 && ` • ৳${Number(cmd.amount).toLocaleString()}`}
+                              </p>
+                            </div>
+
+                            {cmd.canUndo && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={undoingId === cmd.id}
+                                className="h-8 px-3 text-xs font-bold gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer shrink-0"
+                                onClick={async () => {
+                                  if (!confirm(lang === "bn" ? `আপনি কি "${cmd.title}" কমান্ডটি আনডু করতে চান?` : `Do you want to undo "${cmd.title}"?`)) return;
+                                  setUndoingId(cmd.id);
+                                  try {
+                                    await undoCommandFn({ data: { id: cmd.id, undoType: cmd.undoType, recycleId: cmd.recycleId } });
+                                    toast.success(lang === "bn" ? "কমান্ড সফলভাবে আনডু করা হয়েছে!" : "Command undone successfully!");
+                                    qc.invalidateQueries({ queryKey: ["command_history"] });
+                                    qc.invalidateQueries({ queryKey: ["recycle_bin"] });
+                                    qc.invalidateQueries({ queryKey: ["sales"] });
+                                    qc.invalidateQueries({ queryKey: ["products"] });
+                                    qc.invalidateQueries({ queryKey: ["expenses"] });
+                                    qc.invalidateQueries({ queryKey: ["purchases"] });
+                                    qc.invalidateQueries({ queryKey: ["cashbox"] });
+                                  } catch (err: any) {
+                                    toast.error(err?.message || "Failed to undo command");
+                                  } finally {
+                                    setUndoingId(null);
+                                  }
+                                }}
+                              >
+                                <Undo2 className={`size-3.5 ${undoingId === cmd.id ? "animate-spin" : ""}`} />
+                                <span>{lang === "bn" ? "আনডু" : "Undo"}</span>
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+
           {settingsTab === "security" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Screen Security & Admin PIN Code Lock */}
