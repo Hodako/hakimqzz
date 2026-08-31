@@ -2800,30 +2800,18 @@ export async function repairCashboxDbFn() {
     returns,
     expenses,
     purchases,
-    somiti,
-    withdrawals,
     payments,
-    settlements,
-    bankTransactions,
-    bankLoans,
-    bankLoanPayments,
     existingCashbox,
   ] = await Promise.all([
     db.collection("sales").find({ owner_id: ownerId }).toArray(),
     db.collection("returns").find({ owner_id: ownerId }).toArray(),
     db.collection("expenses").find({ owner_id: ownerId }).toArray(),
     db.collection("purchases").find({ owner_id: ownerId }).toArray(),
-    db.collection("somiti_entries").find({ owner_id: ownerId }).toArray(),
-    db.collection("owner_withdrawals").find({ owner_id: ownerId }).toArray(),
     db.collection("payments").find({ owner_id: ownerId }).toArray(),
-    db.collection("party_payable_settlements").find({ owner_id: ownerId }).toArray(),
-    db.collection("bank_transactions").find({ owner_id: ownerId }).toArray(),
-    db.collection("bank_loans").find({ owner_id: ownerId }).toArray(),
-    db.collection("bank_loan_payments").find({ owner_id: ownerId }).toArray(),
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
-  // 1. Preserve true manual cashbox entries (entries created manually by user with no ref_id)
+  // 1. Preserve true manual cashbox entries (entries created manually by user directly in cashbox)
   const manualEntries = existingCashbox.filter((e) => !e.ref_id);
   const newCashboxEntries: any[] = [...manualEntries];
   const seenRefIds = new Set<string>(manualEntries.map((e) => e.ref_id).filter(Boolean));
@@ -2862,7 +2850,7 @@ export async function repairCashboxDbFn() {
         owner_id: ownerId,
         kind: "sale",
         amount: cashAmount,
-        note: `Sale [${(s.type || "CASH").toUpperCase()}]: ${s.product_name || "Product"} (×${qty})`,
+        note: `Sale: ${s.product_name || "Product"} (×${qty})`,
         ref_id: sId,
         created_at: s.created_at || new Date().toISOString(),
       });
@@ -2891,13 +2879,13 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 4. Direct Cash Purchases (Credit & Bank purchases are NOT deducted from cashbox at purchase time!)
+  // 4. Direct Cash Purchases (Credit & Bank purchases do NOT deduct from counter drawer!)
   const purchaseExpenseIds = new Set<string>();
   for (const p of purchases) {
     const pId = p._id.toString();
     const pTotal = Number(p.total) || 0;
 
-    // Only deduct from cashbox if payment_type is CASH / not credit and not bank
+    // Only deduct from cashbox if payment_type is CASH (not credit and not bank)
     if (p.payment_type !== "credit" && p.payment_type !== "bank" && pTotal > 0 && !seenRefIds.has(pId)) {
       seenRefIds.add(pId);
       newCashboxEntries.push({
@@ -2922,7 +2910,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 5. Store Operating Expenses (rent, electricity, salaries, tea, etc. - excluding purchase mirrors)
+  // 5. Store Operating Expenses (excluding duplicate purchase mirror records)
   for (const e of expenses) {
     const eId = e._id.toString();
     if (purchaseExpenseIds.has(eId)) continue;
@@ -2944,25 +2932,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 6. Supplier Settlements (Paying off credit purchases to Mahajans)
-  for (const set of settlements) {
-    const sId = set._id.toString();
-    const amt = Number(set.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(sId)) {
-      seenRefIds.add(sId);
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: "withdraw",
-        amount: amt,
-        note: set.note ? `Supplier Payment: ${set.note}` : "Supplier Payment",
-        ref_id: sId,
-        created_at: set.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // 7. Customer Bokeya Payments (Dues collected into cashbox)
+  // 6. Customer Bokeya Payments (Dues collected into cashbox)
   for (const pay of payments) {
     const pId = pay._id.toString();
     const amt = Number(pay.amount) || 0;
@@ -2973,120 +2943,17 @@ export async function repairCashboxDbFn() {
         owner_id: ownerId,
         kind: "deposit",
         amount: amt,
-        note: pay.note ? `Customer Due Payment: ${pay.note}` : "Customer Due Payment",
+        note: pay.note ? `Customer Payment: ${pay.note}` : "Customer Payment",
         ref_id: pId,
         created_at: pay.created_at || new Date().toISOString(),
       });
     }
   }
 
-  // 8. Owner Personal Withdrawals
-  for (const w of withdrawals) {
-    const wId = w._id.toString();
-    const amt = Number(w.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(wId)) {
-      seenRefIds.add(wId);
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: "withdraw",
-        amount: amt,
-        note: w.note || "Owner Withdrawal",
-        ref_id: wId,
-        created_at: w.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // 9. Somiti (Samity) Deposits & Withdrawals
-  for (const s of somiti) {
-    if ((s as any).skip_cashbox === true || (s as any).is_opening === true) continue;
-    const smId = s._id.toString();
-    const amt = Number(s.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(smId)) {
-      seenRefIds.add(smId);
-      // deposit into somiti cuts from cashbox; withdrawal from somiti adds back to cashbox
-      const cashKind = s.kind === "withdraw" ? "deposit" : "withdraw";
-      const notePrefix = s.kind === "withdraw" ? "Somiti Withdrawal (Back to Cash)" : "Somiti Deposit (Savings)";
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: cashKind,
-        amount: amt,
-        note: s.note ? `${notePrefix}: ${s.note}` : notePrefix,
-        ref_id: smId,
-        created_at: s.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // 10. Bank Account Deposits / Withdrawals
-  for (const tx of bankTransactions) {
-    if ((tx as any).sync_cashbox === false) continue;
-    const bId = tx._id.toString();
-    const amt = Number(tx.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(bId)) {
-      seenRefIds.add(bId);
-      const cashKind = tx.type === "deposit" ? "withdraw" : "deposit";
-      const noteText =
-        tx.type === "deposit"
-          ? `Bank Deposit: ${tx.note || "Transfer to bank"}`
-          : `Bank Withdrawal: ${tx.note || "Cash from bank"}`;
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: cashKind,
-        amount: amt,
-        note: noteText,
-        ref_id: bId,
-        created_at: tx.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // 11. Bank Loans Disbursed to Cashbox
-  for (const loan of bankLoans) {
-    if ((loan as any).receive_to_cashbox) {
-      const lId = loan._id.toString();
-      const amt = Number(loan.principal_amount) || 0;
-      if (amt > 0 && !seenRefIds.has(lId)) {
-        seenRefIds.add(lId);
-        newCashboxEntries.push({
-          _id: crypto.randomUUID() as any,
-          owner_id: ownerId,
-          kind: "deposit",
-          amount: amt,
-          note: `Bank Loan Disbursement: ${loan.bank_name} (${loan.loan_title})`,
-          ref_id: lId,
-          created_at: loan.created_at || new Date().toISOString(),
-        });
-      }
-    }
-  }
-
-  // 12. Bank Loan Installments Paid from Cashbox
-  for (const pmt of bankLoanPayments) {
-    if ((pmt as any).payment_method === "bank") continue; // paid directly from bank, not cashbox
-    const pId = pmt._id.toString();
-    const amt = Number(pmt.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(pId)) {
-      seenRefIds.add(pId);
-      newCashboxEntries.push({
-        _id: crypto.randomUUID() as any,
-        owner_id: ownerId,
-        kind: "withdraw",
-        amount: amt,
-        note: pmt.note ? `Bank Loan Installment: ${pmt.note}` : "Bank Loan Installment",
-        ref_id: pId,
-        created_at: pmt.created_at || new Date().toISOString(),
-      });
-    }
-  }
-
-  // Write reconciled records
+  // Atomically replace cashbox collection for this store owner
   await db.collection("cashbox_entries").deleteMany({ owner_id: ownerId });
   if (newCashboxEntries.length > 0) {
-    await db.collection("cashbox_entries").insertMany(newCashboxEntries as any);
+    await db.collection("cashbox_entries").insertMany(newCashboxEntries);
   }
 
   return { success: true, repairedCount: newCashboxEntries.length };
