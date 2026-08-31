@@ -2778,307 +2778,216 @@ export async function repairCashboxDbFn() {
     throw new Error("Only owners or superadmins can repair the cashbox.");
   }
   const db = await getDb();
+  const ownerId = session.ownerId;
 
-  const sales = await db.collection("sales").find({ owner_id: session.ownerId }).toArray();
-  const returns = await db.collection("returns").find({ owner_id: session.ownerId }).toArray();
-  const expenses = await db.collection("expenses").find({ owner_id: session.ownerId }).toArray();
-  const purchases = await db.collection("purchases").find({ owner_id: session.ownerId }).toArray();
-  const somitiEntries = await db.collection("somiti_entries").find({ owner_id: session.ownerId }).toArray();
-  const ownerWithdrawals = await db.collection("owner_withdrawals").find({ owner_id: session.ownerId }).toArray();
-  const payments = await db.collection("payments").find({ owner_id: session.ownerId }).toArray();
-  const payableSettlements = await db.collection("party_payable_settlements").find({ owner_id: session.ownerId }).toArray();
-  const cashboxEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).toArray();
+  const [sales, returns, expenses, purchases, somiti, withdrawals, payments, settlements, existingCashbox] = await Promise.all([
+    db.collection("sales").find({ owner_id: ownerId }).toArray(),
+    db.collection("returns").find({ owner_id: ownerId }).toArray(),
+    db.collection("expenses").find({ owner_id: ownerId }).toArray(),
+    db.collection("purchases").find({ owner_id: ownerId }).toArray(),
+    db.collection("somiti_entries").find({ owner_id: ownerId }).toArray(),
+    db.collection("owner_withdrawals").find({ owner_id: ownerId }).toArray(),
+    db.collection("payments").find({ owner_id: ownerId }).toArray(),
+    db.collection("party_payable_settlements").find({ owner_id: ownerId }).toArray(),
+    db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
+  ]);
 
-  let repairedCount = 0;
+  // Keep manual entries (ref_id === null)
+  const manualEntries = existingCashbox.filter(e => !e.ref_id);
+  const newCashboxEntries: any[] = [...manualEntries];
+  const seenRefIds = new Set<string>(manualEntries.map(e => e.ref_id).filter(Boolean));
 
-  // 1. Repair Sales
-  for (const sale of sales) {
-    const saleId = sale._id.toString();
-    const expectedAmount = saleCashboxAmount(sale as any);
-    const match = cashboxEntries.find(e => e.ref_id === saleId);
-    if (expectedAmount > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "sale",
-          amount: expectedAmount,
-          note: `Sale: ${sale.product_name}`,
-          ref_id: saleId,
-          created_at: sale.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "sale" || Number(match.amount) !== expectedAmount || match.created_at !== sale.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "sale", amount: expectedAmount, created_at: sale.created_at } }
-        );
-        repairedCount++;
+  // 1. Sales
+  for (const s of sales) {
+    if ((s as any).returned) continue;
+    const sId = s._id.toString();
+    const qty = Number(s.qty) || 1;
+    const sellPrice = Number(s.sell_price) || 0;
+    const paidAmount = Number(s.paid_amount);
+    const lineTotal = sellPrice * qty;
+
+    let cashAmount = 0;
+    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || !s.type) {
+      cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
+    } else if (s.type === "credit") {
+      cashAmount = !isNaN(paidAmount) ? paidAmount : 0;
+    } else if (s.type === "bkash" || (s.type as string) === "bank") {
+      if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) {
+        cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
       }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+    } else if (s.type === "online") {
+      if ((s as any).courier_status === "collected") {
+        cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
+      }
+    }
+
+    if (cashAmount > 10000000) continue; // skip abnormal test records
+
+    if (cashAmount > 0 && !seenRefIds.has(sId)) {
+      seenRefIds.add(sId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "sale",
+        amount: cashAmount,
+        note: `Sale: ${s.product_name || "Product"} (×${qty})`,
+        ref_id: sId,
+        created_at: s.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 2. Repair Returns
-  for (const ret of returns) {
-    const retId = ret._id.toString();
-    let expectedAmount = 0;
-    if (ret.sale_id) {
-      const sale = sales.find(s => s._id.toString() === ret.sale_id.toString());
-      if (sale) {
-        const saleType: string = (sale.type as string) || "cash";
-        const returnQty = Number(ret.qty) || 0;
-        if (saleType === "cash") {
-          expectedAmount = Number(sale.sell_price) * returnQty;
-        } else if (saleType === "credit") {
-          const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
-          expectedAmount = paidPerUnit * returnQty;
-        }
-      }
-    } else if (ret.return_price) {
-      expectedAmount = Number(ret.qty) * (Number(ret.return_price) || 0);
-    } else if (ret.amount && ret.deduct_type === "cash") {
-      expectedAmount = Number(ret.amount) || 0;
-    }
+  // 2. Returns
+  for (const r of returns) {
+    const rId = r._id.toString();
+    if ((r as any).deduct_type === "payable" || (r as any).deduct_type === "receivable") continue;
+    const returnQty = Number(r.qty) || 1;
+    const returnPrice = Number(r.return_price) || Number((r as any).amount) || 0;
+    const refundAmt = (r as any).amount ? Number((r as any).amount) : returnQty * returnPrice;
 
-    const match = cashboxEntries.find(e => e.ref_id === retId);
-    if (expectedAmount > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "withdraw",
-          amount: expectedAmount,
-          note: ret.note ? `Return refund: ${ret.note}` : `Return: ${ret.product_name || "Product"}`,
-          ref_id: retId,
-          created_at: ret.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "withdraw" || Number(match.amount) !== expectedAmount || match.created_at !== ret.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "withdraw", amount: expectedAmount, created_at: ret.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+    if (refundAmt > 0 && !seenRefIds.has(rId)) {
+      seenRefIds.add(rId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: refundAmt,
+        note: `Return refund: ${r.product_name || "Item"}`,
+        ref_id: rId,
+        created_at: r.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 3. Track Purchase Linked Expenses
-  const purchaseLinkedExpenseIds = new Set<string>();
-  for (const p of purchases) {
-    const linkedExp = expenses.find(e => e.note && e.note.includes(`Purchase ID: ${p._id}`));
-    if (linkedExp) {
-      purchaseLinkedExpenseIds.add(linkedExp._id.toString());
-    } else {
-      const fallbackExp = expenses.find(e => 
-        e.title === `Product Purchase: ${p.product_name}` && 
-        Number(e.amount) === Number(p.total) && 
-        !purchaseLinkedExpenseIds.has(e._id.toString())
-      );
-      if (fallbackExp) {
-        purchaseLinkedExpenseIds.add(fallbackExp._id.toString());
-      }
-    }
-  }
-
-  // 4. Standalone Expenses
-  for (const exp of expenses) {
-    const expId = exp._id.toString();
-    if (purchaseLinkedExpenseIds.has(expId)) continue;
-
-    const match = cashboxEntries.find(e => e.ref_id === expId);
-    const expAmt = Number(exp.amount) || 0;
-    if (expAmt > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "expense",
-          amount: expAmt,
-          note: exp.title,
-          ref_id: expId,
-          created_at: exp.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "expense" || Number(match.amount) !== expAmt || match.created_at !== exp.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "expense", amount: expAmt, created_at: exp.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
-    }
-  }
-
-  // 5. Purchases
+  // 3. Purchases & Expenses (Deduplicate linked purchases)
+  const purchaseExpenseIds = new Set<string>();
   for (const p of purchases) {
     const pId = p._id.toString();
-    const linkedExp = expenses.find(e => e.note && e.note.includes(`Purchase ID: ${p._id}`));
-    const fallbackExp = expenses.find(e => 
-      e.title === `Product Purchase: ${p.product_name}` && 
-      Number(e.amount) === Number(p.total)
-    );
-    const expId = linkedExp ? linkedExp._id.toString() : (fallbackExp ? fallbackExp._id.toString() : null);
-
-    const match = cashboxEntries.find(e => e.ref_id === pId || (expId && e.ref_id === expId));
     const pTotal = Number(p.total) || 0;
-    if (pTotal > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "expense",
-          amount: pTotal,
-          note: `Product Purchase: ${p.product_name}`,
-          ref_id: pId,
-          created_at: p.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "expense" || Number(match.amount) !== pTotal || match.created_at !== p.created_at || match.ref_id !== pId) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "expense", amount: pTotal, ref_id: pId, created_at: p.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+    if (pTotal > 0 && !seenRefIds.has(pId)) {
+      seenRefIds.add(pId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "expense",
+        amount: pTotal,
+        note: `Product Purchase: ${p.product_name || "Stock"}`,
+        ref_id: pId,
+        created_at: p.created_at || new Date().toISOString(),
+      });
+    }
+
+    const linkedExp = expenses.find(e => 
+      (e.note && e.note.includes(`Purchase ID: ${p._id}`)) ||
+      (e.title === `Product Purchase: ${p.product_name}` && Number(e.amount) === pTotal)
+    );
+    if (linkedExp) {
+      purchaseExpenseIds.add(linkedExp._id.toString());
     }
   }
 
-  // 6. Somiti Entries
-  for (const som of somitiEntries) {
+  // General Expenses
+  for (const e of expenses) {
+    const eId = e._id.toString();
+    if (purchaseExpenseIds.has(eId)) continue;
+    if (e.category === "purchase" || e.title?.startsWith("Product Purchase:")) continue;
+    const amt = Number(e.amount) || 0;
+    if (amt > 10000000) continue;
+
+    if (amt > 0 && !seenRefIds.has(eId)) {
+      seenRefIds.add(eId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "expense",
+        amount: amt,
+        note: e.title || e.category || "Expense",
+        ref_id: eId,
+        created_at: e.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 4. Somiti Entries (ONLY non-initial, non-skipped)
+  for (const som of somiti) {
     const somId = som._id.toString();
-    const match = cashboxEntries.find(e => e.ref_id === somId);
+    if ((som as any).is_initial || (som as any).skipCashbox) continue;
     const somAmt = Number(som.amount) || 0;
-    if (somAmt > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "withdraw",
-          amount: somAmt,
-          note: som.note || "Samity payment",
-          ref_id: somId,
-          created_at: som.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "withdraw" || Number(match.amount) !== somAmt || match.created_at !== som.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "withdraw", amount: somAmt, created_at: som.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+    if (somAmt > 0 && !seenRefIds.has(somId)) {
+      seenRefIds.add(somId);
+      const cbKind = som.kind === "withdraw" ? "deposit" : "withdraw";
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: cbKind,
+        amount: somAmt,
+        note: som.note ? `Samity: ${som.note}` : "Samity transaction",
+        ref_id: somId,
+        created_at: som.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 7. Withdrawals
-  for (const w of ownerWithdrawals) {
-    const wId = w._id.toString();
-    const match = cashboxEntries.find(e => e.ref_id === wId);
-    const wAmt = Number(w.amount) || 0;
-    if (wAmt > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "withdraw",
-          amount: wAmt,
-          note: w.note || "Owner Withdrawal",
-          ref_id: wId,
-          created_at: w.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "withdraw" || Number(match.amount) !== wAmt || match.created_at !== w.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "withdraw", amount: wAmt, created_at: w.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+  // 5. Settlements (Supplier payments)
+  for (const set of settlements) {
+    const sId = set._id.toString();
+    const amt = Number(set.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(sId)) {
+      seenRefIds.add(sId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: set.note ? `Supplier Payment: ${set.note}` : "Supplier Payment",
+        ref_id: sId,
+        created_at: set.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 8. Payments
+  // 6. Customer Payments (Bokeya recovery)
   for (const pay of payments) {
-    const payId = pay._id.toString();
-    const match = cashboxEntries.find(e => e.ref_id === payId);
-    const payAmt = Number(pay.amount) || 0;
-    if (payAmt > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "deposit",
-          amount: payAmt,
-          note: pay.note || "Collected dues",
-          ref_id: payId,
-          created_at: pay.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "deposit" || Number(match.amount) !== payAmt || match.created_at !== pay.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "deposit", amount: payAmt, created_at: pay.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+    const pId = pay._id.toString();
+    const amt = Number(pay.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(pId)) {
+      seenRefIds.add(pId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "deposit",
+        amount: amt,
+        note: pay.note ? `Customer Due Payment: ${pay.note}` : "Customer Due Payment",
+        ref_id: pId,
+        created_at: pay.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 9. Payable Settlements
-  for (const set of payableSettlements) {
-    const setId = set._id.toString();
-    const match = cashboxEntries.find(e => e.ref_id === setId);
-    const setAmt = Number(set.amount) || 0;
-    if (setAmt > 0) {
-      if (!match) {
-        await insertCashboxEntry(db, session.ownerId, {
-          kind: "withdraw",
-          amount: setAmt,
-          note: set.note || "Paid to Supplier",
-          ref_id: setId,
-          created_at: set.created_at,
-        }, true);
-        repairedCount++;
-      } else if (match.kind !== "withdraw" || Number(match.amount) !== setAmt || match.created_at !== set.created_at) {
-        await db.collection("cashbox_entries").updateOne(
-          { _id: match._id },
-          { $set: { kind: "withdraw", amount: setAmt, created_at: set.created_at } }
-        );
-        repairedCount++;
-      }
-    } else if (match) {
-      await db.collection("cashbox_entries").deleteOne({ _id: match._id });
-      repairedCount++;
+  // 7. Owner Withdrawals
+  for (const w of withdrawals) {
+    const wId = w._id.toString();
+    const amt = Number(w.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(wId)) {
+      seenRefIds.add(wId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: w.note || "Owner Withdrawal",
+        ref_id: wId,
+        created_at: w.created_at || new Date().toISOString(),
+      });
     }
   }
 
-  // 10. Orphan Cleanup
-  const validRefIds = new Set<string>();
-  sales.filter(s => saleCashboxAmount(s as any) > 0).forEach(s => validRefIds.add(s._id.toString()));
-  returns.forEach(r => validRefIds.add(r._id.toString()));
-  expenses.filter(e => (Number(e.amount) || 0) > 0).forEach(e => validRefIds.add(e._id.toString()));
-  purchases.filter(p => (Number(p.total) || 0) > 0).forEach(p => validRefIds.add(p._id.toString()));
-  somitiEntries.filter(s => (Number(s.amount) || 0) > 0).forEach(s => validRefIds.add(s._id.toString()));
-  ownerWithdrawals.filter(w => (Number(w.amount) || 0) > 0).forEach(w => validRefIds.add(w._id.toString()));
-  payments.filter(p => (Number(p.amount) || 0) > 0).forEach(p => validRefIds.add(p._id.toString()));
-  payableSettlements.filter(s => (Number(s.amount) || 0) > 0).forEach(s => validRefIds.add(s._id.toString()));
-
-  const toDelete = cashboxEntries.filter(e => e.ref_id && !validRefIds.has(e.ref_id.toString()));
-  if (toDelete.length > 0) {
-    const toDeleteIds = toDelete.map(e => e._id);
-    await db.collection("cashbox_entries").deleteMany({ _id: { $in: toDeleteIds } });
-    repairedCount += toDelete.length;
+  await db.collection("cashbox_entries").deleteMany({ owner_id: ownerId });
+  if (newCashboxEntries.length > 0) {
+    await db.collection("cashbox_entries").insertMany(newCashboxEntries as any);
   }
 
-  return { success: true, repairedCount };
+  return { success: true, repairedCount: newCashboxEntries.length };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
