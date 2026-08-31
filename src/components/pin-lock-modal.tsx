@@ -100,12 +100,36 @@ export function PinLockModal() {
 
   const verifyPin = (inputToVerify: string) => {
     const currentPin = savedPin || localStorage.getItem("app_pin_code_val") || "1234";
-    if (inputToVerify === currentPin) {
+
+    let matchedEmp: any = null;
+    try {
+      const empsRaw = localStorage.getItem("cw_employee_accounts");
+      if (empsRaw) {
+        const emps = JSON.parse(empsRaw);
+        if (Array.isArray(emps)) {
+          matchedEmp = emps.find(e => String(e.pin || e.password || "").trim() === inputToVerify.trim());
+        }
+      }
+    } catch (_) {}
+
+    if (inputToVerify.trim() === currentPin.trim()) {
       playSaleSuccessSound();
       sessionStorage.setItem("app_pin_unlocked", "true");
+      localStorage.removeItem("cw_active_employee_session");
+      localStorage.setItem("cw_active_session_role", "owner");
+      window.dispatchEvent(new Event("hz-employee-switched"));
       setIsLocked(false);
       setPinInput("");
-      toast.success(lang === "bn" ? "পিন কোড সঠিক হয়েছে! স্বাগতম।" : "PIN code verified! Welcome.");
+      toast.success(lang === "bn" ? "মালিক পিন সঠিক হয়েছে! স্বাগতম।" : "Owner PIN verified! Welcome.");
+    } else if (matchedEmp) {
+      playSaleSuccessSound();
+      sessionStorage.setItem("app_pin_unlocked", "true");
+      localStorage.setItem("cw_active_employee_session", JSON.stringify(matchedEmp));
+      localStorage.setItem("cw_active_session_role", "employee");
+      window.dispatchEvent(new Event("hz-employee-switched"));
+      setIsLocked(false);
+      setPinInput("");
+      toast.success(lang === "bn" ? `পিন কোড সঠিক হয়েছে! স্বাগতম (${matchedEmp.name})` : `PIN verified! Welcome ${matchedEmp.name}`);
     } else {
       playErrorSound();
       setErrorShake(true);

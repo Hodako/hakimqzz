@@ -32,7 +32,9 @@ export default function AuthPage() {
   const [mounted, setMounted] = useState(false);
 
   // Active Main Tab: Owner vs Employee
-  const [mainRole, setMainRole] = useState<"owner" | "employee">("owner");
+  const [mainRole, setMainRole] = useState<"owner" | "employee" | "pin">("owner");
+  const [quickPin, setQuickPin] = useState("");
+  const [quickPinShake, setQuickPinShake] = useState(false);
 
   // Owner Auth State (Phone or Email)
   const [ownerMode, setOwnerMode] = useState<"signin" | "signup">("signin");
@@ -79,6 +81,71 @@ export default function AuthPage() {
 
   if ((!mounted || loading) && !onboardingUser) return <SpeedLoader />;
   if (user && !onboardingUser) return <SpeedLoader />;
+
+  
+  const handlePinDigit = (digit: string) => {
+    if (quickPin.length < 6) {
+      const next = quickPin + digit;
+      setQuickPin(next);
+      if (next.length === 4) {
+        verifyQuickPinInput(next);
+      }
+    }
+  };
+
+  const verifyQuickPinInput = async (pinToTest: string) => {
+    const ownerPin = (typeof window !== "undefined" ? localStorage.getItem("app_pin_code_val") : null) || "1234";
+
+    if (pinToTest.trim() === ownerPin.trim()) {
+      sessionStorage.setItem("app_pin_unlocked", "true");
+      localStorage.removeItem("cw_active_employee_session");
+      localStorage.setItem("cw_active_session_role", "owner");
+      window.dispatchEvent(new Event("hz-employee-switched"));
+      toast.success(lang === "bn" ? "মালিক পিন সঠিক হয়েছে!" : "Owner PIN verified!");
+      router.replace("/dashboard");
+      return;
+    }
+
+    try {
+      const empsRaw = localStorage.getItem("cw_employee_accounts");
+      if (empsRaw) {
+        const emps = JSON.parse(empsRaw);
+        if (Array.isArray(emps)) {
+          const matchedEmp = emps.find((e: any) => String(e.pin || e.password || "").trim() === pinToTest.trim());
+          if (matchedEmp) {
+            sessionStorage.setItem("app_pin_unlocked", "true");
+            localStorage.setItem("cw_active_employee_session", JSON.stringify(matchedEmp));
+            localStorage.setItem("cw_active_session_role", "employee");
+            window.dispatchEvent(new Event("hz-employee-switched"));
+            toast.success(lang === "bn" ? `পিন সঠিক হয়েছে! স্বাগতম (${matchedEmp.name})` : `PIN verified! Welcome ${matchedEmp.name}`);
+            router.replace("/dashboard");
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const res = await employeeLoginFn({
+        data: {
+          username: "employee",
+          password: pinToTest.trim(),
+        },
+      });
+      if (res && res.user) {
+        sessionStorage.setItem("app_pin_unlocked", "true");
+        afterAuth(res.user as AuthUser);
+        return;
+      }
+    } catch (_) {}
+
+    setQuickPinShake(true);
+    setTimeout(() => {
+      setQuickPinShake(false);
+      setQuickPin("");
+    }, 500);
+    toast.error(lang === "bn" ? "ভুল পিন কোড! ৪-সংখ্যার সঠিক পিন দিন।" : "Incorrect 4-digit PIN! Please try again.");
+  };
 
   function afterAuth(u: AuthUser | null) {
     if (!u) return;
@@ -416,38 +483,117 @@ export default function AuthPage() {
         <div className="w-full max-w-md mx-auto my-auto py-2 sm:py-4">
           <div className="p-5 sm:p-7 rounded-3xl bg-card border border-border shadow-xl space-y-5">
             {/* Top Primary Tab: Shop Owner vs Employee */}
-            <div className="grid grid-cols-2 p-1 bg-muted/80 rounded-2xl border border-border/80 text-xs font-semibold">
+            <div className="grid grid-cols-3 p-1 bg-muted/80 rounded-2xl border border-border/80 text-[11px] sm:text-xs font-semibold gap-1">
               <button
                 type="button"
                 onClick={() => setMainRole("owner")}
-                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mainRole === "owner"
                     ? "bg-card text-foreground shadow-sm font-bold border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Shield className="size-4 text-primary" />
-                <span>{lang === "bn" ? "দোকান মালিক" : "Shop Owner"}</span>
+                <Shield className="size-3.5 text-primary shrink-0" />
+                <span className="truncate">{lang === "bn" ? "দোকান মালিক" : "Owner"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMainRole("employee")}
-                className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mainRole === "employee"
                     ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-sm font-bold border border-emerald-500/30"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <UserCheck className="size-4 text-emerald-500" />
-                <span>{lang === "bn" ? "কর্মচারী (Staff)" : "Employee / Staff"}</span>
+                <UserCheck className="size-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">{lang === "bn" ? "কর্মচারী" : "Staff"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainRole("pin")}
+                className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  mainRole === "pin"
+                    ? "bg-card text-amber-600 dark:text-amber-400 shadow-sm font-bold border border-amber-500/30"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Lock className="size-3.5 text-amber-500 shrink-0" />
+                <span className="truncate">{lang === "bn" ? "পিন আনলক" : "Quick PIN"}</span>
               </button>
             </div>
 
             {/* ══════════════════════════════════════════════════════════════════════ */}
             {/* 1. EMPLOYEE AUTHENTICATION VIEW                                      */}
             {/* ══════════════════════════════════════════════════════════════════════ */}
-            {mainRole === "employee" ? (
+            {mainRole === "pin" ? (
+              <div className={`space-y-4 text-center ${quickPinShake ? "animate-shake" : ""}`}>
+                <div className="space-y-1">
+                  <div className="mx-auto size-12 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 shadow-sm">
+                    <Lock className="size-6 text-amber-600" />
+                  </div>
+                  <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">
+                    {lang === "bn" ? "৪-সংখ্যার সিকিউরিটি পিন দিন" : "Quick PIN Unlock"}
+                  </h1>
+                  <p className="text-xs text-muted-foreground">
+                    {lang === "bn" ? "মালিক বা কর্মচারীর পিন প্রবেশ করিয়ে সরাসরি আনলক করুন" : "Enter owner or staff 4-digit PIN to directly access POS"}
+                  </p>
+                </div>
+
+                {/* PIN Dots Indicator */}
+                <div className="flex items-center justify-center gap-3 py-1">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className={`size-4 rounded-full border-2 transition-all duration-150 ${
+                        i < quickPin.length
+                          ? "bg-amber-500 border-amber-500 scale-110 shadow-xs shadow-amber-500/50"
+                          : "border-muted-foreground/30 bg-muted/20"
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Numeric Keypad */}
+                <div className="grid grid-cols-3 gap-2 w-full max-w-[260px] mx-auto pt-1">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                    <button
+                      key={digit}
+                      type="button"
+                      onClick={() => handlePinDigit(digit)}
+                      className="h-12 rounded-xl bg-card border border-border/80 text-foreground font-bold text-lg hover:bg-amber-500/10 hover:border-amber-500/40 active:scale-95 transition-all shadow-2xs flex items-center justify-center cursor-pointer"
+                    >
+                      {digit}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setQuickPin("")}
+                    className="h-12 rounded-xl bg-muted/40 text-muted-foreground font-semibold text-xs hover:bg-muted/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  >
+                    {lang === "bn" ? "মুছুন" : "Clear"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePinDigit("0")}
+                    className="h-12 rounded-xl bg-card border border-border/80 text-foreground font-bold text-lg hover:bg-amber-500/10 hover:border-amber-500/40 active:scale-95 transition-all shadow-2xs flex items-center justify-center cursor-pointer"
+                    >
+                      0
+                    </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuickPin((p) => p.slice(0, -1))}
+                    className="h-12 rounded-xl bg-muted/40 text-muted-foreground font-semibold text-xs hover:bg-muted/80 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  >
+                    ⌫
+                  </button>
+                </div>
+              </div>
+            ) : mainRole === "employee" ? (
               <div className="space-y-4">
                 <div className="text-center space-y-1">
                   <h1 className="text-lg sm:text-xl font-serif font-bold text-foreground">

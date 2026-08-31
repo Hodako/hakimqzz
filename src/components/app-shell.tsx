@@ -521,6 +521,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}
                 </span>
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  sessionStorage.removeItem("app_pin_unlocked");
+                  window.dispatchEvent(new Event("app_lock_screen"));
+                }}
+                className="size-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-600 rounded-lg cursor-pointer"
+                title={lang === "bn" ? "স্ক্রিন লক করুন" : "Lock Screen"}
+              >
+                <Lock className="size-4" />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8">
