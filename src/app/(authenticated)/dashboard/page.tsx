@@ -913,18 +913,45 @@ export default function Dashboard() {
   const filteredPurchases = (purchases.data ?? []).filter(p => isDateInRange(p.created_at));
 
   // KPIs
+  const getSaleTotal = (s: any) => {
+    const p = Number(s.paid_amount);
+    const d = Number(s.due_amount);
+    if (!isNaN(p) && !isNaN(d) && (p + d > 0)) return p + d;
+    const q = Number(s.qty) || 1;
+    const sp = Number(s.sell_price) || 0;
+    const disc = Number((s as any).discount) || 0;
+    return Math.max(0, sp * q - disc);
+  };
+
+  const getSaleCash = (s: any) => {
+    const tot = getSaleTotal(s);
+    const p = Number(s.paid_amount);
+    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
+      return (!isNaN(p) && p >= 0 ? p : tot);
+    }
+    if (s.type === "credit") {
+      return (!isNaN(p) && p > 0 ? p : 0);
+    }
+    if (s.type === "bkash" || (s.type as string) === "bank") {
+      if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) return (!isNaN(p) && p > 0 ? p : tot);
+      return 0;
+    }
+    if (s.type === "online") {
+      if ((s as any).courier_status === "collected") return (!isNaN(p) && p > 0 ? p : tot);
+      return 0;
+    }
+    return (!isNaN(p) && p >= 0 ? p : tot);
+  };
+
   const totalSalesToday = filteredSales.reduce((a, s) => {
     if (s.returned) return a;
-    const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
-    return a + Math.max(lineTotal, 0);
+    return a + getSaleTotal(s);
   }, 0);
 
-  const cashToday = filteredSales
-    .filter(s => !s.returned && (s.type === "cash" || (s.type as string) === "nagad" || (s.type as string) === "hand_cash" || (s.type as string) === "pos" || s.type === undefined || s.type === null))
-    .reduce((a, s) => {
-      const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
-      return a + Math.max(lineTotal, 0);
-    }, 0);
+  const cashToday = filteredSales.reduce((a, s) => {
+    if (s.returned) return a;
+    return a + getSaleCash(s);
+  }, 0);
 
   const bkashToday   = filteredSales.filter(s => s.type === "bkash").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
   const bankToday    = filteredSales.filter(s => (s.type as string) === "bank").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
