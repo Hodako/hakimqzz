@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { getProducts, getParties, getSales, getPurchases, getExpenses } from "@/
 import {
   Home, Package, ShoppingBag, Users, MoreHorizontal,
   LogOut, Languages, Banknote, DollarSign, Settings,
-  BarChart3, BarChart2, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
+  BarChart3, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
   TrendingUp, TrendingDown, Sparkles, Palette, MessageSquare, HelpCircle,
   RefreshCw, Lock, Wallet, Plus, ChevronDown, Check, Crown, User,
 } from "lucide-react";
@@ -48,7 +48,7 @@ import { AdminPopupDialog } from "@/components/admin-popup-dialog";
 
 type NavItem = {
   to: string;
-  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "owner_expense" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits" | "customers" | "theme_settings" | "sms" | "product_analytics";
+  labelKey: "home" | "products" | "sales" | "parties" | "settings" | "more" | "online_sell" | "cash_management" | "trackback" | "expenses" | "owner_expense" | "somiti" | "new_purchase" | "invoice_generator" | "due" | "profit" | "products_buy" | "losses" | "reports_generator" | "ai_audits" | "customers" | "theme_settings" | "sms" | "employees";
   icon: React.ElementType;
   perm?: keyof PermissionSet;
 };
@@ -65,11 +65,13 @@ const desktopNavGroups: NavGroup[] = [
       { to: "/customers", labelKey: "customers", icon: Users, perm: "parties" },
       { to: "/dues", labelKey: "due", icon: Banknote, perm: "parties" },
       { to: "/parties", labelKey: "parties", icon: Users, perm: "parties" },
+      { to: "/employees", labelKey: "employees", icon: Users, perm: "sales" },
     ],
   },
   {
     labelKey: "more",
     items: [
+      { to: "/employees", labelKey: "employees", icon: Users, perm: "sales" },
       { to: "/sms", labelKey: "sms", icon: MessageSquare, perm: "sales" },
       { to: "/invoices", labelKey: "invoice_generator", icon: FileText, perm: "sales" },
       { to: "/purchases", labelKey: "new_purchase", icon: ShoppingCart, perm: "purchases" },
@@ -83,8 +85,8 @@ const desktopNavGroups: NavGroup[] = [
   {
     labelKey: "reports",
     items: [
-      { to: "/product-analytics", labelKey: "product_analytics", icon: BarChart2, perm: "reports" },
       { to: "/reports", labelKey: "reports_generator", icon: FileText, perm: "reports" },
+      { to: "/product-analytics", labelKey: "product_analytics" as any, icon: BarChart3, perm: "reports" },
       { to: "/profits", labelKey: "profit", icon: TrendingUp, perm: "reports" },
       { to: "/losses", labelKey: "losses", icon: TrendingDown, perm: "reports" },
       { to: "/trackback", labelKey: "trackback", icon: BarChart3, perm: "reports" },
@@ -114,17 +116,6 @@ function filterGroups(groups: NavGroup[], perms: PermissionSet): NavGroup[] {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [activeEmpSession, setActiveEmpSession] = useState<any>(() => {
-    if (typeof window === "undefined") return null;
-    try { return JSON.parse(localStorage.getItem("cw_active_employee_session") || "null"); } catch { return null; }
-  });
-  useEffect(() => {
-    const h = () => { try { setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null")); } catch {} };
-    window.addEventListener("hz-employee-switched", h);
-    window.addEventListener("storage", h);
-    return () => { window.removeEventListener("hz-employee-switched", h); window.removeEventListener("storage", h); };
-  }, []);
-
   const { t, lang, setLang } = useT();
   const { resolved, toggle } = useTheme();
   const { user, loading, logout, isUploading, uploadProgress } = useAuth();
@@ -239,10 +230,64 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   const perms = resolvePermissions(user.role, user.permissions);
-  const sidebarGroups = filterGroups(desktopNavGroups, perms);
-  const bottomNav = filterNav(mobileNav, perms);
-  const brandName = user.business_name || "Dream IT";
-  const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "DI";
+  const [activeEmpSession, setActiveEmpSession] = useState<any>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return JSON.parse(localStorage.getItem("cw_active_employee_session") || "null");
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleEmpSwitch = () => {
+      try {
+        setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null"));
+      } catch {}
+    };
+    window.addEventListener("hz-employee-switched", handleEmpSwitch);
+    window.addEventListener("storage", handleEmpSwitch);
+    return () => {
+      window.removeEventListener("hz-employee-switched", handleEmpSwitch);
+      window.removeEventListener("storage", handleEmpSwitch);
+    };
+  }, []);
+
+  const isEmployee = activeEmpSession ? true : user.role === "employee";
+  const allowedPages = activeEmpSession?.allowedPages || (user as any).allowedPages;
+
+  // Pages hidden from employees by default (when no explicit allowedPages list is set)
+  const EMPLOYEE_DEFAULT_HIDDEN = new Set([
+    "/trackback", "/profits", "/losses", "/reports", "/ai-audits",
+    "/purchase-reports", "/somiti", "/parties",
+    "/dues", "/customers", "/bank", "/cash-management",
+  ]);
+
+  const sidebarGroups = filterGroups(desktopNavGroups, perms).map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      if (isEmployee && allowedPages && Array.isArray(allowedPages) && allowedPages.length > 0) {
+        return allowedPages.includes(item.to);
+      }
+      if (isEmployee && EMPLOYEE_DEFAULT_HIDDEN.has(item.to)) {
+        return false;
+      }
+      return true;
+    })
+  })).filter(group => group.items.length > 0);
+
+  const bottomNav = filterNav(mobileNav, perms).filter(item => {
+    if (isEmployee && allowedPages && Array.isArray(allowedPages) && allowedPages.length > 0) {
+      return allowedPages.includes(item.to) || item.to === "/more";
+    }
+    if (isEmployee && EMPLOYEE_DEFAULT_HIDDEN.has(item.to)) {
+      return false;
+    }
+    return true;
+  });
+
+  const brandName = user.business_name || "Classic World";
+  const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "CW";
 
   // Profile / ID Switcher State
   const [modeSwitcherOpen, setModeSwitcherOpen] = useState(false);
@@ -305,29 +350,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen min-h-dvh bg-transparent flex w-full app-shell">
       {!isMobile && (
         <Sidebar collapsible="icon" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-          <SidebarHeader className="border-b border-sidebar-border px-2 py-3 space-y-2">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <AppLogo size="sm" />
-              <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-                <p className="font-serif font-semibold text-sm truncate leading-tight">{brandName}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{t("tagline")}</p>
-                <p className="text-[8px] text-muted-foreground/80 truncate mt-0.5 font-medium">Powered by Dream IT</p>
-              </div>
+          <SidebarHeader className="border-b border-sidebar-border px-3 py-3 space-y-2">
+            <div className="flex items-center overflow-hidden group-data-[collapsible=icon]:justify-center">
+              <AppLogo size="md" className="h-11 max-w-[210px]" />
             </div>
-            {/* Sidebar ID Switcher badge */}
-            <div className="group-data-[collapsible=icon]:hidden flex items-center justify-between px-2 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs">
-              <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 truncate">
-                ID: {currentProfile?.name || "Main ID"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCreateProfileOpen(true)}
-                className="text-[10px] text-muted-foreground hover:text-indigo-600 font-bold"
-                title={lang === "bn" ? "নতুন আইডি" : "New ID"}
-              >
-                + {lang === "bn" ? "নতুন" : "New"}
-              </button>
-            </div>
+            
           </SidebarHeader>
 
           <SidebarContent>
@@ -386,9 +413,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
               </SidebarMenuItem>
             </SidebarMenu>
-            <div className="text-[9px] text-center text-muted-foreground pb-2 pt-1 group-data-[collapsible=icon]:hidden border-t border-sidebar-border/30">
-              Powered by Dream IT
-            </div>
           </SidebarFooter>
         </Sidebar>
       )}
@@ -406,17 +430,84 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center h-12 px-3 gap-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {isMobile ? (
-                <>
-                  <AppLogo size="sm" />
-                  <div className="min-w-0 flex flex-col justify-center">
-                    <h1 className="font-serif font-semibold text-sm truncate leading-none">{brandName}</h1>
-                    <span className="text-[8px] text-muted-foreground mt-0.5 leading-none">Powered by Dream IT</span>
-                  </div>
-                </>
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <AppLogo size="sm" className="h-8.5 max-w-[140px]" />
+                  {/* Mobile ID Switcher Button */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={isSwitchingProfile}
+                        className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-bold rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 truncate max-w-[110px]"
+                      >
+                        <RefreshCw className={`size-3 shrink-0 ${isSwitchingProfile ? "animate-spin" : ""}`} />
+                        <span className="truncate">{currentProfile?.name || "ID"}</span>
+                        <ChevronDown className="size-2.5 opacity-60" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56 p-1.5 shadow-xl rounded-2xl border-border/80">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold px-2 py-1">
+                        {lang === "bn" ? "আইডি / ব্রাঞ্চ পরিবর্তন করুন" : "Switch ID / Branch"}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {profiles.map(p => {
+                        const isActive = p.id === activeProfileId;
+                        return (
+                          <DropdownMenuItem
+                            key={p.id}
+                            onClick={() => !isActive && handleSwitchProfile(p.id)}
+                            className={`flex items-center justify-between text-xs rounded-xl cursor-pointer px-2.5 py-1.5 ${
+                              isActive ? "font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10" : ""
+                            }`}
+                          >
+                            <span className="truncate">{p.name}</span>
+                            {isActive && (
+                              <span className="text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-md font-bold">
+                                {lang === "bn" ? "সক্রিয়" : "Active"}
+                              </span>
+                            )}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setCreateProfileOpen(true)}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 rounded-xl cursor-pointer px-2.5 py-1.5 hover:bg-indigo-500/10"
+                      >
+                        <Plus className="size-3.5 mr-1.5" />
+                        {lang === "bn" ? "নতুন আইডি যোগ করুন" : "Add New ID / Branch"}
+                      </DropdownMenuItem>
+                      {activeEmpSession && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            sessionStorage.removeItem("app_pin_unlocked");
+                            window.dispatchEvent(new Event("app_lock_screen"));
+                          }}
+                          className="text-xs font-bold text-amber-600 dark:text-amber-400 rounded-xl cursor-pointer px-2.5 py-1.5 hover:bg-amber-500/10"
+                        >
+                          <Lock className="size-3.5 mr-1.5" />
+                          {lang === "bn" ? "মালিক মোডে ফিরুন (PIN)" : "Switch to Owner (Enter PIN)"}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (confirm(lang === "bn" ? "আপনি কি অন্য একাউন্ট বা কর্মচারী আইডিতে লগইন করতে চান?" : "Log in with another user or employee ID?")) {
+                            handleSignOut();
+                          }
+                        }}
+                        className="text-xs font-semibold text-muted-foreground hover:text-foreground rounded-xl cursor-pointer px-2.5 py-1.5 hover:bg-muted"
+                      >
+                        <Users className="size-3.5 mr-1.5 text-primary" />
+                        {lang === "bn" ? "অন্য আইডি / কর্মচারী লগইন" : "Login with Other / Employee ID"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               ) : (
                 <>
                   <SidebarTrigger className="size-7 shrink-0" />
                   <div className="min-w-0 flex items-center gap-2">
+                    <AppLogo size="sm" className="h-8.5 max-w-[170px] hidden md:block" />
                     <h1 className="font-serif font-semibold text-base truncate leading-none hidden sm:block">{brandName}</h1>
                     
                     {/* ID Switcher for PC / Desktop Version */}
@@ -471,6 +562,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           <Plus className="size-3.5 mr-1.5" />
                           {lang === "bn" ? "নতুন আইডি যোগ করুন" : "Add New ID / Branch"}
                         </DropdownMenuItem>
+                        {activeEmpSession && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              sessionStorage.removeItem("app_pin_unlocked");
+                              window.dispatchEvent(new Event("app_lock_screen"));
+                            }}
+                            className="text-xs font-bold text-amber-600 dark:text-amber-400 rounded-xl cursor-pointer px-2.5 py-1.5 hover:bg-amber-500/10"
+                          >
+                            <Lock className="size-3.5 mr-1.5" />
+                            {lang === "bn" ? "মালিক মোডে ফিরুন (PIN)" : "Switch to Owner (Enter PIN)"}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (confirm(lang === "bn" ? "আপনি কি অন্য একাউন্ট বা কর্মচারী আইডিতে লগইন করতে চান?" : "Log in with another user or employee ID?")) {
+                              handleSignOut();
+                            }
+                          }}
+                          className="text-xs font-semibold text-muted-foreground hover:text-foreground rounded-xl cursor-pointer px-2.5 py-1.5 hover:bg-muted"
+                        >
+                          <Users className="size-3.5 mr-1.5 text-primary" />
+                          {lang === "bn" ? "অন্য আইডি / কর্মচারী লগইন" : "Login with Other / Employee ID"}
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -505,22 +619,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
               <PWAInstallButton variant="outline" className="hidden sm:inline-flex h-8 px-2.5 text-xs" />
               <UniversalSearch role={user.role} permissions={user.permissions} />
-              
-              {/* Support Icon */}
               <Link href="/more" title={lang === "bn" ? "হেল্প ও সাপোর্ট" : "Help & Support"}>
-                <Button variant="ghost" size="icon" className="size-8 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer">
+                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground">
                   <HelpCircle className="icon-sm" />
                 </Button>
               </Link>
-
               <Button variant="ghost" size="icon" className="size-8" onClick={toggle} aria-label="Theme">
                 {resolved === "dark" ? <Sun className="icon-sm" /> : <Moon className="icon-sm" />}
               </Button>
-              {!isMobile && (
-                <span className="text-[10px] text-muted-foreground mr-1 hidden lg:block">
-                  {new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}
-                </span>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -558,7 +664,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-xl rounded-2xl border-border/80">
                   <div className="px-2 py-1.5 border-b border-border/60">
-                    <div className="text-xs font-bold truncate text-foreground">{user.business_name || "Dream Fashion"}</div>
+                    <div className="text-xs font-bold truncate text-foreground">{user.business_name || "Classic World"}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{user.email || (user as any).username || ""}</div>
                     <div className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-md bg-primary/10 text-primary border border-primary/20">
                       {user.role || "Admin / Owner"}
@@ -579,6 +685,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
                     <DropdownMenuItem
                       onClick={() => {
+                        // Lock screen before entering Settings — owner must re-enter PIN
+                        const pinEnabled = localStorage.getItem("app_pin_code_enabled") === "true";
+                        const pinVal = localStorage.getItem("app_pin_code_val");
+                        if (pinEnabled && pinVal) {
+                          sessionStorage.removeItem("app_pin_unlocked");
+                          window.dispatchEvent(new Event("app_lock_screen"));
+                        }
                         router.push("/settings");
                       }}
                       className="text-xs font-medium cursor-pointer"
@@ -655,7 +768,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       )}
-      <FloatingAiChat />
+      {!isMobile && (pathname === "/dashboard" || pathname === "/") && (
+        <FloatingAiChat />
+      )}
       <AdminPopupDialog />
 
       {/* Create New Profile / ID Modal Dialog */}
@@ -674,7 +789,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Label>
               <Input
                 required
-                placeholder={lang === "bn" ? " যেমন: শাখা ২, ব্রাঞ্চ বা শোরুম..." : "e.g. Branch 2, Showroom..."}
+                placeholder={lang === "bn" ? "যেমন: শাখা ২, ব্রাঞ্চ বা শোরুম..." : "e.g. Branch 2, Showroom..."}
                 value={newProfileName}
                 onChange={e => setNewProfileName(e.target.value)}
                 className="h-9 text-xs"
