@@ -2784,6 +2784,9 @@ export async function repairCashboxDbFn() {
     expenses,
     purchases,
     payments,
+    withdrawals,
+    ownerWallet,
+    somiti,
     existingCashbox,
   ] = await Promise.all([
     db.collection("sales").find({ owner_id: ownerId }).toArray(),
@@ -2791,6 +2794,9 @@ export async function repairCashboxDbFn() {
     db.collection("expenses").find({ owner_id: ownerId }).toArray(),
     db.collection("purchases").find({ owner_id: ownerId }).toArray(),
     db.collection("payments").find({ owner_id: ownerId }).toArray(),
+    db.collection("withdrawals").find({ owner_id: ownerId }).toArray(),
+    db.collection("owner_wallet").find({ owner_id: ownerId }).toArray(),
+    db.collection("somiti").find({ owner_id: ownerId }).toArray(),
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
@@ -2803,24 +2809,25 @@ export async function repairCashboxDbFn() {
   for (const s of sales) {
     if ((s as any).returned) continue;
     const sId = s._id.toString();
+    const p = Number(s.paid_amount);
+    const d = Number(s.due_amount);
     const qty = Number(s.qty) || 1;
     const sellPrice = Number(s.sell_price) || 0;
     const discount = Number((s as any).discount) || 0;
-    const lineTotal = Math.max(0, sellPrice * qty - discount);
-    const paidAmount = Number(s.paid_amount);
+    const lineTotal = (!isNaN(p) && !isNaN(d) && (p + d > 0)) ? (p + d) : Math.max(0, sellPrice * qty - discount);
 
     let cashAmount = 0;
     if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
-      cashAmount = !isNaN(paidAmount) && paidAmount >= 0 ? paidAmount : lineTotal;
+      cashAmount = !isNaN(p) && p >= 0 ? p : lineTotal;
     } else if (s.type === "credit") {
-      cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : 0;
+      cashAmount = !isNaN(p) && p > 0 ? p : 0;
     } else if (s.type === "bkash" || (s.type as string) === "bank") {
       if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) {
-        cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
+        cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
       }
     } else if (s.type === "online") {
       if ((s as any).courier_status === "collected") {
-        cashAmount = !isNaN(paidAmount) && paidAmount > 0 ? paidAmount : lineTotal;
+        cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
       }
     }
 
@@ -2862,7 +2869,7 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 4. Direct Cash Purchases (Credit & Bank purchases do NOT deduct from counter drawer!)
+  // 4. Direct Cash Purchases (Stock spend)
   const purchaseExpenseIds = new Set<string>();
   for (const p of purchases) {
     const pId = p._id.toString();
@@ -2893,11 +2900,12 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 5. Store Operating Expenses (excluding duplicate purchase mirror records)
+  // 5. Store Operating Expenses (excluding duplicate purchase mirror records and owner wallet records)
   for (const e of expenses) {
     const eId = e._id.toString();
     if (purchaseExpenseIds.has(eId)) continue;
     if (e.category === "purchase" || e.title?.startsWith("Product Purchase:")) continue;
+    if (e.category === "owner_personal" || e.note?.includes("Owner Wallet ID:")) continue;
     const amt = Number(e.amount) || 0;
     if (amt > 100000000) continue;
 
@@ -2915,7 +2923,63 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 6. Customer Bokeya Payments (Dues collected into cashbox)
+  // 6. Owner Wallet Spends / Personal & Family Expenses
+  for (const w of ownerWallet) {
+    const wId = w._id.toString();
+    const amt = Number(w.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(wId)) {
+      seenRefIds.add(wId);
+      const cat = w.category || "personal";
+      const catLabel = cat === "family" ? "পরিবার খরচ" : cat === "bazar" ? "বাজার খরচ" : cat === "home_rent" ? "বাসা ভাড়া" : cat === "medical" ? "চিকিৎসা" : "ব্যক্তিগত";
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: `[মালিকের খরচ] ${catLabel}: ${w.note || "ব্যক্তিগত উত্তোলন"}`,
+        ref_id: wId,
+        created_at: w.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 7. Direct Cashbox Withdrawals
+  for (const w of withdrawals) {
+    const wId = w._id.toString();
+    const amt = Number(w.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(wId)) {
+      seenRefIds.add(wId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: `উত্তোলন: ${w.note || "Owner"}`,
+        ref_id: wId,
+        created_at: w.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 8. Somiti Savings Deposits
+  for (const s of somiti) {
+    const sId = s._id.toString();
+    const amt = Number(s.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(sId)) {
+      seenRefIds.add(sId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: s.kind === "deposit" ? "expense" : "deposit",
+        amount: amt,
+        note: `সমিতি সঞ্চয়: ${s.name || "Somiti"}`,
+        ref_id: sId,
+        created_at: s.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 9. Customer Bokeya Payments (Dues collected into cashbox)
   for (const pay of payments) {
     const pId = pay._id.toString();
     const amt = Number(pay.amount) || 0;
