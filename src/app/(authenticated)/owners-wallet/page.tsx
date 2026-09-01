@@ -61,7 +61,7 @@ export default function OwnersWalletPage() {
   // Filter States
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "month" | "custom">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "yesterday" | "month" | "custom">("all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
@@ -91,6 +91,8 @@ export default function OwnersWalletPage() {
   const filteredEntries = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
+    const yDate = new Date(); yDate.setDate(yDate.getDate() - 1);
+    const yesterdayStr = yDate.toISOString().slice(0, 10);
     const currentMonthStr = todayStr.slice(0, 7);
 
     return entries.filter(e => {
@@ -100,6 +102,8 @@ export default function OwnersWalletPage() {
       // Date Filtering
       if (dateFilter === "today") {
         if (dStr !== todayStr) return false;
+      } else if (dateFilter === "yesterday") {
+        if (dStr !== yesterdayStr) return false;
       } else if (dateFilter === "month") {
         if (!dStr.startsWith(currentMonthStr)) return false;
       } else if (dateFilter === "custom") {
@@ -412,6 +416,7 @@ export default function OwnersWalletPage() {
             <SelectContent>
               <SelectItem value="all">{lang === "bn" ? "সব সময় (All Time)" : "All Time"}</SelectItem>
               <SelectItem value="today">{lang === "bn" ? "আজকের (Today)" : "Today"}</SelectItem>
+              <SelectItem value="yesterday">{lang === "bn" ? "গতকালের (Yesterday)" : "Yesterday"}</SelectItem>
               <SelectItem value="month">{lang === "bn" ? "চলতি মাস (This Month)" : "This Month"}</SelectItem>
               <SelectItem value="custom">{lang === "bn" ? "কাস্টম রেঞ্জ..." : "Custom Range..."}</SelectItem>
             </SelectContent>
