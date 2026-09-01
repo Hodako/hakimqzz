@@ -368,12 +368,7 @@ export default function SalesPage() {
 
       const custName = s.parties?.name || (isBn ? "সাধারণ কাস্টমার" : "Walk-in Customer");
       const cats = Array.from(new Set(s.items.map(it => {
-          const totalSalesAmount = filteredSales.reduce((sum, s) => sum + (Number(s.sell_price || 0) * Number(s.qty || 1) - Number((s as any).discount || 0)), 0);
-  const totalProfitAmount = filteredSales.reduce((sum, s) => sum + (Number(s.profit || 0)), 0);
-  const totalPaidAmount = filteredSales.reduce((sum, s) => sum + (Number(s.paid_amount || 0)), 0);
-  const totalDueAmount = filteredSales.reduce((sum, s) => sum + (Number(s.due_amount || 0)), 0);
-
-  return (it.product_id ? productCategoryMap.get(it.product_id) : null) ||
+        return (it.product_id ? productCategoryMap.get(it.product_id) : null) ||
                productCategoryMap.get(it.product_name.toLowerCase().trim()) ||
                (isBn ? "সাধারণ" : "General");
       }))).join("; ");
@@ -447,10 +442,10 @@ export default function SalesPage() {
       `;
     }).join("");
 
-    const totalSalesAmount = filteredSales.reduce((sum, s) => sum + (Number(s.sell_price || 0) * Number(s.qty || 1) - Number((s as any).discount || 0)), 0);
-    const totalProfitAmount = filteredSales.reduce((sum, s) => sum + (Number(s.profit || 0)), 0);
-    const totalPaidAmount = filteredSales.reduce((sum, s) => sum + (Number(s.paid_amount || 0)), 0);
-    const totalDueAmount = filteredSales.reduce((sum, s) => sum + (Number(s.due_amount || 0)), 0);
+    const totalSalesAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.sell_price || 0)), 0);
+    const totalProfitAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.profit || 0)), 0);
+    const totalPaidAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.paid_amount || 0)), 0);
+    const totalDueAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.due_amount || 0)), 0);
 
     printWin.document.write(`
       <!DOCTYPE html>
