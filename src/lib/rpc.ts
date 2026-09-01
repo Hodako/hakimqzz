@@ -299,6 +299,25 @@ export const createReminderFn = makeWriteAction("createReminderFn");
 export const toggleReminderFn = makeWriteAction("toggleReminderFn");
 export const deleteReminderFn = makeWriteAction("deleteReminderFn");
 
+// ─── Employees & Staff Management ─────────────────────────────────────────────
+export const getEmployeesFn = makeReadAction("getEmployeesFn");
+export const createEmployeeFn = makeWriteAction("createEmployeeFn");
+export const addEmployeeFn = createEmployeeFn;
+export const updateEmployeeFn = makeWriteAction("updateEmployeeFn");
+export const deleteEmployeeFn = makeWriteAction("deleteEmployeeFn");
+
+export const getEmployeeSalariesFn = makeReadAction("getEmployeeSalariesFn");
+export const createEmployeeSalaryFn = makeWriteAction("createEmployeeSalaryFn");
+export const deleteEmployeeSalaryFn = makeWriteAction("deleteEmployeeSalaryFn");
+
+export const getEmployeeExpensesFn = makeReadAction("getEmployeeExpensesFn");
+export const createEmployeeExpenseFn = makeWriteAction("createEmployeeExpenseFn");
+export const deleteEmployeeExpenseFn = makeWriteAction("deleteEmployeeExpenseFn");
+
+export const getEmployeeShoppingsFn = makeReadAction("getEmployeeShoppingsFn");
+export const createEmployeeShoppingFn = makeWriteAction("createEmployeeShoppingFn");
+export const deleteEmployeeShoppingFn = makeWriteAction("deleteEmployeeShoppingFn");
+
 // ─── Export Reset Operations ─────────────────────────────────────────────────
 export const emptyCashboxFn = makeReadAction("emptyCashboxFn");
 export const resetProductsFn = makeReadAction("resetProductsFn");
@@ -321,7 +340,11 @@ const actionsList = [
   "createPurchaseFn", "deletePurchaseFn", "createExpenseFn", "deleteExpenseFn",
   "createPaymentFn", "deletePaymentFn", "createSomitiFn", "updateSomitiFn", "deleteSomitiFn",
   "renameSomitiFn", "deleteSomitiFnByName", "createWithdrawalFn",
-  "createReminderFn", "toggleReminderFn", "deleteReminderFn"
+  "createReminderFn", "toggleReminderFn", "deleteReminderFn",
+  "createEmployeeFn", "updateEmployeeFn", "deleteEmployeeFn",
+  "createEmployeeSalaryFn", "deleteEmployeeSalaryFn",
+  "createEmployeeExpenseFn", "deleteEmployeeExpenseFn",
+  "createEmployeeShoppingFn", "deleteEmployeeShoppingFn"
 ];
 
 const syncActions: Record<string, Function> = {};

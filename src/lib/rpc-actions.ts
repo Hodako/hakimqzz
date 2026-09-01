@@ -4641,3 +4641,289 @@ export async function undoCommandFn(input: { data: { id: string; undoType: strin
   }
   return { success: true };
 }
+
+
+// ─── Employees & Staff Management ─────────────────────────────────────────────
+
+export async function getEmployeesFn(): Promise<any[]> {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("employees").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return items.map((e) => ({ ...e, id: e._id.toString() }));
+}
+
+export async function createEmployeeFn(input: { data: any }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    name: data.name,
+    phone: data.phone || null,
+    email: data.email || null,
+    username: data.username || null,
+    password: data.password || data.pin || null,
+    pin: data.pin || null,
+    role: data.role || "staff",
+    designation: data.designation || "Sales Staff",
+    base_salary: Number(data.base_salary) || 0,
+    salary_type: data.salary_type || "monthly",
+    daily_allowance: Number(data.daily_allowance) || 0,
+    status: data.status || "active",
+    permissions: data.permissions || {
+      sales: true,
+      products: true,
+      parties: false,
+      expenses: false,
+      reports: false,
+      settings: false,
+      cashbox: false,
+    },
+    join_date: data.join_date || new Date().toISOString().slice(0, 10),
+    created_at: new Date().toISOString(),
+  };
+  await db.collection("employees").insertOne(doc as any);
+  return { ...doc, id };
+}
+
+export async function updateEmployeeFn(input: { data: any }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const { id, ...updates } = data;
+  await db.collection("employees").updateOne(
+    { _id: id as any, owner_id: session.ownerId },
+    { $set: { ...updates, updated_at: new Date().toISOString() } }
+  );
+  return { success: true, id };
+}
+
+export async function deleteEmployeeFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("employees").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true, id: data.id };
+}
+
+// ─── Employee Salaries ────────────────────────────────────────────────────────
+
+export async function getEmployeeSalariesFn(): Promise<any[]> {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("employee_salaries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return items.map((s) => ({ ...s, id: s._id.toString() }));
+}
+
+export async function createEmployeeSalaryFn(input: { data: any }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const amount = Number(data.amount) || 0;
+  const empName = data.employee_name || "Employee";
+  const month = data.month || new Date().toISOString().slice(0, 7);
+  const paymentMethod = data.payment_method || "cash";
+  const title = `[বেতন প্রদান] ${empName} - ${month}`;
+
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    employee_id: data.employee_id || null,
+    employee_name: empName,
+    month,
+    base_salary: Number(data.base_salary) || 0,
+    deductions: Number(data.deductions) || 0,
+    bonus: Number(data.bonus) || 0,
+    amount,
+    payment_method: paymentMethod,
+    payment_date: data.payment_date || new Date().toISOString().slice(0, 10),
+    status: data.status || "paid",
+    note: data.note || null,
+    created_at: new Date().toISOString(),
+  };
+
+  await db.collection("employee_salaries").insertOne(doc as any);
+
+  if (amount > 0) {
+    const expId = crypto.randomUUID();
+    await db.collection("expenses").insertOne({
+      _id: expId,
+      owner_id: session.ownerId,
+      title,
+      amount,
+      category: "salary",
+      note: `Employee Salary ID: ${id}`,
+      created_at: doc.created_at,
+    } as any);
+
+    if (paymentMethod === "cash") {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "expense",
+        amount,
+        note: title,
+        ref_id: id,
+        created_at: doc.created_at,
+      });
+    }
+  }
+
+  return { ...doc, id };
+}
+
+export async function deleteEmployeeSalaryFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("employee_salaries").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true, id: data.id };
+}
+
+// ─── Employee Expenses & Allowances ───────────────────────────────────────────
+
+export async function getEmployeeExpensesFn(): Promise<any[]> {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("employee_expenses").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return items.map((e) => ({ ...e, id: e._id.toString() }));
+}
+
+export async function createEmployeeExpenseFn(input: { data: any }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const amount = Number(data.amount) || 0;
+  const empName = data.employee_name || "Employee";
+  const category = data.category || "food";
+  const note = data.note || "";
+  const paymentMethod = data.payment_method || "cash";
+  const catLabel = category === "food" ? "খাবার ভাতা" : category === "travel" ? "যাতায়াত" : category === "tea" ? "নাস্তা/চা" : category === "bonus" ? "বোনাস" : "অন্যান্য";
+  const title = `[কর্মচারী খরচ] ${empName} (${catLabel}): ${note}`;
+
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    employee_id: data.employee_id || null,
+    employee_name: empName,
+    category,
+    amount,
+    payment_method: paymentMethod,
+    date: data.date || new Date().toISOString().slice(0, 10),
+    note: note || null,
+    created_at: new Date().toISOString(),
+  };
+
+  await db.collection("employee_expenses").insertOne(doc as any);
+
+  if (amount > 0) {
+    const expId = crypto.randomUUID();
+    await db.collection("expenses").insertOne({
+      _id: expId,
+      owner_id: session.ownerId,
+      title,
+      amount,
+      category: "employee_expense",
+      note: `Employee Expense ID: ${id}`,
+      created_at: doc.created_at,
+    } as any);
+
+    if (paymentMethod === "cash") {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "withdraw",
+        amount,
+        note: title,
+        ref_id: id,
+        created_at: doc.created_at,
+      });
+    }
+  }
+
+  return { ...doc, id };
+}
+
+export async function deleteEmployeeExpenseFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("employee_expenses").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true, id: data.id };
+}
+
+// ─── Employee Shopping / Clothing Draw (কর্মচারী কেনাকাটা) ───────────────────────────
+
+export async function getEmployeeShoppingsFn(): Promise<any[]> {
+  const session = await requireSession();
+  const db = await getDb();
+  const items = await db.collection("employee_shoppings").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  return items.map((s) => ({ ...s, id: s._id.toString() }));
+}
+
+export async function createEmployeeShoppingFn(input: { data: any }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  const empName = data.employee_name || "Employee";
+  const items = Array.isArray(data.items) ? data.items : [];
+  const totalAmount = Number(data.total_amount) || 0;
+  const paymentStatus = data.payment_status || "deduct_from_salary";
+  const note = data.note || "";
+
+  // 1. Deduct stock from inventory for each item taken
+  for (const item of items) {
+    if (item.product_id) {
+      try {
+        const takeQty = Number(item.qty) || 1;
+        await db.collection("products").updateOne(
+          { _id: item.product_id as any, owner_id: session.ownerId },
+          { $inc: { stock: -takeQty } }
+        );
+      } catch (e) {
+        console.warn("Could not deduct stock for employee shopping:", e);
+      }
+    }
+  }
+
+  // 2. Save document
+  const doc = {
+    _id: id,
+    owner_id: session.ownerId,
+    employee_id: data.employee_id || null,
+    employee_name: empName,
+    items,
+    total_amount: totalAmount,
+    payment_status: paymentStatus,
+    date: data.date || new Date().toISOString().slice(0, 10),
+    note: note || null,
+    created_at: new Date().toISOString(),
+  };
+
+  await db.collection("employee_shoppings").insertOne(doc as any);
+
+  // 3. If paid in cash, add to cashbox as income
+  if (paymentStatus === "paid_cash" && totalAmount > 0) {
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "deposit",
+      amount: totalAmount,
+      note: `[কর্মচারী কেনাকাটা নগদ আদায়] ${empName}: ${note || "পোশাক বিক্রয়"}`,
+      ref_id: id,
+      created_at: doc.created_at,
+    });
+  }
+
+  return { ...doc, id };
+}
+
+export async function deleteEmployeeShoppingFn(input: { data: { id: string } }) {
+  const { data } = input;
+  const session = await requireSession();
+  const db = await getDb();
+  await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("employee_shoppings").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  return { success: true, id: data.id };
+}
