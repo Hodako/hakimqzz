@@ -2816,19 +2816,26 @@ export async function repairCashboxDbFn() {
     const discount = Number((s as any).discount) || 0;
     const lineTotal = (!isNaN(p) && !isNaN(d) && (p + d > 0)) ? (p + d) : Math.max(0, sellPrice * qty - discount);
 
+    const type = String(s.type || "cash").toLowerCase().trim();
     let cashAmount = 0;
-    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
+    if (type === "cash" || type === "pos" || type === "nagad" || type === "card" || type === "hand_cash" || !s.type) {
       cashAmount = !isNaN(p) && p >= 0 ? p : lineTotal;
-    } else if (s.type === "credit") {
+    } else if (type === "credit") {
       cashAmount = !isNaN(p) && p > 0 ? p : 0;
-    } else if (s.type === "bkash" || (s.type as string) === "bank") {
-      if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) {
+    } else if (type === "bkash" || type === "bank" || type === "rocket") {
+      if ((s as any).payment_status === "rejected" || (s as any).payment_status === "cancelled") {
+        cashAmount = 0;
+      } else {
         cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
       }
-    } else if (s.type === "online") {
-      if ((s as any).courier_status === "collected") {
+    } else if (type === "online") {
+      const cStatus = String((s as any).courier_status || "").toLowerCase().trim();
+      const isCollected = cStatus === "collected" || cStatus === "delivered" || cStatus === "completed" || (s as any).payment_status === "accepted" || (s as any).payment_status === "paid";
+      if (isCollected || (!isNaN(p) && p > 0)) {
         cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
       }
+    } else {
+      if (!isNaN(p) && p > 0) cashAmount = p;
     }
 
     if (cashAmount > 100000000) continue; // skip abnormal test records
