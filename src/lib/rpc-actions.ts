@@ -2787,6 +2787,7 @@ export async function repairCashboxDbFn() {
     withdrawals,
     ownerWallet,
     somiti,
+    employeeShoppings,
     existingCashbox,
   ] = await Promise.all([
     db.collection("sales").find({ owner_id: ownerId }).toArray(),
@@ -2797,6 +2798,7 @@ export async function repairCashboxDbFn() {
     db.collection("withdrawals").find({ owner_id: ownerId }).toArray(),
     db.collection("owner_wallet").find({ owner_id: ownerId }).toArray(),
     db.collection("somiti").find({ owner_id: ownerId }).toArray(),
+    db.collection("employee_shoppings").find({ owner_id: ownerId }).toArray(),
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
@@ -3000,6 +3002,24 @@ export async function repairCashboxDbFn() {
         note: pay.note ? `Customer Payment: ${pay.note}` : "Customer Payment",
         ref_id: pId,
         created_at: pay.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 10. Employee Shoppings (Cash collections)
+  for (const es of employeeShoppings) {
+    const esId = es._id.toString();
+    const amt = Number(es.total_amount) || 0;
+    if (es.payment_status === "paid_cash" && amt > 0 && !seenRefIds.has(esId)) {
+      seenRefIds.add(esId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "deposit",
+        amount: amt,
+        note: `[কর্মচারী কেনাকাটা নগদ আদায়] ${es.employee_name || "Employee"}: ${es.note || "পোশাক বিক্রয়"}`,
+        ref_id: esId,
+        created_at: es.created_at || new Date().toISOString(),
       });
     }
   }
