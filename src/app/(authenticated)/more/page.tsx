@@ -9,7 +9,7 @@ import {
   LogOut, TrendingUp, TrendingDown, GripVertical, Palette,
   Layout, Type, Image as ImageIcon, Sparkles, LayoutGrid, AlignLeft, AlignCenter, AlignRight,
   Bot, Send, Loader2, HelpCircle, RefreshCw, Landmark, MessageSquare, BarChart2,
-  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle, Store, Upload, Wallet
+  UserCheck, UserPlus, ShieldCheck, Check, Copy, Edit, Trash2, Key, KeyRound, Mail, Eye, EyeOff, Lock, User, Shield, AlertTriangle, Store, Upload, Wallet, Shirt
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
@@ -61,7 +61,8 @@ const businessLinks = [
   { to: "/customers",      labelKey: "customers",       desc: "Customer profiles & transaction statistics", icon: Users, perm: "parties" as const },
   { to: "/dues",           labelKey: "due",             desc: "Customer dues & collections history", icon: Banknote, perm: "parties"    as const },
   { to: "/parties",        labelKey: "parties",         desc: "Suppliers, vendors, and partner logs", icon: Users, perm: "parties"    as const },
-  { to: "/employees",      labelKey: "employees" as any, desc: "Employee accounts, salary ledger, expenses & shopping draws", icon: Users, perm: "sales" as const },
+  { to: "/employees",      labelKey: "employees" as any, desc: "Employee accounts, salary ledger, attendance & permissions", icon: Users, perm: "sales" as const },
+  { to: "/employees?tab=shoppings", labelKey: "employee_shopping" as any, desc: "Staff clothing draws, shopping ledger & vouchers", icon: Shirt, perm: "sales" as const },
   { to: "/settings",       labelKey: "settings",        desc: "Advanced settings & configurations", icon: Settings,     perm: "settings"   as const },
 ] as const;
 
