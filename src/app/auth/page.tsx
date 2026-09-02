@@ -489,11 +489,11 @@ export default function AuthPage() {
                 onClick={() => setMainRole("owner")}
                 className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mainRole === "owner"
-                    ? "bg-card text-foreground shadow-sm font-bold border border-border/60"
+                    ? "bg-card text-[#F7931A] dark:text-[#F7931A] shadow-sm font-bold border border-[#F7931A]/35"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Shield className="size-3.5 text-primary shrink-0" />
+                <Shield className="size-3.5 text-[#F7931A] shrink-0" />
                 <span className="truncate">{lang === "bn" ? "দোকান মালিক" : "Owner"}</span>
               </button>
 
@@ -502,11 +502,11 @@ export default function AuthPage() {
                 onClick={() => setMainRole("employee")}
                 className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mainRole === "employee"
-                    ? "bg-card text-emerald-600 dark:text-emerald-400 shadow-sm font-bold border border-emerald-500/30"
+                    ? "bg-card text-emerald-600 dark:text-[#CCFF00] shadow-sm font-bold border border-emerald-500/30 dark:border-[#CCFF00]/40"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <UserCheck className="size-3.5 text-emerald-500 shrink-0" />
+                <UserCheck className="size-3.5 text-emerald-500 dark:text-[#CCFF00] shrink-0" />
                 <span className="truncate">{lang === "bn" ? "কর্মচারী" : "Staff"}</span>
               </button>
 
@@ -515,11 +515,11 @@ export default function AuthPage() {
                 onClick={() => setMainRole("pin")}
                 className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mainRole === "pin"
-                    ? "bg-card text-amber-600 dark:text-amber-400 shadow-sm font-bold border border-amber-500/30"
+                    ? "bg-card text-[#F7931A] dark:text-[#F7931A] shadow-sm font-bold border border-[#F7931A]/35"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Lock className="size-3.5 text-amber-500 shrink-0" />
+                <Lock className="size-3.5 text-[#F7931A] shrink-0" />
                 <span className="truncate">{lang === "bn" ? "পিন আনলক" : "Quick PIN"}</span>
               </button>
             </div>
@@ -643,7 +643,7 @@ export default function AuthPage() {
                         required
                         value={empIdentifier}
                         onChange={(e) => setEmpIdentifier(e.target.value)}
-                        placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX, staff@gmail.com বা rahim" : "e.g. 017XXXXXXXX, staff@gmail.com or rahim"}
+                        placeholder={lang === "bn" ? "মোবাইল নম্বর বা ইমেইল" : "Phone or Email"}
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -668,7 +668,7 @@ export default function AuthPage() {
                         required
                         value={empPassword}
                         onChange={(e) => setEmpPassword(e.target.value)}
-                        placeholder={lang === "bn" ? "আপনার পাসওয়ার্ড লিখুন" : "Enter your password"}
+                        placeholder="••••••••"
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -714,7 +714,7 @@ export default function AuthPage() {
                         required
                         value={empFullName}
                         onChange={(e) => setEmpFullName(e.target.value)}
-                        placeholder={lang === "bn" ? "আপনার পুরো নাম লিখুন" : "e.g. Md Rahim Khan"}
+                        placeholder={lang === "bn" ? "পুরো নাম" : "Full name"}
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -729,7 +729,7 @@ export default function AuthPage() {
                         required
                         value={empIdentifier}
                         onChange={(e) => setEmpIdentifier(e.target.value)}
-                        placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা employee@gmail.com" : "e.g. 017XXXXXXXX or employee@gmail.com"}
+                        placeholder={lang === "bn" ? "মোবাইল নম্বর বা ইমেইল" : "Phone or Email"}
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -755,7 +755,7 @@ export default function AuthPage() {
                         minLength={6}
                         value={empPassword}
                         onChange={(e) => setEmpPassword(e.target.value)}
-                        placeholder={lang === "bn" ? "কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড" : "Create a password (min 6 characters)"}
+                        placeholder="••••••••"
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -862,7 +862,7 @@ export default function AuthPage() {
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Rahim Ahmed"
+                        placeholder={lang === "bn" ? "পুরো নাম" : "Full name"}
                         className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                       />
                     </div>
@@ -879,7 +879,7 @@ export default function AuthPage() {
                       required
                       value={ownerIdentifier}
                       onChange={(e) => setOwnerIdentifier(e.target.value)}
-                      placeholder={lang === "bn" ? "যেমন: 017XXXXXXXX অথবা owner@gmail.com" : "e.g. 017XXXXXXXX or owner@gmail.com"}
+                      placeholder={lang === "bn" ? "মোবাইল নম্বর বা ইমেইল" : "Phone or Email"}
                       className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                     />
                   </div>
@@ -906,7 +906,7 @@ export default function AuthPage() {
                       minLength={ownerMode === "signup" ? 6 : undefined}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={ownerMode === "signup" ? "Create password (min 6 characters)" : "Enter your password"}
+                      placeholder="••••••••"
                       className="h-11 sm:h-12 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-3.5 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-zinc-600 focus-visible:border-transparent w-full shadow-2xs"
                     />
                   </div>
@@ -915,7 +915,7 @@ export default function AuthPage() {
                   {ownerMode === "signin" && (
                     <div className="flex items-center justify-between text-xs pt-0.5">
                       <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
-                        <input type="checkbox" defaultChecked className="rounded accent-primary cursor-pointer" />
+                        <input type="checkbox" defaultChecked className="rounded accent-[#F7931A] cursor-pointer" />
                         <span>Remember me</span>
                       </label>
                       <Link
@@ -930,7 +930,7 @@ export default function AuthPage() {
                   <Button
                     type="submit"
                     disabled={busy}
-                    className="w-full h-11 sm:h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm shadow-md shadow-primary/20 transition-all active:scale-[0.98] gap-2 mt-1 cursor-pointer"
+                    className="w-full h-11 sm:h-12 rounded-xl bg-[#F7931A] hover:bg-[#e08416] text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all active:scale-[0.98] gap-2 mt-1 cursor-pointer"
                   >
                     {busy ? (
                       <RefreshCw className="size-4 animate-spin" />
