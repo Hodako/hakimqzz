@@ -422,7 +422,24 @@ export const getBusinessSettingsFn = makeReadAction("getBusinessSettingsFn");
 // ── Recycle Bin & Command History ──────────────────────────────────────────
 export const getRecycleBinFn = makeReadAction("getRecycleBinFn");
 export const restoreRecycleItemFn = makeWriteAction("restoreRecycleItemFn");
+export const restoreFromRecycleBinFn = restoreRecycleItemFn;
 export const permanentDeleteRecycleItemFn = makeWriteAction("permanentDeleteRecycleItemFn");
+export const permanentDeleteRecycleBinFn = permanentDeleteRecycleItemFn;
 export const emptyRecycleBinFn = makeWriteAction("emptyRecycleBinFn");
 export const getCommandHistoryFn = makeReadAction("getCommandHistoryFn");
 export const undoCommandFn = makeWriteAction("undoCommandFn");
+
+// ── Additional License Key Actions ─────────────────────────────────────────
+export const generateOwnerLicenseKeyFn = makeWriteAction("generateOwnerLicenseKeyFn");
+export const generateEmployeeLicenseKeyFn = makeWriteAction("generateEmployeeLicenseKeyFn");
+export const listLicensesFn = makeReadAction("listLicensesFn");
+export const revokeLicenseFn = makeWriteAction("revokeLicenseFn");
+export const validateAndActivateLicenseFn = makeWriteAction("validateAndActivateLicenseFn");
+export const activateLicenseFn = makeWriteAction("activateLicenseFn");
+
+// ── Asset Transfer & Export Keys ──────────────────────────────────────────
+export const createAssetTransferKeyFn = makeWriteAction("createAssetTransferKeyAction");
+export const inspectAssetTransferKeyFn = makeReadAction("inspectAssetTransferKeyAction");
+export const applyAssetTransferKeyFn = makeWriteAction("applyAssetTransferKeyAction");
+export const listMyTransferKeysFn = makeReadAction("listMyTransferKeysAction");
+export const deleteTransferKeyFn = makeWriteAction("deleteTransferKeyAction");
