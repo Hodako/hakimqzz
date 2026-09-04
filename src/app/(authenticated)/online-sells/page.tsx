@@ -472,10 +472,10 @@ export default function OnlineSellsPage() {
                           <span className="text-[9.5px] font-bold uppercase text-muted-foreground tracking-wider block font-hind">
                             {lang === "bn" ? "অর্ডার আইটেম সমূহ" : "Order Items"}
                           </span>
-                          {item.items.map((it: any) => (
+                          {item.items.map((it: any, idx: number) => (
                             <div key={it.id} className="flex justify-between items-center text-xs py-0.5 border-b border-border/30 last:border-0 font-hind">
                               <div className="truncate mr-2">
-                                <span className="font-bold text-zinc-800 dark:text-zinc-200">{it.product_name}</span>
+                                <span className="font-bold text-zinc-800 dark:text-zinc-200">{idx + 1}. {it.product_name}</span>
                                 <span className="text-muted-foreground font-mono ml-1">×{it.qty}</span>
                               </div>
                               <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100 shrink-0">

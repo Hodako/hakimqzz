@@ -771,7 +771,7 @@ export function SaleDialog({
                           <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-2.5 text-xs bg-card space-y-1.5 shadow-2xs">
                             <div className="flex items-center justify-between font-semibold">
                               <span className="truncate flex-1 text-zinc-900 dark:text-zinc-100 font-medium" title={p?.name}>
-                                {p?.name}
+                                {i + 1}. {p?.name}
                               </span>
                               <Button
                                 type="button"

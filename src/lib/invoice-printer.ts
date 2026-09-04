@@ -534,7 +534,7 @@ export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewT
     // Items Table
     const tableRows = data.items.map((item, idx) => [
       String(idx + 1),
-      item.product.name,
+      `${idx + 1}. ${item.product.name}`,
       String(item.qty),
       `Tk ${item.sellPrice.toLocaleString()}`,
       `Tk ${(item.qty * item.sellPrice).toLocaleString()}`,
