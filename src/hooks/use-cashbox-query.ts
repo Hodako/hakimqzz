@@ -7,7 +7,7 @@ export function useCashboxQuery() {
     queryKey: ["cashbox"],
     queryFn: getCashbox,
     staleTime: 0,
-    gcTime: 0,
+    gcTime: 5 * 60 * 1000,
     refetchInterval: 3000, // Poll every 3 seconds for real-time database sync
     refetchOnWindowFocus: true,
     refetchOnMount: true,
