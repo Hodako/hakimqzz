@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("image");
-    if (!file) {
-      return NextResponse.json({ error: "No image file provided" }, {
+    if (!file || !(file instanceof Blob) || typeof (file as any).arrayBuffer !== "function") {
+      return NextResponse.json({ error: "No valid image file provided" }, {
         status: 400,
         headers: {
           "Access-Control-Allow-Origin": origin,
