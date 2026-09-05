@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, BarChart3, Trash2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Download, BarChart3, Trash2, Lock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useT } from "@/lib/i18n";
 import { useCachedQuery } from "@/hooks/use-cached-query";
-import { getSales, getPurchases, getExpenses, getReturns, getParties } from "@/lib/queries";
+import { getSales, getPurchases, getExpenses, getReturns, getParties, getOwnerWallet } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
@@ -17,6 +17,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { deleteSaleFn, deletePurchaseFn, deleteExpenseFn, deleteReturnFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,11 +47,51 @@ function inRange(dateStr: string, range: Range, from?: string, to?: string) {
 export default function TrackbackPage() {
   const { lang, t } = useT();
   const qc = useQueryClient();
+  const router = useRouter();
+  const { user } = useAuth();
   const [range, setRange] = useState<Range>("today");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 15;
+
+  // Check if an employee session is active
+  const [activeEmpSession, setActiveEmpSession] = useState<any>(() => {
+    if (typeof window === "undefined") return null;
+    try { return JSON.parse(localStorage.getItem("cw_active_employee_session") || "null"); } catch { return null; }
+  });
+  useEffect(() => {
+    const h = () => {
+      try { setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null")); } catch {}
+    };
+    window.addEventListener("hz-employee-switched", h);
+    window.addEventListener("storage", h);
+    return () => { window.removeEventListener("hz-employee-switched", h); window.removeEventListener("storage", h); };
+  }, []);
+
+  const isEmployee = activeEmpSession != null || user?.role === "employee";
+
+  // If employee: show access denied, no redirect needed (keeps URL clean)
+  if (isEmployee) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+        <div className="p-5 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+          <Lock className="size-10 text-rose-500" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground">
+          {lang === "bn" ? "এই পেজে প্রবেশাধিকার নেই" : "Access Restricted"}
+        </h2>
+        <p className="text-sm text-muted-foreground max-w-xs">
+          {lang === "bn"
+            ? "ট্র্যাকব্যাক রিপোর্ট শুধুমাত্র ব্যবসার মালিক দেখতে পারবেন। কর্মচারীরা এই পেজ অ্যাক্সেস করতে পারবেন না।"
+            : "The Trackback report is restricted to business owners only. Employees cannot access this page."}
+        </p>
+        <Button variant="outline" className="rounded-xl" onClick={() => router.replace("/dashboard")}>
+          {lang === "bn" ? "ড্যাশবোর্ডে ফিরুন" : "Return to Dashboard"}
+        </Button>
+      </div>
+    );
+  }
 
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
@@ -125,6 +167,7 @@ export default function TrackbackPage() {
   const expenses = useCachedQuery(["expenses"], getExpenses);
   const returns = useCachedQuery(["returns"], getReturns);
   const parties = useCachedQuery(["parties"], getParties);
+  const ownerWallet = useCachedQuery(["owner_wallet"], getOwnerWallet);
 
   const filteredSales = useMemo(
     () => (sales.data ?? []).filter(s => !s.returned && inRange(s.created_at, range, from, to)),
@@ -146,6 +189,55 @@ export default function TrackbackPage() {
     [returns.data, range, from, to],
   );
 
+  const filteredOwnerExpenses = useMemo(
+    () => (ownerWallet.data ?? []).filter(w => inRange(w.created_at, range, from, to)),
+    [ownerWallet.data, range, from, to],
+  );
+
+  const overheadExpenses = useMemo(() => {
+    return filteredExpenses.filter(
+      e => e.category !== "owner_personal" && !(e.note && e.note.includes("Owner Wallet ID:"))
+    );
+  }, [filteredExpenses]);
+
+  const ownerExpensesToDeduct = useMemo(() => {
+    const list: Array<{ id: string; amount: number; note?: string | null; created_at: string }> = [];
+    const seenIds = new Set<string>();
+
+    for (const w of filteredOwnerExpenses) {
+      if (w.cut_from_profit !== false) {
+        list.push({
+          id: w.id,
+          amount: Number(w.amount || 0),
+          note: w.note,
+          created_at: w.created_at,
+        });
+        seenIds.add(w.id);
+      }
+    }
+
+    for (const e of filteredExpenses) {
+      if (e.category === "owner_personal" || (e.note && e.note.includes("Owner Wallet ID:"))) {
+        const match = e.note?.match(/Owner Wallet ID:\s*([a-zA-Z0-9_-]+)/);
+        const linkedId = match ? match[1] : null;
+        if (!linkedId || !seenIds.has(linkedId)) {
+          list.push({
+            id: e.id,
+            amount: Number(e.amount || 0),
+            note: e.note || e.title,
+            created_at: e.created_at,
+          });
+        }
+      }
+    }
+
+    return list;
+  }, [filteredOwnerExpenses, filteredExpenses]);
+
+  const totalOwnerExpenseCut = useMemo(() => {
+    return ownerExpensesToDeduct.reduce((sum, w) => sum + w.amount, 0);
+  }, [ownerExpensesToDeduct]);
+
   const chartData = useMemo(() => {
     const map: Record<string, { date: string; dateObj: Date; sales: number; buys: number; spends: number; profit: number }> = {};
     
@@ -164,23 +256,33 @@ export default function TrackbackPage() {
       map[key].buys += p.total;
     }
     
-    for (const e of filteredExpenses) {
+    for (const e of overheadExpenses) {
       const date = new Date(e.created_at);
       const key = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       if (!map[key]) map[key] = { date: key, dateObj: date, sales: 0, buys: 0, spends: 0, profit: 0 };
       map[key].spends += e.amount;
+      map[key].profit -= e.amount;
+    }
+
+    for (const w of ownerExpensesToDeduct) {
+      const date = new Date(w.created_at);
+      const key = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      if (!map[key]) map[key] = { date: key, dateObj: date, sales: 0, buys: 0, spends: 0, profit: 0 };
+      map[key].spends += w.amount;
+      map[key].profit -= w.amount;
     }
     
     return Object.values(map)
       .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
       .map(({ date, sales, buys, spends, profit }) => ({ date, sales, buys, spends, profit }));
-  }, [filteredSales, filteredPurchases, filteredExpenses]);
+  }, [filteredSales, filteredPurchases, overheadExpenses, ownerExpensesToDeduct]);
 
   const totals = useMemo(() => {
     const totalSales = filteredSales.reduce((a, s) => a + Number(s.sell_price) * s.qty, 0);
     const totalProfit = filteredSales.reduce((a, s) => a + Number(s.profit), 0);
     const totalBuys = filteredPurchases.reduce((a, p) => a + p.total, 0);
-    const totalSpends = filteredExpenses.reduce((a, e) => a + e.amount, 0);
+    const totalOverheadSpends = overheadExpenses.reduce((a, e) => a + e.amount, 0);
+    const totalSpends = totalOverheadSpends + totalOwnerExpenseCut;
     const netProfit = totalProfit - totalSpends;
 
     return {
@@ -191,9 +293,9 @@ export default function TrackbackPage() {
       netProfit: netProfit,
       salesCount: filteredSales.length,
       buysCount: filteredPurchases.length,
-      spendsCount: filteredExpenses.length,
+      spendsCount: overheadExpenses.length + ownerExpensesToDeduct.length,
     };
-  }, [filteredSales, filteredPurchases, filteredExpenses]);
+  }, [filteredSales, filteredPurchases, overheadExpenses, totalOwnerExpenseCut, ownerExpensesToDeduct]);
 
   const { items: pagedSales, totalPages, safePage } = paginate(filteredSales, page, pageSize);
 
