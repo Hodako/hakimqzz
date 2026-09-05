@@ -103,7 +103,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const result = await action(args);
+      const safeActionArgs = args !== undefined && args !== null ? args : { data: {} };
+      const result = await action(safeActionArgs);
 
       return NextResponse.json(result, {
         headers: {

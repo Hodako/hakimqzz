@@ -59,6 +59,7 @@ export default function RootLayout({
       <body className="antialiased site-bg text-foreground min-h-screen relative overflow-x-hidden" suppressHydrationWarning>
         <script
           id="theme-initializer"
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -76,13 +77,11 @@ export default function RootLayout({
                   var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                   var cfg = accents[accent] || accents.mechanix;
                   var val = isDark ? cfg.dark : cfg.light;
-                  var st = document.getElementById('theme-init-style');
-                  if (!st) {
-                    st = document.createElement('style');
-                    st.id = 'theme-init-style';
-                    document.head.appendChild(st);
-                  }
-                  st.textContent = ':root { --primary: ' + val + '; --ring: ' + val + '; --loader-color: ' + val + '; --sidebar-primary: ' + val + '; }';
+                  var root = document.documentElement;
+                  root.style.setProperty('--primary', val);
+                  root.style.setProperty('--ring', val);
+                  root.style.setProperty('--loader-color', val);
+                  root.style.setProperty('--sidebar-primary', val);
                 } catch (e) {}
 
                 // Early recovery for stale chunk load errors (deployments / cache mismatch)
@@ -118,7 +117,7 @@ export default function RootLayout({
             `,
           }}
         />
-        <div className="content relative z-10 w-full min-h-screen">
+        <div className="content relative z-10 w-full min-h-screen" suppressHydrationWarning>
           <Providers>
             {children}
             <PwaInstallPrompt />
