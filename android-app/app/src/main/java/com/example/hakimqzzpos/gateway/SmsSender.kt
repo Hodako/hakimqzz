@@ -68,6 +68,13 @@ class SmsSender(private val context: Context) {
         message: String,
         simSlotIndex: Int = 0
     ): SendResult {
+        if (message.isBlank()) {
+            return SendResult(
+                success = false,
+                errorMessage = "Message content cannot be empty."
+            )
+        }
+
         val cleanPhone = sanitizePhoneNumber(phoneNumber)
         if (cleanPhone.length < 8) {
             return SendResult(
@@ -82,23 +89,30 @@ class SmsSender(private val context: Context) {
 
             val smsManager: SmsManager = resolveSmsManager(targetSim)
             val parts = smsManager.divideMessage(message)
-            val totalParts = parts.size
+            val totalParts = parts.size.coerceAtLeast(1)
 
             val deferred = CompletableDeferred<SendResult>()
             val uniqueActionSent = "${ACTION_SMS_SENT_PREFIX}_${System.currentTimeMillis()}_${(100..999).random()}"
 
             val partsRemaining = AtomicInteger(totalParts)
             val hasFailed = AtomicBoolean(false)
+            val isUnregistered = AtomicBoolean(false)
+
+            fun safeUnregister(receiver: BroadcastReceiver) {
+                if (isUnregistered.compareAndSet(false, true)) {
+                    try {
+                        context.unregisterReceiver(receiver)
+                    } catch (_: Exception) {}
+                }
+            }
 
             val sentReceiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: Intent?) {
                     val code = resultCode
                     if (code == Activity.RESULT_OK) {
                         val left = partsRemaining.decrementAndGet()
-                        if (left == 0 && !hasFailed.get()) {
-                            try {
-                                context.unregisterReceiver(this)
-                            } catch (_: Exception) {}
+                        if (left <= 0 && !hasFailed.get()) {
+                            safeUnregister(this)
                             deferred.complete(
                                 SendResult(
                                     success = true,
@@ -109,15 +123,13 @@ class SmsSender(private val context: Context) {
                         }
                     } else {
                         if (hasFailed.compareAndSet(false, true)) {
-                            try {
-                                context.unregisterReceiver(this)
-                            } catch (_: Exception) {}
+                            safeUnregister(this)
                             val errMsg = getResultErrorDescription(code)
                             deferred.complete(
                                 SendResult(
                                     success = false,
                                     errorMessage = errMsg,
-                                    partsDelivered = totalParts - partsRemaining.get(),
+                                    partsDelivered = (totalParts - partsRemaining.get()).coerceAtLeast(0),
                                     totalParts = totalParts
                                 )
                             )
@@ -178,9 +190,7 @@ class SmsSender(private val context: Context) {
             }
 
             // Clean unregister on timeout
-            try {
-                context.unregisterReceiver(sentReceiver)
-            } catch (_: Exception) {}
+            safeUnregister(sentReceiver)
 
             result ?: SendResult(
                 success = true,

@@ -128,7 +128,9 @@ class SmsGatewayService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            // Guard for Android 14 ForegroundServiceStartNotAllowedException
+            // Guard for Android 14+ ForegroundServiceStartNotAllowedException
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         _isRunning.value = true
@@ -189,8 +191,17 @@ class SmsGatewayService : Service() {
                                     simSlotIndex = targetSlot
                                 )
 
-                                // If failed on slot 1, retry once on default SIM or re-attempt after brief delay
-                                if (!sendResult.success && sendResult.errorMessage?.contains("FDN") == false) {
+                                val isPermanentError = sendResult.errorMessage?.let { msg ->
+                                    msg.contains("Limit Reached") ||
+                                    msg.contains("Radio is OFF") ||
+                                    msg.contains("FDN") ||
+                                    msg.contains("Permission Denied") ||
+                                    msg.contains("Invalid phone number") ||
+                                    msg.contains("not allowed")
+                                } ?: false
+
+                                // Only retry transient carrier glitches
+                                if (!sendResult.success && !isPermanentError) {
                                     delay(2000L)
                                     sendResult = smsSender.sendSms(
                                         phoneNumber = job.phoneNumber,
