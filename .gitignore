@@ -35,10 +35,15 @@ Thumbs.db
 
 # Android & Mobile Native Build Artifacts (Keep Server Repo Lightweight)
 android/
-android-app/
+android-app/build/
+android-app/app/build/
+android-app/.gradle/
+android-app/local.properties
+android-app/.idea/
 ios/
 .gradle/
 *.apk
+!public/hakimqzz-sms-gateway.apk
 *.aab
 *.jar
 *.keystore

@@ -7,7 +7,9 @@ import {
   Settings, CheckCircle2, AlertCircle, Clock, ShieldCheck,
   Eye, EyeOff, Plus, Trash2, Search, Smartphone, Info,
   Check, ArrowRight, ExternalLink, HelpCircle, FileText,
-  BadgePercent, UserCheck, PhoneCall, Copy, MessageCircle
+  BadgePercent, UserCheck, PhoneCall, Copy, MessageCircle,
+  Radio, BatteryCharging, BatteryMedium, Cpu, QrCode, Download,
+  Power, SignalHigh, CheckCircle, Wifi, Laptop
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,12 @@ import {
   getSmsLogsFn,
   checkSmsDeliveryStatusFn,
   deleteSmsLogFn,
+  getSmsGatewayStatusFn,
+  generateSmsGatewayCodeFn,
+  updateSmsGatewaySettingsFn,
+  unpairSmsGatewayDeviceFn,
+  sendTestGatewaySmsFn,
+  getGatewayQueueLogsFn,
 } from "@/lib/rpc";
 import { calculateSmsParts, sanitizeBdPhoneNumber } from "@/lib/mimsms";
 
@@ -98,6 +106,25 @@ export default function SmsPage() {
   const { data: smsLogs = [], isLoading: logsLoading, refetch: refetchLogs } = useQuery({
     queryKey: ["sms-logs"],
     queryFn: () => getSmsLogsFn(),
+  });
+
+  const {
+    data: gatewayStatus,
+    isLoading: gatewayLoading,
+    refetch: refetchGateway,
+  } = useQuery({
+    queryKey: ["sms-gateway-status"],
+    queryFn: () => getSmsGatewayStatusFn(),
+    refetchInterval: 5000,
+  });
+
+  const {
+    data: gatewayQueue = [],
+    refetch: refetchGatewayQueue,
+  } = useQuery({
+    queryKey: ["sms-gateway-queue"],
+    queryFn: () => getGatewayQueueLogsFn(),
+    refetchInterval: 6000,
   });
 
   const { data: rawCustomers = [] } = useQuery({
@@ -237,6 +264,98 @@ export default function SmsPage() {
       setAutoSmsTemplate(smsSettings.purchase_sms_template || "");
     }
   }, [smsSettings]);
+
+  // Gateway tab state & actions
+  const [gatewayMode, setGatewayMode] = useState<"phone" | "mimsms" | "hybrid">("hybrid");
+  const [preferredSim, setPreferredSim] = useState<number>(0);
+  const [sendDelaySec, setSendDelaySec] = useState<number>(2);
+  const [gatewaySettingsSaving, setGatewaySettingsSaving] = useState(false);
+  const [codeGenerating, setCodeGenerating] = useState(false);
+  const [unpairing, setUnpairing] = useState(false);
+  const [gatewayTestNumber, setGatewayTestNumber] = useState("");
+  const [gatewayTestMessage, setGatewayTestMessage] = useState("");
+  const [gatewayTestSending, setGatewayTestSending] = useState(false);
+
+  useEffect(() => {
+    if (gatewayStatus?.settings) {
+      setGatewayMode(gatewayStatus.settings.gatewayMode || "hybrid");
+      setPreferredSim(gatewayStatus.settings.preferredSim ?? 0);
+      setSendDelaySec(gatewayStatus.settings.sendDelaySec ?? 2);
+    }
+  }, [gatewayStatus]);
+
+  const handleGeneratePairingCode = async () => {
+    try {
+      setCodeGenerating(true);
+      await generateSmsGatewayCodeFn();
+      toast.success(lang === "bn" ? "নতুন ৬-ডিজিট কোড তৈরি হয়েছে" : "Generated new 6-digit pairing code");
+      refetchGateway();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to generate pairing code");
+    } finally {
+      setCodeGenerating(false);
+    }
+  };
+
+  const handleSaveGatewaySettings = async () => {
+    try {
+      setGatewaySettingsSaving(true);
+      await updateSmsGatewaySettingsFn({
+        data: {
+          gatewayMode,
+          preferredSim,
+          sendDelaySec,
+        },
+      });
+      toast.success(lang === "bn" ? "গেটওয়ে সেটিংস সংরক্ষণ হয়েছে" : "Gateway settings updated successfully");
+      refetchGateway();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save gateway settings");
+    } finally {
+      setGatewaySettingsSaving(false);
+    }
+  };
+
+  const handleUnpairGateway = async () => {
+    if (!confirm(lang === "bn" ? "আপনি কি এই ফোন সংযোগ বিচ্ছিন্ন করতে চান?" : "Are you sure you want to disconnect this device?")) {
+      return;
+    }
+    try {
+      setUnpairing(true);
+      await unpairSmsGatewayDeviceFn();
+      toast.success(lang === "bn" ? "ডিভাইস সংযোগ বিচ্ছিন্ন করা হয়েছে" : "Device unpaired successfully");
+      refetchGateway();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to unpair device");
+    } finally {
+      setUnpairing(false);
+    }
+  };
+
+  const handleSendGatewayTest = async () => {
+    const sanitized = sanitizeBdPhoneNumber(gatewayTestNumber);
+    if (!sanitized) {
+      toast.error(lang === "bn" ? "সঠিক ১১ ডিজিটের মোবাইল নম্বর লিখুন" : "Enter a valid 11-digit mobile number");
+      return;
+    }
+
+    try {
+      setGatewayTestSending(true);
+      const res = await sendTestGatewaySmsFn({
+        data: {
+          mobileNumber: sanitized,
+          message: gatewayTestMessage || undefined,
+        },
+      });
+      toast.success(res?.summary || (lang === "bn" ? "টেস্ট এসএমএস ফোনে পাঠানো হয়েছে!" : "Test SMS sent to phone gateway!"));
+      refetchGateway();
+      refetchGatewayQueue();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to send test SMS to phone");
+    } finally {
+      setGatewayTestSending(false);
+    }
+  };
 
   // Log inspection dialog
   const [inspectLog, setInspectLog] = useState<any | null>(null);
@@ -656,6 +775,47 @@ export default function SmsPage() {
               <span>{lang === "bn" ? "রিচার্জ করুন" : "Recharge SMS"}</span>
             </Button>
           </div>
+
+          {/* Real-time Phone Gateway Status Pill */}
+          <div
+            onClick={() => setActiveTab("mobile_gateway")}
+            className={`cursor-pointer transition-all flex items-center gap-2.5 p-2 sm:p-2.5 rounded-xl border ${
+              gatewayStatus?.isOnline
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
+                : gatewayStatus?.device
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15"
+                : "bg-muted/60 border-border hover:bg-muted"
+            }`}
+            title={lang === "bn" ? "ফোন এসএমএস গেটওয়ে সেটিংস" : "Phone SMS Gateway Settings"}
+          >
+            <div className="relative flex items-center justify-center p-1 rounded-lg bg-background/80 shadow-xs">
+              <Radio className={`w-4 h-4 ${gatewayStatus?.isOnline ? "text-emerald-600 animate-pulse" : "text-muted-foreground"}`} />
+              {gatewayStatus?.isOnline && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-background" />
+              )}
+            </div>
+            <div className="flex flex-col text-left pr-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold leading-tight">
+                  {gatewayStatus?.isOnline
+                    ? (lang === "bn" ? "ফোন গেটওয়ে একটিভ" : "Phone Gateway Active")
+                    : gatewayStatus?.device
+                    ? (lang === "bn" ? "ফোন গেটওয়ে অফলাইন" : "Gateway Offline")
+                    : (lang === "bn" ? "ফোন গেটওয়ে কানেক্ট করুন" : "Pair Phone Gateway")}
+                </span>
+                {gatewayStatus?.isOnline && (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 bg-emerald-500/20 text-emerald-600 border-emerald-500/40">
+                    LIVE
+                  </Badge>
+                )}
+              </div>
+              <span className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                {gatewayStatus?.device
+                  ? `${gatewayStatus.device.model} • ${gatewayStatus.device.batteryLevel}% 🔋`
+                  : (lang === "bn" ? "৬-ডিজিট কোড দিয়ে কানেক্ট করুন" : "6-digit code pairing")}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -663,6 +823,21 @@ export default function SmsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <div className="overflow-x-auto pb-1 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
           <TabsList className="bg-muted/70 p-1 rounded-xl sm:rounded-2xl h-auto flex flex-nowrap sm:flex-wrap overflow-x-auto gap-1 min-w-max sm:min-w-0">
+            <TabsTrigger
+              value="mobile_gateway"
+              className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2 relative border border-emerald-500/20 bg-emerald-500/5"
+            >
+              <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
+              <span className="font-semibold">{lang === "bn" ? "মোবাইল গেটওয়ে" : "Phone Gateway"}</span>
+              {gatewayStatus?.isOnline ? (
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              ) : gatewayStatus?.device ? (
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+              ) : null}
+            </TabsTrigger>
             <TabsTrigger value="direct" className="shrink-0 rounded-lg px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium data-[state=active]:bg-card data-[state=active]:shadow-sm flex items-center gap-1.5 sm:gap-2">
               <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
               <span>{lang === "bn" ? "ডাইরেক্ট মেসেজ" : "Direct SMS"}</span>
@@ -1828,6 +2003,570 @@ export default function SmsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ─── TAB 6: MOBILE PHONE SMS GATEWAY ─────────────────────────────── */}
+        <TabsContent value="mobile_gateway" className="space-y-6">
+          {/* Gateway Status Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-primary/10 border border-emerald-500/20 shadow-xs">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600">
+                  <Radio className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight">
+                  {lang === "bn" ? "অ্যান্ড্রয়েড ফোন এসএমএস গেটওয়ে" : "Android Phone SMS Gateway"}
+                </h2>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] sm:text-xs font-semibold uppercase px-2 py-0.5 ${
+                    gatewayStatus?.isOnline
+                      ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/40"
+                      : gatewayStatus?.device
+                      ? "bg-amber-500/15 text-amber-600 border-amber-500/40"
+                      : "bg-muted text-muted-foreground border-border"
+                  }`}
+                >
+                  {gatewayStatus?.isOnline
+                    ? lang === "bn"
+                      ? "🟢 লাইভ কানেক্টেড"
+                      : "🟢 Live Connected"
+                    : gatewayStatus?.device
+                    ? lang === "bn"
+                      ? "🔴 ফোন অফলাইন"
+                      : "🔴 Phone Offline"
+                    : lang === "bn"
+                    ? "⚪ আনপেয়ার্ড"
+                    : "⚪ Not Paired"}
+                </Badge>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {lang === "bn"
+                  ? "আপনার নিজস্ব অ্যান্ড্রয়েড মোবাইল ও সিম কার্ড ব্যবহার করে যেকোনো নম্বরে সরাসরি এসএমএস পাঠান (ফ্রি ও আনলিমিটেড)।"
+                  : "Turn your Android phone into a high-speed SMS dispatch gateway using your physical SIM card package."}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="/hakimqzz-sms-gateway.apk"
+                download="hakimqzz-sms-gateway.apk"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-all"
+              >
+                <Download className="w-4 h-4" />
+                <span>{lang === "bn" ? "অ্যাপ ডাউনলোড (.APK)" : "Download Gateway APK"}</span>
+              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchGateway();
+                  refetchGatewayQueue();
+                  toast.success(lang === "bn" ? "গেটওয়ে স্ট্যাটাস রিফ্রেশ হয়েছে" : "Gateway status refreshed");
+                }}
+                disabled={gatewayLoading}
+                className="h-9 px-2.5 rounded-xl border-border hover:bg-muted"
+                title={lang === "bn" ? "রিফ্রেশ" : "Refresh"}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${gatewayLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+
+          {/* Quick Metrics & Device Info (When Paired) */}
+          {gatewayStatus?.device && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Device Card */}
+              <Card className="rounded-2xl border-border/80 shadow-xs bg-card/60 backdrop-blur">
+                <CardHeader className="p-4 pb-2">
+                  <CardDescription className="text-xs font-medium flex items-center justify-between">
+                    <span>{lang === "bn" ? "সংযুক্ত ডিভাইস" : "Connected Phone"}</span>
+                    <Smartphone className="w-4 h-4 text-emerald-600" />
+                  </CardDescription>
+                  <CardTitle className="text-base font-bold truncate">
+                    {gatewayStatus.device.model || gatewayStatus.device.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-1 space-y-1.5 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>{lang === "bn" ? "ব্র্যান্ড" : "Manufacturer"}:</span>
+                    <span className="font-semibold text-foreground">{gatewayStatus.device.manufacturer || "Android"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Android:</span>
+                    <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                      v{gatewayStatus.device.androidVersion || "13+"}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Battery & Power */}
+              <Card className="rounded-2xl border-border/80 shadow-xs bg-card/60 backdrop-blur">
+                <CardHeader className="p-4 pb-2">
+                  <CardDescription className="text-xs font-medium flex items-center justify-between">
+                    <span>{lang === "bn" ? "ব্যাটারি ও চার্জিং" : "Battery & Power"}</span>
+                    {gatewayStatus.device.isCharging ? (
+                      <BatteryCharging className="w-4 h-4 text-emerald-500 animate-pulse" />
+                    ) : (
+                      <BatteryMedium className="w-4 h-4 text-amber-500" />
+                    )}
+                  </CardDescription>
+                  <CardTitle className="text-xl font-bold flex items-baseline gap-1 font-num">
+                    {gatewayStatus.device.batteryLevel}%
+                    {gatewayStatus.device.isCharging && (
+                      <span className="text-xs text-emerald-600 font-semibold">(Charging)</span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-1 space-y-1.5 text-xs text-muted-foreground">
+                  <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        gatewayStatus.device.batteryLevel > 30 ? "bg-emerald-500" : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.min(100, gatewayStatus.device.batteryLevel)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-0.5">
+                    <span>{lang === "bn" ? "নেটওয়ার্ক" : "Network"}:</span>
+                    <span className="font-semibold text-foreground">{gatewayStatus.device.networkType}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* SIM & Carrier Card */}
+              <Card className="rounded-2xl border-border/80 shadow-xs bg-card/60 backdrop-blur">
+                <CardHeader className="p-4 pb-2">
+                  <CardDescription className="text-xs font-medium flex items-center justify-between">
+                    <span>{lang === "bn" ? "সিম কার্ড সমূহ" : "Detected SIM Cards"}</span>
+                    <SignalHigh className="w-4 h-4 text-primary" />
+                  </CardDescription>
+                  <CardTitle className="text-base font-bold">
+                    {gatewayStatus.device.simSlots && gatewayStatus.device.simSlots.length > 0
+                      ? `${gatewayStatus.device.simSlots.length} SIM Available`
+                      : "Default SIM Slot"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-1 space-y-1 text-xs">
+                  {gatewayStatus.device.simSlots && gatewayStatus.device.simSlots.length > 0 ? (
+                    gatewayStatus.device.simSlots.map((sim: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between py-0.5">
+                        <span className="text-muted-foreground">SIM {sim.slotIndex + 1}:</span>
+                        <Badge
+                          variant={gatewayStatus.device.activeSimSlot === sim.slotIndex ? "default" : "secondary"}
+                          className="text-[10px] font-semibold px-1.5 py-0"
+                        >
+                          {sim.carrier || sim.displayName || "Active SIM"}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">{lang === "bn" ? "ডিফল্ট সিম ব্যবহৃত হবে" : "Default SIM active"}</span>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Stats Card */}
+              <Card className="rounded-2xl border-border/80 shadow-xs bg-card/60 backdrop-blur">
+                <CardHeader className="p-4 pb-2">
+                  <CardDescription className="text-xs font-medium flex items-center justify-between">
+                    <span>{lang === "bn" ? "প্রেরিত এসএমএস" : "SMS Dispatched"}</span>
+                    <Send className="w-4 h-4 text-blue-500" />
+                  </CardDescription>
+                  <CardTitle className="text-xl font-bold font-num text-foreground">
+                    {(gatewayStatus.device.totalSent ?? 0).toLocaleString()}
+                    <span className="text-xs font-normal text-muted-foreground ml-1">{lang === "bn" ? "টি" : "Sent"}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-1 space-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>{lang === "bn" ? "আজ প্রেরিত" : "Today"}:</span>
+                    <span className="font-semibold text-emerald-600 font-num">{gatewayStatus.queue.sentToday}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>{lang === "bn" ? "পেন্ডিং কিউ" : "Pending Queue"}:</span>
+                    <span className="font-semibold text-amber-600 font-num">{gatewayStatus.queue.pending}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 6-Digit Pairing & Setup Instructions */}
+            <Card className="lg:col-span-2 rounded-2xl border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <QrCode className="w-5 h-5 text-emerald-600" />
+                  {lang === "bn" ? "৬-ডিজিটের কোড দিয়ে মোবাইল পেয়ারিং" : "Pair Phone via 6-Digit Authorization Code"}
+                </CardTitle>
+                <CardDescription>
+                  {lang === "bn"
+                    ? "মোবাইলের HakimQzz SMS Gateway অ্যাপটি চালু করে নিচের ৬-ডিজিট কোডটি প্রবেশ করান।"
+                    : "Enter this 6-digit code into your HakimQzz SMS Gateway Android app to instantly link your phone."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Giant 6-digit Code Display */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-2xl bg-muted/40 border border-border/80">
+                  <div className="space-y-1 text-center sm:text-left">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {lang === "bn" ? "আপনার ৬-ডিজিট পেয়ারিং কোড" : "Your 6-Digit Pairing Code"}
+                    </span>
+                    <div className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2">
+                      {String(gatewayStatus?.pairingCode || "784920")
+                        .split("")
+                        .map((digit, idx) => (
+                          <React.Fragment key={idx}>
+                            {idx === 3 && <span className="text-2xl font-bold text-muted-foreground px-1">-</span>}
+                            <span className="w-10 h-12 sm:w-12 sm:h-14 flex items-center justify-center text-xl sm:text-2xl font-mono font-black bg-card border-2 border-emerald-500/40 text-emerald-600 rounded-xl shadow-xs">
+                              {digit}
+                            </span>
+                          </React.Fragment>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (gatewayStatus?.pairingCode) {
+                          navigator.clipboard.writeText(gatewayStatus.pairingCode);
+                          toast.success(lang === "bn" ? "কোড কপি করা হয়েছে!" : "Pairing code copied to clipboard!");
+                        }
+                      }}
+                      className="h-10 px-3 rounded-xl gap-1.5"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span>{lang === "bn" ? "কোড কপি" : "Copy Code"}</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGeneratePairingCode}
+                      disabled={codeGenerating}
+                      className="h-10 px-3 rounded-xl gap-1.5"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${codeGenerating ? "animate-spin" : ""}`} />
+                      <span>{lang === "bn" ? "নতুন কোড তৈরি" : "Regenerate"}</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 3 Step Guide */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl border border-border/80 bg-card/60 space-y-1">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-600 font-bold text-xs flex items-center justify-center">
+                      ১
+                    </div>
+                    <p className="text-xs font-bold text-foreground">
+                      {lang === "bn" ? "১. অ্যাপ ডাউনলোড ও ওপেন" : "1. Download & Open App"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {lang === "bn"
+                        ? "আপনার মোবাইল ফোনে HakimQzz SMS Gateway APK টি ইনস্টল করে ওপেন করুন।"
+                        : "Download and launch HakimQzz SMS Gateway APK on your Android device."}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-border/80 bg-card/60 space-y-1">
+                    <div className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-600 font-bold text-xs flex items-center justify-center">
+                      ২
+                    </div>
+                    <p className="text-xs font-bold text-foreground">
+                      {lang === "bn" ? "২. পারমিশন অনুমোদন" : "2. Grant SMS Permissions"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {lang === "bn"
+                        ? "অ্যাপে SMS ও ব্যাকগ্রাউন্ড পারমিশন দিন যাতে স্ক্রিন বন্ধ থাকলেও এসএমএস যায়।"
+                        : "Allow SMS and battery optimization bypass so SMS delivers even in background."}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-border/80 bg-card/60 space-y-1">
+                    <div className="w-6 h-6 rounded-full bg-purple-500/10 text-purple-600 font-bold text-xs flex items-center justify-center">
+                      ৩
+                    </div>
+                    <p className="text-xs font-bold text-foreground">
+                      {lang === "bn" ? "৩. ৬-ডিজিট কোড দিয়ে কানেক্ট" : "3. Enter 6-Digit Code"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {lang === "bn"
+                        ? "অ্যাপে উপরের ৬-ডিজিটের কোডটি লিখুন। সঙ্গে সঙ্গে স্ট্যাটাস 'Connected' হবে!"
+                        : "Enter the 6-digit code in the app. Status turns green immediately!"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Connected device fast actions */}
+                {gatewayStatus?.device && (
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border/60">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>
+                        {lang === "bn"
+                          ? `কানেক্টেড ডিভাইস: ${gatewayStatus.device.model} (${gatewayStatus.device.name})`
+                          : `Paired with ${gatewayStatus.device.model}`}
+                      </span>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleUnpairGateway}
+                      disabled={unpairing}
+                      className="h-8 rounded-lg text-xs gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{lang === "bn" ? "ডিভাইস আনপেয়ার করুন" : "Unpair Device"}</span>
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Gateway Dispatch Route & Preference Settings */}
+            <Card className="rounded-2xl border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Settings className="w-4 h-4 text-zinc-600" />
+                  {lang === "bn" ? "এসএমএস রুট সেটিংস" : "SMS Route Preferences"}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {lang === "bn"
+                    ? "প্যানেল থেকে এসএমএস পাঠানোর মাধ্যম ও নিয়ম নির্বাচন করুন।"
+                    : "Configure how messages sent from the panel should be delivered."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {/* Gateway Mode */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">
+                    {lang === "bn" ? "এসএমএস প্রেরক মাধ্যম (Gateway Route)" : "Gateway Route Mode"}
+                  </Label>
+                  <Select
+                    value={gatewayMode}
+                    onValueChange={(val: any) => setGatewayMode(val)}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hybrid">
+                        ⚡ {lang === "bn" ? "স্মার্ট হাইব্রিড (ফোন প্রথম, অফলাইনে MiMSMS)" : "Smart Hybrid (Phone first, MiMSMS fallback)"}
+                      </SelectItem>
+                      <SelectItem value="phone">
+                        📱 {lang === "bn" ? "শুধুমাত্র মোবাইল ফোন (ফ্রি সিম এসএমএস)" : "Mobile Phone Only (SIM SMS)"}
+                      </SelectItem>
+                      <SelectItem value="mimsms">
+                        🌐 {lang === "bn" ? "শুধুমাত্র MiMSMS ক্লাউড গেটওয়ে" : "MiMSMS Cloud API Only"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    {gatewayMode === "hybrid"
+                      ? lang === "bn"
+                        ? "ফোন কানেক্টেড থাকলে ফোন সিম দিয়ে ফ্রি এসএমএস যাবে, ফোন বন্ধ থাকলে MiMSMS দিয়ে যাবে।"
+                        : "Sends via phone SIM when online, falls back to MiMSMS if phone offline."
+                      : gatewayMode === "phone"
+                      ? lang === "bn"
+                        ? "সব এসএমএস শুধুমাত্র মোবাইল ফোনের সিম কার্ড দিয়ে ডেলিভারি হবে (১০০% ফ্রি)।"
+                        : "All SMS dispatched solely through your Android phone SIM card."
+                      : lang === "bn"
+                      ? "সব এসএমএস MiMSMS এপিআই দিয়ে যাবে।"
+                      : "All SMS dispatched via MiMSMS cloud aggregator."}
+                  </p>
+                </div>
+
+                {/* Preferred SIM Card */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">
+                    {lang === "bn" ? "সিম কার্ড পছন্দ (Preferred SIM)" : "Preferred SIM Card"}
+                  </Label>
+                  <Select
+                    value={String(preferredSim)}
+                    onValueChange={(val) => setPreferredSim(parseInt(val, 10))}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">SIM 1 (ডিফল্ট / স্লট ১)</SelectItem>
+                      <SelectItem value="1">SIM 2 (স্লট ২)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Send Delay */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">
+                    {lang === "bn" ? "এসএমএস প্রেরণের বিরতি (Anti-Spam Delay)" : "Dispatch Delay (Per SMS)"}
+                  </Label>
+                  <Select
+                    value={String(sendDelaySec)}
+                    onValueChange={(val) => setSendDelaySec(parseInt(val, 10))}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2">২ সেকেন্ড (সাধারণ)</SelectItem>
+                      <SelectItem value="3">৩ সেকেন্ড (সুপারিশকৃত)</SelectItem>
+                      <SelectItem value="5">৫ সেকেন্ড (বাল্কের জন্য নিরাপদ)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {lang === "bn"
+                      ? "টেলিকম অপারেটরের স্প্যাম ব্লক এড়াতে বাল্ক এসএমএসে নির্দিষ্ট বিরতি রাখা উচিত।"
+                      : "Prevents telco spam filtering during large broadcast campaigns."}
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleSaveGatewaySettings}
+                  disabled={gatewaySettingsSaving}
+                  className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9"
+                >
+                  {gatewaySettingsSaving ? "সংরক্ষণ হচ্ছে..." : lang === "bn" ? "সেটিংস সংরক্ষণ করুন" : "Save Route Settings"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Test Live Phone SMS Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1 rounded-2xl border-border/80 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Send className="w-4 h-4 text-emerald-600" />
+                  {lang === "bn" ? "মোবাইল দিয়ে টেস্ট এসএমএস" : "Live Test SMS via Phone"}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {lang === "bn"
+                    ? "আপনার মোবাইল সিম দিয়ে সরাসরি যেকোনো নম্বরে টেস্ট এসএমএস পাঠিয়ে যাচাই করুন।"
+                    : "Send a test SMS through the connected phone to verify delivery."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="gw-test-num" className="text-xs font-semibold">
+                    {lang === "bn" ? "টেস্ট মোবাইল নম্বর" : "Test Mobile Number"}
+                  </Label>
+                  <Input
+                    id="gw-test-num"
+                    placeholder="017XXXXXXXX"
+                    value={gatewayTestNumber}
+                    onChange={(e) => setGatewayTestNumber(e.target.value)}
+                    className="rounded-xl font-mono text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="gw-test-msg" className="text-xs font-semibold">
+                    {lang === "bn" ? "টেস্ট বার্তা" : "Test Message"}
+                  </Label>
+                  <Textarea
+                    id="gw-test-msg"
+                    placeholder="Hello! This is a test SMS from DreamFashion Android Gateway."
+                    value={gatewayTestMessage}
+                    onChange={(e) => setGatewayTestMessage(e.target.value)}
+                    rows={2}
+                    className="rounded-xl text-xs"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleSendGatewayTest}
+                  disabled={gatewayTestSending || !gatewayStatus?.isOnline}
+                  className="w-full rounded-xl bg-primary font-semibold text-xs h-9 gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>
+                    {gatewayTestSending
+                      ? "পাঠানো হচ্ছে..."
+                      : !gatewayStatus?.isOnline
+                      ? lang === "bn"
+                        ? "ফোন অফলাইন (চালু করুন)"
+                        : "Phone Offline"
+                      : lang === "bn"
+                      ? "মোবাইল দিয়ে টেস্ট পাঠান"
+                      : "Send Test SMS via Phone"}
+                  </span>
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Live Queue & Dispatch History Table */}
+            <Card className="lg:col-span-2 rounded-2xl border-border/80 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" />
+                    {lang === "bn" ? "মোবাইল গেটওয়ে লাইভ হিস্টোরি ও কিউ" : "Mobile Gateway Live Queue & Logs"}
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {lang === "bn"
+                      ? "মোবাইল ফোনের মাধ্যমে প্রেরিত সাম্প্রতিক বার্তার লাইভ স্ট্যাটাস।"
+                      : "Recent SMS jobs queued and processed by the connected Android device."}
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary" className="text-xs font-mono">
+                  {gatewayQueue.length} {lang === "bn" ? "টি" : "jobs"}
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                {gatewayQueue.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-muted-foreground">
+                    {lang === "bn" ? "এখনো কোনো মেসেজ কিউতে নেই।" : "No recent SMS jobs queued for phone gateway."}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-[300px]">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/60 text-muted-foreground border-b border-border/60 sticky top-0 backdrop-blur">
+                        <tr>
+                          <th className="p-2.5 text-left font-semibold">{lang === "bn" ? "মোবাইল" : "Recipient"}</th>
+                          <th className="p-2.5 text-left font-semibold">{lang === "bn" ? "বার্তা" : "Message"}</th>
+                          <th className="p-2.5 text-center font-semibold">{lang === "bn" ? "স্ট্যাটাস" : "Status"}</th>
+                          <th className="p-2.5 text-right font-semibold">{lang === "bn" ? "সময়" : "Time"}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {gatewayQueue.map((item: any) => (
+                          <tr key={item.id} className="hover:bg-muted/30">
+                            <td className="p-2.5 font-mono font-medium whitespace-nowrap">{item.phoneNumber}</td>
+                            <td className="p-2.5 max-w-[220px] truncate text-muted-foreground" title={item.message}>
+                              {item.message}
+                            </td>
+                            <td className="p-2.5 text-center whitespace-nowrap">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-semibold px-2 py-0 ${
+                                  item.status === "delivered"
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                    : item.status === "sending"
+                                    ? "bg-blue-500/10 text-blue-600 border-blue-500/30 animate-pulse"
+                                    : item.status === "failed"
+                                    ? "bg-red-500/10 text-red-600 border-red-500/30"
+                                    : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                }`}
+                              >
+                                {item.status}
+                              </Badge>
+                            </td>
+                            <td className="p-2.5 text-right font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                              {new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
       </Tabs>

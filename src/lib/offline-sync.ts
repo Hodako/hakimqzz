@@ -75,6 +75,7 @@ function applyOptimisticUpdate(actionName: string, args: any) {
       party_id: args.data.party_id ?? null,
       paid_amount: Number(args.data.paid_amount) || 0,
       due_amount: Number(args.data.due_amount) || 0,
+      discount: Number(args.data.discount) || 0,
       split_cash: args.data.split_cash !== undefined ? Number(args.data.split_cash) : undefined,
       split_bkash: args.data.split_bkash !== undefined ? Number(args.data.split_bkash) : undefined,
       split_bank: args.data.split_bank !== undefined ? Number(args.data.split_bank) : undefined,
@@ -122,6 +123,33 @@ function applyOptimisticUpdate(actionName: string, args: any) {
       };
       writeQueryCache(["cashbox"], [newCashbox, ...cashbox]);
     }
+  }
+
+  else if (actionName === "editSaleFn") {
+    const sales = readQueryCache<any[]>(["sales"]) ?? [];
+    const updatedSales = sales.map((s) => {
+      if (s.id === args.data.id || s._id === args.data.id) {
+        return {
+          ...s,
+          ...args.data,
+          qty: args.data.qty !== undefined ? Number(args.data.qty) : s.qty,
+          buy_price: args.data.buy_price !== undefined ? Number(args.data.buy_price) : s.buy_price,
+          sell_price: args.data.sell_price !== undefined ? Number(args.data.sell_price) : s.sell_price,
+          profit: args.data.profit !== undefined ? Number(args.data.profit) : s.profit,
+          paid_amount: args.data.paid_amount !== undefined ? Number(args.data.paid_amount) : s.paid_amount,
+          due_amount: args.data.due_amount !== undefined ? Number(args.data.due_amount) : s.due_amount,
+          updated_at: now,
+        };
+      }
+      return s;
+    });
+    writeQueryCache(["sales"], updatedSales);
+  }
+
+  else if (actionName === "deleteSaleFn") {
+    const sales = readQueryCache<any[]>(["sales"]) ?? [];
+    const filtered = sales.filter((s) => s.id !== args.data.id && s._id !== args.data.id);
+    writeQueryCache(["sales"], filtered);
   }
 
   else if (actionName === "createPaymentFn") {

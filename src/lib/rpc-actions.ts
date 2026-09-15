@@ -25,6 +25,12 @@ import {
   sendWhatsAppMessage,
   sendWhatsAppCampaign,
 } from "@/lib/whatsapp-baileys";
+import {
+  getOwnerGatewayStatus,
+  getOrCreatePairingCode,
+  enqueueSmsToGateway,
+  unpairOwnerDevice,
+} from "@/lib/sms-gateway";
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
@@ -900,18 +906,20 @@ export async function approveCourierPaymentFn(input: { data: { id: string } }) {
           due_amount: 0,
           collected_at: nowStr,
           updated_at: nowStr,
-        }
+        },
       }
     );
 
-    // Deposit remittance into Cashbox
-    await insertCashboxEntry(db, session.ownerId, {
-      kind: "sale",
-      amount: totalAmount,
-      note: `Online Courier Payment Collected: ${s.product_name} [${s.courier_name || "Courier"}] (INV-${String(s._id).slice(-6).toUpperCase()})`,
-      ref_id: String(s._id),
-      created_at: nowStr,
-    });
+    // Deposit into Cashbox
+    if (totalAmount > 0) {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "sale",
+        amount: totalAmount,
+        note: `Courier Payment Collected: ${s.product_name} (INV-${String(s._id).slice(-6).toUpperCase()})`,
+        ref_id: String(s._id),
+        created_at: nowStr,
+      });
+    }
   }
 
   return { success: true };
@@ -1224,28 +1232,51 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
     );
   }
  
-  if (returnQty >= (sale.qty as number)) {
+  const originalQty = Number(sale.qty) || 1;
+  const ratio = returnQty / originalQty;
+
+  if (returnQty >= originalQty) {
     await db.collection("sales").updateOne({ _id: data.sale_id as any }, { $set: { returned: true, return_qty: returnQty } });
   } else {
-    const remaining = (sale.qty as number) - returnQty;
+    const remaining = originalQty - returnQty;
+    const remainingPaid = Math.max(0, Math.round((Number(sale.paid_amount) || 0) * (1 - ratio)));
+    const remainingDue = Math.max(0, Math.round((Number(sale.due_amount) || 0) * (1 - ratio)));
+    const remainingSplitCash = sale.split_cash !== undefined ? Math.max(0, Math.round((Number(sale.split_cash) || 0) * (1 - ratio))) : undefined;
+    const remainingSplitBkash = sale.split_bkash !== undefined ? Math.max(0, Math.round((Number(sale.split_bkash) || 0) * (1 - ratio))) : undefined;
+    const remainingSplitBank = sale.split_bank !== undefined ? Math.max(0, Math.round((Number(sale.split_bank) || 0) * (1 - ratio))) : undefined;
+
     await db.collection("sales").updateOne(
       { _id: data.sale_id as any },
-      { $set: { qty: remaining, profit: profitPerUnit * remaining, return_qty: returnQty } },
+      {
+        $set: {
+          qty: remaining,
+          profit: profitPerUnit * remaining,
+          return_qty: returnQty,
+          paid_amount: remainingPaid,
+          due_amount: remainingDue,
+          ...(remainingSplitCash !== undefined ? { split_cash: remainingSplitCash } : {}),
+          ...(remainingSplitBkash !== undefined ? { split_bkash: remainingSplitBkash } : {}),
+          ...(remainingSplitBank !== undefined ? { split_bank: remainingSplitBank } : {}),
+        }
+      },
     );
   }
 
   // Cash sales added money to the cashbox — returning them must withdraw it back.
   // Credit sales only created cashbox entries for the paid_amount portion (not the full amount),
   // so we refund proportionally based on what was actually collected.
+  // Split sales created cashbox entries for the split_cash portion, so refund split_cash portion.
   // Online sales: admin does not receive money immediately, so no cashbox impact on return either.
   const saleType: string = (sale.type as string) || "cash";
   let refundAmt = 0;
   if (saleType === "cash") {
     refundAmt = Number(sale.sell_price) * returnQty;
   } else if (saleType === "credit") {
-    // Proportional refund of what was already paid in cash
-    const paidPerUnit = Number(sale.qty) > 0 ? Number(sale.paid_amount) / Number(sale.qty) : 0;
+    const paidPerUnit = originalQty > 0 ? (Number(sale.paid_amount) || 0) / originalQty : 0;
     refundAmt = paidPerUnit * returnQty;
+  } else if (saleType === "split") {
+    const cashPerUnit = originalQty > 0 ? (Number(sale.split_cash) || 0) / originalQty : 0;
+    refundAmt = cashPerUnit * returnQty;
   }
 
   if (refundAmt > 0) {
@@ -3454,6 +3485,22 @@ async function triggerAutoPurchaseSms(
       .replace(/{due_amount}/g, String(dueAmount))
       .replace(/{invoice_id}/g, invoiceId);
 
+    const gatewayStatus = await getOwnerGatewayStatus(ownerId);
+    const shouldUsePhone =
+      (gatewayStatus.settings.gatewayMode === "phone" && gatewayStatus.isOnline) ||
+      (gatewayStatus.settings.gatewayMode === "hybrid" && gatewayStatus.isOnline);
+
+    if (shouldUsePhone) {
+      await enqueueSmsToGateway(ownerId, {
+        phoneNumber: party.phone,
+        message,
+        simSlot: gatewayStatus.settings.preferredSim,
+        campaignTitle: "Auto Purchase Receipt",
+        recipientType: "auto_purchase",
+      });
+      return;
+    }
+
     let result: MiMSMSResponse = {
       statusCode: "400",
       status: "Failed",
@@ -3668,7 +3715,55 @@ export async function sendSmsCampaignFn(input: {
     throw new Error("No recipients with valid phone numbers were found for this campaign.");
   }
 
-  // Calculate required SMS credits
+  // Check if owner has Android Phone Gateway active or preferred
+  const gatewayStatus = await getOwnerGatewayStatus(session.ownerId);
+  const isPhoneGatewayPreferred = gatewayStatus.settings.gatewayMode === "phone";
+  const isHybrid = gatewayStatus.settings.gatewayMode === "hybrid";
+
+  if (isPhoneGatewayPreferred && !gatewayStatus.isOnline) {
+    throw new Error(
+      "আপনার অ্যান্ড্রয়েড ফোন এসএমএস গেটওয়েটি বর্তমানে অফলাইন। অনুগ্রহ করে আপনার মোবাইল ফোনে HakimQzz SMS Gateway অ্যাপটি চালু রাখুন অথবা সেটিংসে গিয়ে হাইব্রিড/MiMSMS মোড বেছে নিন।"
+    );
+  }
+
+  const shouldUsePhoneGateway =
+    (isPhoneGatewayPreferred && gatewayStatus.isOnline) ||
+    (isHybrid && gatewayStatus.isOnline);
+
+  if (shouldUsePhoneGateway) {
+    const trxnIds: string[] = [];
+    for (const r of recipients) {
+      const personalMsg = data.isPersonalized
+        ? data.message
+            .replace(/{name}/g, r.name)
+            .replace(/{customer_name}/g, r.name)
+            .replace(/{supplier_name}/g, r.name)
+            .replace(/{shop_name}/g, shopName)
+        : data.message.replace(/{shop_name}/g, shopName);
+
+      const res = await enqueueSmsToGateway(session.ownerId, {
+        phoneNumber: r.phone,
+        message: personalMsg,
+        simSlot: gatewayStatus.settings.preferredSim,
+        campaignTitle: data.campaignTitle || "SMS Campaign",
+        recipientType: data.recipientType,
+      });
+      trxnIds.push(res.jobId);
+    }
+
+    return {
+      success: true,
+      status: "Success",
+      recipientCount: recipients.length,
+      creditsDeducted: 0, // Free on owner's phone SIM!
+      remainingCredits: Number(business?.sms_credits ?? 0),
+      trxnIds,
+      summary: `মোবাইল গেটওয়েতে (${gatewayStatus.device?.model || "Phone"}) ${recipients.length} টি বার্তা পাঠানো হচ্ছে। সিম ${gatewayStatus.settings.preferredSim + 1} দিয়ে ডেলিভারি হবে।`,
+      isPhoneGateway: true,
+    };
+  }
+
+  // Calculate required SMS credits for cloud gateway
   const { parts } = calculateSmsParts(data.message);
   const requiredCredits = Math.max(1, recipients.length * Math.max(1, parts));
   const currentCredits = Number(business?.sms_credits ?? 0);
@@ -3838,6 +3933,112 @@ export async function deleteSmsLogFn(input: { data: { id: string } }) {
   const db = await getDb();
   await db.collection("sms_logs").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true };
+}
+
+// ─── Android SMS Gateway Device Management ────────────────────────────────────
+
+export async function getSmsGatewayStatusFn() {
+  const session = await requireSession();
+  return await getOwnerGatewayStatus(session.ownerId);
+}
+
+export async function generateSmsGatewayCodeFn() {
+  const session = await requireSession();
+  const code = await getOrCreatePairingCode(session.ownerId, true);
+  return { success: true, code };
+}
+
+export async function updateSmsGatewaySettingsFn(input: {
+  data: {
+    gatewayMode?: "phone" | "mimsms" | "hybrid";
+    preferredSim?: number;
+    sendDelaySec?: number;
+  };
+}) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+
+  const updateFields: any = {
+    updated_at: new Date().toISOString(),
+  };
+  if (data.gatewayMode) updateFields.gateway_mode = data.gatewayMode;
+  if (data.preferredSim !== undefined) updateFields.preferred_sim = data.preferredSim;
+  if (data.sendDelaySec !== undefined) updateFields.send_delay_sec = data.sendDelaySec;
+
+  await db.collection("sms_settings").updateOne(
+    { owner_id: session.ownerId },
+    { $set: updateFields },
+    { upsert: true }
+  );
+
+  return { success: true };
+}
+
+export async function unpairSmsGatewayDeviceFn() {
+  const session = await requireSession();
+  return await unpairOwnerDevice(session.ownerId);
+}
+
+export async function sendTestGatewaySmsFn(input: {
+  data: {
+    mobileNumber: string;
+    message?: string;
+  };
+}) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+
+  const business = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+  const shopName = business?.name || "Dream Fashion";
+
+  const gatewayStatus = await getOwnerGatewayStatus(session.ownerId);
+  if (!gatewayStatus.device) {
+    throw new Error("No Android SMS Gateway device is paired. Please pair your mobile phone first using the 6-digit code.");
+  }
+  if (!gatewayStatus.isOnline) {
+    throw new Error("Android SMS Gateway device is currently offline. Please open the HakimQzz SMS Gateway app on your phone.");
+  }
+
+  const msg = data.message || `Test SMS from ${shopName} Android SMS Gateway. Device is connected & working!`;
+
+  const res = await enqueueSmsToGateway(session.ownerId, {
+    phoneNumber: data.mobileNumber.trim(),
+    message: msg,
+    simSlot: gatewayStatus.settings.preferredSim,
+    campaignTitle: "Gateway Live Test",
+    recipientType: "test_verification",
+  });
+
+  return {
+    success: true,
+    jobId: res.jobId,
+    summary: `Test SMS enqueued to ${gatewayStatus.device.model}. Dispatched to phone for delivery!`,
+  };
+}
+
+export async function getGatewayQueueLogsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+
+  const queue = await db
+    .collection("sms_gateway_queue")
+    .find({ owner_id: session.ownerId })
+    .sort({ created_at: -1 })
+    .limit(30)
+    .toArray();
+
+  return queue.map((q) => ({
+    id: q._id,
+    phoneNumber: q.phone_number,
+    message: q.message,
+    status: q.status,
+    errorMessage: q.error_message,
+    createdAt: q.created_at,
+    sentAt: q.sent_at,
+    campaignTitle: q.campaign_title,
+  }));
 }
 
 // ─── Active Admin Popups & Announcements ────────────────────────────────────

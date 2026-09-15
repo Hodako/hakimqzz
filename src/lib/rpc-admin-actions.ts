@@ -1076,6 +1076,36 @@ export async function directSendSmsAsAdminFn(input: {
   const userName = (platform?.master_sms_user_name as string) || "";
   const senderName = (platform?.master_sms_sender_name as string) || "DreamFashion";
 
+  // Check if an Android Phone Gateway is connected and online for admin
+  const adminGateway = await db.collection("sms_gateway_devices").findOne({
+    $or: [{ owner_id: "superadmin" }, { owner_id: "admin" }],
+  });
+  let isGatewayOnline = false;
+  if (adminGateway?.last_seen_at) {
+    const diff = (Date.now() - new Date(adminGateway.last_seen_at).getTime()) / 1000;
+    isGatewayOnline = diff <= 45;
+  }
+
+  if (isGatewayOnline && adminGateway) {
+    const { enqueueSmsToGateway } = await import("@/lib/sms-gateway");
+    const queueRes = await enqueueSmsToGateway(adminGateway.owner_id, {
+      phoneNumber: data.mobileNumber.trim(),
+      message: data.message.trim(),
+      simSlot: adminGateway.active_sim_slot ?? 0,
+      campaignTitle: "Admin Direct Dispatch (Android Gateway)",
+      recipientType: "direct",
+    });
+
+    return {
+      isSuccess: true,
+      status: "Success",
+      statusCode: "200",
+      trxnId: queueRes.jobId,
+      responseResult: `Delivered to Android Phone Gateway (${adminGateway.device_model || "Mobile Phone"}). Dispatched via SIM.`,
+      isPhoneGateway: true,
+    };
+  }
+
   if (!apiKey || !userName) {
     throw new Error("Master SMS credentials are not configured. Please enter and save API Key & Username in Master Gateway settings first.");
   }

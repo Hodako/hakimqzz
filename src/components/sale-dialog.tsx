@@ -322,11 +322,36 @@ export function SaleDialog({
     setBusy(true);
     try {
       const cartId = safeUUID();
-      let remainingCash = splitCashNum;
-      let remainingBkash = splitBkashNum;
-      let remainingBank = splitBankNum;
-      let remainingPaid = (type === "credit" || type === "split") ? paidNum : sellTotal;
-      let remainingDue = (type === "credit" || type === "split") ? due : 0;
+      const changeAmount = (type === "split" && totalSplitPaid > sellTotal)
+        ? totalSplitPaid - sellTotal
+        : 0;
+
+      // Net amounts actually received/retained after returning physical cash change
+      let netCash = splitCashNum;
+      let netBkash = splitBkashNum;
+      let netBank = splitBankNum;
+
+      if (type === "split" && changeAmount > 0) {
+        const cashDeduction = Math.min(netCash, changeAmount);
+        netCash -= cashDeduction;
+        const remainderChange = changeAmount - cashDeduction;
+        if (remainderChange > 0) {
+          const bkashDeduction = Math.min(netBkash, remainderChange);
+          netBkash -= bkashDeduction;
+          const bankDeduction = Math.min(netBank, remainderChange - bkashDeduction);
+          netBank -= bankDeduction;
+        }
+      }
+
+      const effectivePaid = type === "split"
+        ? Math.min(totalSplitPaid, sellTotal)
+        : (type === "online" ? 0 : (isFullPaid ? sellTotal : Math.min(Number(paid) || 0, sellTotal)));
+
+      let remainingCash = type === "split" ? netCash : (type === "cash" ? sellTotal : 0);
+      let remainingBkash = type === "split" ? netBkash : (type === "bkash" ? sellTotal : 0);
+      let remainingBank = type === "split" ? netBank : (type === "bank" ? sellTotal : 0);
+      let remainingPaid = (type === "credit") ? effectivePaid : (type === "split" ? (netCash + netBkash + netBank) : (type === "online" ? 0 : sellTotal));
+      let remainingDue = (type === "credit" || type === "split") ? due : (type === "online" ? sellTotal : 0);
 
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];
@@ -339,6 +364,7 @@ export function SaleDialog({
         const disc = Math.max(0, Number(line.discount) || 0);
         const finalUnitSell = Math.max(rawSellPrice - disc, 0);
         const lineSell = finalUnitSell * qtyNum;
+        const lineDiscTotal = disc * qtyNum;
         const lineProfit = (finalUnitSell - Number(product.buy_price || 0)) * qtyNum;
 
         // Proportional paid & due distribution
@@ -356,14 +382,14 @@ export function SaleDialog({
             lineCash = Math.max(remainingCash, 0);
             lineBkash = Math.max(remainingBkash, 0);
             lineBank = Math.max(remainingBank, 0);
-            linePaid = lineCash + lineBkash + lineBank;
-            lineDue = Math.max(remainingDue, 0);
+            linePaid = Math.min(lineCash + lineBkash + lineBank, lineSell);
+            lineDue = Math.max(lineSell - linePaid, 0);
           } else {
             const ratio = sellTotal > 0 ? lineSell / sellTotal : 1 / cart.length;
-            lineCash = Math.min(Math.round(splitCashNum * ratio), remainingCash);
-            lineBkash = Math.min(Math.round(splitBkashNum * ratio), remainingBkash);
-            lineBank = Math.min(Math.round(splitBankNum * ratio), remainingBank);
-            linePaid = lineCash + lineBkash + lineBank;
+            lineCash = Math.min(Math.round(netCash * ratio), remainingCash);
+            lineBkash = Math.min(Math.round(netBkash * ratio), remainingBkash);
+            lineBank = Math.min(Math.round(netBank * ratio), remainingBank);
+            linePaid = Math.min(lineCash + lineBkash + lineBank, lineSell);
             lineDue = Math.max(lineSell - linePaid, 0);
             remainingCash -= lineCash;
             remainingBkash -= lineBkash;
@@ -372,12 +398,12 @@ export function SaleDialog({
           }
         } else if (type === "credit") {
           if (i === cart.length - 1) {
-            linePaid = Math.max(remainingPaid, 0);
-            lineDue = Math.max(remainingDue, 0);
+            linePaid = Math.min(Math.max(remainingPaid, 0), lineSell);
+            lineDue = Math.max(lineSell - linePaid, 0);
             lineCash = linePaid;
           } else {
             const ratio = sellTotal > 0 ? lineSell / sellTotal : 1 / cart.length;
-            linePaid = Math.min(Math.round(paidNum * ratio), remainingPaid);
+            linePaid = Math.min(Math.round(effectivePaid * ratio), remainingPaid, lineSell);
             lineDue = Math.max(lineSell - linePaid, 0);
             lineCash = linePaid;
             remainingPaid -= linePaid;
@@ -397,7 +423,8 @@ export function SaleDialog({
             product_name: product.name,
             qty: qtyNum,
             buy_price: Number(product.buy_price) || 0,
-            sell_price: finalUnitSell,
+            sell_price: rawSellPrice,
+            discount: lineDiscTotal,
             profit: lineProfit,
             type,
             party_id: partyId || null,
@@ -407,7 +434,6 @@ export function SaleDialog({
             split_bkash: lineBkash,
             split_bank: lineBank,
             cart_id: cartId,
-            discount: 0,
             courier_name: type === "online" ? courierName : undefined,
             tracking_code: type === "online" ? trackingCode : undefined,
             courier_status: type === "online" ? "pending" : undefined,
@@ -438,7 +464,7 @@ export function SaleDialog({
         if (splitBkashNum > 0) parts.push(`বিকাশ: ৳${splitBkashNum}`);
         if (splitBankNum > 0) parts.push(`ব্যাংক: ৳${splitBankNum}`);
         if (due > 0) parts.push(`বাকী: ৳${due}`);
-        paymentModeStr = `MIXED (${parts.join(" + ")})`;
+        paymentModeStr = `SPLIT (${parts.join(" + ")})`;
       }
 
       const cust = customers.find(c => c.id === partyId);
@@ -498,9 +524,9 @@ export function SaleDialog({
           customerName: cust?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
           customerPhone: cust?.phone || "",
           paymentMode: paymentModeStr,
-          splitCash: type === "split" ? splitCashNum : (type === "cash" ? paidNum : undefined),
-          splitBkash: type === "split" ? splitBkashNum : (type === "bkash" ? paidNum : undefined),
-          splitBank: type === "split" ? splitBankNum : (type === "bank" ? paidNum : undefined),
+          splitCash: type === "split" ? netCash : (type === "cash" ? paidNum : undefined),
+          splitBkash: type === "split" ? netBkash : (type === "bkash" ? paidNum : undefined),
+          splitBank: type === "split" ? netBank : (type === "bank" ? paidNum : undefined),
           items: cart.map(c => {
             const prod = products.find(p => p.id === c.productId);
             return {
@@ -512,8 +538,9 @@ export function SaleDialog({
           subtotal: sellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
           discountAmount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
           total: sellTotal,
-          paidAmount: type === "online" ? 0 : paidNum,
+          paidAmount: type === "online" ? 0 : (type === "split" && totalSplitPaid > sellTotal ? totalSplitPaid : paidNum),
           due: type === "online" ? sellTotal : due,
+          changeAmount: changeAmount > 0 ? changeAmount : undefined,
           terms: user.invoice_terms || "",
         };
 
@@ -531,7 +558,7 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-2xl md:max-w-4xl max-h-[92dvh] flex flex-col overflow-hidden p-0 rounded-2xl border-border shadow-2xl">
+        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl max-h-[92dvh] flex flex-col overflow-hidden p-0 rounded-2xl border-border shadow-2xl">
           <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -566,9 +593,9 @@ export function SaleDialog({
                   submit(e);
                 }
               }}
-              className="grid grid-cols-1 md:grid-cols-12 gap-4"
+              className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-5"
             >
-              <div className="md:col-span-7 space-y-3.5">
+              <div className="md:col-span-7 lg:col-span-6 space-y-3.5 min-w-0">
                 {/* Payment Method Selector or Courier Delivery Panel */}
                 {presetType === "online" || type === "online" ? (
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5">
@@ -675,17 +702,7 @@ export function SaleDialog({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          setType("split");
-                          if (!splitCash && !splitBkash && !splitBank) {
-                            if (sellTotal > 0) {
-                              const half = Math.round(sellTotal / 2);
-                              setSplitCash(String(half));
-                              setSplitBkash(String(sellTotal - half));
-                            }
-                            setSplitBank("");
-                          }
-                        }}
+                        onClick={() => setType("split")}
                         className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                           type === "split"
                             ? "bg-purple-500/15 border-purple-500 text-purple-700 dark:text-purple-300 shadow-xs ring-1 ring-purple-500/30"
@@ -693,7 +710,7 @@ export function SaleDialog({
                         }`}
                       >
                         <Split className="size-4 text-purple-600 dark:text-purple-400" />
-                        <span>{lang === "bn" ? "মিক্সড / আংশিক" : "Split / Mixed"}</span>
+                        <span>{lang === "bn" ? "স্প্লিট" : "Split"}</span>
                       </button>
                     </div>
                   </div>
@@ -825,7 +842,7 @@ export function SaleDialog({
                 </div>
               </div>
 
-              <div className="md:col-span-5 flex flex-col justify-between space-y-3">
+              <div className="md:col-span-5 lg:col-span-6 flex flex-col justify-between space-y-3 min-w-0">
                 <div className="space-y-2 flex-1">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
@@ -913,22 +930,38 @@ export function SaleDialog({
                 </div>
 
                 {type === "split" && (
-                  <div className="border border-purple-500/30 bg-purple-500/5 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xs">
+                  <div className="border border-purple-500/30 bg-purple-500/5 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xs overflow-hidden font-hind">
                     {/* Header: Title, Total, and Mobile Toggle */}
                     <div className="flex items-center justify-between gap-2 border-b border-purple-500/20 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="size-7 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 grid place-items-center">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="size-7 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 grid place-items-center shrink-0">
                           <Split className="size-4" />
                         </div>
-                        <div>
-                          <Label className="text-xs sm:text-sm font-bold text-purple-950 dark:text-purple-100 flex items-center gap-1.5 font-charukola">
-                            {lang === "bn" ? "আংশিক / মিক্সড পেমেন্ট হিসাব" : "Split & Partial Payment Breakdown"}
+                        <div className="min-w-0">
+                          <Label className="text-xs sm:text-sm font-bold text-purple-950 dark:text-purple-100 flex items-center gap-1.5 truncate">
+                            {lang === "bn" ? "স্প্লিট পেমেন্ট হিসাব" : "Split Payment Breakdown"}
                           </Label>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-extrabold font-serif bg-background px-2 py-1 rounded-lg border border-purple-500/30 text-foreground">
+                      <div className="flex items-center gap-2 shrink-0">
+                        {(splitCashNum > 0 || splitBkashNum > 0 || splitBankNum > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSplitCash("");
+                              setSplitBkash("");
+                              setSplitBank("");
+                            }}
+                            className="text-[11px] font-medium text-muted-foreground hover:text-rose-600 px-2 py-0.5 rounded border border-border/60 hover:border-rose-300 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Reset all split fields"
+                          >
+                            <RotateCcw className="size-3" />
+                            <span>{lang === "bn" ? "মুছুন" : "Clear"}</span>
+                          </button>
+                        )}
+
+                        <span className="text-xs font-bold bg-background px-2.5 py-1 rounded-lg border border-purple-500/30 text-foreground shadow-2xs">
                           {lang === "bn" ? "বিল:" : "Bill:"} ৳{sellTotal}
                         </span>
 
@@ -948,7 +981,7 @@ export function SaleDialog({
                           ) : (
                             <>
                               <ChevronDown className="size-3.5" />
-                              <span>{lang === "bn" ? "টাকা ভাগ করুন" : "Reveal"}</span>
+                              <span>{lang === "bn" ? "টাকা লিখুন" : "Reveal"}</span>
                             </>
                           )}
                         </Button>
@@ -962,19 +995,19 @@ export function SaleDialog({
                         className="sm:hidden p-2 bg-background/90 rounded-xl border border-purple-500/30 flex items-center justify-between text-xs cursor-pointer hover:bg-muted/40 transition-all"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold font-serif text-[11px]">
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
                             {lang === "bn" ? "নগদ:" : "Cash:"} ৳{splitCashNum}
                           </span>
-                          <span className="text-[#E2136E] font-bold font-serif text-[11px]">
+                          <span className="text-[#E2136E] font-bold text-[11px]">
                             {lang === "bn" ? "বিকাশ:" : "bKash:"} ৳{splitBkashNum}
                           </span>
                           {splitBankNum > 0 && (
-                            <span className="text-sky-600 font-bold font-serif text-[11px]">
+                            <span className="text-sky-600 font-bold text-[11px]">
                               {lang === "bn" ? "ব্যাংক:" : "Bank:"} ৳{splitBankNum}
                             </span>
                           )}
                         </div>
-                        <div className="font-extrabold font-serif text-[11px] text-purple-700 dark:text-purple-300">
+                        <div className="font-bold text-[11px] text-purple-700 dark:text-purple-300">
                           {due > 0 ? (
                             <span className="text-rose-600">বাকী: ৳{due}</span>
                           ) : (
@@ -986,230 +1019,182 @@ export function SaleDialog({
 
                     {/* Inputs & Controls (Visible always on sm: screens, revealable on mobile) */}
                     <div className={`${mobileSplitOpen ? "block" : "hidden sm:block"} space-y-3 animate-in fade-in duration-150`}>
+                      {/* Visual Segmented Payment Progress Bar */}
+                      {sellTotal > 0 && (
+                        <div className="h-1.5 w-full bg-muted/80 rounded-full overflow-hidden flex shadow-inner">
+                          {splitCashNum > 0 && (
+                            <div
+                              style={{ width: `${Math.min(100, (splitCashNum / sellTotal) * 100)}%` }}
+                              className="bg-emerald-500 transition-all duration-200"
+                              title={lang === "bn" ? `নগদ: ৳${splitCashNum}` : `Cash: ৳${splitCashNum}`}
+                            />
+                          )}
+                          {splitBkashNum > 0 && (
+                            <div
+                              style={{ width: `${Math.min(100, (splitBkashNum / sellTotal) * 100)}%` }}
+                              className="bg-[#E2136E] transition-all duration-200"
+                              title={lang === "bn" ? `বিকাশ: ৳${splitBkashNum}` : `bKash: ৳${splitBkashNum}`}
+                            />
+                          )}
+                          {splitBankNum > 0 && (
+                            <div
+                              style={{ width: `${Math.min(100, (splitBankNum / sellTotal) * 100)}%` }}
+                              className="bg-sky-500 transition-all duration-200"
+                              title={lang === "bn" ? `ব্যাংক: ৳${splitBankNum}` : `Bank: ৳${splitBankNum}`}
+                            />
+                          )}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 gap-2.5">
                         {/* Line 1: Cash */}
-                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-emerald-500/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-emerald-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                          <div className="flex items-center justify-between sm:justify-start gap-2 min-w-[140px] sm:min-w-[170px] shrink-0">
-                            <Label className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 cursor-pointer">
+                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-emerald-500/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-emerald-500 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <div className="size-6 sm:size-7 rounded-md bg-emerald-500/15 grid place-items-center text-emerald-600 shrink-0">
                                 <Banknote className="size-3.5 sm:size-4" />
                               </div>
-                              <span>{lang === "bn" ? "১. নগদ (Cash)" : "1. Cash"}</span>
-                            </Label>
-                            {splitCashNum > 0 && sellTotal > 0 && (
-                              <span className="sm:hidden text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">
-                                {Math.round((splitCashNum / sellTotal) * 100)}%
-                              </span>
-                            )}
+                              <Label className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400 cursor-pointer truncate">
+                                {lang === "bn" ? "নগদ (Cash)" : "Cash"}
+                              </Label>
+                            </div>
                           </div>
 
-                          <div className="relative flex-1 w-full">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm sm:text-lg font-bold text-muted-foreground select-none pointer-events-none">৳</span>
+                          <div className="relative w-full">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground select-none pointer-events-none">৳</span>
                             <Input
                               type="number"
                               step="any"
                               inputMode="decimal"
-                              placeholder=""
+                              placeholder="0"
                               value={splitCash}
                               onChange={e => setSplitCash(e.target.value)}
-                              className="h-11 sm:h-13 pl-8 sm:pl-10 text-base sm:text-xl font-black font-serif bg-card rounded-lg w-full"
+                              className="h-9 sm:h-10 pl-7 pr-7 text-sm sm:text-base font-bold bg-card rounded-lg w-full"
                             />
-                          </div>
-
-                          <div className="flex items-center gap-1.5 justify-end shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const rest = Math.max(0, sellTotal - splitBkashNum - splitBankNum);
-                                setSplitCash(String(rest));
-                              }}
-                              className="text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold cursor-pointer transition-colors"
-                            >
-                              {lang === "bn" ? "বাকি ক্যাশ" : "Fill Rest"}
-                            </button>
-                            {/* Mobile-only quick preset chips */}
-                            <button
-                              type="button"
-                              onClick={() => setSplitCash(String(splitCashNum + 100))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +১০০
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSplitCash(String(splitCashNum + 500))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +৫০০
-                            </button>
+                            {splitCash && (
+                              <button
+                                type="button"
+                                onClick={() => setSplitCash("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground size-5 flex items-center justify-center text-xs rounded-full hover:bg-muted cursor-pointer"
+                                title="Clear"
+                              >
+                                ×
+                              </button>
+                            )}
                           </div>
                         </div>
 
                         {/* Line 2: bKash */}
-                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-[#E2136E]/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-[#E2136E] flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                          <div className="flex items-center justify-between sm:justify-start gap-2 min-w-[140px] sm:min-w-[170px] shrink-0">
-                            <Label className="text-xs sm:text-sm font-bold text-[#E2136E] dark:text-pink-300 flex items-center gap-1.5 cursor-pointer">
+                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-[#E2136E]/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-[#E2136E] space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <div className="size-6 sm:size-7 rounded-md bg-[#E2136E]/15 grid place-items-center text-[#E2136E] shrink-0">
                                 <BkashLogo className="size-3.5 sm:size-4" />
                               </div>
-                              <span>{lang === "bn" ? "২. বিকাশ (bKash)" : "2. bKash"}</span>
-                            </Label>
-                            {splitBkashNum > 0 && sellTotal > 0 && (
-                              <span className="sm:hidden text-[10px] font-mono font-bold bg-[#E2136E]/15 text-[#E2136E] dark:text-pink-300 px-1.5 py-0.5 rounded">
-                                {Math.round((splitBkashNum / sellTotal) * 100)}%
-                              </span>
-                            )}
+                              <Label className="text-xs sm:text-sm font-bold text-[#E2136E] dark:text-pink-300 cursor-pointer truncate">
+                                {lang === "bn" ? "বিকাশ (bKash)" : "bKash"}
+                              </Label>
+                            </div>
                           </div>
 
-                          <div className="relative flex-1 w-full">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm sm:text-lg font-bold text-muted-foreground select-none pointer-events-none">৳</span>
+                          <div className="relative w-full">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground select-none pointer-events-none">৳</span>
                             <Input
                               type="number"
                               step="any"
                               inputMode="decimal"
-                              placeholder=""
+                              placeholder="0"
                               value={splitBkash}
                               onChange={e => setSplitBkash(e.target.value)}
-                              className="h-11 sm:h-13 pl-8 sm:pl-10 text-base sm:text-xl font-black font-serif bg-card rounded-lg w-full"
+                              className="h-9 sm:h-10 pl-7 pr-7 text-sm sm:text-base font-bold bg-card rounded-lg w-full"
                             />
-                          </div>
-
-                          <div className="flex items-center gap-1.5 justify-end shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const rest = Math.max(0, sellTotal - splitCashNum - splitBankNum);
-                                setSplitBkash(String(rest));
-                              }}
-                              className="text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-lg bg-[#E2136E]/10 hover:bg-[#E2136E]/20 text-[#E2136E] font-bold cursor-pointer transition-colors"
-                            >
-                              {lang === "bn" ? "বাকি বিকাশ" : "Fill Rest"}
-                            </button>
-                            {/* Mobile-only quick preset chips */}
-                            <button
-                              type="button"
-                              onClick={() => setSplitBkash(String(splitBkashNum + 100))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +১০০
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSplitBkash(String(splitBkashNum + 500))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +৫০০
-                            </button>
+                            {splitBkash && (
+                              <button
+                                type="button"
+                                onClick={() => setSplitBkash("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground size-5 flex items-center justify-center text-xs rounded-full hover:bg-muted cursor-pointer"
+                                title="Clear"
+                              >
+                                ×
+                              </button>
+                            )}
                           </div>
                         </div>
 
                         {/* Line 3: Bank */}
-                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-sky-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                          <div className="flex items-center justify-between sm:justify-start gap-2 min-w-[140px] sm:min-w-[170px] shrink-0">
-                            <Label className="text-xs sm:text-sm font-bold text-sky-700 dark:text-sky-300 flex items-center gap-1.5 cursor-pointer">
+                        <div className="bg-background rounded-xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xs transition-all focus-within:ring-1 focus-within:ring-sky-500 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <div className="size-6 sm:size-7 rounded-md bg-sky-500/15 grid place-items-center text-sky-600 shrink-0">
                                 <DollarSign className="size-3.5 sm:size-4" />
                               </div>
-                              <span>{lang === "bn" ? "৩. ব্যাংক (Bank)" : "3. Bank"}</span>
-                            </Label>
-                            {splitBankNum > 0 && sellTotal > 0 && (
-                              <span className="sm:hidden text-[10px] font-mono font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded">
-                                {Math.round((splitBankNum / sellTotal) * 100)}%
-                              </span>
-                            )}
+                              <Label className="text-xs sm:text-sm font-bold text-sky-700 dark:text-sky-300 cursor-pointer truncate">
+                                {lang === "bn" ? "ব্যাংক (Bank)" : "Bank"}
+                              </Label>
+                            </div>
                           </div>
 
-                          <div className="relative flex-1 w-full">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm sm:text-lg font-bold text-muted-foreground select-none pointer-events-none">৳</span>
+                          <div className="relative w-full">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground select-none pointer-events-none">৳</span>
                             <Input
                               type="number"
                               step="any"
                               inputMode="decimal"
-                              placeholder=""
+                              placeholder="0"
                               value={splitBank}
                               onChange={e => setSplitBank(e.target.value)}
-                              className="h-11 sm:h-13 pl-8 sm:pl-10 text-base sm:text-xl font-black font-serif bg-card rounded-lg w-full"
+                              className="h-9 sm:h-10 pl-7 pr-7 text-sm sm:text-base font-bold bg-card rounded-lg w-full"
                             />
-                          </div>
-
-                          <div className="flex items-center gap-1.5 justify-end shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const rest = Math.max(0, sellTotal - splitCashNum - splitBkashNum);
-                                setSplitBank(String(rest));
-                              }}
-                              className="text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-bold cursor-pointer transition-colors"
-                            >
-                              {lang === "bn" ? "বাকি ব্যাংক" : "Fill Rest"}
-                            </button>
-                            {/* Mobile-only quick preset chips */}
-                            <button
-                              type="button"
-                              onClick={() => setSplitBank(String(splitBankNum + 100))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +১০০
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSplitBank(String(splitBankNum + 500))}
-                              className="sm:hidden text-[10px] px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono font-bold cursor-pointer"
-                            >
-                              +৫০০
-                            </button>
+                            {splitBank && (
+                              <button
+                                type="button"
+                                onClick={() => setSplitBank("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground size-5 flex items-center justify-center text-xs rounded-full hover:bg-muted cursor-pointer"
+                                title="Clear"
+                              >
+                                ×
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Reset button only */}
-                      {(splitCashNum > 0 || splitBkashNum > 0 || splitBankNum > 0) && (
-                        <div className="flex justify-end pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSplitCash("");
-                              setSplitBkash("");
-                              setSplitBank("");
-                            }}
-                            className="text-xs px-2.5 py-1 rounded-md text-muted-foreground hover:text-rose-600 font-semibold cursor-pointer flex items-center gap-1 transition-colors"
-                          >
-                            <RotateCcw className="size-3" />
-                            <span>{lang === "bn" ? "রিসেট করুন" : "Reset"}</span>
-                          </button>
-                        </div>
-                      )}
-
                       {/* Summary & Live Financial Verification Strip */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold pt-2 border-t border-purple-500/20 bg-background/50 p-2.5 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <span className="text-muted-foreground">{lang === "bn" ? "মোট পরিশোধ:" : "Total Paid:"} </span>
-                            <span className="font-serif text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">৳{totalSplitPaid}</span>
-                          </div>
-                          <span className="text-muted-foreground font-normal">/</span>
-                          <div>
-                            <span className="text-muted-foreground">{lang === "bn" ? "মোট বিল:" : "Total Bill:"} </span>
-                            <span className="font-serif font-extrabold text-sm">৳{sellTotal}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          {due > 0 ? (
-                            <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-extrabold">
-                              <span>{lang === "bn" ? "⚠️ বাকী থাকবে (Due):" : "⚠️ Remaining Due:"} ৳{due}</span>
-                              {!partyId && (
-                                <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                  {lang === "bn" ? "কাস্টমার আবশ্যক" : "Customer required"}
-                                </span>
-                              )}
+                      <div className="space-y-2 pt-1 border-t border-purple-500/20">
+                        <div className="flex items-center justify-between gap-2 text-xs font-bold bg-background/60 p-2.5 rounded-xl border border-purple-500/20">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div>
+                              <span className="text-muted-foreground">{lang === "bn" ? "পরিশোধ:" : "Paid:"} </span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">৳{totalSplitPaid}</span>
                             </div>
-                          ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
-                              <CheckCircle2 className="size-3.5" />
-                              <span>{lang === "bn" ? "সম্পূর্ণ পরিশোধিত (Paid in Full)" : "Paid in Full"}</span>
-                            </span>
-                          )}
+                            <span className="text-muted-foreground font-normal">/</span>
+                            <div>
+                              <span className="text-muted-foreground">{lang === "bn" ? "বিল:" : "Bill:"} </span>
+                              <span className="font-extrabold text-sm">৳{sellTotal}</span>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {due > 0 ? (
+                              <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-extrabold text-[11px] sm:text-xs">
+                                <span>{lang === "bn" ? "⚠️ বাকী:" : "⚠️ Due:"} ৳{due}</span>
+                                {!partyId && (
+                                  <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                    {lang === "bn" ? "কাস্টমার আবশ্যক" : "Cust req"}
+                                  </span>
+                                )}
+                              </div>
+                            ) : totalSplitPaid > sellTotal ? (
+                              <span className="text-amber-600 dark:text-amber-400 font-extrabold text-[11px] sm:text-xs flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                                <span>{lang === "bn" ? "🔄 ফেরত (Change):" : "🔄 Change:"} ৳{totalSplitPaid - sellTotal}</span>
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] sm:text-xs flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                                <CheckCircle2 className="size-3.5" />
+                                <span>{lang === "bn" ? "সম্পূর্ণ পরিশোধিত" : "Paid in Full"}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1276,7 +1261,7 @@ export function SaleDialog({
                     <span>{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}</span>
                     <span className="font-bold uppercase text-foreground">
                       {type === "split"
-                        ? (lang === "bn" ? "মিক্সড / আংশিক" : "Split / Mixed")
+                        ? (lang === "bn" ? "স্প্লিট" : "Split")
                         : type === "bkash"
                         ? (lang === "bn" ? "বিকাশ" : "bKash")
                         : type === "credit"
@@ -1288,6 +1273,19 @@ export function SaleDialog({
                         : (lang === "bn" ? "নগদ" : "Cash")}
                     </span>
                   </div>
+                  {type === "split" && (
+                    <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/50 text-[11px]">
+                      <span>{lang === "bn" ? "পরিশোধিত / বাকী:" : "Paid / Due:"}</span>
+                      <span className="font-mono font-bold">
+                        <span className="text-emerald-600 dark:text-emerald-400">৳{totalSplitPaid}</span>
+                        {" / "}
+                        <span className={due > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}>৳{due}</span>
+                        {totalSplitPaid > sellTotal && (
+                          <span className="text-amber-600 dark:text-amber-400 font-sans ml-1 text-[10px]">(ফেরত ৳{totalSplitPaid - sellTotal})</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <div className="border-t border-border/80 pt-1.5 flex justify-between items-baseline font-bold text-sm">
                     <span>{t("total")}</span>
                     <span className="text-base font-serif text-foreground">৳{sellTotal}</span>

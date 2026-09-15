@@ -971,6 +971,9 @@ export default function Dashboard() {
   const getSaleCash = (s: any) => {
     const tot = getSaleTotal(s);
     const p = Number(s.paid_amount);
+    if (s.type === "split") {
+      return Number(s.split_cash) || 0;
+    }
     if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
       return (!isNaN(p) && p >= 0 ? p : tot);
     }
@@ -998,20 +1001,73 @@ export default function Dashboard() {
     return a + getSaleCash(s);
   }, 0);
 
-  const bkashToday   = filteredSales.filter(s => s.type === "bkash").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const bankToday    = filteredSales.filter(s => (s.type as string) === "bank").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const bkashBankCollected = filteredSales.filter(s => (s.type === "bkash" || (s.type as string) === "bank") && ((s as any).payment_status === "accepted" || (s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const bkashPending = filteredSales.filter(s => s.type === "bkash" && ((s as any).payment_status === "pending" || !(s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const bankPending = filteredSales.filter(s => (s.type as string) === "bank" && ((s as any).payment_status === "pending" || !(s as any).payment_accepted)).reduce((a, s) => a + ((Number(s.paid_amount) || Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const bkashBankPending = bkashPending + bankPending;
-  const creditToday  = filteredSales.filter(s => s.type === "credit").reduce((a, s) => {
-    const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
-    const due = Number(s.due_amount);
-    return a + (!isNaN(due) ? due : lineTotal);
+  const bkashToday = filteredSales.reduce((a, s) => {
+    if (s.type === "bkash") return a + getSaleTotal(s);
+    if (s.type === "split") return a + (Number(s.split_bkash) || 0);
+    return a;
   }, 0);
-  const onlineToday  = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const onlinePendingToday = filteredSales.filter(s => s.type === "online" && (s as any).courier_status !== "collected" && (s as any).courier_status !== "cancelled").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
-  const onlineCollectedToday = filteredSales.filter(s => s.type === "online" && (s as any).courier_status === "collected").reduce((a, s) => a + ((Number(s.sell_price) || 0) * (Number(s.qty) || 1)), 0);
+
+  const bankToday = filteredSales.reduce((a, s) => {
+    if ((s.type as string) === "bank") return a + getSaleTotal(s);
+    if (s.type === "split") return a + (Number(s.split_bank) || 0);
+    return a;
+  }, 0);
+
+  const bkashBankCollected = filteredSales.reduce((a, s) => {
+    const isAccepted = (s as any).payment_status === "accepted" || (s as any).payment_accepted;
+    if (!isAccepted) return a;
+    if (s.type === "bkash" || (s.type as string) === "bank") {
+      const p = Number(s.paid_amount);
+      return a + (!isNaN(p) && p > 0 ? p : getSaleTotal(s));
+    }
+    if (s.type === "split") {
+      return a + (Number(s.split_bkash) || 0) + (Number(s.split_bank) || 0);
+    }
+    return a;
+  }, 0);
+
+  const bkashPending = filteredSales.reduce((a, s) => {
+    const isPending = (s as any).payment_status === "pending" || !(s as any).payment_accepted;
+    if (!isPending) return a;
+    if (s.type === "bkash") {
+      const p = Number(s.paid_amount);
+      return a + (!isNaN(p) && p > 0 ? p : getSaleTotal(s));
+    }
+    if (s.type === "split") {
+      return a + (Number(s.split_bkash) || 0);
+    }
+    return a;
+  }, 0);
+
+  const bankPending = filteredSales.reduce((a, s) => {
+    const isPending = (s as any).payment_status === "pending" || !(s as any).payment_accepted;
+    if (!isPending) return a;
+    if ((s.type as string) === "bank") {
+      const p = Number(s.paid_amount);
+      return a + (!isNaN(p) && p > 0 ? p : getSaleTotal(s));
+    }
+    if (s.type === "split") {
+      return a + (Number(s.split_bank) || 0);
+    }
+    return a;
+  }, 0);
+
+  const bkashBankPending = bkashPending + bankPending;
+
+  const creditToday = filteredSales.reduce((a, s) => {
+    if (s.type === "credit") {
+      const due = Number(s.due_amount);
+      return a + (!isNaN(due) ? due : getSaleTotal(s));
+    }
+    if (s.type === "split") {
+      return a + (Number(s.due_amount) || 0);
+    }
+    return a;
+  }, 0);
+
+  const onlineToday = filteredSales.filter(s => s.type === "online").reduce((a, s) => a + getSaleTotal(s), 0);
+  const onlinePendingToday = filteredSales.filter(s => s.type === "online" && (s as any).courier_status !== "collected" && (s as any).courier_status !== "cancelled").reduce((a, s) => a + getSaleTotal(s), 0);
+  const onlineCollectedToday = filteredSales.filter(s => s.type === "online" && (s as any).courier_status === "collected").reduce((a, s) => a + getSaleTotal(s), 0);
   const cashboxDepositedToday = cashToday + bkashBankCollected + onlineCollectedToday;
   const purchasesToday = filteredPurchases.reduce((a, p) => a + (Number(p.total) || 0), 0);
   const validFilteredSales = filteredSales.filter(s => !s.returned && (s as any).courier_status !== "cancelled");
@@ -1126,8 +1182,8 @@ export default function Dashboard() {
   }, [somiti.data, dateFilter]);
 
   // Stock Valuation
-  const totalStockCostValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + (p.buy_price * p.stock), 0);
-  const totalStockSaleValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + (p.sell_price * p.stock), 0);
+  const totalStockCostValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + ((Number(p.buy_price) || 0) * Math.max(0, Number(p.stock) || 0)), 0);
+  const totalStockSaleValuation = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + ((Number(p.sell_price) || 0) * Math.max(0, Number(p.stock) || 0)), 0);
 
   // Critical Stock List
   const lowStockProducts = (products.data ?? []).filter(p => !p.archived && p.stock <= (p.min_stock ?? 5));
@@ -1163,7 +1219,7 @@ export default function Dashboard() {
           if (!isNaN(h) && h >= 8 && h <= 23) {
             const idx = h - 8;
             if (hours[idx]) {
-              const lineTotal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
+              const lineTotal = getSaleTotal(s);
               hours[idx].sales += lineTotal;
               hours[idx].hourly += lineTotal;
               hours[idx].count += 1;
@@ -1185,11 +1241,15 @@ export default function Dashboard() {
 
   for (const s of salesForPie) {
     if (s.returned) continue;
-    const totalVal = (Number(s.sell_price) || 0) * (Number(s.qty) || 1);
+    const totalVal = getSaleTotal(s);
     const paid = Number(s.paid_amount) || 0;
     const due = Number(s.due_amount) || 0;
 
-    if (s.type === "bkash") {
+    if (s.type === "split") {
+      pieCashTotal += Math.max(0, Number(s.split_cash) || 0);
+      pieBkashTotal += Math.max(0, (Number(s.split_bkash) || 0) + (Number(s.split_bank) || 0));
+      pieCreditTotal += Math.max(0, due);
+    } else if (s.type === "bkash" || (s.type as string) === "bank") {
       pieBkashTotal += totalVal;
     } else if (s.type === "online") {
       pieOnlineTotal += totalVal;

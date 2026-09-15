@@ -39,7 +39,7 @@ export const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionSet = {
 
 /** Resolve effective permissions for the current user. */
 export function resolvePermissions(role: string, permissions?: PermissionSet): PermissionSet {
-  if (role === "owner") return OWNER_PERMISSIONS;
+  if (role === "owner" || role === "admin" || role === "superadmin") return OWNER_PERMISSIONS;
   return permissions ?? DEFAULT_EMPLOYEE_PERMISSIONS;
 }
 
@@ -58,6 +58,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; perm: keyof PermissionSet }[] 
   { prefix: "/cash-management", perm: "cashbox" },
   { prefix: "/somiti", perm: "expenses" },
   { prefix: "/settings", perm: "settings" },
+  { prefix: "/employees", perm: "settings" },
   { prefix: "/purchases", perm: "purchases" },
 ];
 

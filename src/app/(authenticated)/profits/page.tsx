@@ -200,17 +200,31 @@ export default function ProfitPage() {
       map[key].profit -= w.amount; // Direct deduction of owner expense from net profit
     }
     
+    // Adjust for product returns
+    for (const r of filteredReturns) {
+      const adj = Number((r as any).profit_adjustment) || 0;
+      if (adj === 0) continue;
+      const date = new Date(r.created_at || (r as any).date || (r as any).return_date);
+      const key = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      if (!map[key]) map[key] = { date: key, dateObj: date, profit: 0, sales: 0, expenses: 0, ownerExpenses: 0 };
+      map[key].profit += adj;
+    }
+    
     return Object.values(map).sort((a, b) => +a.dateObj - +b.dateObj);
-  }, [filteredSales, overheadExpenses, ownerExpensesDeductedList]);
+  }, [filteredSales, overheadExpenses, ownerExpensesDeductedList, filteredReturns]);
 
   // Aggregated totals
   const totalSalesRevenue = useMemo(() => {
     return filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.sell_price) * s.qty), 0);
   }, [filteredSales]);
 
+  const returnProfitAdj = useMemo(() => {
+    return filteredReturns.reduce((sum, r) => sum + (Number((r as any).profit_adjustment) || 0), 0);
+  }, [filteredReturns]);
+
   const totalSalesProfit = useMemo(() => {
-    return filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.profit)), 0);
-  }, [filteredSales]);
+    return filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.profit)), 0) + returnProfitAdj;
+  }, [filteredSales, returnProfitAdj]);
 
   const totalCostOfGoods = useMemo(() => {
     return Math.max(totalSalesRevenue - totalSalesProfit, 0);
@@ -291,8 +305,25 @@ export default function ProfitPage() {
       });
     });
 
+    // Add product returns
+    filteredReturns.forEach(r => {
+      const adj = Number((r as any).profit_adjustment) || 0;
+      if (adj === 0) return;
+      list.push({
+        id: r.id,
+        date: r.created_at || (r as any).date || (r as any).return_date,
+        name: `${t("return")}: ${r.product_name || "Product Return"}${r.note ? ` (${r.note})` : ""}`,
+        qty: Number(r.qty) || 1,
+        revenue: 0,
+        cost: 0,
+        profit: adj,
+        margin: 0,
+        type: "return"
+      });
+    });
+
     return list.sort((a, b) => +new Date(b.date) - +new Date(a.date));
-  }, [filteredSales, overheadExpenses, ownerExpensesDeductedList, t, lang]);
+  }, [filteredSales, overheadExpenses, ownerExpensesDeductedList, filteredReturns, t, lang]);
 
   // Search filter
   const searchedTransactions = useMemo(() => {

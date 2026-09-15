@@ -487,6 +487,12 @@ export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewT
       currentY += 3.5;
     }
 
+    if ((data.changeAmount || 0) > 0) {
+      pdf.text("Change:", margin, currentY);
+      pdf.text(`Tk ${(data.changeAmount || 0).toLocaleString()}`, pageWidth - margin, currentY, { align: "right" });
+      currentY += 3.5;
+    }
+
     // Payment method
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(isThermal58 ? 6 : 7);
@@ -626,6 +632,14 @@ export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewT
       pdf.setTextColor(225, 29, 72);
       pdf.text("Due Amount:", labelCol, currentY);
       pdf.text(`Tk ${data.due.toLocaleString()}`, rightCol, currentY, { align: "right" });
+      currentY += 5;
+    }
+
+    if ((data.changeAmount || 0) > 0) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(217, 119, 6);
+      pdf.text("Change Return:", labelCol, currentY);
+      pdf.text(`Tk ${(data.changeAmount || 0).toLocaleString()}`, rightCol, currentY, { align: "right" });
       currentY += 5;
     }
 

@@ -35,7 +35,7 @@ export function useCachedQuery<T>(
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
-    refetchInterval: 3000, // 3-second live heartbeat for real-time KPI & financial syncing
+    refetchInterval: 15000, // 15-second heartbeat for real-time syncing without overwhelming network
     refetchIntervalInBackground: false,
     ...options,
   });

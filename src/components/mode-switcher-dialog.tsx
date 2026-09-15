@@ -80,29 +80,39 @@ export function ModeSwitcherDialog({ open, onOpenChange }: ModeSwitcherDialogPro
 
   const handleVerifyEmployeePin = (pinToTest: string) => {
     let targetEmployee = employees.find(e => e.id === selectedEmpId);
-    // If no employee selected specifically, check all employees for matching PIN
     if (!targetEmployee) {
-      targetEmployee = employees.find(e => String(e.pin).trim() === pinToTest.trim());
+      targetEmployee = employees.find(e => String(e.pin || e.password || "").trim() === pinToTest.trim());
     }
 
-    if (targetEmployee && String(targetEmployee.pin).trim() === pinToTest.trim()) {
+    const isMatch = Boolean(targetEmployee && String(targetEmployee.pin || targetEmployee.password || "").trim() === pinToTest.trim());
+
+    if (isMatch && targetEmployee) {
       playSaleSuccessSound();
       sessionStorage.setItem("app_pin_unlocked", "true");
-      localStorage.setItem("cw_active_employee_session", JSON.stringify(targetEmployee));
+      const empData = targetEmployee;
+      localStorage.setItem("cw_active_employee_session", JSON.stringify(empData));
       localStorage.setItem("cw_active_session_role", "employee");
+      localStorage.setItem("user", JSON.stringify({ ...empData, role: "employee" }));
+      localStorage.setItem("classicworld_auth_profile", JSON.stringify({ ...empData, role: "employee" }));
+      localStorage.setItem("auth_token", `token_emp_${empData.id}`);
       window.dispatchEvent(new Event("hz-employee-switched"));
+      window.dispatchEvent(new Event("storage"));
       onOpenChange(false);
       toast.success(
         lang === "bn"
-          ? `কর্মচারী (${targetEmployee.name}) মোডে প্রবেশ সফল হয়েছে!`
-          : `Switched to Employee (${targetEmployee.name}) Mode!`
+          ? `কর্মচারী (${empData.name}) মোডে প্রবেশ সফল হয়েছে!`
+          : `Switched to Employee (${empData.name}) Mode!`
       );
     } else {
       playErrorSound();
       setErrorShake(true);
       setTimeout(() => setErrorShake(false), 500);
       setPinInput("");
-      toast.error(lang === "bn" ? "ভুল কর্মচারী পিন কোড!" : "Incorrect Employee PIN code!");
+      toast.error(
+        employees.length === 0
+          ? (lang === "bn" ? "দোকানে কোনো কর্মচারী অ্যাকাউন্ট যোগ করা নেই!" : "No employee accounts found! Please add staff first.")
+          : (lang === "bn" ? "ভুল কর্মচারী পিন কোড!" : "Incorrect Employee PIN code!")
+      );
     }
   };
 
