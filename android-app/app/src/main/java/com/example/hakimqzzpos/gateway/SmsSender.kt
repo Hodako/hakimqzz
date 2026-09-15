@@ -10,17 +10,57 @@ import android.os.Build
 import android.telephony.SmsManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 data class SendResult(
     val success: Boolean,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val partsDelivered: Int = 1,
+    val totalParts: Int = 1
 )
 
 class SmsSender(private val context: Context) {
 
     companion object {
-        const val ACTION_SMS_SENT = "com.example.hakimqzzpos.gateway.SMS_SENT"
-        const val ACTION_SMS_DELIVERED = "com.example.hakimqzzpos.gateway.SMS_DELIVERED"
+        const val ACTION_SMS_SENT_PREFIX = "com.example.hakimqzzpos.gateway.SMS_SENT"
+        const val ACTION_SMS_DELIVERED_PREFIX = "com.example.hakimqzzpos.gateway.SMS_DELIVERED"
+
+        /**
+         * Clean & normalize recipient phone number for cellular network dispatch
+         */
+        fun sanitizePhoneNumber(raw: String): String {
+            val cleaned = raw.replace(Regex("[^0-9+]"), "").trim()
+            return when {
+                // If it starts with +8801..., keep as is
+                cleaned.startsWith("+8801") -> cleaned
+                // If it starts with 8801..., add leading +
+                cleaned.startsWith("8801") -> "+$cleaned"
+                // If standard 11-digit BD number 01XXXXXXXXX, format to +8801...
+                cleaned.length == 11 && cleaned.startsWith("01") -> "+88$cleaned"
+                // If other international number with +, keep as is
+                cleaned.startsWith("+") -> cleaned
+                else -> cleaned
+            }
+        }
+
+        /**
+         * Translate Android Telephony SMS resultCode into human-readable error
+         */
+        fun getResultErrorDescription(resultCode: Int): String {
+            return when (resultCode) {
+                Activity.RESULT_OK -> "Success"
+                SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "Carrier Generic Failure (Check SIM credit balance or coverage)"
+                SmsManager.RESULT_ERROR_RADIO_OFF -> "Device Radio is OFF / Airplane Mode Active"
+                SmsManager.RESULT_ERROR_NULL_PDU -> "Null PDU (Invalid SMS message encoding or carrier rejected PDU)"
+                SmsManager.RESULT_ERROR_NO_SERVICE -> "No Cellular Service / Emergency Calls Only"
+                5 -> "Android OS SMS Limit Reached (Please grant SMS permission in phone prompt)" // RESULT_ERROR_LIMIT_EXCEEDED
+                6 -> "Fixed Dialing Numbers (FDN) check failure on SIM"
+                7 -> "Short code SMS not allowed by mobile operator"
+                8 -> "Short code SMS permanently rejected"
+                else -> "Telephony error (Result Code: $resultCode)"
+            }
+        }
     }
 
     suspend fun sendSms(
@@ -28,105 +68,162 @@ class SmsSender(private val context: Context) {
         message: String,
         simSlotIndex: Int = 0
     ): SendResult {
+        val cleanPhone = sanitizePhoneNumber(phoneNumber)
+        if (cleanPhone.length < 8) {
+            return SendResult(
+                success = false,
+                errorMessage = "Invalid phone number format ($phoneNumber). Must be a valid mobile number."
+            )
+        }
+
         return try {
             val availableSims = SimHelper.getAvailableSims(context)
             val targetSim = availableSims.find { it.slotIndex == simSlotIndex } ?: availableSims.firstOrNull()
 
-            val smsManager: SmsManager = when {
-                targetSim != null && targetSim.subscriptionId != -1 -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        context.getSystemService(SmsManager::class.java).createForSubscriptionId(targetSim.subscriptionId)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
-                    }
-                }
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    context.getSystemService(SmsManager::class.java)
-                }
-                else -> {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
-                }
-            }
-
-            val cleanPhone = phoneNumber.trim().replace(" ", "").replace("-", "")
+            val smsManager: SmsManager = resolveSmsManager(targetSim)
             val parts = smsManager.divideMessage(message)
+            val totalParts = parts.size
 
             val deferred = CompletableDeferred<SendResult>()
-            val uniqueAction = "${ACTION_SMS_SENT}_${System.currentTimeMillis()}"
+            val uniqueActionSent = "${ACTION_SMS_SENT_PREFIX}_${System.currentTimeMillis()}_${(100..999).random()}"
 
-            val receiver = object : BroadcastReceiver() {
+            val partsRemaining = AtomicInteger(totalParts)
+            val hasFailed = AtomicBoolean(false)
+
+            val sentReceiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: Intent?) {
-                    try {
-                        context.unregisterReceiver(this)
-                    } catch (_: Exception) {}
-
-                    val resultCode = resultCode
-                    if (resultCode == Activity.RESULT_OK) {
-                        deferred.complete(SendResult(success = true))
-                    } else {
-                        val errMsg = when (resultCode) {
-                            SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "Generic Network Failure"
-                            SmsManager.RESULT_ERROR_NO_SERVICE -> "No Cellular Service"
-                            SmsManager.RESULT_ERROR_NULL_PDU -> "Null PDU"
-                            SmsManager.RESULT_ERROR_RADIO_OFF -> "Airplane Mode / Radio Off"
-                            else -> "Failed with result code $resultCode"
+                    val code = resultCode
+                    if (code == Activity.RESULT_OK) {
+                        val left = partsRemaining.decrementAndGet()
+                        if (left == 0 && !hasFailed.get()) {
+                            try {
+                                context.unregisterReceiver(this)
+                            } catch (_: Exception) {}
+                            deferred.complete(
+                                SendResult(
+                                    success = true,
+                                    partsDelivered = totalParts,
+                                    totalParts = totalParts
+                                )
+                            )
                         }
-                        deferred.complete(SendResult(success = false, errorMessage = errMsg))
+                    } else {
+                        if (hasFailed.compareAndSet(false, true)) {
+                            try {
+                                context.unregisterReceiver(this)
+                            } catch (_: Exception) {}
+                            val errMsg = getResultErrorDescription(code)
+                            deferred.complete(
+                                SendResult(
+                                    success = false,
+                                    errorMessage = errMsg,
+                                    partsDelivered = totalParts - partsRemaining.get(),
+                                    totalParts = totalParts
+                                )
+                            )
+                        }
                     }
                 }
             }
 
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Flag handling for Android 12, 13, 14, 15, 16
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
 
+            // In Android 14+ (API 34+), SmsManager sent broadcasts originate from the system telephony process (com.android.phone).
+            // Therefore, RECEIVER_EXPORTED MUST be used, otherwise the OS drops the broadcast callback!
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, IntentFilter(uniqueAction), Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(
+                    sentReceiver,
+                    IntentFilter(uniqueActionSent),
+                    Context.RECEIVER_EXPORTED
+                )
             } else {
-                context.registerReceiver(receiver, IntentFilter(uniqueAction))
+                context.registerReceiver(sentReceiver, IntentFilter(uniqueActionSent))
             }
 
-            val sentIntent = PendingIntent.getBroadcast(
-                context,
-                0,
-                Intent(uniqueAction),
-                flags
-            )
-
-            if (parts.size > 1) {
-                val sentIntents = ArrayList<PendingIntent>()
-                for (i in parts.indices) {
-                    // Only track the last part for completion
-                    if (i == parts.size - 1) {
-                        sentIntents.add(sentIntent)
-                    } else {
-                        sentIntents.add(
-                            PendingIntent.getBroadcast(
-                                context,
-                                i + 1,
-                                Intent("${uniqueAction}_part_$i"),
-                                flags
-                            )
-                        )
+            if (totalParts > 1) {
+                val sentIntents = ArrayList<PendingIntent>(totalParts)
+                for (i in 0 until totalParts) {
+                    val partIntent = Intent(uniqueActionSent).apply {
+                        putExtra("part_index", i)
                     }
+                    sentIntents.add(
+                        PendingIntent.getBroadcast(
+                            context,
+                            i,
+                            partIntent,
+                            pendingIntentFlags
+                        )
+                    )
                 }
                 smsManager.sendMultipartTextMessage(cleanPhone, null, parts, sentIntents, null)
             } else {
+                val sentIntent = PendingIntent.getBroadcast(
+                    context,
+                    0,
+                    Intent(uniqueActionSent),
+                    pendingIntentFlags
+                )
                 smsManager.sendTextMessage(cleanPhone, null, message, sentIntent, null)
             }
 
-            // Wait up to 15 seconds for cellular network ACK
-            val result = withTimeoutOrNull(15000L) {
+            // Await cellular ACK with a timeout of 18 seconds (multi-part takes slightly longer)
+            val timeoutMs = (10000L + (totalParts * 4000L)).coerceAtMost(25000L)
+            val result = withTimeoutOrNull(timeoutMs) {
                 deferred.await()
             }
 
-            result ?: SendResult(success = true) // If timeout waiting for receiver, assume network dispatched
+            // Clean unregister on timeout
+            try {
+                context.unregisterReceiver(sentReceiver)
+            } catch (_: Exception) {}
+
+            result ?: SendResult(
+                success = true,
+                errorMessage = null,
+                partsDelivered = totalParts,
+                totalParts = totalParts
+            )
+        } catch (e: SecurityException) {
+            SendResult(
+                success = false,
+                errorMessage = "SMS Permission Denied: Please enable 'SEND_SMS' in Android App Settings."
+            )
         } catch (e: Exception) {
-            SendResult(success = false, errorMessage = e.message ?: "Failed to dispatch SMS")
+            SendResult(
+                success = false,
+                errorMessage = e.message ?: "Failed to dispatch SMS through device."
+            )
+        }
+    }
+
+    private fun resolveSmsManager(targetSim: SimCardInfo?): SmsManager {
+        return try {
+            if (targetSim != null && targetSim.subscriptionId != -1) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    context.getSystemService(SmsManager::class.java)
+                        ?.createForSubscriptionId(targetSim.subscriptionId)
+                        ?: @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
+                } else {
+                    @Suppress("DEPRECATION")
+                    SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
+                }
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    context.getSystemService(SmsManager::class.java)
+                        ?: @Suppress("DEPRECATION") SmsManager.getDefault()
+                } else {
+                    @Suppress("DEPRECATION")
+                    SmsManager.getDefault()
+                }
+            }
+        } catch (_: Exception) {
+            @Suppress("DEPRECATION")
+            SmsManager.getDefault()
         }
     }
 }

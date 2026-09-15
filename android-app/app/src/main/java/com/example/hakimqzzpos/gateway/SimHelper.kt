@@ -21,12 +21,18 @@ object SimHelper {
 
     @SuppressLint("MissingPermission")
     fun getAvailableSims(context: Context): List<SimCardInfo> {
-        val hasPermission = ContextCompat.checkSelfPermission(
+        val hasStatePerm = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_PHONE_STATE
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (!hasPermission) {
+        val hasBasicPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    "android.permission.READ_BASIC_PHONE_STATE"
+                ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasStatePerm && !hasBasicPerm) {
             return listOf(
                 SimCardInfo(
                     slotIndex = 0,
@@ -42,16 +48,19 @@ object SimHelper {
             val activeList: List<SubscriptionInfo>? = subscriptionManager?.activeSubscriptionInfoList
 
             if (!activeList.isNullOrEmpty()) {
-                activeList.map { info ->
-                    val carrierName = info.carrierName?.toString() ?: ""
-                    val dispName = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}"
-                    SimCardInfo(
-                        slotIndex = info.simSlotIndex,
-                        subscriptionId = info.subscriptionId,
-                        carrier = if (carrierName.isNotEmpty()) carrierName else dispName,
-                        displayName = dispName
-                    )
-                }
+                activeList
+                    .filter { it.simSlotIndex >= 0 }
+                    .sortedBy { it.simSlotIndex }
+                    .map { info ->
+                        val carrierName = info.carrierName?.toString()?.trim() ?: ""
+                        val dispName = info.displayName?.toString()?.trim() ?: "SIM ${info.simSlotIndex + 1}"
+                        SimCardInfo(
+                            slotIndex = info.simSlotIndex,
+                            subscriptionId = info.subscriptionId,
+                            carrier = if (carrierName.isNotEmpty()) carrierName else dispName,
+                            displayName = dispName
+                        )
+                    }
             } else {
                 listOf(
                     SimCardInfo(
@@ -62,7 +71,7 @@ object SimHelper {
                     )
                 )
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             listOf(
                 SimCardInfo(
                     slotIndex = 0,

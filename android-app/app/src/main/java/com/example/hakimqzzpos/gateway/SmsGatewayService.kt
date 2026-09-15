@@ -49,22 +49,28 @@ class SmsGatewayService : Service() {
         fun addLog(entry: GatewayLogEntry) {
             val current = _logs.value.toMutableList()
             current.add(0, entry)
-            if (current.size > 50) current.removeAt(current.size - 1)
+            if (current.size > 100) current.removeAt(current.size - 1)
             _logs.value = current
         }
 
         fun start(context: Context) {
-            val intent = Intent(context, SmsGatewayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                val intent = Intent(context, SmsGatewayService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                // Android 14+ background launch restriction guard
             }
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, SmsGatewayService::class.java)
-            context.stopService(intent)
+            try {
+                val intent = Intent(context, SmsGatewayService::class.java)
+                context.stopService(intent)
+            } catch (_: Exception) {}
         }
     }
 
@@ -98,18 +104,31 @@ class SmsGatewayService : Service() {
         smsSender = SmsSender(this)
         createNotificationChannel()
 
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HakimQzz::GatewayWakeLock")
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HakimQzz::GatewayWakeLock")
+        } catch (_: Exception) {}
 
-        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        // Android 14+ requires export flag when registering receivers
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            }
+        } catch (_: Exception) {}
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("🟢 Active & Ready to send SMS")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        val notification = createNotification("🟢 Active: Ready to send SMS (${prefs.shopName})")
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            // Guard for Android 14 ForegroundServiceStartNotAllowedException
         }
 
         _isRunning.value = true
@@ -121,7 +140,7 @@ class SmsGatewayService : Service() {
     }
 
     private fun startGatewayLoops() {
-        // Loop 1: Heartbeat (every 15s)
+        // Loop 1: Heartbeat telemetry (every 15s)
         serviceScope.launch {
             while (isActive) {
                 if (prefs.isPaired) {
@@ -142,7 +161,7 @@ class SmsGatewayService : Service() {
             }
         }
 
-        // Loop 2: Pending SMS Queue Polling (every 3s)
+        // Loop 2: Pending SMS Queue Polling & Dispatch (every 3s)
         serviceScope.launch {
             while (isActive) {
                 if (prefs.isPaired) {
@@ -154,16 +173,31 @@ class SmsGatewayService : Service() {
                         )
 
                         if (jobs.isNotEmpty()) {
-                            wakeLock?.acquire(30000L)
+                            try {
+                                if (wakeLock?.isHeld != true) {
+                                    wakeLock?.acquire(45000L)
+                                }
+                            } catch (_: Exception) {}
+
                             for (job in jobs) {
                                 val targetSlot = if (job.simSlot in 0..1) job.simSlot else prefs.selectedSimSlot
-                                updateNotification("Sending SMS to ${job.phoneNumber}...")
+                                updateNotification("Dispatching SMS to ${job.phoneNumber}...")
 
-                                val sendResult = smsSender.sendSms(
+                                var sendResult = smsSender.sendSms(
                                     phoneNumber = job.phoneNumber,
                                     message = job.message,
                                     simSlotIndex = targetSlot
                                 )
+
+                                // If failed on slot 1, retry once on default SIM or re-attempt after brief delay
+                                if (!sendResult.success && sendResult.errorMessage?.contains("FDN") == false) {
+                                    delay(2000L)
+                                    sendResult = smsSender.sendSms(
+                                        phoneNumber = job.phoneNumber,
+                                        message = job.message,
+                                        simSlotIndex = targetSlot
+                                    )
+                                }
 
                                 val statusStr = if (sendResult.success) "delivered" else "failed"
 
@@ -188,11 +222,13 @@ class SmsGatewayService : Service() {
                                     )
                                 )
 
-                                // 1.5s pause between multi-message queue
-                                delay(1500L)
+                                // Anti-burst pause to keep telecom carriers happy
+                                delay(1800L)
                             }
-                            updateNotification("🟢 Ready (Sent: ${prefs.totalSentCount})")
-                            if (wakeLock?.isHeld == true) wakeLock?.release()
+                            updateNotification("🟢 Ready (Total Sent: ${prefs.totalSentCount})")
+                            try {
+                                if (wakeLock?.isHeld == true) wakeLock?.release()
+                            } catch (_: Exception) {}
                         }
                     } catch (_: Exception) {}
                 }
@@ -208,7 +244,7 @@ class SmsGatewayService : Service() {
                 "SMS Gateway Background Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps SMS Gateway listening for new dispatch jobs"
+                description = "Maintains connection with DreamFashion POS for SMS dispatch"
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
@@ -238,9 +274,11 @@ class SmsGatewayService : Service() {
     }
 
     private fun updateNotification(statusText: String) {
-        val notification = createNotification(statusText)
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
+        try {
+            val notification = createNotification(statusText)
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
@@ -251,7 +289,9 @@ class SmsGatewayService : Service() {
         try {
             unregisterReceiver(batteryReceiver)
         } catch (_: Exception) {}
-        if (wakeLock?.isHeld == true) wakeLock?.release()
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Exception) {}
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
