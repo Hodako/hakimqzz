@@ -138,15 +138,15 @@ class SmsSender(private val context: Context) {
                 }
             }
 
-            // Flag handling for Android 12, 13, 14, 15, 16
-            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            // 2. Set FLAG_IMMUTABLE for Android 12+ (API 31+) & Android 14+ (API 34)
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
 
             // In Android 14+ (API 34+), SmsManager sent broadcasts originate from the system telephony process (com.android.phone).
-            // Therefore, RECEIVER_EXPORTED MUST be used, otherwise the OS drops the broadcast callback!
+            // Explicitly registering with RECEIVER_EXPORTED ensures delivery to the app's receiver.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(
                     sentReceiver,
@@ -157,10 +157,12 @@ class SmsSender(private val context: Context) {
                 context.registerReceiver(sentReceiver, IntentFilter(uniqueActionSent))
             }
 
+            // 3. Make all callback Intents explicit by locking them to context.packageName
             if (totalParts > 1) {
                 val sentIntents = ArrayList<PendingIntent>(totalParts)
                 for (i in 0 until totalParts) {
                     val partIntent = Intent(uniqueActionSent).apply {
+                        setPackage(context.packageName)
                         putExtra("part_index", i)
                     }
                     sentIntents.add(
@@ -174,13 +176,16 @@ class SmsSender(private val context: Context) {
                 }
                 smsManager.sendMultipartTextMessage(cleanPhone, null, parts, sentIntents, null)
             } else {
-                val sentIntent = PendingIntent.getBroadcast(
+                val sentIntent = Intent(uniqueActionSent).apply {
+                    setPackage(context.packageName)
+                }
+                val sentPendingIntent = PendingIntent.getBroadcast(
                     context,
                     0,
-                    Intent(uniqueActionSent),
+                    sentIntent,
                     pendingIntentFlags
                 )
-                smsManager.sendTextMessage(cleanPhone, null, message, sentIntent, null)
+                smsManager.sendTextMessage(cleanPhone, null, message, sentPendingIntent, null)
             }
 
             // Await cellular ACK with a timeout of 18 seconds (multi-part takes slightly longer)
@@ -211,6 +216,62 @@ class SmsSender(private val context: Context) {
         }
     }
 
+    /**
+     * Standard synchronous dispatch helper for direct single/multipart SMS delivery
+     */
+    fun sendSms(phoneNumber: String, message: String) {
+        val cleanPhone = sanitizePhoneNumber(phoneNumber)
+        if (cleanPhone.length < 8 || message.isBlank()) {
+            android.util.Log.e("SmsSender", "Invalid phone ($phoneNumber) or blank message")
+            return
+        }
+
+        try {
+            // 1. Resolve SmsManager safely across Android versions
+            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(SmsManager::class.java) ?: @Suppress("DEPRECATION") SmsManager.getDefault()
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+
+            // 2. Make the Intent explicit by locking it to your package
+            val sentAction = "${context.packageName}.SMS_SENT"
+            val sentIntent = Intent(sentAction).apply {
+                setPackage(context.packageName)
+            }
+
+            // 3. Set FLAG_IMMUTABLE for Android 12+ (API 31+) & Android 14+ (API 34)
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+
+            val sentPendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                sentIntent,
+                flags
+            )
+
+            // 4. Handle long messages with multipart if needed
+            val parts = smsManager.divideMessage(message)
+            if (parts.size > 1) {
+                val sentIntents = ArrayList<PendingIntent>().apply {
+                    repeat(parts.size) { add(sentPendingIntent) }
+                }
+                smsManager.sendMultipartTextMessage(cleanPhone, null, parts, sentIntents, null)
+            } else {
+                smsManager.sendTextMessage(cleanPhone, null, message, sentPendingIntent, null)
+            }
+
+            android.util.Log.d("SmsSender", "SMS dispatched successfully to $cleanPhone")
+        } catch (e: Exception) {
+            android.util.Log.e("SmsSender", "Failed to send SMS: ${e.message}", e)
+        }
+    }
+
     private fun resolveSmsManager(targetSim: SimCardInfo?): SmsManager {
         return try {
             if (targetSim != null && targetSim.subscriptionId != -1) {
@@ -223,7 +284,7 @@ class SmsSender(private val context: Context) {
                     SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
                 }
             } else {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     context.getSystemService(SmsManager::class.java)
                         ?: @Suppress("DEPRECATION") SmsManager.getDefault()
                 } else {
