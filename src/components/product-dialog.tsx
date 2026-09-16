@@ -71,7 +71,10 @@ export function ProductDialog({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast.error("অনুগ্রহ করে পুনরায় লগইন করুন (Please log in first)");
+      return;
+    }
     setBusy(true);
     try {
       let image_url = product?.image_url ?? null;

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getMeFn, logoutFn, updateUserAvatarFn, API_BASE } from "@/lib/rpc";
+import { getMeFn, logoutFn, updateUserAvatarFn } from "@/lib/rpc";
 import type { PermissionSet } from "@/lib/permissions";
 import { clearAuthProfile, readAuthProfile, writeAuthProfile, writeBrand } from "@/lib/local-cache";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ type AuthCtx = {
   loading: boolean;
   isUploading: boolean;
   uploadProgress: number;
-  login: (user: AuthUser, token?: string) => void;
+  login: (user: AuthUser) => void;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   updateUser: (patch: Partial<AuthUser>) => void;
@@ -96,123 +96,52 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
   };
 }
 
+function getInitialUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  const cached = readAuthProfile();
+  const tokenExists = !!window.localStorage.getItem("auth_token");
+  if (cached && tokenExists) {
+    return profileToUser(cached);
+  }
+  return null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(getInitialUser);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const tokenExists = !!window.localStorage.getItem("auth_token");
+    const cached = readAuthProfile();
+    if (tokenExists && cached) return false;
+    if (!tokenExists) return false;
+    return true;
+  });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { lang } = useT();
 
   async function checkUser() {
     try {
-      const isEmp = typeof window !== "undefined" && (
-        !!window.localStorage.getItem("cw_active_employee_session") ||
-        window.localStorage.getItem("cw_active_session_role") === "employee"
-      );
       const data = await getMeFn();
-      const next = data?.user as AuthUser | null;
+      const next = data.user as AuthUser | null;
       if (next) {
         setUser(next);
         cacheUser(next);
         writeBrand({ name: next.business_name, logo_url: next.logo_url });
-      } else if (!isEmp) {
-        const cached = readAuthProfile();
-        if (cached) {
-          setUser(profileToUser(cached));
-        } else {
-          setUser(null);
-          clearAuthProfile();
-          if (typeof window !== "undefined") {
-            window.localStorage.removeItem("auth_token");
-          }
-        }
+      } else if (!window.localStorage.getItem("auth_token")) {
+        setUser(null);
+        clearAuthProfile();
       }
     } catch (err: any) {
       console.warn("Background auth check info:", err?.message || err);
-      const isEmp = typeof window !== "undefined" && (
-        !!window.localStorage.getItem("cw_active_employee_session") ||
-        window.localStorage.getItem("cw_active_session_role") === "employee"
-      );
-      if (!isEmp && (err?.message?.includes("401") || err?.message?.includes("Unauthorized"))) {
-        setUser(null);
-        clearAuthProfile();
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem("auth_token");
-        }
-      }
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    // Restore locally cached session immediately on client mount
-    try {
-      const tokenExists = typeof window !== "undefined" && !!window.localStorage.getItem("auth_token");
-      const cached = readAuthProfile();
-      if (tokenExists && cached) {
-        setUser(profileToUser(cached));
-        setLoading(false);
-      } else if (!tokenExists) {
-        setLoading(false);
-      }
-    } catch {
-      setLoading(false);
-    }
+  useEffect(() => { void checkUser(); }, []);
 
-    void checkUser();
-
-    // Listen to Firebase Auth state to seamlessly restore auth_token
-    let unsubscribe: (() => void) | null = null;
-    (async () => {
-      try {
-        const { auth } = await import("@/lib/firebase");
-        const { onAuthStateChanged } = await import("firebase/auth");
-        unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-          const isEmp = typeof window !== "undefined" && (
-            !!window.localStorage.getItem("cw_active_employee_session") ||
-            window.localStorage.getItem("cw_active_session_role") === "employee"
-          );
-          if (fbUser && fbUser.email && !window.localStorage.getItem("auth_token") && !isEmp) {
-            try {
-              const { firebaseAuthSyncFn } = await import("@/lib/rpc");
-              const res = await firebaseAuthSyncFn({
-                data: {
-                  email: fbUser.email,
-                  fullName: fbUser.displayName || undefined,
-                  photoUrl: fbUser.photoURL || undefined,
-                  firebaseUid: fbUser.uid,
-                },
-              });
-              if (res?.token) {
-                window.localStorage.setItem("auth_token", res.token);
-                if (res.user) {
-                  setUser(res.user as AuthUser);
-                  cacheUser(res.user as AuthUser);
-                  writeBrand({ name: res.user.business_name, logo_url: res.user.logo_url });
-                }
-              }
-            } catch (syncErr) {
-              console.warn("Firebase auto-sync on auth state changed failed:", syncErr);
-            }
-          }
-        });
-      } catch (_) {}
-    })();
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, []);
-
-  const login = (newUser: AuthUser, token?: string) => {
-    if (token && typeof window !== "undefined") {
-      window.localStorage.setItem("auth_token", token);
-    }
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("app_pin_unlocked", "true");
-    }
+  const login = (newUser: AuthUser) => {
     setUser(newUser);
     cacheUser(newUser);
     writeBrand({ name: newUser.business_name, logo_url: newUser.logo_url });
@@ -229,22 +158,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try { await logoutFn(); } catch { /* ignore */ }
     try {
-      const { auth } = await import("@/lib/firebase");
       const { signOut } = await import("firebase/auth");
+      const { auth } = await import("@/lib/firebase");
       await signOut(auth);
-    } catch (_) {}
+    } catch { /* ignore */ }
+    try { await logoutFn(); } catch { /* ignore */ }
     setUser(null);
     clearAuthProfile();
     setLoading(false);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("auth_token");
-      window.localStorage.removeItem("cw_active_employee_session");
-      window.localStorage.removeItem("cw_active_session_role");
-      window.sessionStorage.removeItem("app_pin_unlocked");
-      window.location.href = "/auth";
-    }
   };
 
   const uploadProfilePic = async (file: File) => {
@@ -286,11 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           reject(new Error("Network error during upload"));
         });
 
-        xhr.open("POST", `${API_BASE}/api/upload`);
-        const token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
-        if (token) {
-          xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        }
+        xhr.open("POST", "/api/upload");
         xhr.send(formData);
       });
 

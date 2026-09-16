@@ -61,27 +61,12 @@ function EmployeeLoginForm() {
 
     setBusy(true);
     try {
-      let res: any = null;
-      // 1. Direct Firestore employee authentication (handles default PIN & shop employees)
-      try {
-        const { fsEmployeeLogin } = await import("@/lib/firestore-service");
-        res = await fsEmployeeLogin({
-          username: cleanId || cleanPwd,
-          password: cleanPwd || cleanId,
-        });
-      } catch (fsErr: any) {
-        // 2. Fallback to remote RPC
-        try {
-          res = await employeeLoginFn({
-            data: {
-              username: cleanId,
-              password: cleanPwd,
-            },
-          });
-        } catch (rpcErr) {
-          throw fsErr || rpcErr;
-        }
-      }
+      const res = await employeeLoginFn({
+        data: {
+          username: cleanId,
+          password: cleanPwd,
+        },
+      });
 
       toast.success(lang === "bn" ? "কর্মচারী হিসেবে সফলভাবে লগইন হয়েছে!" : "Logged in as shop employee!");
       afterAuth(res.user as AuthUser);

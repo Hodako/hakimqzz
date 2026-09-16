@@ -1123,16 +1123,9 @@ function SalesTab({
       await acceptDigitalPaymentFn({ data: { id } });
       toast.success(lang === "bn" ? "ডিজিটাল পেমেন্ট গ্রহণ করা হয়েছে এবং ক্যাশবক্সে যোগ হয়েছে!" : "Digital payment accepted and deposited into Cashbox!");
     } catch (err: any) {
-      console.warn("acceptDigitalPaymentFn failed, attempting direct Firestore fallback:", err);
-      try {
-        const { fsAcceptDigitalPayment } = await import("@/lib/firestore-service");
-        await fsAcceptDigitalPayment(id);
-        toast.success(lang === "bn" ? "ডিজিটাল পেমেন্ট গ্রহণ করা হয়েছে এবং ক্যাশবক্সে যোগ হয়েছে!" : "Digital payment accepted and deposited into Cashbox!");
-      } catch (fsErr: any) {
-        toast.error(err.message || fsErr.message || String(err));
-        qc.invalidateQueries({ queryKey: ["sales"] });
-        return;
-      }
+      toast.error(err.message || String(err));
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      return;
     } finally {
       setActionBusyId(null);
       qc.invalidateQueries({ queryKey: ["sales"] });
