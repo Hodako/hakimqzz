@@ -9,6 +9,7 @@
     "build:cap": "cross-env EXPORT_STATIC=true next build",
     "start": "node server.js",
     "start:next": "next start -p 3141",
+    "server:apk": "node apk-server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "cap:sync": "cap sync",
