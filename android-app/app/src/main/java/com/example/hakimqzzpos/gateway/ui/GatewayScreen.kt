@@ -62,12 +62,30 @@ fun GatewayScreen() {
     LaunchedEffect(Unit) {
         val perms = mutableListOf(
             Manifest.permission.SEND_SMS,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_PHONE_STATE
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            perms.add("android.permission.READ_BASIC_PHONE_STATE")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            perms.add(Manifest.permission.READ_PHONE_NUMBERS)
         }
         permissionsLauncher.launch(perms.toTypedArray())
+
+        try {
+            val pm = context.getSystemService(PowerManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !pm.isIgnoringBatteryOptimizations(context.packageName)
+            ) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                context.startActivity(intent)
+            }
+        } catch (_: Exception) {}
 
         if (prefs.isPaired && prefs.isServiceEnabled) {
             SmsGatewayService.start(context)
@@ -120,6 +138,46 @@ fun GatewayScreen() {
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            // Android 14 Restricted Settings Unlock Helper Card
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "🔓 Android 14 / Motorola SMS Permission Disabled?",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "If 'Allow' is greyed out in phone settings:\n1. Tap 'Unlock SMS Permission' below to open App Info\n2. Tap 3 dots (⋮) in top right corner\n3. Tap 'Allow restricted settings'\n4. Return to Permissions > SMS > Tap Allow",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("⚙️ Unlock SMS Permission (App Info)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             if (!isPaired) {
                 // ─── NOT PAIRED STATE ───────────────────────────────────────
                 Card(

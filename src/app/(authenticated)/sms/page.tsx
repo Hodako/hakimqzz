@@ -2301,6 +2301,28 @@ export default function SmsPage() {
                   </div>
                 </div>
 
+                {/* Installation Troubleshooting Banner */}
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span>⚠️</span>
+                    <span>{lang === "bn" ? "অ্যাপ ইনস্টল করতে সমস্যা বা 'App not installed' দেখালে:" : "If you see 'App not installed' or cannot install:"}</span>
+                  </p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-[11.5px] leading-relaxed">
+                    <li>
+                      <strong>{lang === "bn" ? "পুরনো সংস্করণ আনইনস্টল করুন:" : "Uninstall previous version:"}</strong>{" "}
+                      {lang === "bn"
+                        ? "ফোনে আগে থেকে কোনো পুরনো HakimQzz POS বা Gateway অ্যাপ থাকলে সেটি আগে আনইনস্টল (Uninstall) করুন।"
+                        : "If you previously installed an older version, please uninstall it first so Android accepts the new release signature."}
+                    </li>
+                    <li>
+                      <strong>{lang === "bn" ? "অজানা সোর্স অনুমোদন (Unknown Sources):" : "Allow Unknown Sources:"}</strong>{" "}
+                      {lang === "bn"
+                        ? "ব্রাউজার বা ফাইল ম্যানেজার থেকে 'Install unknown apps' পারমিশন Allow করে দিন।"
+                        : "Allow 'Install unknown apps' permission when prompted by Chrome/Downloads."}
+                    </li>
+                  </ul>
+                </div>
+
                 {/* Connected device fast actions */}
                 {gatewayStatus?.device && (
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border/60">

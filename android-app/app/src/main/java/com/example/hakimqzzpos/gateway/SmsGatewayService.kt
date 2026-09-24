@@ -128,9 +128,9 @@ class SmsGatewayService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            // Guard for Android 14+ ForegroundServiceStartNotAllowedException
-            stopSelf()
-            return START_NOT_STICKY
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+            } catch (_: Exception) {}
         }
 
         _isRunning.value = true

@@ -5,27 +5,47 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.telephony.SmsManager
+import android.telephony.SubscriptionManager
 import android.util.Log
 
 class SmsSender(private val context: Context) {
 
     fun sendSms(phoneNumber: String, message: String) {
         try {
-            // 1. Resolve SmsManager safely across Android versions
-            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                context.getSystemService(SmsManager::class.java) ?: @Suppress("DEPRECATION") SmsManager.getDefault()
-            } else {
+            var subId = -1
+            try {
+                subId = SubscriptionManager.getDefaultSmsSubscriptionId()
+            } catch (_: Exception) {}
+
+            val smsManager: SmsManager = try {
+                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && subId > 0) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.getSystemService(SmsManager::class.java)
+                            ?.createForSubscriptionId(subId)
+                            ?: @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(subId)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        SmsManager.getSmsManagerForSubscriptionId(subId)
+                    }
+                } else {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.getSystemService(SmsManager::class.java)
+                            ?: @Suppress("DEPRECATION") SmsManager.getDefault()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        SmsManager.getDefault()
+                    }
+                }
+            } catch (_: Exception) {
                 @Suppress("DEPRECATION")
                 SmsManager.getDefault()
             }
 
-            // 2. Make the Intent explicit by locking it to your package
             val sentAction = "${context.packageName}.SMS_SENT"
             val sentIntent = Intent(sentAction).apply {
                 setPackage(context.packageName)
             }
 
-            // 3. Set FLAG_IMMUTABLE for Android 12+ (API 31+) & Android 14 (API 34)
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
@@ -39,7 +59,6 @@ class SmsSender(private val context: Context) {
                 flags
             )
 
-            // 4. Handle long messages with multipart if needed
             val parts = smsManager.divideMessage(message)
             if (parts.size > 1) {
                 val sentIntents = ArrayList<PendingIntent>().apply {

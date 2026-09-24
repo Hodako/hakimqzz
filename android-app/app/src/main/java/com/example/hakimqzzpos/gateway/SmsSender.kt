@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.telephony.SmsManager
+import android.telephony.SubscriptionManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
@@ -32,15 +33,22 @@ class SmsSender(private val context: Context) {
         fun sanitizePhoneNumber(raw: String): String {
             val cleaned = raw.replace(Regex("[^0-9+]"), "").trim()
             return when {
-                // If it starts with +8801..., keep as is
                 cleaned.startsWith("+8801") -> cleaned
-                // If it starts with 8801..., add leading +
                 cleaned.startsWith("8801") -> "+$cleaned"
-                // If standard 11-digit BD number 01XXXXXXXXX, format to +8801...
                 cleaned.length == 11 && cleaned.startsWith("01") -> "+88$cleaned"
-                // If other international number with +, keep as is
                 cleaned.startsWith("+") -> cleaned
                 else -> cleaned
+            }
+        }
+
+        /**
+         * Converts +8801XXXXXXXXX to 01XXXXXXXXX for Bangladeshi local SIM dispatch fallback
+         */
+        fun toLocalNationalFormat(phone: String): String {
+            return if (phone.startsWith("+8801") && phone.length == 14) {
+                phone.substring(3) // "01XXXXXXXXX"
+            } else {
+                phone
             }
         }
 
@@ -54,7 +62,7 @@ class SmsSender(private val context: Context) {
                 SmsManager.RESULT_ERROR_RADIO_OFF -> "Device Radio is OFF / Airplane Mode Active"
                 SmsManager.RESULT_ERROR_NULL_PDU -> "Null PDU (Invalid SMS message encoding or carrier rejected PDU)"
                 SmsManager.RESULT_ERROR_NO_SERVICE -> "No Cellular Service / Emergency Calls Only"
-                5 -> "Android OS SMS Limit Reached (Please grant SMS permission in phone prompt)" // RESULT_ERROR_LIMIT_EXCEEDED
+                5 -> "Android OS SMS Limit Reached (Please grant SMS permission in phone prompt)"
                 6 -> "Fixed Dialing Numbers (FDN) check failure on SIM"
                 7 -> "Short code SMS not allowed by mobile operator"
                 8 -> "Short code SMS permanently rejected"
@@ -75,14 +83,37 @@ class SmsSender(private val context: Context) {
             )
         }
 
-        val cleanPhone = sanitizePhoneNumber(phoneNumber)
-        if (cleanPhone.length < 8) {
+        val primaryPhone = sanitizePhoneNumber(phoneNumber)
+        if (primaryPhone.length < 8) {
             return SendResult(
                 success = false,
                 errorMessage = "Invalid phone number format ($phoneNumber). Must be a valid mobile number."
             )
         }
 
+        // Try sending with primary formatted number (+8801...)
+        val firstAttempt = attemptDispatch(primaryPhone, message, simSlotIndex)
+        if (firstAttempt.success) {
+            return firstAttempt
+        }
+
+        // If generic failure occurred on Bangladeshi number, fallback to national format (01...)
+        val nationalPhone = toLocalNationalFormat(primaryPhone)
+        if (nationalPhone != primaryPhone && firstAttempt.errorMessage?.contains("Generic Failure") == true) {
+            val fallbackAttempt = attemptDispatch(nationalPhone, message, simSlotIndex)
+            if (fallbackAttempt.success) {
+                return fallbackAttempt
+            }
+        }
+
+        return firstAttempt
+    }
+
+    private suspend fun attemptDispatch(
+        targetPhone: String,
+        message: String,
+        simSlotIndex: Int
+    ): SendResult {
         return try {
             val availableSims = SimHelper.getAvailableSims(context)
             val targetSim = availableSims.find { it.slotIndex == simSlotIndex } ?: availableSims.firstOrNull()
@@ -138,15 +169,14 @@ class SmsSender(private val context: Context) {
                 }
             }
 
-            // 2. Set FLAG_IMMUTABLE for Android 12+ (API 31+) & Android 14+ (API 34)
+            // In Android 12+ (API 31+) & Android 14+ (API 34+), FLAG_IMMUTABLE with explicit intent is safest and standard for SmsManager
             val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
 
-            // In Android 14+ (API 34+), SmsManager sent broadcasts originate from the system telephony process (com.android.phone).
-            // Explicitly registering with RECEIVER_EXPORTED ensures delivery to the app's receiver.
+            // Register receiver with RECEIVER_EXPORTED on Android 13+ (API 33+) so system telephony process com.android.phone can trigger it
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(
                     sentReceiver,
@@ -157,7 +187,7 @@ class SmsSender(private val context: Context) {
                 context.registerReceiver(sentReceiver, IntentFilter(uniqueActionSent))
             }
 
-            // 3. Make all callback Intents explicit by locking them to context.packageName
+            // Make callback Intents explicit by locking to context.packageName for Android 14+ compatibility
             if (totalParts > 1) {
                 val sentIntents = ArrayList<PendingIntent>(totalParts)
                 for (i in 0 until totalParts) {
@@ -174,7 +204,7 @@ class SmsSender(private val context: Context) {
                         )
                     )
                 }
-                smsManager.sendMultipartTextMessage(cleanPhone, null, parts, sentIntents, null)
+                smsManager.sendMultipartTextMessage(targetPhone, null, parts, sentIntents, null)
             } else {
                 val sentIntent = Intent(uniqueActionSent).apply {
                     setPackage(context.packageName)
@@ -185,16 +215,14 @@ class SmsSender(private val context: Context) {
                     sentIntent,
                     pendingIntentFlags
                 )
-                smsManager.sendTextMessage(cleanPhone, null, message, sentPendingIntent, null)
+                smsManager.sendTextMessage(targetPhone, null, message, sentPendingIntent, null)
             }
 
-            // Await cellular ACK with a timeout of 18 seconds (multi-part takes slightly longer)
             val timeoutMs = (10000L + (totalParts * 4000L)).coerceAtMost(25000L)
             val result = withTimeoutOrNull(timeoutMs) {
                 deferred.await()
             }
 
-            // Clean unregister on timeout
             safeUnregister(sentReceiver)
 
             result ?: SendResult(
@@ -209,10 +237,22 @@ class SmsSender(private val context: Context) {
                 errorMessage = "SMS Permission Denied: Please enable 'SEND_SMS' in Android App Settings."
             )
         } catch (e: Exception) {
-            SendResult(
-                success = false,
-                errorMessage = e.message ?: "Failed to dispatch SMS through device."
-            )
+            // Direct dispatch fallback if PendingIntent tracking throws exception on vendor-restricted devices
+            try {
+                val fallbackManager = resolveSmsManager(null)
+                val parts = fallbackManager.divideMessage(message)
+                if (parts.size > 1) {
+                    fallbackManager.sendMultipartTextMessage(targetPhone, null, parts, null, null)
+                } else {
+                    fallbackManager.sendTextMessage(targetPhone, null, message, null, null)
+                }
+                SendResult(success = true, partsDelivered = 1, totalParts = 1)
+            } catch (fallbackEx: Exception) {
+                SendResult(
+                    success = false,
+                    errorMessage = e.message ?: fallbackEx.message ?: "Failed to dispatch SMS through device."
+                )
+            }
         }
     }
 
@@ -227,27 +267,17 @@ class SmsSender(private val context: Context) {
         }
 
         try {
-            // 1. Resolve SmsManager safely across Android versions
-            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                context.getSystemService(SmsManager::class.java) ?: @Suppress("DEPRECATION") SmsManager.getDefault()
-            } else {
-                @Suppress("DEPRECATION")
-                SmsManager.getDefault()
-            }
-
-            // 2. Make the Intent explicit by locking it to your package
-            val sentAction = "${context.packageName}.SMS_SENT"
-            val sentIntent = Intent(sentAction).apply {
-                setPackage(context.packageName)
-            }
-
-            // 3. Set FLAG_IMMUTABLE for Android 12+ (API 31+) & Android 14+ (API 34)
+            val smsManager: SmsManager = resolveSmsManager(null)
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
 
+            val sentAction = "${context.packageName}.SMS_SENT"
+            val sentIntent = Intent(sentAction).apply {
+                setPackage(context.packageName)
+            }
             val sentPendingIntent = PendingIntent.getBroadcast(
                 context,
                 0,
@@ -255,7 +285,6 @@ class SmsSender(private val context: Context) {
                 flags
             )
 
-            // 4. Handle long messages with multipart if needed
             val parts = smsManager.divideMessage(message)
             if (parts.size > 1) {
                 val sentIntents = ArrayList<PendingIntent>().apply {
@@ -273,15 +302,22 @@ class SmsSender(private val context: Context) {
     }
 
     private fun resolveSmsManager(targetSim: SimCardInfo?): SmsManager {
+        var subId = targetSim?.subscriptionId ?: -1
+        if (subId == -1) {
+            try {
+                subId = SubscriptionManager.getDefaultSmsSubscriptionId()
+            } catch (_: Exception) {}
+        }
+
         return try {
-            if (targetSim != null && targetSim.subscriptionId != -1) {
+            if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && subId > 0) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     context.getSystemService(SmsManager::class.java)
-                        ?.createForSubscriptionId(targetSim.subscriptionId)
-                        ?: @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
+                        ?.createForSubscriptionId(subId)
+                        ?: @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(subId)
                 } else {
                     @Suppress("DEPRECATION")
-                    SmsManager.getSmsManagerForSubscriptionId(targetSim.subscriptionId)
+                    SmsManager.getSmsManagerForSubscriptionId(subId)
                 }
             } else {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
