@@ -80,12 +80,28 @@ const server = http.createServer((req, res) => {
       });
 
       const fileStream = fs.createReadStream(APK_PATH, { start, end });
+      fileStream.on("error", (err) => {
+        console.warn("[APK Server] Stream range error:", err.message);
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      });
+      res.on("close", () => {
+        fileStream.destroy();
+      });
       fileStream.pipe(res);
     } else {
       res.writeHead(200, {
         "Content-Length": fileSize,
       });
       const fileStream = fs.createReadStream(APK_PATH);
+      fileStream.on("error", (err) => {
+        console.warn("[APK Server] Stream error:", err.message);
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      });
+      res.on("close", () => {
+        fileStream.destroy();
+      });
       fileStream.pipe(res);
     }
     return;
@@ -168,6 +184,22 @@ const server = http.createServer((req, res) => {
 
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not Found");
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.warn(`[APK Server] Port ${PORT} is already in use.`);
+  } else {
+    console.warn(`[APK Server] Server error:`, err.message);
+  }
+});
+
+process.on("uncaughtException", (err) => {
+  console.warn("[APK Server] Uncaught exception:", err.message);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.warn("[APK Server] Unhandled rejection:", err);
 });
 
 server.listen(PORT, HOST, () => {
