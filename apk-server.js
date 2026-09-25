@@ -202,6 +202,24 @@ process.on("unhandledRejection", (err) => {
   console.warn("[APK Server] Unhandled rejection:", err);
 });
 
+process.stdin.resume();
+
+setInterval(() => {
+  // Keep event loop active
+}, 30000);
+
+process.on("exit", (code) => {
+  console.log(`[APK Server] Process exiting with code: ${code}`);
+});
+
+process.on("SIGINT", () => {
+  console.log("[APK Server] SIGINT received");
+});
+
+process.on("SIGTERM", () => {
+  console.log("[APK Server] SIGTERM received");
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`[APK Server] Running at http://${HOST}:${PORT}`);
   console.log(`[APK Server] Local Access: http://localhost:${PORT}`);
