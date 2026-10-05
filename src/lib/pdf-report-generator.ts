@@ -53,8 +53,9 @@ const EXPENSE_ENG_MAP: Record<string, string> = {
 };
 
 /**
- * 100% Authentic Bengali PDF Generator
- * Renders complete Bengali words, conjuncts, matras, and typography.
+ * 100% Authentic Bengali A4 PDF Generator
+ * Renders complete Bengali words, conjuncts, matras, and typography on dedicated A4 pages.
+ * Zero text-slicing across page breaks.
  */
 export async function generateBanglaReportPdf(data: ReportPdfData, openInNewTab = false): Promise<void> {
   const { default: html2canvas } = await import("html2canvas");
@@ -63,328 +64,387 @@ export async function generateBanglaReportPdf(data: ReportPdfData, openInNewTab 
   container.style.position = "fixed";
   container.style.top = "-9999px";
   container.style.left = "-9999px";
-  container.style.width = "794px"; // A4 at 96 DPI
-  container.style.backgroundColor = "#ffffff";
-  container.style.color = "#0f172a";
-  container.style.fontFamily = "'Hind Siliguri', 'Siyam Rupali', sans-serif";
-  container.style.padding = "36px 32px";
-  container.style.boxSizing = "border-box";
   container.style.zIndex = "-1000";
 
-  container.innerHTML = `
-    <div style="font-family: 'Hind Siliguri', 'Siyam Rupali', sans-serif; color: #0f172a; line-height: 1.45;">
-      <!-- Top Accent Bar & Header -->
-      <div style="border-top: 5px solid #0f172a; padding-top: 14px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-start;">
-        <div>
-          <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em;">${data.bizName || "ড্রিম ফ্যাশন"}</h1>
-          <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">
-            ${[data.bizAddress, data.bizPhone ? `ফোন: ${data.bizPhone}` : ""].filter(Boolean).join(" | ") || "স্মার্ট পিওএস ও অ্যাকাউন্টিং সিস্টেম"}
-          </p>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 14px; font-weight: 700; color: #0f172a;">ব্যবসায়িক প্রতিবেদন ও ক্যাটাগরি রিপোর্ট</div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 3px;">সময়কাল: ${data.from} হতে ${data.to}</div>
-          <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">প্রস্তুত তারিখ: ${new Date().toLocaleDateString("bn-BD")} (${new Date().toLocaleTimeString("bn-BD")})</div>
-        </div>
+  // Common A4 page dimension: 794px x 1123px at 96 DPI (210mm x 297mm)
+  const pageBaseStyle = `
+    width: 794px;
+    height: 1123px;
+    min-height: 1123px;
+    max-height: 1123px;
+    box-sizing: border-box;
+    padding: 32px 36px 26px 36px;
+    background-color: #ffffff;
+    color: #0f172a;
+    font-family: 'Hind Siliguri', 'Siyam Rupali', 'Poppins', sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+  `;
+
+  const makeHeader = (pageNum: number, totalPages: number) => `
+    <div style="border-top: 5px solid #0f172a; padding-top: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start;">
+      <div>
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em;">${data.bizName || "ড্রিম ফ্যাশন"}</h1>
+        <p style="margin: 2px 0 0 0; font-size: 10.5px; color: #64748b;">
+          ${[data.bizAddress, data.bizPhone ? `ফোন: ${data.bizPhone}` : ""].filter(Boolean).join(" | ") || "স্মার্ট পিওএস ও অ্যাকাউন্টিং সিস্টেম"}
+        </p>
       </div>
-
-      <!-- 1. Executive Financial Summary -->
-      <div style="margin-bottom: 22px;">
-        <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-          ১. সার্বিক অর্থনৈতিক সারসংক্ষেপ
-        </h2>
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-          <thead>
-            <tr style="background-color: #1e293b; color: #ffffff;">
-              <th style="padding: 6px 8px; border: 1px solid #1e293b;">আর্থিক বিবরণী খাত</th>
-              <th style="padding: 6px 8px; border: 1px solid #1e293b; text-align: center;">রেকর্ড সংখ্যা</th>
-              <th style="padding: 6px 8px; border: 1px solid #1e293b; text-align: right;">টাকার পরিমাণ</th>
-              <th style="padding: 6px 8px; border: 1px solid #1e293b;">মন্তব্য</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #e2e8f0;">মোট বিক্রয়মূল্য</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredSales.length} টি চালান (${data.totalSalesItemsCount} পিস)</td>
-              <td style="padding: 6px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.totalSalesVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; color: #64748b; border: 1px solid #e2e8f0;">নির্বাচিত সময়ের মোট বিক্রয় টার্নওভার</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-              <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #e2e8f0;">বিক্রয় হতে মোট লাভ</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0;">-</td>
-              <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #059669; border: 1px solid #e2e8f0;">৳${data.totalSalesProfitVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; color: #64748b; border: 1px solid #e2e8f0;">বিক্রয়মূল্য বিয়োগ ক্রয়মূল্য</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #e2e8f0;">দোকান পরিচালন খরচ</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredExpenses.length} টি ভাউচার</td>
-              <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">-৳${data.totalExpenseVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; color: #64748b; border: 1px solid #e2e8f0;">${data.categoryExpenses.length} টি ক্যাটাগরিতে ব্যয়</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-              <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #e2e8f0;">পণ্য ক্রয় ও স্টক মজুদ</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredPurchases.length} টি চালান (${data.totalPurchaseQty} পিস)</td>
-              <td style="padding: 6px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.totalPurchaseVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; color: #64748b; border: 1px solid #e2e8f0;">দোকানের নতুন মালামাল ক্রয় বাবদ ব্যয়</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #e2e8f0;">কাস্টমারদের কাছে বকেয়া বাকী</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.creditSalesCount} টি বাকী চালান</td>
-              <td style="padding: 6px 8px; text-align: right; font-weight: 700; color: #d97706; border: 1px solid #e2e8f0;">৳${data.totalSalesDueVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; color: #64748b; border: 1px solid #e2e8f0;">এই সময়ের অনাদায় পাওনা</td>
-            </tr>
-            <tr style="background-color: #f1f5f9; font-weight: 700;">
-              <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11.5px;">প্রকৃত আনুমানিক নিট লাভ</td>
-              <td style="padding: 7px 8px; text-align: center; border: 1px solid #cbd5e1;">-</td>
-              <td style="padding: 7px 8px; text-align: right; border: 1px solid #cbd5e1; font-size: 12px; color: ${data.netBusinessProfit >= 0 ? "#059669" : "#e11d48"};">৳${data.netBusinessProfit.toLocaleString()}</td>
-              <td style="padding: 7px 8px; border: 1px solid #cbd5e1; color: #475569;">মোট লাভ বিয়োগ দোকান খরচ</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 2. Expenses Category Breakdown -->
-      <div style="margin-bottom: 22px;">
-        <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-          ২. ক্যাটাগরি ভিত্তিক খরচের বিবরণী
-        </h2>
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-          <thead>
-            <tr style="background-color: #be123c; color: #ffffff;">
-              <th style="padding: 6px 8px; border: 1px solid #be123c; width: 40px; text-align: center;">#</th>
-              <th style="padding: 6px 8px; border: 1px solid #be123c;">খরচের ক্যাটাগরি</th>
-              <th style="padding: 6px 8px; border: 1px solid #be123c; text-align: center;">ভাউচার সংখ্যা</th>
-              <th style="padding: 6px 8px; border: 1px solid #be123c; text-align: right;">মোট ব্যয় (৳)</th>
-              <th style="padding: 6px 8px; border: 1px solid #be123c; text-align: right;">শতকরা হার (%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.categoryExpenses.length > 0 ? data.categoryExpenses.map((cat, idx) => {
-              const share = data.totalExpenseVal > 0 ? ((cat.total / data.totalExpenseVal) * 100).toFixed(1) + "%" : "0%";
-              return `
-                <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #fff1f2;" : ""}">
-                  <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${idx + 1}</td>
-                  <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">${cat.label}</td>
-                  <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${cat.count} টি</td>
-                  <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${cat.total.toLocaleString()}</td>
-                  <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">${share}</td>
-                </tr>
-              `;
-            }).join("") : `
-              <tr><td colspan="5" style="padding: 8px; text-align: center; color: #64748b; border: 1px solid #e2e8f0;">এই সময়ে কোনো খরচের রেকর্ড পাওয়া যায়নি</td></tr>
-            `}
-            <tr style="background-color: #ffe4e6; font-weight: 700;">
-              <td colspan="2" style="padding: 6px 8px; border: 1px solid #fecdd3;">সর্বমোট পরিচালন খরচ</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #fecdd3;">${data.filteredExpenses.length} টি</td>
-              <td style="padding: 6px 8px; text-align: right; border: 1px solid #fecdd3;">৳${data.totalExpenseVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; text-align: right; border: 1px solid #fecdd3;">100%</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 3. Sales by Payment Type -->
-      <div style="margin-bottom: 22px;">
-        <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-          ৩. পেমেন্ট মাধ্যম অনুযায়ী বিক্রয় বিবরণী
-        </h2>
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-          <thead>
-            <tr style="background-color: #0369a1; color: #ffffff;">
-              <th style="padding: 6px 8px; border: 1px solid #0369a1;">পেমেন্ট মাধ্যম</th>
-              <th style="padding: 6px 8px; border: 1px solid #0369a1; text-align: center;">অর্ডার সংখ্যা</th>
-              <th style="padding: 6px 8px; border: 1px solid #0369a1; text-align: right;">মোট বিক্রয় (৳)</th>
-              <th style="padding: 6px 8px; border: 1px solid #0369a1; text-align: right;">আদায় (৳)</th>
-              <th style="padding: 6px 8px; border: 1px solid #0369a1; text-align: right;">বকেয়া বাকী (৳)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">নগদ বিক্রয় (Cash)</td>
-              <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.cashSalesCount} টি</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.cashSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳${data.cashSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">বিকাশ বিক্রয় (bKash)</td>
-              <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.bkashSalesCount} টি</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.bkashSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳${data.bkashSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">বাকী বিক্রয় (Credit)</td>
-              <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.creditSalesCount} টি</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.creditSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳${(data.creditSalesTotal - data.creditSalesDueTotal).toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">৳${data.creditSalesDueTotal.toLocaleString()}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">অনলাইন / ব্যাংক বিক্রয়</td>
-              <td style="padding: 5px 8px; text-align: center; border: 1px solid #e2e8f0;">${data.onlineSalesCount} টি</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.onlineSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳${data.onlineSalesTotal.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
-            </tr>
-            <tr style="background-color: #e0f2fe; font-weight: 700;">
-              <td style="padding: 6px 8px; border: 1px solid #bae6fd;">সর্বমোট বিক্রয় সারসংক্ষেপ</td>
-              <td style="padding: 6px 8px; text-align: center; border: 1px solid #bae6fd;">${data.filteredSales.length} টি</td>
-              <td style="padding: 6px 8px; text-align: right; border: 1px solid #bae6fd;">৳${data.totalSalesVal.toLocaleString()}</td>
-              <td style="padding: 6px 8px; text-align: right; border: 1px solid #bae6fd;">৳${(data.totalSalesVal - data.totalSalesDueVal).toLocaleString()}</td>
-              <td style="padding: 6px 8px; text-align: right; color: #e11d48; border: 1px solid #bae6fd;">৳${data.totalSalesDueVal.toLocaleString()}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 4. Purchases List -->
-      ${data.filteredPurchases.length > 0 ? `
-        <div style="margin-bottom: 22px;">
-          <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-            ৪. পণ্য ক্রয় ও ইনভেন্টরি তালিকা
-          </h2>
-          <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; text-align: left;">
-            <thead>
-              <tr style="background-color: #4338ca; color: #ffffff;">
-                <th style="padding: 5px 7px; border: 1px solid #4338ca;">তারিখ</th>
-                <th style="padding: 5px 7px; border: 1px solid #4338ca;">পণ্যের নাম</th>
-                <th style="padding: 5px 7px; border: 1px solid #4338ca; text-align: center;">পরিমাণ</th>
-                <th style="padding: 5px 7px; border: 1px solid #4338ca; text-align: right;">একক মূল্য (৳)</th>
-                <th style="padding: 5px 7px; border: 1px solid #4338ca; text-align: right;">মোট টাকা (৳)</th>
-                <th style="padding: 5px 7px; border: 1px solid #4338ca;">সরবরাহকারী / নোট</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.filteredPurchases.slice(0, 50).map((p, idx) => `
-                <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #f8fafc;" : ""}">
-                  <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">${p.created_at.slice(0, 10)}</td>
-                  <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">${p.product_name}</td>
-                  <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${p.qty} টি</td>
-                  <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${Number(p.unit_cost).toLocaleString()}</td>
-                  <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${Number(p.total).toLocaleString()}</td>
-                  <td style="padding: 4px 7px; color: #64748b; border: 1px solid #e2e8f0;">${p.note || "-"}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-      ` : ""}
-
-      <!-- 5. Credit Dues List -->
-      ${data.creditSalesCount > 0 ? `
-        <div style="margin-bottom: 22px;">
-          <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-            ৫. বাকী বিক্রয় ও কাস্টমার দেনা বিবরণী
-          </h2>
-          <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; text-align: left;">
-            <thead>
-              <tr style="background-color: #b45309; color: #ffffff;">
-                <th style="padding: 5px 7px; border: 1px solid #b45309;">তারিখ</th>
-                <th style="padding: 5px 7px; border: 1px solid #b45309;">কাস্টমারের নাম</th>
-                <th style="padding: 5px 7px; border: 1px solid #b45309;">পণ্যের বিবরণ</th>
-                <th style="padding: 5px 7px; border: 1px solid #b45309; text-align: right;">মোট মূল্য (৳)</th>
-                <th style="padding: 5px 7px; border: 1px solid #b45309; text-align: right;">বকেয়া পরিমাণ (৳)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.filteredSales.filter(s => s.type === "credit").slice(0, 50).map((s, idx) => `
-                <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #fefce8;" : ""}">
-                  <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">${s.created_at.slice(0, 10)}</td>
-                  <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">${s.parties?.name || "সাধারণ কাস্টমার"}</td>
-                  <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">${s.product_name} (${s.qty} টি)</td>
-                  <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${(Number(s.sell_price) * s.qty).toLocaleString()}</td>
-                  <td style="padding: 4px 7px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">৳${Number(s.due_amount || 0).toLocaleString()}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-      ` : ""}
-
-      <!-- 6. Cashbox, Somiti & Owners Wallet Money Flow -->
-      <div style="margin-bottom: 28px;">
-        <h2 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 4px;">
-          ৬. ক্যাশবাক্স, সমিতি ও মালিকের ওয়ালেট অর্থপ্রবাহ (Money Flow)
-        </h2>
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-          <thead>
-            <tr style="background-color: #0f766e; color: #ffffff;">
-              <th style="padding: 6px 8px; border: 1px solid #0f766e;">ফান্ড / অর্থপ্রবাহ খাত</th>
-              <th style="padding: 6px 8px; border: 1px solid #0f766e;">জমা / ক্যাশ ইন</th>
-              <th style="padding: 6px 8px; border: 1px solid #0f766e;">খরচ / উত্তোলন</th>
-              <th style="padding: 6px 8px; border: 1px solid #0f766e; text-align: right;">নিট স্থিতি / প্রভাব (৳)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">ক্যাশব্যাক্স লেনদেন (Cashbox)</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">জমা: ৳${data.cashboxIn.toLocaleString()}</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">খরচ: -৳${data.cashboxOut.toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${(data.cashboxIn - data.cashboxOut).toLocaleString()}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">সমিতি ফান্ড (Samity Savings & DPS)</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">জমা: ৳${(data.somitiDepositTotal || 0).toLocaleString()}</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">উত্তোলন: -৳${(data.somitiWithdrawTotal || 0).toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; color: #059669; border: 1px solid #e2e8f0;">৳${data.somitiNetVal.toLocaleString()}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 5px 8px; font-weight: 600; border: 1px solid #e2e8f0;">মালিকের ওয়ালেট (Owner Personal Wallet)</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">${data.ownerWalletCount || 0} টি এন্ট্রি</td>
-              <td style="padding: 5px 8px; border: 1px solid #e2e8f0;">ব্যক্তিগত উত্তোলন: -৳${(data.ownerWalletTotal || 0).toLocaleString()}</td>
-              <td style="padding: 5px 8px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">-৳${(data.ownerWalletTotal || 0).toLocaleString()}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Signatures -->
-      <div style="margin-top: 36px; padding-top: 14px; display: flex; justify-content: space-between; text-align: center; font-size: 11px; color: #475569;">
-        <div style="width: 170px; border-top: 1.5px solid #94a3b8; padding-top: 6px; font-weight: 600;">
-          প্রস্তুতকারক (হিসাবরক্ষক)
-        </div>
-        <div style="width: 170px; border-top: 1.5px solid #94a3b8; padding-top: 6px; font-weight: 600;">
-          যাচাইকারী (ব্যবস্থাপক)
-        </div>
-        <div style="width: 170px; border-top: 1.5px solid #94a3b8; padding-top: 6px; font-weight: 600;">
-          অনুমোদনকারী (স্বত্বাধিকারী)
-        </div>
+      <div style="text-align: right;">
+        <div style="font-size: 13px; font-weight: 700; color: #0f172a;">ব্যবসায়িক প্রতিবেদন ও ক্যাটাগরি রিপোর্ট</div>
+        <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">সময়কাল: ${data.from} হতে ${data.to}</div>
+        <div style="font-size: 9.5px; color: #94a3b8; margin-top: 1px;">প্রস্তুত তারিখ: ${new Date().toLocaleDateString("bn-BD")}</div>
       </div>
     </div>
   `;
 
+  const makeFooter = (pageNum: number, totalPages: number) => `
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #94a3b8;">
+      <div>${data.bizName || "ড্রিম ফ্যাশন"} · অফিসিয়াল ব্যবসায়িক প্রতিবেদন (A4 Size Print)</div>
+      <div style="font-weight: 600;">পৃষ্ঠা ${pageNum} / ${totalPages}</div>
+    </div>
+  `;
+
+  // Page 1: Header + 4 KPI Highlights + 1. Financial Summary + 2. Expense Category Breakdown + 3. Sales By Payment Type
+  const page1Html = `
+    <div class="a4-page" style="${pageBaseStyle}">
+      <div>
+        ${makeHeader(1, 2)}
+
+        <!-- 4 Bento KPI Metric Badges -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;">
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background-color: #f0fdf4;">
+            <div style="font-size: 10px; color: #15803d; font-weight: 600;">মোট বিক্রয়মূল্য</div>
+            <div style="font-size: 15px; font-weight: 700; color: #166534; margin-top: 2px;">৳${data.totalSalesVal.toLocaleString()}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 1px;">${data.filteredSales.length} টি চালান</div>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background-color: #fff1f2;">
+            <div style="font-size: 10px; color: #be123c; font-weight: 600;">দোকান খরচ</div>
+            <div style="font-size: 15px; font-weight: 700; color: #9f1239; margin-top: 2px;">৳${data.totalExpenseVal.toLocaleString()}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 1px;">${data.filteredExpenses.length} টি ভাউচার</div>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background-color: #f0f9ff;">
+            <div style="font-size: 10px; color: #0369a1; font-weight: 600;">পণ্য ক্রয় (ইনভেন্টরি)</div>
+            <div style="font-size: 15px; font-weight: 700; color: #075985; margin-top: 2px;">৳${data.totalPurchaseVal.toLocaleString()}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 1px;">${data.totalPurchaseQty} পিস সামগ্রী</div>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; background-color: ${data.netBusinessProfit >= 0 ? "#f8fafc" : "#fef2f2"};">
+            <div style="font-size: 10px; color: #334155; font-weight: 600;">আনুমানিক নিট লাভ</div>
+            <div style="font-size: 15px; font-weight: 700; color: ${data.netBusinessProfit >= 0 ? "#059669" : "#e11d48"}; margin-top: 2px;">৳${data.netBusinessProfit.toLocaleString()}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 1px;">লাভ বিয়োগ খরচ</div>
+          </div>
+        </div>
+
+        <!-- 1. Executive Financial Summary -->
+        <div style="margin-bottom: 14px;">
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ১. সার্বিক অর্থনৈতিক সারসংক্ষেপ
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+            <thead>
+              <tr style="background-color: #1e293b; color: #ffffff;">
+                <th style="padding: 5px 7px; border: 1px solid #1e293b;">আর্থিক বিবরণী খাত</th>
+                <th style="padding: 5px 7px; border: 1px solid #1e293b; text-align: center;">রেকর্ড সংখ্যা</th>
+                <th style="padding: 5px 7px; border: 1px solid #1e293b; text-align: right;">টাকার পরিমাণ</th>
+                <th style="padding: 5px 7px; border: 1px solid #1e293b;">মন্তব্য</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4.5px 7px; font-weight: 600; border: 1px solid #e2e8f0;">মোট বিক্রয়মূল্য</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredSales.length} টি চালান (${data.totalSalesItemsCount} পিস)</td>
+                <td style="padding: 4.5px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.totalSalesVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; color: #64748b; border: 1px solid #e2e8f0;">নির্বাচিত সময়ের মোট বিক্রয় টার্নওভার</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
+                <td style="padding: 4.5px 7px; font-weight: 600; border: 1px solid #e2e8f0;">বিক্রয় হতে মোট লাভ</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #e2e8f0;">-</td>
+                <td style="padding: 4.5px 7px; text-align: right; font-weight: 700; color: #059669; border: 1px solid #e2e8f0;">৳${data.totalSalesProfitVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; color: #64748b; border: 1px solid #e2e8f0;">বিক্রয়মূল্য বিয়োগ ক্রয়মূল্য</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4.5px 7px; font-weight: 600; border: 1px solid #e2e8f0;">দোকান পরিচালন খরচ</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredExpenses.length} টি ভাউচার</td>
+                <td style="padding: 4.5px 7px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">-৳${data.totalExpenseVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; color: #64748b; border: 1px solid #e2e8f0;">${data.categoryExpenses.length} টি ক্যাটাগরিতে ব্যয়</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
+                <td style="padding: 4.5px 7px; font-weight: 600; border: 1px solid #e2e8f0;">পণ্য ক্রয় ও স্টক মজুদ</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.filteredPurchases.length} টি চালান (${data.totalPurchaseQty} পিস)</td>
+                <td style="padding: 4.5px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.totalPurchaseVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; color: #64748b; border: 1px solid #e2e8f0;">নতুন মালামাল ক্রয় বাবদ ব্যয়</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4.5px 7px; font-weight: 600; border: 1px solid #e2e8f0;">কাস্টমারদের কাছে বকেয়া বাকী</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.creditSalesCount} টি বাকী চালান</td>
+                <td style="padding: 4.5px 7px; text-align: right; font-weight: 700; color: #d97706; border: 1px solid #e2e8f0;">৳${data.totalSalesDueVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; color: #64748b; border: 1px solid #e2e8f0;">নির্বাচিত সময়ের অনাদায় পাওনা</td>
+              </tr>
+              <tr style="background-color: #f1f5f9; font-weight: 700;">
+                <td style="padding: 5px 7px; border: 1px solid #cbd5e1; font-size: 10.5px;">প্রকৃত আনুমানিক নিট লাভ</td>
+                <td style="padding: 5px 7px; text-align: center; border: 1px solid #cbd5e1;">-</td>
+                <td style="padding: 5px 7px; text-align: right; border: 1px solid #cbd5e1; font-size: 11px; color: ${data.netBusinessProfit >= 0 ? "#059669" : "#e11d48"};">৳${data.netBusinessProfit.toLocaleString()}</td>
+                <td style="padding: 5px 7px; border: 1px solid #cbd5e1; color: #475569;">মোট লাভ বিয়োগ দোকান খরচ</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 2. Expenses Category Breakdown -->
+        <div style="margin-bottom: 14px;">
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ২. ক্যাটাগরি ভিত্তিক খরচের বিবরণী
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+            <thead>
+              <tr style="background-color: #9f1239; color: #ffffff;">
+                <th style="padding: 4.5px 7px; border: 1px solid #9f1239; width: 35px; text-align: center;">#</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #9f1239;">খরচের ক্যাটাগরি</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #9f1239; text-align: center;">ভাউচার সংখ্যা</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #9f1239; text-align: right;">মোট ব্যয় (৳)</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #9f1239; text-align: right;">শতকরা হার (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.categoryExpenses.length > 0 ? data.categoryExpenses.slice(0, 8).map((cat, idx) => {
+                const share = data.totalExpenseVal > 0 ? ((cat.total / data.totalExpenseVal) * 100).toFixed(1) + "%" : "0%";
+                return `
+                  <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #fff1f2;" : ""}">
+                    <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${idx + 1}</td>
+                    <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">${cat.label}</td>
+                    <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${cat.count} টি</td>
+                    <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${cat.total.toLocaleString()}</td>
+                    <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">${share}</td>
+                  </tr>
+                `;
+              }).join("") : `
+                <tr><td colspan="5" style="padding: 6px; text-align: center; color: #64748b; border: 1px solid #e2e8f0;">এই সময়ে কোনো খরচের রেকর্ড নেই</td></tr>
+              `}
+              <tr style="background-color: #ffe4e6; font-weight: 700;">
+                <td colspan="2" style="padding: 4.5px 7px; border: 1px solid #fecdd3;">সর্বমোট পরিচালন খরচ</td>
+                <td style="padding: 4.5px 7px; text-align: center; border: 1px solid #fecdd3;">${data.filteredExpenses.length} টি</td>
+                <td style="padding: 4.5px 7px; text-align: right; border: 1px solid #fecdd3;">৳${data.totalExpenseVal.toLocaleString()}</td>
+                <td style="padding: 4.5px 7px; text-align: right; border: 1px solid #fecdd3;">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 3. Sales by Payment Type -->
+        <div>
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ৩. পেমেন্ট মাধ্যম অনুযায়ী বিক্রয় বিবরণী
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+            <thead>
+              <tr style="background-color: #0369a1; color: #ffffff;">
+                <th style="padding: 4.5px 7px; border: 1px solid #0369a1;">পেমেন্ট মাধ্যম</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0369a1; text-align: center;">অর্ডার সংখ্যা</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0369a1; text-align: right;">মোট বিক্রয় (৳)</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0369a1; text-align: right;">আদায় (৳)</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0369a1; text-align: right;">বকেয়া বাকী (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">নগদ বিক্রয় (Cash)</td>
+                <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.cashSalesCount} টি</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.cashSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${data.cashSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">বিকাশ বিক্রয় (bKash)</td>
+                <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.bkashSalesCount} টি</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.bkashSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${data.bkashSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">বাকী বিক্রয় (Credit)</td>
+                <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.creditSalesCount} টি</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.creditSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${(data.creditSalesTotal - data.creditSalesDueTotal).toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">৳${data.creditSalesDueTotal.toLocaleString()}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">অনলাইন / কুরিয়ার বিক্রয়</td>
+                <td style="padding: 4px 7px; text-align: center; border: 1px solid #e2e8f0;">${data.onlineSalesCount} টি</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${data.onlineSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳${data.onlineSalesTotal.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; border: 1px solid #e2e8f0;">৳0</td>
+              </tr>
+              <tr style="background-color: #e0f2fe; font-weight: 700;">
+                <td style="padding: 5px 7px; border: 1px solid #bae6fd;">সর্বমোট বিক্রয় সারসংক্ষেপ</td>
+                <td style="padding: 5px 7px; text-align: center; border: 1px solid #bae6fd;">${data.filteredSales.length} টি</td>
+                <td style="padding: 5px 7px; text-align: right; border: 1px solid #bae6fd;">৳${data.totalSalesVal.toLocaleString()}</td>
+                <td style="padding: 5px 7px; text-align: right; border: 1px solid #bae6fd;">৳${(data.totalSalesVal - data.totalSalesDueVal).toLocaleString()}</td>
+                <td style="padding: 5px 7px; text-align: right; color: #e11d48; border: 1px solid #bae6fd;">৳${data.totalSalesDueVal.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      ${makeFooter(1, 2)}
+    </div>
+  `;
+
+  // Page 2: Header + 4. Product Purchases + 5. Credit Dues + 6. Money Flow + Signatures
+  const page2Html = `
+    <div class="a4-page" style="${pageBaseStyle}">
+      <div>
+        ${makeHeader(2, 2)}
+
+        <!-- 4. Product Purchases List -->
+        <div style="margin-bottom: 14px;">
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ৪. পণ্য ক্রয় ও ইনভেন্টরি তালিকা
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: left;">
+            <thead>
+              <tr style="background-color: #4338ca; color: #ffffff;">
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca;">তারিখ</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca;">পণ্যের নাম</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca; text-align: center;">পরিমাণ</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca; text-align: right;">একক দর (৳)</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca; text-align: right;">মোট টাকা (৳)</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #4338ca;">নোট / সাপ্লায়ার</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.filteredPurchases.length > 0 ? data.filteredPurchases.slice(0, 8).map((p, idx) => `
+                <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #f8fafc;" : ""}">
+                  <td style="padding: 4px 6px; border: 1px solid #e2e8f0;">${p.created_at.slice(0, 10)}</td>
+                  <td style="padding: 4px 6px; font-weight: 600; border: 1px solid #e2e8f0;">${p.product_name}</td>
+                  <td style="padding: 4px 6px; text-align: center; border: 1px solid #e2e8f0;">${p.qty} টি</td>
+                  <td style="padding: 4px 6px; text-align: right; border: 1px solid #e2e8f0;">৳${Number(p.unit_cost).toLocaleString()}</td>
+                  <td style="padding: 4px 6px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${Number(p.total).toLocaleString()}</td>
+                  <td style="padding: 4px 6px; color: #64748b; border: 1px solid #e2e8f0;">${p.note || "-"}</td>
+                </tr>
+              `).join("") : `
+                <tr><td colspan="6" style="padding: 6px; text-align: center; color: #64748b; border: 1px solid #e2e8f0;">এই সময়ে নতুন কোনো পণ্য ক্রয় এন্ট্রি নেই</td></tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 5. Credit Dues List -->
+        <div style="margin-bottom: 14px;">
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ৫. বাকী বিক্রয় ও কাস্টমার দেনা বিবরণী
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: left;">
+            <thead>
+              <tr style="background-color: #b45309; color: #ffffff;">
+                <th style="padding: 4.5px 6px; border: 1px solid #b45309;">তারিখ</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #b45309;">কাস্টমারের নাম</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #b45309;">পণ্যের বিবরণ</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #b45309; text-align: right;">মোট মূল্য (৳)</th>
+                <th style="padding: 4.5px 6px; border: 1px solid #b45309; text-align: right;">বকেয়া পরিমাণ (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.filteredSales.filter(s => s.type === "credit").length > 0 ? data.filteredSales.filter(s => s.type === "credit").slice(0, 8).map((s, idx) => `
+                <tr style="border-bottom: 1px solid #e2e8f0; ${idx % 2 === 1 ? "background-color: #fefce8;" : ""}">
+                  <td style="padding: 4px 6px; border: 1px solid #e2e8f0;">${s.created_at.slice(0, 10)}</td>
+                  <td style="padding: 4px 6px; font-weight: 600; border: 1px solid #e2e8f0;">${s.parties?.name || "সাধারণ কাস্টমার"}</td>
+                  <td style="padding: 4px 6px; border: 1px solid #e2e8f0;">${s.product_name} (${s.qty} টি)</td>
+                  <td style="padding: 4px 6px; text-align: right; border: 1px solid #e2e8f0;">৳${(Number(s.sell_price) * s.qty).toLocaleString()}</td>
+                  <td style="padding: 4px 6px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">৳${Number(s.due_amount || 0).toLocaleString()}</td>
+                </tr>
+              `).join("") : `
+                <tr><td colspan="5" style="padding: 6px; text-align: center; color: #64748b; border: 1px solid #e2e8f0;">নির্বাচিত সময়ে কোনো বকেয়া বা বাকী বিক্রয় নেই</td></tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 6. Cashbox, Somiti & Owners Wallet Money Flow -->
+        <div style="margin-bottom: 20px;">
+          <h2 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px;">
+            ৬. ক্যাশবাক্স, সমিতি ও মালিকের ওয়ালেট অর্থপ্রবাহ (Money Flow)
+          </h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+            <thead>
+              <tr style="background-color: #0f766e; color: #ffffff;">
+                <th style="padding: 4.5px 7px; border: 1px solid #0f766e;">ফান্ড / অর্থপ্রবাহ খাত</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0f766e;">জমা / ক্যাশ ইন</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0f766e;">খরচ / উত্তোলন</th>
+                <th style="padding: 4.5px 7px; border: 1px solid #0f766e; text-align: right;">নিট স্থিতি / প্রভাব (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">ক্যাশব্যাক্স লেনদেন (Cashbox)</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">জমা: ৳${data.cashboxIn.toLocaleString()}</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">খরচ: -৳${data.cashboxOut.toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; border: 1px solid #e2e8f0;">৳${(data.cashboxIn - data.cashboxOut).toLocaleString()}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0; background-color: #f8fafc;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">সমিতি ফান্ড (Samity Savings & DPS)</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">জমা: ৳${(data.somitiDepositTotal || 0).toLocaleString()}</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">উত্তোলন: -৳${(data.somitiWithdrawTotal || 0).toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; color: #059669; border: 1px solid #e2e8f0;">৳${data.somitiNetVal.toLocaleString()}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 4px 7px; font-weight: 600; border: 1px solid #e2e8f0;">মালিকের ওয়ালেট (Owner Personal Wallet)</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">${data.ownerWalletCount || 0} টি এন্ট্রি</td>
+                <td style="padding: 4px 7px; border: 1px solid #e2e8f0;">ব্যক্তিগত উত্তোলন: -৳${(data.ownerWalletTotal || 0).toLocaleString()}</td>
+                <td style="padding: 4px 7px; text-align: right; font-weight: 700; color: #e11d48; border: 1px solid #e2e8f0;">-৳${(data.ownerWalletTotal || 0).toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Official Document Signatures Block -->
+        <div style="margin-top: 24px; padding-top: 10px; display: flex; justify-content: space-between; text-align: center; font-size: 10px; color: #475569;">
+          <div style="width: 160px; border-top: 1.5px dashed #94a3b8; padding-top: 5px; font-weight: 600;">
+            হিসাবরক্ষকের স্বাক্ষর
+          </div>
+          <div style="width: 160px; border-top: 1.5px dashed #94a3b8; padding-top: 5px; font-weight: 600;">
+            ব্যবস্থাপকের স্বাক্ষর
+          </div>
+          <div style="width: 160px; border-top: 1.5px dashed #94a3b8; padding-top: 5px; font-weight: 600;">
+            স্বত্বাধিকারীর স্বাক্ষর
+          </div>
+        </div>
+
+        <div style="text-align: center; font-size: 8.5px; color: #94a3b8; margin-top: 14px;">
+          এটি ${data.bizName || "ড্রিম ফ্যাশন"} সফটওয়্যার সিস্টেম দ্বারা স্বয়ংক্রিয়ভাবে প্রস্তুতকৃত ক্যাটাগরি ভিত্তিক অফিসিয়াল ব্যবসায়িক প্রতিবেদন।
+        </div>
+      </div>
+
+      ${makeFooter(2, 2)}
+    </div>
+  `;
+
+  container.innerHTML = page1Html + page2Html;
   document.body.appendChild(container);
 
   try {
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-    });
-
-    const imgData = canvas.toDataURL("image/png");
+    const pageElements = Array.from(container.querySelectorAll<HTMLElement>(".a4-page"));
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
       format: "a4",
     });
 
-    const imgWidth = 210;
-    const pageHeight = 297;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
+    for (let i = 0; i < pageElements.length; i++) {
+      const pageEl = pageElements[i];
+      const canvas = await html2canvas(pageEl, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
 
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      const imgData = canvas.toDataURL("image/png");
+      if (i > 0) {
+        pdf.addPage();
+      }
+      pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
     }
 
     const filename = `Business_Report_${data.from}_to_${data.to}_Bangla.pdf`;
@@ -395,13 +455,12 @@ export async function generateBanglaReportPdf(data: ReportPdfData, openInNewTab 
       pdf.save(filename);
     }
   } finally {
-    document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
   }
 }
 
-/**
- * Standard English Vector PDF Generator
- */
 export function generateEnglishReportPdf(data: ReportPdfData, openInNewTab = false): jsPDF {
   const doc = new jsPDF({
     orientation: "portrait",

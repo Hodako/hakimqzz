@@ -124,6 +124,7 @@ export default function EmployeesPage() {
   const [salAmount, setSalAmount] = useState("");
   const [salMethod, setSalMethod] = useState("cash");
   const [salNote, setSalNote] = useState("");
+  const [deductShoppings, setDeductShoppings] = useState(true);
 
   // Dialog States: Expense
   const [addExpOpen, setAddExpOpen] = useState(false);
@@ -144,6 +145,25 @@ export default function EmployeesPage() {
   const [printSlipItem, setPrintSlipItem] = useState<EmployeeShopping | null>(null);
 
   const [busy, setBusy] = useState(false);
+
+  // Selected employee for salary calculation
+  const selectedSalaryEmp = useMemo(() => {
+    return employees.find(x => x.id === salEmpId) || null;
+  }, [employees, salEmpId]);
+
+  // Shoppings with "deduct_from_salary" not yet settled
+  const pendingShoppingsForSal = useMemo(() => {
+    if (!salEmpId) return [];
+    return shoppings.filter(s =>
+      (s.employee_id === salEmpId || (!s.employee_id && selectedSalaryEmp && s.employee_name.toLowerCase() === selectedSalaryEmp.name.toLowerCase())) &&
+      s.payment_status === "deduct_from_salary" &&
+      !(s as any).settled
+    );
+  }, [salEmpId, shoppings, selectedSalaryEmp]);
+
+  const shoppingDeductionTotal = useMemo(() => {
+    return pendingShoppingsForSal.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+  }, [pendingShoppingsForSal]);
 
   // Identify currently logged-in employee
   const currentEmployee = useMemo(() => {
@@ -282,7 +302,7 @@ export default function EmployeesPage() {
   async function handleSaveSalary(e: React.FormEvent) {
     e.preventDefault();
     const val = parseFloat(salAmount);
-    if (!salEmpId || isNaN(val) || val <= 0) {
+    if (!salEmpId || isNaN(val) || val < 0) {
       toast.error(lang === "bn" ? "কর্মচারী নির্বাচন করুন এবং সঠিক টাকার অঙ্ক লিখুন" : "Select employee and enter valid amount");
       return;
     }
@@ -294,14 +314,17 @@ export default function EmployeesPage() {
           employee_id: salEmpId,
           employee_name: emp?.name || "Employee",
           base_salary: emp?.base_salary || 0,
+          deductions: deductShoppings ? shoppingDeductionTotal : 0,
           month: salMonth,
           amount: val,
           payment_method: salMethod,
           note: salNote.trim() || null,
+          settled_shopping_ids: deductShoppings ? pendingShoppingsForSal.map(s => s.id) : [],
         },
       });
       toast.success(lang === "bn" ? "বেতন পরিশোধ রেকর্ড সংরক্ষিত হয়েছে" : "Salary payment recorded successfully");
       qc.invalidateQueries({ queryKey: ["employee_salaries"] });
+      qc.invalidateQueries({ queryKey: ["employee_shoppings"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
       setAddSalaryOpen(false);
@@ -871,8 +894,8 @@ export default function EmployeesPage() {
                       <div className="min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-foreground">{s.employee_name}</span>
-                          <Badge variant="outline" className={`text-[10px] ${s.payment_status === "paid_cash" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : s.payment_status === "gift" ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"}`}>
-                            {s.payment_status === "paid_cash" ? (lang === "bn" ? "নগদ পরিশোধিত" : "Paid in Cash") : s.payment_status === "gift" ? (lang === "bn" ? "উপহার/বোনাস" : "Gift") : (lang === "bn" ? "বেতন থেকে কর্তন" : "Deduct from Salary")}
+                          <Badge variant="outline" className={`text-[10px] ${s.payment_status === "paid_cash" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : s.payment_status === "gift" ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : (s as any).settled ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"}`}>
+                            {s.payment_status === "paid_cash" ? (lang === "bn" ? "নগদ পরিশোধিত" : "Paid in Cash") : s.payment_status === "gift" ? (lang === "bn" ? "উপহার/বোনাস" : "Gift") : ((s as any).settled ? (lang === "bn" ? "✓ বেতন থেকে কর্তিত" : "✓ Deducted from Salary") : (lang === "bn" ? "বেতন থেকে কর্তনযোগ্য" : "Pending Salary Deduction"))}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">{s.date}</span>
                         </div>
@@ -992,6 +1015,9 @@ export default function EmployeesPage() {
                   onChange={e => setEmpSalary(e.target.value)}
                   className="h-9 text-xs font-charukola"
                 />
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  {lang === "bn" ? "💡 বেতন নির্ধারণে ক্যাশ থেকে টাকা কাটবে না। 'বেতন প্রদান' করার সময় ক্যাশ কর্তন হবে।" : "💡 Setting salary does not deduct cash. Cash is deducted only upon payment."}
+                </p>
               </div>
 
               <div className="space-y-1">
@@ -1129,7 +1155,15 @@ export default function EmployeesPage() {
               <Select value={salEmpId} onValueChange={v => {
                 setSalEmpId(v);
                 const emp = employees.find(x => x.id === v);
-                if (emp?.base_salary) setSalAmount(String(emp.base_salary));
+                const pendings = shoppings.filter(s =>
+                  (s.employee_id === v || (!s.employee_id && emp && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
+                  s.payment_status === "deduct_from_salary" &&
+                  !(s as any).settled
+                );
+                const shopTotal = pendings.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+                const baseSal = Number(emp?.base_salary) || 0;
+                const net = deductShoppings ? Math.max(baseSal - shopTotal, 0) : baseSal;
+                setSalAmount(String(net));
               }}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder={lang === "bn" ? "কর্মচারী বাছাই করুন" : "Select employee"} />
@@ -1137,12 +1171,47 @@ export default function EmployeesPage() {
                 <SelectContent>
                   {employees.map(e => (
                     <SelectItem key={e.id} value={e.id}>
-                      {e.name} {e.base_salary ? `(৳${fmtMoney(e.base_salary)})` : ""}
+                      {e.name} {e.base_salary ? `(মূল বেতন: ৳${fmtMoney(e.base_salary)})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {shoppingDeductionTotal > 0 && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                    <Shirt className="size-3.5" />
+                    {lang === "bn" ? "পোশাক/পণ্য কেনাকাটা কর্তন" : "Shopping Deduction"}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30">
+                    −৳{fmtMoney(shoppingDeductionTotal)}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {lang === "bn"
+                    ? `কর্মচারীর বকেয়া কেনাকাটা (${pendingShoppingsForSal.length}টি চালান) বেতন থেকে কর্তন করা হচ্ছে।`
+                    : `Employee has ${pendingShoppingsForSal.length} shopping orders pending deduction.`}
+                </p>
+                <div className="flex items-center space-x-2 pt-0.5">
+                  <Checkbox
+                    id="deduct_shop"
+                    checked={deductShoppings}
+                    onCheckedChange={(checked) => {
+                      const isChecked = Boolean(checked);
+                      setDeductShoppings(isChecked);
+                      const baseSal = Number(selectedSalaryEmp?.base_salary) || 0;
+                      const net = isChecked ? Math.max(baseSal - shoppingDeductionTotal, 0) : baseSal;
+                      setSalAmount(String(net));
+                    }}
+                  />
+                  <Label htmlFor="deduct_shop" className="text-[11px] font-semibold cursor-pointer">
+                    {lang === "bn" ? "এই কেনাকাটা বিল বেতন থেকে কর্তন করুন" : "Deduct shopping from salary"}
+                  </Label>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
@@ -1156,7 +1225,12 @@ export default function EmployeesPage() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">{lang === "bn" ? "টাকার অঙ্ক (৳) *" : "Amount (৳) *"}</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">{lang === "bn" ? "প্রদেয় বেতন (৳) *" : "Net Payable (৳) *"}</Label>
+                  {shoppingDeductionTotal > 0 && deductShoppings && (
+                    <span className="text-[9px] text-amber-600 font-bold">{lang === "bn" ? "কর্তন সমন্বিত" : "Adjusted"}</span>
+                  )}
+                </div>
                 <Input
                   type="number"
                   required

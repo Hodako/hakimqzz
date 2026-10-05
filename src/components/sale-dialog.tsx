@@ -72,6 +72,7 @@ export function SaleDialog({
   const [courierName, setCourierName] = useState("Steadfast Courier");
   const [trackingCode, setTrackingCode] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [finalDiscount, setFinalDiscount] = useState("");
   const [busy, setBusy] = useState(false);
 
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
@@ -161,6 +162,7 @@ export function SaleDialog({
       setSplitCash("");
       setSplitBkash("");
       setSplitBank("");
+      setFinalDiscount("");
       if (presetCart && presetCart.length > 0) {
         setCart(presetCart.map(x => ({ ...x, discount: x.discount ?? "" })));
       } else if (presetProductId) {
@@ -215,8 +217,10 @@ export function SaleDialog({
     return finalPrice * (Number(line.qty) || 0);
   }
 
-  const sellTotal = cart.reduce((a, l) => a + lineTotal(l), 0);
-  const profitTotal = cart.reduce((a, l) => {
+  const rawSellTotal = cart.reduce((a, l) => a + lineTotal(l), 0);
+  const finalDiscountNum = Math.min(Math.max(0, Number(finalDiscount) || 0), rawSellTotal);
+  const sellTotal = Math.max(0, rawSellTotal - finalDiscountNum);
+  const profitTotal = Math.max(0, cart.reduce((a, l) => {
     const p = products.find(x => x.id === l.productId);
     const sell = Number(l.sellPrice) || (p ? p.sell_price : 0) || 0;
     const disc = Number(l.discount) || 0;
@@ -224,7 +228,7 @@ export function SaleDialog({
     const qty = Number(l.qty) || 1;
     const buy = Number(p?.buy_price) || 0;
     return a + (finalPrice - buy) * qty;
-  }, 0);
+  }, 0) - finalDiscountNum);
 
   const isFullPaid = type === "cash" || type === "bkash" || type === "bank";
   const splitCashNum = Math.max(0, Number(splitCash) || 0);
@@ -352,6 +356,7 @@ export function SaleDialog({
       let remainingBank = type === "split" ? netBank : (type === "bank" ? sellTotal : 0);
       let remainingPaid = (type === "credit") ? effectivePaid : (type === "split" ? (netCash + netBkash + netBank) : (type === "online" ? 0 : sellTotal));
       let remainingDue = (type === "credit" || type === "split") ? due : (type === "online" ? sellTotal : 0);
+      let remainingFinalDisc = finalDiscountNum;
 
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];
@@ -363,9 +368,23 @@ export function SaleDialog({
         const rawSellPrice = Number(line.sellPrice) || product.sell_price || 0;
         const disc = Math.max(0, Number(line.discount) || 0);
         const finalUnitSell = Math.max(rawSellPrice - disc, 0);
-        const lineSell = finalUnitSell * qtyNum;
-        const lineDiscTotal = disc * qtyNum;
-        const lineProfit = (finalUnitSell - Number(product.buy_price || 0)) * qtyNum;
+        const lineItemSell = finalUnitSell * qtyNum;
+
+        let allocatedFinalDisc = 0;
+        if (remainingFinalDisc > 0) {
+          if (i === cart.length - 1) {
+            allocatedFinalDisc = Math.min(remainingFinalDisc, lineItemSell);
+            remainingFinalDisc = Math.max(0, remainingFinalDisc - allocatedFinalDisc);
+          } else {
+            const ratio = rawSellTotal > 0 ? lineItemSell / rawSellTotal : 1 / cart.length;
+            allocatedFinalDisc = Math.min(Math.round(finalDiscountNum * ratio), remainingFinalDisc, lineItemSell);
+            remainingFinalDisc -= allocatedFinalDisc;
+          }
+        }
+
+        const lineSell = Math.max(lineItemSell - allocatedFinalDisc, 0);
+        const lineDiscTotal = (disc * qtyNum) + allocatedFinalDisc;
+        const lineProfit = lineSell - (Number(product.buy_price || 0) * qtyNum);
 
         // Proportional paid & due distribution
         let linePaid = 0;
@@ -482,8 +501,8 @@ export function SaleDialog({
             price: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
           };
         }),
-        subtotal: sellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
-        discount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+        subtotal: rawSellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+        discount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0) + finalDiscountNum,
         total: sellTotal,
         paidAmount: type === "online" ? 0 : paidNum,
         dueAmount: type === "online" ? sellTotal : due,
@@ -535,8 +554,8 @@ export function SaleDialog({
               sellPrice: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
             };
           }),
-          subtotal: sellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
-          discountAmount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+          subtotal: rawSellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+          discountAmount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0) + finalDiscountNum,
           total: sellTotal,
           paidAmount: type === "online" ? 0 : (type === "split" && totalSplitPaid > sellTotal ? totalSplitPaid : paidNum),
           due: type === "online" ? sellTotal : due,
@@ -855,7 +874,7 @@ export function SaleDialog({
                         variant="ghost"
                         size="sm"
                         className="h-6 text-[10px] text-destructive hover:bg-destructive/10 px-1.5"
-                        onClick={() => setCart([])}
+                        onClick={() => { setCart([]); setFinalDiscount(""); }}
                       >
                         {lang === "bn" ? "কার্ট খালি করুন" : "Clear Cart"}
                       </Button>
@@ -1252,11 +1271,38 @@ export function SaleDialog({
                   </div>
                 )}
 
-                <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-1.5 text-xs">
+                <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-2 text-xs">
                   <div className="flex justify-between text-muted-foreground">
                     <span>{t("subtotal")}</span>
-                    <span className="font-mono font-medium">৳{sellTotal}</span>
+                    <span className="font-mono font-medium">৳{rawSellTotal}</span>
                   </div>
+
+                  {/* Final Overall Cart Discount */}
+                  <div className="flex items-center justify-between gap-2 py-1 border-y border-border/60">
+                    <div className="flex items-center gap-1.5 font-bold text-foreground">
+                      <Sparkles className="size-3.5 text-amber-500" />
+                      <span>{lang === "bn" ? "ফাইনাল ছাড় / ডিসকাউন্ট:" : "Final Discount:"}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-rose-500 font-bold">−৳</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="0"
+                        value={finalDiscount}
+                        onChange={e => setFinalDiscount(e.target.value)}
+                        className="h-7 w-24 text-right text-xs font-bold font-mono bg-background border-border/80 text-rose-600 dark:text-rose-400 rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  {finalDiscountNum > 0 && (
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 font-semibold text-[11px]">
+                      <span>{lang === "bn" ? "সর্বশেষ ছাড় কর্তন:" : "Final Discount Deducted:"}</span>
+                      <span className="font-mono font-bold">−৳{finalDiscountNum}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}</span>
                     <span className="font-bold uppercase text-foreground">

@@ -46,6 +46,8 @@ export default function CustomersPage() {
 
   const duesByParty: Record<string, number> = {};
   const purchasesByParty: Record<string, { total: number; count: number }> = {};
+  const trackingCodesByParty: Record<string, string[]> = {};
+  const latestTrackingByParty: Record<string, { code: string; courier?: string }> = {};
 
   (sales.data ?? []).forEach(s => {
     if (s.party_id && !s.returned) {
@@ -55,6 +57,18 @@ export default function CustomersPage() {
       }
       purchasesByParty[s.party_id].total += Number(s.sell_price) * s.qty;
       purchasesByParty[s.party_id].count += Number(s.qty) || 0;
+    }
+    if (s.party_id && (s as any).tracking_code) {
+      const code = String((s as any).tracking_code).trim();
+      if (code) {
+        if (!trackingCodesByParty[s.party_id]) {
+          trackingCodesByParty[s.party_id] = [];
+        }
+        trackingCodesByParty[s.party_id].push(code.toLowerCase());
+        if (!latestTrackingByParty[s.party_id]) {
+          latestTrackingByParty[s.party_id] = { code, courier: (s as any).courier_name };
+        }
+      }
     }
   });
 
@@ -98,7 +112,13 @@ export default function CustomersPage() {
 
   const filtered = onlyCustomers
     .filter(p => {
-      const matchesSearch = (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.phone ?? "").includes(search);
+      const q = search.trim().toLowerCase();
+      const customerTrackings = trackingCodesByParty[p.id] || [];
+      const matchesTracking = Boolean(q) && customerTrackings.some(code => code.includes(q));
+      const matchesSearch = !q ||
+                            (p.name || "").toLowerCase().includes(q) ||
+                            (p.phone ?? "").includes(q) ||
+                            matchesTracking;
       const matchesTab = activeTab === "archived" ? p.archived === true : p.archived !== true;
       return matchesSearch && matchesTab;
     });
@@ -251,7 +271,7 @@ export default function CustomersPage() {
           <Input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder={lang === "bn" ? "নাম বা ফোন নম্বর দিয়ে খুঁজুন…" : "Search by name or phone…"}
+            placeholder={lang === "bn" ? "নাম, ফোন বা ট্র্যাকিং নম্বর দিয়ে খুঁজুন…" : "Search by name, phone or tracking…"}
             className="pl-8 h-8.5 text-xs rounded-xl"
           />
         </div>
@@ -302,8 +322,13 @@ export default function CustomersPage() {
                               <div className="font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
                                 {p.name}
                               </div>
-                              <div className="text-[11px] text-muted-foreground">
-                                ID: #{p.id.slice(0, 6)}
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                <span>ID: #{p.id.slice(0, 6)}</span>
+                                {latestTrackingByParty[p.id] && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-mono text-[10px] font-semibold border border-sky-500/20" title={`কুরিয়ার: ${latestTrackingByParty[p.id].courier || "Courier"}`}>
+                                    🚚 {latestTrackingByParty[p.id].code}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </Link>
@@ -406,7 +431,14 @@ export default function CustomersPage() {
                   className="flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors gap-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-sm truncate text-foreground">{p.name}</div>
+                    <div className="font-semibold text-sm truncate text-foreground flex items-center gap-1.5 flex-wrap">
+                      <span>{p.name}</span>
+                      {latestTrackingByParty[p.id] && (
+                        <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-mono text-[9px] font-semibold border border-sky-500/20">
+                          🚚 {latestTrackingByParty[p.id].code}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2 mt-0.5">
                       {p.phone && <span>{p.phone}</span>}
                       {p.address && (

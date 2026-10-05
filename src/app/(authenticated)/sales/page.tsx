@@ -401,8 +401,10 @@ export default function SalesPage() {
       if (q) {
         const matchName = s.product_name.toLowerCase().includes(q);
         const matchCustomer = (s.parties?.name ?? "").toLowerCase().includes(q);
+        const matchTracking = (s.tracking_code || "").toLowerCase().includes(q) ||
+                              s.items.some(it => ((it as any).tracking_code || "").toLowerCase().includes(q));
         const matchNote = s.items.some(it => (it.note || "").toLowerCase().includes(q));
-        if (!matchName && !matchCustomer && !matchNote) return false;
+        if (!matchName && !matchCustomer && !matchTracking && !matchNote) return false;
       }
 
       return true;
@@ -662,7 +664,7 @@ export default function SalesPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
               className="pl-8 h-8.5 text-xs rounded-xl font-balooda"
-              placeholder={lang === "bn" ? "পণ্য বা ক্রেতার নাম দিয়ে খুঁজুন..." : "Search product or customer..."}
+              placeholder={lang === "bn" ? "পণ্য, ক্রেতা বা ট্র্যাকিং নম্বর..." : "Search product, customer, tracking..."}
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />

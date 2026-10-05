@@ -718,7 +718,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 1: Executive Financial Summary Table ── */}
         {(activeTab === "summary" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "summary" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "summary" ? "hidden print:block" : ""}`}>
             <div className="flex items-center gap-2 border-b border-border/60 pb-1.5">
               <span className="size-2 rounded-full bg-emerald-500 print:bg-black" />
               <h3 className="text-sm font-bold uppercase tracking-wider text-foreground print:text-black">
@@ -795,7 +795,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 2: Expenses Breakdown by Category ── */}
         {(activeTab === "expenses" || activeTab === "summary" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "expenses" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "expenses" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
             <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-rose-500 print:bg-black" />
@@ -853,7 +853,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 3: Sales by Payment Type ── */}
         {(activeTab === "sales" || activeTab === "summary" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "sales" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "sales" && activeTab !== "summary" ? "hidden print:block" : ""}`}>
             <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-sky-500 print:bg-black" />
@@ -933,7 +933,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 4: Product Purchases Restock Statement ── */}
         {(activeTab === "purchases" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "purchases" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "purchases" ? "hidden print:block" : ""}`}>
             <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-indigo-500 print:bg-black" />
@@ -1031,7 +1031,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 5: Customer Dues / Credit Sales ── */}
         {(activeTab === "dues" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "dues" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "dues" ? "hidden print:block" : ""}`}>
             <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-amber-500 print:bg-black" />
@@ -1127,7 +1127,7 @@ export default function ReportsGeneratorPage() {
 
         {/* ── Section 6: Cashbox, Somiti & Owner Wallet Movement ── */}
         {(activeTab === "cashbox" || typeof window !== "undefined") && (
-          <div className={`space-y-3 ${activeTab !== "cashbox" ? "hidden print:block" : ""}`}>
+          <div className={`space-y-3 print-avoid-break ${activeTab !== "cashbox" ? "hidden print:block" : ""}`}>
             <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
               <div className="flex items-center gap-2">
                 <span className="size-2 rounded-full bg-teal-500 print:bg-black" />
@@ -1195,7 +1195,7 @@ export default function ReportsGeneratorPage() {
         )}
 
         {/* Official Document Signatures Block */}
-        <div className="pt-10 border-t border-border/70 print:border-gray-400 grid grid-cols-3 gap-6 text-center text-xs text-muted-foreground print:text-black">
+        <div className="pt-10 border-t border-border/70 print:border-gray-400 grid grid-cols-3 gap-6 text-center text-xs text-muted-foreground print:text-black print-avoid-break">
           <div className="space-y-1">
             <div className="border-t border-dashed border-border/80 print:border-gray-700 pt-2 font-semibold">
               {lang === "bn" ? "হিসাবরক্ষকের স্বাক্ষর" : "Accountant Signature"}

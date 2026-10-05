@@ -5134,10 +5134,19 @@ export async function createEmployeeSalaryFn(input: { data: any }) {
     payment_date: data.payment_date || new Date().toISOString().slice(0, 10),
     status: data.status || "paid",
     note: data.note || null,
+    settled_shopping_ids: Array.isArray(data.settled_shopping_ids) ? data.settled_shopping_ids : [],
     created_at: new Date().toISOString(),
   };
 
   await db.collection("employee_salaries").insertOne(doc as any);
+
+  // Settle linked employee shoppings if any
+  if (Array.isArray(data.settled_shopping_ids) && data.settled_shopping_ids.length > 0) {
+    await db.collection("employee_shoppings").updateMany(
+      { _id: { $in: data.settled_shopping_ids as any }, owner_id: session.ownerId },
+      { $set: { settled: true, settled_at: doc.created_at, salary_id: id } }
+    );
+  }
 
   if (amount > 0) {
     const expId = crypto.randomUUID();
@@ -5170,6 +5179,11 @@ export async function deleteEmployeeSalaryFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  // Un-settle any shoppings linked to this salary
+  await db.collection("employee_shoppings").updateMany(
+    { salary_id: data.id as any, owner_id: session.ownerId },
+    { $set: { settled: false, settled_at: null, salary_id: null } }
+  );
   await db.collection("employee_salaries").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true, id: data.id };
 }

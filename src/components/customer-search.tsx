@@ -29,7 +29,8 @@ export function CustomerSearchSelect({ customers, value, onChange, placeholder }
     if (!q) return validCustomers;
     return validCustomers.filter(c => 
       (c.name || "").toLowerCase().includes(q) || 
-      (c.phone || "").includes(q)
+      (c.phone || "").includes(q) ||
+      String((c as any).tracking_code || "").toLowerCase().includes(q)
     );
   }, [customers, searchQuery]);
 

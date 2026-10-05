@@ -88,11 +88,17 @@ export function UniversalSearch({ role, permissions }: UniversalSearchProps) {
         sales: sales.slice(0, 6),
       };
     }
+    const matchedPartyIdsFromTracking = new Set(
+      sales
+        .filter(s => s.party_id && String((s as any).tracking_code || "").toLowerCase().includes(q))
+        .map(s => s.party_id)
+    );
+
     return {
       pages: pages.filter(p => t(p.labelKey).toLowerCase().includes(q)),
       products: products.filter(p => (p.name || "").toLowerCase().includes(q)).slice(0, 10),
-      parties: parties.filter(p => (p.name || "").toLowerCase().includes(q) || (p.phone ?? "").includes(q)).slice(0, 10),
-      sales: sales.filter(s => (s.product_name || "").toLowerCase().includes(q)).slice(0, 8),
+      parties: parties.filter(p => (p.name || "").toLowerCase().includes(q) || (p.phone ?? "").includes(q) || matchedPartyIdsFromTracking.has(p.id)).slice(0, 10),
+      sales: sales.filter(s => (s.product_name || "").toLowerCase().includes(q) || String((s as any).tracking_code || "").toLowerCase().includes(q)).slice(0, 8),
     };
   }, [q, pages, products, parties, sales, t]);
 

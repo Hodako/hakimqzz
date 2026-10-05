@@ -576,22 +576,43 @@
   }
 }
 
-/* Clean Print Engine Rules — Borderless & Exact Paper Fit */
+/* Clean Print Engine Rules — A4 Reports & Thermal Invoices */
 @media print {
   @page {
-    margin: 0;
+    size: A4 portrait;
+    margin: 10mm 12mm 12mm 12mm;
   }
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    color: #000000 !important;
-    box-shadow: none !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-family: 'Hind Siliguri', 'Poppins', sans-serif !important;
+  }
+  .app-shell header, .app-shell nav, .app-shell aside, .no-print, [data-sidebar], .mobile-tab-bar {
+    display: none !important;
   }
   .card, .invoice-print-container {
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
+  }
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  table {
+    page-break-inside: auto !important;
+  }
+  tr, td, th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 
