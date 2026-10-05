@@ -152,9 +152,23 @@ export type EmployeeShopping = {
   id: string;
   employee_id?: string | null;
   employee_name: string;
-  items: { product_id: string; product_name: string; qty: number; unit_price: number; total: number }[];
+  items: {
+    product_id: string;
+    product_name: string;
+    qty: number;
+    regular_price?: number;
+    unit_price: number;
+    discount?: number;
+    total: number;
+  }[];
+  subtotal?: number;
+  discount?: number;
+  overall_discount?: number;
   total_amount: number;
   payment_status: "deduct_from_salary" | "paid_cash" | "gift";
+  settled?: boolean;
+  settled_at?: string | null;
+  salary_id?: string | null;
   date: string;
   note?: string | null;
   created_at: string;

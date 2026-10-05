@@ -31,6 +31,7 @@ import {
   Clock,
   ArrowLeft,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -139,12 +140,80 @@ export default function EmployeesPage() {
   const [addShopOpen, setAddShopOpen] = useState(false);
   const [shopEmpId, setShopEmpId] = useState("");
   const [shopStatus, setShopStatus] = useState<"deduct_from_salary" | "paid_cash" | "gift">("deduct_from_salary");
-  const [shopItems, setShopItems] = useState<{ product_id: string; product_name: string; qty: number; unit_price: number; total: number }[]>([]);
+  const [shopItems, setShopItems] = useState<{
+    product_id: string;
+    product_name: string;
+    qty: number;
+    regular_price: number;
+    unit_price: number;
+    discount: number;
+    total: number;
+  }[]>([]);
+  const [shopOverallDiscount, setShopOverallDiscount] = useState("");
   const [shopProdSearch, setShopProdSearch] = useState("");
   const [shopNote, setShopNote] = useState("");
   const [printSlipItem, setPrintSlipItem] = useState<EmployeeShopping | null>(null);
 
   const [busy, setBusy] = useState(false);
+
+  function updateItemUnitPrice(index: number, newPriceStr: string) {
+    setShopItems(prev => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const unitPrice = Math.max(0, parseFloat(newPriceStr) || 0);
+      const discount = next[index].discount || 0;
+      const total = Math.max(0, (unitPrice - discount) * next[index].qty);
+      next[index] = { ...next[index], unit_price: unitPrice, total };
+      return next;
+    });
+  }
+
+  function updateItemDiscount(index: number, newDiscStr: string) {
+    setShopItems(prev => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const discount = Math.max(0, parseFloat(newDiscStr) || 0);
+      const unitPrice = next[index].unit_price;
+      const total = Math.max(0, (unitPrice - discount) * next[index].qty);
+      next[index] = { ...next[index], discount, total };
+      return next;
+    });
+  }
+
+  function updateItemQty(index: number, newQty: number) {
+    setShopItems(prev => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      const q = Math.max(1, newQty);
+      const total = Math.max(0, (next[index].unit_price - next[index].discount) * q);
+      next[index] = { ...next[index], qty: q, total };
+      return next;
+    });
+  }
+
+  const shopRawSubtotal = useMemo(() => {
+    return shopItems.reduce((acc, it) => acc + (it.unit_price * it.qty), 0);
+  }, [shopItems]);
+
+  const shopItemDiscounts = useMemo(() => {
+    return shopItems.reduce((acc, it) => acc + ((it.discount || 0) * it.qty), 0);
+  }, [shopItems]);
+
+  const shopLineTotalsSum = useMemo(() => {
+    return shopItems.reduce((acc, it) => acc + it.total, 0);
+  }, [shopItems]);
+
+  const shopOverallDiscNum = useMemo(() => {
+    return Math.min(Math.max(0, Number(shopOverallDiscount) || 0), shopLineTotalsSum);
+  }, [shopOverallDiscount, shopLineTotalsSum]);
+
+  const shopFinalNetTotal = useMemo(() => {
+    return Math.max(0, shopLineTotalsSum - shopOverallDiscNum);
+  }, [shopLineTotalsSum, shopOverallDiscNum]);
+
+  const shopTotalDiscountAll = useMemo(() => {
+    return shopItemDiscounts + shopOverallDiscNum;
+  }, [shopItemDiscounts, shopOverallDiscNum]);
 
   // Selected employee for salary calculation
   const selectedSalaryEmp = useMemo(() => {
@@ -185,6 +254,8 @@ export default function EmployeesPage() {
       setShopEmpId(employees[0].id);
     }
     setShopItems([]);
+    setShopOverallDiscount("");
+    setShopProdSearch("");
     setShopNote("");
     setAddShopOpen(true);
   };
@@ -384,7 +455,6 @@ export default function EmployeesPage() {
       toast.error(lang === "bn" ? "কমপক্ষে ১টি পণ্য নির্বাচন করুন" : "Please add at least 1 product");
       return;
     }
-    const total = shopItems.reduce((acc, curr) => acc + curr.total, 0);
     const emp = employees.find(x => x.id === shopEmpId);
     setBusy(true);
     try {
@@ -393,7 +463,10 @@ export default function EmployeesPage() {
           employee_id: shopEmpId,
           employee_name: emp?.name || "Employee",
           items: shopItems,
-          total_amount: total,
+          subtotal: shopRawSubtotal,
+          discount: shopTotalDiscountAll,
+          overall_discount: shopOverallDiscNum,
+          total_amount: shopFinalNetTotal,
           payment_status: shopStatus,
           note: shopNote.trim() || null,
         },
@@ -404,6 +477,7 @@ export default function EmployeesPage() {
       qc.invalidateQueries({ queryKey: ["cashbox"] });
       setAddShopOpen(false);
       setShopItems([]);
+      setShopOverallDiscount("");
       setShopNote("");
     } catch (err: any) {
       toast.error(err.message || "Failed to record shopping");
@@ -901,10 +975,20 @@ export default function EmployeesPage() {
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap text-xs">
                           {s.items?.map((item, idx) => (
-                            <span key={idx} className="bg-muted px-2 py-0.5 rounded-md font-medium text-foreground">
-                              {item.product_name} x{item.qty} (৳{item.unit_price})
+                            <span key={idx} className="bg-muted px-2 py-0.5 rounded-md font-medium text-foreground inline-flex items-center gap-1">
+                              <span>{item.product_name} x{item.qty} (৳{item.unit_price})</span>
+                              {item.discount && item.discount > 0 ? (
+                                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold bg-rose-500/10 px-1 rounded">
+                                  −৳{item.discount}
+                                </span>
+                              ) : null}
                             </span>
                           ))}
+                          {s.discount && s.discount > 0 ? (
+                            <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                              {lang === "bn" ? `ছাড়: −৳${fmtMoney(s.discount)}` : `Disc: −৳${fmtMoney(s.discount)}`}
+                            </span>
+                          ) : null}
                         </div>
                         {s.note && <p className="text-xs text-muted-foreground">{s.note}</p>}
                       </div>
@@ -1359,9 +1443,9 @@ export default function EmployeesPage() {
 
       {/* ──────────────── Modal 4: Employee Shopping / Clothing Draw ──────────────── */}
       <Dialog open={addShopOpen} onOpenChange={setAddShopOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="font-charukola flex items-center gap-2">
+            <DialogTitle className="font-charukola flex items-center gap-2 text-base sm:text-lg">
               <Shirt className="size-4 text-pink-600" />
               {lang === "bn" ? "কর্মচারী পোশাক / পণ্য কেনাকাটা" : "Employee Clothing & Shopping Draw"}
             </DialogTitle>
@@ -1417,10 +1501,10 @@ export default function EmployeesPage() {
               />
 
               {shopProdSearch.trim() && (
-                <div className="max-h-32 overflow-y-auto divide-y divide-border bg-card border rounded-lg shadow-xs">
+                <div className="max-h-36 overflow-y-auto divide-y divide-border bg-card border rounded-lg shadow-xs">
                   {products
                     .filter(p => p.name.toLowerCase().includes(shopProdSearch.toLowerCase()) || (p.code && p.code.toLowerCase().includes(shopProdSearch.toLowerCase())))
-                    .slice(0, 5)
+                    .slice(0, 6)
                     .map(p => (
                       <div
                         key={p.id}
@@ -1429,15 +1513,22 @@ export default function EmployeesPage() {
                           const existingIdx = shopItems.findIndex(i => i.product_id === p.id);
                           let newItems = [...shopItems];
                           if (existingIdx >= 0) {
-                            newItems[existingIdx].qty += 1;
-                            newItems[existingIdx].total = newItems[existingIdx].qty * newItems[existingIdx].unit_price;
+                            const item = newItems[existingIdx];
+                            const newQty = item.qty + 1;
+                            newItems[existingIdx] = {
+                              ...item,
+                              qty: newQty,
+                              total: Math.max(0, (item.unit_price - item.discount) * newQty),
+                            };
                           } else {
                             const price = Number(p.sell_price) || 0;
                             newItems.push({
                               product_id: p.id,
                               product_name: p.name,
                               qty: 1,
+                              regular_price: price,
                               unit_price: price,
+                              discount: 0,
                               total: price,
                             });
                           }
@@ -1449,34 +1540,161 @@ export default function EmployeesPage() {
                           <span className="font-semibold">{p.name}</span>
                           <span className="text-[10px] text-muted-foreground ml-1.5">(স্টক: {p.stock})</span>
                         </div>
-                        <span className="font-bold text-emerald-600">৳{p.sell_price}</span>
+                        <span className="font-bold text-emerald-600 font-mono">৳{p.sell_price}</span>
                       </div>
                     ))}
                 </div>
               )}
 
-              {/* Chosen Items */}
+              {/* Chosen Items with Editable Sell Price and Discount */}
               {shopItems.length > 0 && (
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-2 pt-1 max-h-56 overflow-y-auto pr-1">
                   {shopItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-card border text-xs">
-                      <div className="min-w-0 flex-1 mr-2">
-                        <p className="font-bold truncate">{item.product_name}</p>
-                        <p className="text-[10px] text-muted-foreground">৳{item.unit_price} x {item.qty} = ৳{item.total}</p>
+                    <div key={idx} className="p-2 sm:p-2.5 rounded-xl bg-card border border-border/80 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs text-foreground truncate">{item.product_name}</span>
+                            {item.regular_price > 0 && item.regular_price !== item.unit_price && (
+                              <span className="text-[10px] text-muted-foreground line-through">
+                                MRP: ৳{item.regular_price}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShopItems(shopItems.filter((_, i) => i !== idx))}
+                          className="p-1 text-rose-500 hover:bg-rose-500/10 rounded-md transition-colors cursor-pointer"
+                          title={lang === "bn" ? "আইটেম মুছুন" : "Remove item"}
+                        >
+                          <X className="size-3.5" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShopItems(shopItems.filter((_, i) => i !== idx))}
-                        className="p-1 text-rose-500 hover:bg-rose-500/10 rounded"
-                      >
-                        <X className="size-3" />
-                      </button>
+
+                      <div className="grid grid-cols-12 gap-1.5 sm:gap-2 items-center text-xs">
+                        {/* Sell Price (বিক্রয় মূল্য) */}
+                        <div className="col-span-4 space-y-0.5">
+                          <label className="text-[10px] font-semibold text-muted-foreground block truncate">
+                            {lang === "bn" ? "বিক্রয় মূল্য (৳)" : "Sell Price (৳)"}
+                          </label>
+                          <Input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={item.unit_price}
+                            onChange={e => updateItemUnitPrice(idx, e.target.value)}
+                            className="h-7 text-xs font-mono font-bold bg-background px-2"
+                          />
+                        </div>
+
+                        {/* Discount (ছাড়) */}
+                        <div className="col-span-3 space-y-0.5">
+                          <label className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 block truncate">
+                            {lang === "bn" ? "ছাড় (৳)" : "Disc (৳)"}
+                          </label>
+                          <Input
+                            type="number"
+                            step="any"
+                            min="0"
+                            placeholder="0"
+                            value={item.discount || ""}
+                            onChange={e => updateItemDiscount(idx, e.target.value)}
+                            className="h-7 text-xs font-mono text-rose-600 dark:text-rose-400 font-bold bg-background px-2"
+                          />
+                        </div>
+
+                        {/* Qty (পরিমাণ) */}
+                        <div className="col-span-3 space-y-0.5">
+                          <label className="text-[10px] font-semibold text-muted-foreground block truncate">
+                            {lang === "bn" ? "পরিমাণ" : "Qty"}
+                          </label>
+                          <div className="flex items-center">
+                            <button
+                              type="button"
+                              onClick={() => updateItemQty(idx, Math.max(1, item.qty - 1))}
+                              className="size-7 flex items-center justify-center rounded-l-md border border-r-0 bg-muted hover:bg-muted/80 text-muted-foreground text-xs font-bold select-none cursor-pointer"
+                            >
+                              −
+                            </button>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.qty}
+                              onChange={e => updateItemQty(idx, parseInt(e.target.value) || 1)}
+                              className="h-7 rounded-none text-center font-mono font-bold text-xs p-0 border-x-0 bg-background w-8 shrink-0"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateItemQty(idx, item.qty + 1)}
+                              className="size-7 flex items-center justify-center rounded-r-md border border-l-0 bg-muted hover:bg-muted/80 text-muted-foreground text-xs font-bold select-none cursor-pointer"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Line Total */}
+                        <div className="col-span-2 text-right space-y-0.5">
+                          <span className="text-[10px] text-muted-foreground block">
+                            {lang === "bn" ? "মোট" : "Total"}
+                          </span>
+                          <span className="font-bold font-mono text-xs text-foreground block pt-0.5">
+                            ৳{item.total}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center pt-1 font-bold text-xs">
-                    <span>{lang === "bn" ? "মোট মূল্য:" : "Total Price:"}</span>
-                    <span className="text-pink-600 font-charukola">
-                      {fmtMoney(shopItems.reduce((a, b) => a + b.total, 0))}
+                </div>
+              )}
+
+              {/* Shopping Bill Summary */}
+              {shopItems.length > 0 && (
+                <div className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-2 text-xs">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{lang === "bn" ? "উপমোট (বিক্রয় মূল্য):" : "Subtotal (Sell Price):"}</span>
+                    <span className="font-mono font-medium">৳{shopRawSubtotal}</span>
+                  </div>
+
+                  {shopItemDiscounts > 0 && (
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 text-[11px] font-medium">
+                      <span>{lang === "bn" ? "আইটেম ডিসকাউন্ট ছাড়:" : "Item Discounts:"}</span>
+                      <span className="font-mono font-semibold">−৳{shopItemDiscounts}</span>
+                    </div>
+                  )}
+
+                  {/* Overall Cart / Final Discount Input */}
+                  <div className="flex items-center justify-between gap-2 py-1.5 border-y border-border/60">
+                    <div className="flex items-center gap-1.5 font-bold text-foreground">
+                      <Sparkles className="size-3.5 text-amber-500" />
+                      <span>{lang === "bn" ? "অতিরিক্ত সার্বিক ছাড়:" : "Extra Cart Discount:"}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-rose-500 font-bold">−৳</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="0"
+                        value={shopOverallDiscount}
+                        onChange={e => setShopOverallDiscount(e.target.value)}
+                        className="h-7 w-24 text-right text-xs font-bold font-mono bg-background border-border/80 text-rose-600 dark:text-rose-400 rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  {shopTotalDiscountAll > 0 && (
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 font-bold text-[11px]">
+                      <span>{lang === "bn" ? "সর্বমোট ছাড় কর্তন:" : "Total Discount Deducted:"}</span>
+                      <span className="font-mono">−৳{shopTotalDiscountAll}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-1 border-t border-border/80 font-bold">
+                    <span className="text-xs sm:text-sm">{lang === "bn" ? "সর্বমোট প্রদেয় বিল:" : "Net Payable Total:"}</span>
+                    <span className="text-base sm:text-lg text-pink-600 font-charukola">
+                      ৳{fmtMoney(shopFinalNetTotal)}
                     </span>
                   </div>
                 </div>
@@ -1503,7 +1721,7 @@ export default function EmployeesPage() {
               <Button type="button" variant="outline" size="sm" onClick={() => setAddShopOpen(false)} className="rounded-xl text-xs">
                 {t("cancel")}
               </Button>
-              <Button type="submit" disabled={busy} size="sm" className="rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-700 text-white">
+              <Button type="submit" disabled={busy} size="sm" className="rounded-xl text-xs font-bold bg-pink-600 hover:bg-pink-700 text-white cursor-pointer">
                 {busy ? <RefreshCw className="size-3.5 animate-spin mr-1" /> : <Check className="size-3.5 mr-1" />}
                 <span>{lang === "bn" ? "রেকর্ড সম্পন্ন করুন" : "Save Draw"}</span>
               </Button>
@@ -1559,14 +1777,35 @@ export default function EmployeesPage() {
                     <span>{lang === "bn" ? "মূল্য" : "Total"}</span>
                   </div>
                   {printSlipItem.items?.map((it, idx) => (
-                    <div key={idx} className="flex justify-between text-[11px]">
-                      <span className="truncate max-w-[170px]">{it.product_name} x{it.qty}</span>
-                      <span className="font-bold">৳{it.total}</span>
+                    <div key={idx} className="flex justify-between text-[11px] gap-2">
+                      <div className="truncate max-w-[190px]">
+                        <div>{it.product_name} x{it.qty}</div>
+                        <div className="text-[9px] text-muted-foreground">
+                          @৳{it.unit_price}
+                          {it.discount && it.discount > 0 ? ` (-৳${it.discount} ছাড়)` : ""}
+                        </div>
+                      </div>
+                      <span className="font-bold shrink-0">৳{it.total}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex justify-between font-bold text-sm pt-1">
+                {printSlipItem.discount && printSlipItem.discount > 0 ? (
+                  <div className="space-y-1 pt-1 text-[11px]">
+                    {printSlipItem.subtotal && printSlipItem.subtotal !== printSlipItem.total_amount && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>{lang === "bn" ? "উপমোট:" : "Subtotal:"}</span>
+                        <span>৳{printSlipItem.subtotal}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-rose-600 font-bold">
+                      <span>{lang === "bn" ? "মোট ছাড়:" : "Total Discount:"}</span>
+                      <span>−৳{printSlipItem.discount}</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex justify-between font-bold text-sm pt-1 border-t">
                   <span>{lang === "bn" ? "সর্বমোট:" : "Grand Total:"}</span>
                   <span className="text-pink-600 font-charukola">{fmtMoney(printSlipItem.total_amount)}</span>
                 </div>

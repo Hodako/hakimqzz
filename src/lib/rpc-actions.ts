@@ -5275,8 +5275,29 @@ export async function createEmployeeShoppingFn(input: { data: any }) {
   const db = await getDb();
   const id = crypto.randomUUID();
   const empName = data.employee_name || "Employee";
-  const items = Array.isArray(data.items) ? data.items : [];
-  const totalAmount = Number(data.total_amount) || 0;
+  const items = Array.isArray(data.items) ? data.items.map((it: any) => {
+    const qty = Math.max(1, Number(it.qty) || 1);
+    const regPrice = Number(it.regular_price) || Number(it.unit_price) || 0;
+    const unitPrice = Math.max(0, Number(it.unit_price) || 0);
+    const disc = Math.max(0, Number(it.discount) || 0);
+    const total = it.total !== undefined ? Math.max(0, Number(it.total) || 0) : Math.max(0, (unitPrice - disc) * qty);
+    return {
+      product_id: it.product_id,
+      product_name: it.product_name || "Item",
+      qty,
+      regular_price: regPrice,
+      unit_price: unitPrice,
+      discount: disc,
+      total,
+    };
+  }) : [];
+
+  const rawSubtotal = items.reduce((sum: number, it: any) => sum + (it.unit_price * it.qty), 0);
+  const itemDiscounts = items.reduce((sum: number, it: any) => sum + ((it.discount || 0) * it.qty), 0);
+  const overallDiscount = Math.max(0, Number(data.discount) || 0);
+  const totalDiscount = itemDiscounts + overallDiscount;
+  const calculatedTotal = Math.max(0, rawSubtotal - totalDiscount);
+  const totalAmount = data.total_amount !== undefined ? Math.max(0, Number(data.total_amount) || 0) : calculatedTotal;
   const paymentStatus = data.payment_status || "deduct_from_salary";
   const note = data.note || "";
 
@@ -5302,8 +5323,12 @@ export async function createEmployeeShoppingFn(input: { data: any }) {
     employee_id: data.employee_id || null,
     employee_name: empName,
     items,
+    subtotal: rawSubtotal,
+    discount: totalDiscount,
+    overall_discount: overallDiscount,
     total_amount: totalAmount,
     payment_status: paymentStatus,
+    settled: false,
     date: data.date || new Date().toISOString().slice(0, 10),
     note: note || null,
     created_at: new Date().toISOString(),
