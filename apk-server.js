@@ -146,9 +146,9 @@ const server = http.createServer((req, res) => {
 </head>
 <body>
   <div class="card">
-    <div class="badge">LIVE RELEASE v2.1</div>
-    <h1>HakimQzz SMS Gateway</h1>
-    <p class="sub">High-Speed SMS Delivery Gateway for DreamFashion POS (Supports Android 7 to Android 15)</p>
+    <div class="badge">LIVE RELEASE v2.2</div>
+    <h1>Dream Fashion SMS Gateway</h1>
+    <p class="sub">High-Speed SMS Delivery Gateway for Dream Fashion POS (Supports Android 7 to Android 15)</p>
 
     <div class="qr-box">
       <img src="${qrCodeUrl}" alt="Scan to Download on Mobile" />
@@ -162,16 +162,17 @@ const server = http.createServer((req, res) => {
 
     <div class="meta-box">
       <div class="meta-row"><span class="meta-label">File:</span><span class="meta-val">${APK_FILENAME}</span></div>
-      <div class="meta-row"><span class="meta-label">Version:</span><span class="meta-val">v2.1 (Build 3)</span></div>
+      <div class="meta-row"><span class="meta-label">Version:</span><span class="meta-val">v2.2 (Build 5)</span></div>
+      <div class="meta-row"><span class="meta-label">Package:</span><span class="meta-val">com.dreamfashion.smsgateway</span></div>
       <div class="meta-row"><span class="meta-label">Target SDK:</span><span class="meta-val">Android 14 (API 34)</span></div>
       <div class="meta-row"><span class="meta-label">Min SDK:</span><span class="meta-val">Android 7.0 (API 24+)</span></div>
-      <div class="meta-row"><span class="meta-label">Build Type:</span><span class="meta-val">Release (Signed v2/v3)</span></div>
+      <div class="meta-row"><span class="meta-label">Build Type:</span><span class="meta-val">Official Release (Signed & ZipAligned)</span></div>
       <div class="meta-row"><span class="meta-label">Last Updated:</span><span class="meta-val">${lastModified}</span></div>
     </div>
 
     <div class="warning">
       <strong>⚠️ Installation Note:</strong>
-      If you previously installed an older version, please <strong>uninstall it first</strong> before installing this build to avoid signature conflicts. When prompted by Chrome, enable <em>"Allow from this source"</em>.
+      If you previously installed an older version, please <strong>uninstall it first</strong> before installing this build to avoid signature conflicts. When prompted by Chrome or Play Protect, tap <em>"More details"</em> &gt; <em>"Install anyway"</em>.
     </div>
   </div>
 </body>

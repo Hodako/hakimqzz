@@ -8,11 +8,11 @@ android {
     namespace = "com.example.hakimqzzpos"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.hakimqzzpos"
+        applicationId = "com.dreamfashion.smsgateway"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 5
+        versionName = "2.2"
     }
 
     signingConfigs {

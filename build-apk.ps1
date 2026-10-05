@@ -17,11 +17,11 @@ if (-not $env:JAVA_HOME -or -not (Test-Path "$env:JAVA_HOME\bin\javac.exe")) {
 
 Push-Location android-app
 try {
-    .\gradlew.bat assembleDebug --no-daemon
+    .\gradlew.bat assembleRelease --no-daemon
     if ($LASTEXITCODE -eq 0) {
-        $apkPath = Get-ChildItem -Path "app\build\outputs\apk\release\*.apk" | Select-Object -First 1
+        $apkPath = Get-ChildItem -Path "app\build\outputs\apk\release\app-release.apk" | Select-Object -First 1
         if (-not $apkPath) {
-            $apkPath = Get-ChildItem -Path "app\build\outputs\apk\debug\*.apk" | Select-Object -First 1
+            $apkPath = Get-ChildItem -Path "app\build\outputs\apk\release\*.apk" | Select-Object -First 1
         }
         if ($apkPath) {
             Copy-Item $apkPath.FullName -Destination "..\public\hakimqzz-sms-gateway.apk" -Force
@@ -30,7 +30,9 @@ try {
             Copy-Item $apkPath.FullName -Destination "..\dream_v3.apk" -Force
             Copy-Item $apkPath.FullName -Destination "..\dreamFashion.apk" -Force
             Copy-Item $apkPath.FullName -Destination "..\dreamfashion-live.apk" -Force
-            Write-Host "SUCCESS: APK created and copied to public/hakimqzz-sms-gateway.apk and root." -ForegroundColor Green
+            Copy-Item $apkPath.FullName -Destination "..\dream-pos.apk" -Force
+            Copy-Item $apkPath.FullName -Destination "..\dream-fashion-v2.0.apk" -Force
+            Write-Host "SUCCESS: Release APK created, verified, and copied to public/hakimqzz-sms-gateway.apk and root." -ForegroundColor Green
         }
     } else {
         Write-Host "Gradle build returned exit code $LASTEXITCODE" -ForegroundColor Yellow
