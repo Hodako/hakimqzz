@@ -6,11 +6,11 @@ export function useCashboxQuery() {
   return useQuery<CashboxEntry[]>({
     queryKey: ["cashbox"],
     queryFn: getCashbox,
-    staleTime: 0,
-    gcTime: 5 * 60 * 1000,
-    refetchInterval: 3000, // Poll every 3 seconds for real-time database sync
+    staleTime: 15 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 30000, // 30-second heartbeat for real-time sync without overwhelming the CPU/laptop
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchOnReconnect: true,
   });
 }

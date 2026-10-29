@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -41,11 +41,12 @@ export default function OnlineSellsPage() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
-  // Filter for online sales only
+  // Filter for online sales only (includes sales with courier status or tracking code)
   const onlineSales = useMemo(() => {
-    return (data ?? []).filter((s) => s.type === "online");
+    return (data ?? []).filter((s) => s.type === "online" || Boolean((s as any).tracking_code) || Boolean((s as any).courier_status));
   }, [data]);
 
   // Group by cart_id if multi-item cart
@@ -62,6 +63,15 @@ export default function OnlineSellsPage() {
       }
     });
 
+    const parseTs = (dateInput: any): number => {
+      if (!dateInput) return 0;
+      if (typeof dateInput === "number") return dateInput;
+      if (typeof dateInput?.toDate === "function") return dateInput.toDate().getTime();
+      if (dateInput?.seconds !== undefined) return dateInput.seconds * 1000;
+      const t = typeof dateInput === "string" ? Date.parse(dateInput) : new Date(dateInput).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
     const result = [
       ...singles.map((s) => ({
         id: s.id,
@@ -74,10 +84,11 @@ export default function OnlineSellsPage() {
         due_amount: s.due_amount,
         courier_status: (s as any).courier_status || "pending",
         courier_name: (s as any).courier_name || "Courier Delivery",
-        tracking_code: (s as any).tracking_code || null,
+        tracking_code: (s as any).tracking_code || (s as any).tracking_id || (s as any).consignment_id || null,
         note: s.note,
         returned: (s as any).returned || false,
         created_at: s.created_at,
+        _ts: parseTs(s.created_at),
         parties: s.parties,
         party_id: s.party_id,
       })),
@@ -90,6 +101,10 @@ export default function OnlineSellsPage() {
         const totalDue = items.reduce((sum, x) => sum + (Number(x.due_amount) || 0), 0);
         const names = items.map((x) => `${x.product_name} (×${x.qty})`).join(", ");
 
+        const foundTracking = (first as any).tracking_code ||
+          items.find((x) => (x as any).tracking_code || (x as any).tracking_id || (x as any).consignment_id)?.tracking_code ||
+          null;
+
         return {
           id: first.id,
           cart_id: cartId,
@@ -100,35 +115,54 @@ export default function OnlineSellsPage() {
           profit: totalProfit,
           paid_amount: totalPaid,
           due_amount: totalDue,
-          courier_status: (first as any).courier_status || "pending",
-          courier_name: (first as any).courier_name || "Courier Delivery",
-          tracking_code: (first as any).tracking_code || null,
+          courier_status: (first as any).courier_status || items.find((x) => (x as any).courier_status)?.courier_status || "pending",
+          courier_name: (first as any).courier_name || items.find((x) => (x as any).courier_name)?.courier_name || "Courier Delivery",
+          tracking_code: foundTracking,
           note: first.note,
           returned: (first as any).returned || false,
           created_at: first.created_at,
+          _ts: parseTs(first.created_at),
           parties: first.parties,
           party_id: first.party_id,
         };
       }),
     ];
 
-    const parseDate = (dateInput: any): Date => {
-      if (!dateInput) return new Date(0);
-      if (typeof dateInput?.toDate === "function") return dateInput.toDate();
-      if (dateInput?.seconds !== undefined) return new Date(dateInput.seconds * 1000);
-      const d = new Date(dateInput);
-      return !isNaN(d.getTime()) ? d : new Date(0);
-    };
-
-    result.sort((a, b) => parseDate(b.created_at).getTime() - parseDate(a.created_at).getTime());
+    result.sort((a, b) => b._ts - a._ts);
     return result;
   }, [onlineSales]);
 
-  // Tab Filtering
+  // Tab & Tracking Search Filtering - Always matches tracking codes across all tabs and records
   const filteredList = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
+    const cleanQ = q.replace(/[^a-zA-Z0-9]/g, "");
+
     return groupedOnlineSales.filter((item) => {
-      // 1. Tab Filter
+      // 1. Search query
+      if (q) {
+        const itemTrack = (item.tracking_code ?? "").toLowerCase();
+        const cleanTrack = itemTrack.replace(/[^a-zA-Z0-9]/g, "");
+        const matchTrack = (itemTrack && (itemTrack.includes(q) || (cleanQ && cleanTrack.includes(cleanQ)))) ||
+                           item.items.some((x) => {
+                             const t = ((x as any).tracking_code || (x as any).tracking_id || (x as any).consignment_id || "").toLowerCase();
+                             return t && (t.includes(q) || (cleanQ && t.replace(/[^a-zA-Z0-9]/g, "").includes(cleanQ)));
+                           });
+
+        // If tracking code matches, immediately show across all tabs!
+        if (matchTrack) return true;
+
+        const matchProd = item.product_name.toLowerCase().includes(q);
+        const matchCust = (item.parties?.name ?? "").toLowerCase().includes(q) ||
+                          ((item as any).parties?.phone ?? "").includes(q) ||
+                          ((item as any).customer?.phone ?? "").includes(q);
+        const matchCourier = (item.courier_name ?? "").toLowerCase().includes(q);
+        const matchNote = (item.note ?? "").toLowerCase().includes(q);
+        const matchId = item.id.toLowerCase().includes(q);
+
+        if (!matchProd && !matchCust && !matchCourier && !matchNote && !matchId) return false;
+      }
+
+      // 2. Tab Filter
       if (tab === "pending") {
         if (item.courier_status === "collected" || item.courier_status === "cancelled" || item.returned) return false;
       } else if (tab === "collected") {
@@ -137,36 +171,28 @@ export default function OnlineSellsPage() {
         if (item.courier_status !== "cancelled" && !item.returned) return false;
       }
 
-      // 2. Search query
-      if (q) {
-        const matchProd = item.product_name.toLowerCase().includes(q);
-        const matchCust = (item.parties?.name ?? "").toLowerCase().includes(q);
-        const matchCourier = (item.courier_name ?? "").toLowerCase().includes(q);
-        const matchTrack = (item.tracking_code ?? "").toLowerCase().includes(q);
-        if (!matchProd && !matchCust && !matchCourier && !matchTrack) return false;
-      }
-
       return true;
     });
-  }, [groupedOnlineSales, tab, search]);
+  }, [groupedOnlineSales, tab, deferredSearch]);
 
-  // Overall Financial Counters for Online Sales
-  const pendingAmount = useMemo(() => {
-    return groupedOnlineSales
-      .filter((s) => s.courier_status !== "collected" && s.courier_status !== "cancelled" && !s.returned)
-      .reduce((acc, s) => acc + s.sell_price, 0);
-  }, [groupedOnlineSales]);
+  // Fast single-pass financial counters for online sales
+  const { pendingAmount, collectedAmount, onlineProfitTotal } = useMemo(() => {
+    let pending = 0;
+    let collected = 0;
+    let profit = 0;
 
-  const collectedAmount = useMemo(() => {
-    return groupedOnlineSales
-      .filter((s) => s.courier_status === "collected")
-      .reduce((acc, s) => acc + s.sell_price, 0);
-  }, [groupedOnlineSales]);
+    for (const s of groupedOnlineSales) {
+      if (s.courier_status === "collected") {
+        collected += s.sell_price;
+      } else if (s.courier_status !== "cancelled" && !s.returned) {
+        pending += s.sell_price;
+      }
+      if (s.courier_status !== "cancelled" && !s.returned) {
+        profit += s.profit;
+      }
+    }
 
-  const onlineProfitTotal = useMemo(() => {
-    return groupedOnlineSales
-      .filter((s) => s.courier_status !== "cancelled" && !s.returned)
-      .reduce((acc, s) => acc + s.profit, 0);
+    return { pendingAmount: pending, collectedAmount: collected, onlineProfitTotal: profit };
   }, [groupedOnlineSales]);
 
   async function handleApprove(id: string) {

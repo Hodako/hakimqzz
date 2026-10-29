@@ -3,7 +3,7 @@ import { readQueryCache, writeQueryCache } from "@/lib/query-cache";
 
 /**
  * useQuery wrapper that hydrates from localStorage and persists on success.
- * Improves perceived load speed on repeat visits.
+ * Improves perceived load speed on repeat visits without hammering CPU or battery.
  */
 export function useCachedQuery<T>(
   queryKey: QueryKey,
@@ -29,13 +29,13 @@ export function useCachedQuery<T>(
       }
     },
     initialData: cached,
-    initialDataUpdatedAt: cached ? Date.now() - 1000 : undefined,
+    initialDataUpdatedAt: cached ? Date.now() - 5000 : undefined,
     placeholderData: keepPreviousData,
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30s freshness window - prevents repetitive refetching on minor clicks
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: true,
-    refetchOnMount: "always",
-    refetchInterval: 15000, // 15-second heartbeat for real-time syncing without overwhelming network
+    refetchOnMount: false,
+    refetchInterval: 45000, // 45-second background sync heartbeat
     refetchIntervalInBackground: false,
     ...options,
   });

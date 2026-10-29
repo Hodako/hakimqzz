@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -80,6 +80,7 @@ interface GroupedSale {
   tracking_code?: string | null;
   returned?: boolean;
   created_at: string;
+  _ts: number;
   parties?: { name: string } | null;
   items: Sale[];
 }
@@ -120,6 +121,15 @@ function isPartialOrSplitSale(s: Sale | GroupedSale): boolean {
   return false;
 }
 
+function parseSaleTimestamp(dateInput: any): number {
+  if (!dateInput) return 0;
+  if (typeof dateInput === "number") return dateInput;
+  if (typeof dateInput?.toDate === "function") return dateInput.toDate().getTime();
+  if (dateInput?.seconds !== undefined) return dateInput.seconds * 1000;
+  const t = typeof dateInput === "string" ? Date.parse(dateInput) : new Date(dateInput).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
 function groupSales(sales: Sale[]): GroupedSale[] {
   const grouped: GroupedSale[] = [];
   const cartGroups: Record<string, Sale[]> = {};
@@ -145,6 +155,8 @@ function groupSales(sales: Sale[]): GroupedSale[] {
       const splitBank = Number((s as any).split_bank) || 0;
       const isSplitNonCart = s.type === "split" || (s.type as string) === "partial" || (splitCash > 0 || splitBkash > 0 || splitBank > 0);
 
+      const trackingCode = (s as any).tracking_code || (s as any).tracking_id || (s as any).consignment_id || null;
+
       grouped.push({
         id: s.id,
         isGroup: false,
@@ -163,9 +175,10 @@ function groupSales(sales: Sale[]): GroupedSale[] {
         payment_accepted: Boolean((s as any).payment_accepted || (s as any).payment_status === "accepted"),
         courier_status: (s as any).courier_status || (s.type === "online" ? "pending" : null),
         courier_name: (s as any).courier_name || (s.type === "online" ? "Courier" : null),
-        tracking_code: (s as any).tracking_code || null,
+        tracking_code: trackingCode,
         returned: (s as any).returned || false,
         created_at: s.created_at,
+        _ts: parseSaleTimestamp(s.created_at),
         parties: s.parties,
         items: [s],
       });
@@ -204,6 +217,16 @@ function groupSales(sales: Sale[]): GroupedSale[] {
     const isSplitGroup = (totalSplitCash > 0 || totalSplitBkash > 0 || totalSplitBank > 0) ||
       items.some(x => x.type === "split" || (x.type as string) === "partial");
 
+    const foundTracking = (firstItem as any).tracking_code ||
+      items.find(x => (x as any).tracking_code || (x as any).tracking_id || (x as any).consignment_id)?.tracking_code ||
+      null;
+    const foundCourierStatus = (firstItem as any).courier_status ||
+      items.find(x => (x as any).courier_status)?.courier_status ||
+      (items.some(x => x.type === "online") ? "pending" : null);
+    const foundCourierName = (firstItem as any).courier_name ||
+      items.find(x => (x as any).courier_name)?.courier_name ||
+      (items.some(x => x.type === "online") ? "Courier" : null);
+
     grouped.push({
       id: firstItem.id,
       isGroup: true,
@@ -220,25 +243,18 @@ function groupSales(sales: Sale[]): GroupedSale[] {
       split_bank: totalSplitBank > 0 ? totalSplitBank : undefined,
       payment_status: paymentStatus,
       payment_accepted: isAnyAccepted,
-      courier_status: (firstItem as any).courier_status || (firstItem.type === "online" ? "pending" : null),
-      courier_name: (firstItem as any).courier_name || (firstItem.type === "online" ? "Courier" : null),
-      tracking_code: (firstItem as any).tracking_code || null,
+      courier_status: foundCourierStatus,
+      courier_name: foundCourierName,
+      tracking_code: foundTracking,
       returned: (firstItem as any).returned || false,
       created_at: firstItem.created_at,
+      _ts: parseSaleTimestamp(firstItem.created_at),
       parties: firstItem.parties,
       items: items,
     });
   });
 
-  function parseSaleDate(dateInput: any): Date {
-    if (!dateInput) return new Date(0);
-    if (typeof dateInput?.toDate === "function") return dateInput.toDate();
-    if (dateInput?.seconds !== undefined) return new Date(dateInput.seconds * 1000);
-    const d = new Date(dateInput);
-    return !isNaN(d.getTime()) ? d : new Date(0);
-  }
-
-  grouped.sort((a, b) => parseSaleDate(b.created_at).getTime() - parseSaleDate(a.created_at).getTime());
+  grouped.sort((a, b) => b._ts - a._ts);
   return grouped;
 }
 
@@ -255,6 +271,7 @@ export default function SalesPage() {
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [activeTab, setActiveTab] = useState("all");
   const [dateRange, setDateRange] = useState<"today" | "yesterday" | "week" | "month" | "all" | "custom">("today");
@@ -320,58 +337,71 @@ export default function SalesPage() {
     return groupSales(rawSales);
   }, [rawSales]);
 
-  // Date Filtering Logic
-  const inDateRange = (dateInput: any) => {
-    if (!dateInput) return false;
-    let d: Date;
-    if (typeof dateInput?.toDate === "function") {
-      d = dateInput.toDate();
-    } else if (dateInput?.seconds !== undefined) {
-      d = new Date(dateInput.seconds * 1000);
-    } else {
-      d = new Date(dateInput);
-    }
-    if (isNaN(d.getTime())) return false;
+  // Precomputed Date Range Boundaries (computed once, not inside the hot filter loop)
+  const dateBounds = useMemo(() => {
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const customFromTs = customFrom ? new Date(customFrom).getTime() : 0;
+    let customToTs = 0;
+    if (customTo) {
+      const toDate = new Date(customTo);
+      toDate.setHours(23, 59, 59, 999);
+      customToTs = toDate.getTime();
+    }
+    return { todayStart, yesterdayStart, weekStart, monthStart, customFromTs, customToTs };
+  }, [customFrom, customTo]);
 
-    if (dateRange === "today") {
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return d >= today;
-    }
-    if (dateRange === "yesterday") {
-      const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return d >= yesterdayStart && d < yesterdayEnd;
-    }
-    if (dateRange === "week") {
-      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-      return d >= weekStart;
-    }
-    if (dateRange === "month") {
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return d >= monthStart;
-    }
-    if (dateRange === "custom") {
-      if (customFrom && d < new Date(customFrom)) return false;
-      if (customTo) {
-        const toDate = new Date(customTo);
-        toDate.setHours(23, 59, 59, 999);
-        if (d > toDate) return false;
-      }
-      return true;
-    }
-    return true; // "all"
-  };
+  // Master Filter: Online Tracking Code Search Across All Records + Date + Category + Payment Method Tab
+  const isSearchActive = Boolean(deferredSearch.trim());
 
-  // Master Filter: Search + Date + Category + Payment Method Tab
   const filteredSales = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
+    const cleanQ = q.replace(/[^a-zA-Z0-9]/g, "");
+    const { todayStart, yesterdayStart, weekStart, monthStart, customFromTs, customToTs } = dateBounds;
 
     return allSalesGrouped.filter(s => {
-      // 1. Date filter
-      if (!inDateRange(s.created_at)) return false;
+      // 1. Online Tracking Code & Search Query Matching
+      if (q) {
+        const itemTrack = (s.tracking_code || "").toLowerCase();
+        const cleanTrack = itemTrack.replace(/[^a-zA-Z0-9]/g, "");
+        const matchTracking = (itemTrack && (itemTrack.includes(q) || (cleanQ && cleanTrack.includes(cleanQ)))) ||
+                              s.items.some(it => {
+                                const itTrack = ((it as any).tracking_code || (it as any).tracking_id || (it as any).consignment_id || "").toLowerCase();
+                                return itTrack && (itTrack.includes(q) || (cleanQ && itTrack.replace(/[^a-zA-Z0-9]/g, "").includes(cleanQ)));
+                              });
 
-      // 2. Tab / Payment Method Filter
+        // Online tracking code search ALWAYS works through ALL records and tabs!
+        if (matchTracking) return true;
+
+        const matchName = s.product_name.toLowerCase().includes(q);
+        const matchCustomer = (s.parties?.name ?? "").toLowerCase().includes(q) ||
+                              ((s as any).parties?.phone ?? "").includes(q) ||
+                              ((s as any).customer?.phone ?? "").includes(q);
+        const matchNote = s.items.some(it => (it.note || "").toLowerCase().includes(q));
+        const matchId = (s.id || "").toLowerCase().includes(q) ||
+                        `inv-${(s.id || "").slice(-6)}`.toLowerCase().includes(q);
+
+        if (!matchName && !matchCustomer && !matchNote && !matchId) return false;
+      }
+
+      // 2. Date Filter
+      // When searching, bypass the date filter so that searches work properly across ALL records!
+      if (!q) {
+        const ts = s._ts;
+        if (dateRange === "today" && ts < todayStart) return false;
+        if (dateRange === "yesterday" && (ts < yesterdayStart || ts >= todayStart)) return false;
+        if (dateRange === "week" && ts < weekStart) return false;
+        if (dateRange === "month" && ts < monthStart) return false;
+        if (dateRange === "custom") {
+          if (customFromTs && ts < customFromTs) return false;
+          if (customToTs && ts > customToTs) return false;
+        }
+      }
+
+      // 3. Tab / Payment Method Filter
       if (activeTab !== "all") {
         if (activeTab === "cash" && s.type !== "cash" && !(s.type === "split" && (Number(s.split_cash) > 0))) return false;
         if (activeTab === "bkash") {
@@ -387,7 +417,7 @@ export default function SalesPage() {
         if (activeTab === "online" && s.type !== "online") return false;
       }
 
-      // 3. Category Filter
+      // 4. Category Filter
       if (selectedCategory !== "all") {
         const matchesCategory = s.items.some(it => {
           const cat = (it.product_id ? productCategoryMap.get(it.product_id) : null) ||
@@ -397,56 +427,47 @@ export default function SalesPage() {
         if (!matchesCategory) return false;
       }
 
-      // 4. Search Query
-      if (q) {
-        const matchName = s.product_name.toLowerCase().includes(q);
-        const matchCustomer = (s.parties?.name ?? "").toLowerCase().includes(q);
-        const matchTracking = (s.tracking_code || "").toLowerCase().includes(q) ||
-                              s.items.some(it => ((it as any).tracking_code || "").toLowerCase().includes(q));
-        const matchNote = s.items.some(it => (it.note || "").toLowerCase().includes(q));
-        if (!matchName && !matchCustomer && !matchTracking && !matchNote) return false;
-      }
-
       return true;
     });
-  }, [allSalesGrouped, dateRange, customFrom, customTo, activeTab, selectedCategory, search, productCategoryMap]);
+  }, [allSalesGrouped, dateRange, dateBounds, activeTab, selectedCategory, deferredSearch, productCategoryMap]);
 
-  // Financial KPIs for filtered set
-  const filteredTotalSales = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.sell_price), 0);
-  }, [filteredSales]);
-
-  const filteredTotalProfit = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.profit), 0);
-  }, [filteredSales]);
-
-  const filteredTotalDue = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.due_amount), 0);
-  }, [filteredSales]);
-
-  const bkashPendingDueTotal = useMemo(() => {
-    return filteredSales.reduce((acc, s) => {
-      if (s.returned) return acc;
-      const hasBkash = s.type === "bkash" || (s.type === "split" && Number(s.split_bkash) > 0);
-      if (hasBkash && s.due_amount > 0) return acc + s.due_amount;
-      return acc;
-    }, 0);
-  }, [filteredSales]);
-
-  // Partial / Split sales summary
-  const partialSummary = useMemo(() => {
-    let count = 0;
+  // Fast single-pass financial counters for filtered set
+  const { filteredTotalSales, filteredTotalProfit, filteredTotalDue, bkashPendingDueTotal, partialSummary } = useMemo(() => {
     let totalSales = 0;
-    let totalPaid = 0;
+    let totalProfit = 0;
     let totalDue = 0;
-    for (const s of filteredSales) {
-      if (s.returned) continue;
-      count++;
-      totalSales += Number(s.sell_price || 0);
-      totalPaid += Number(s.paid_amount || 0);
-      totalDue += Number(s.due_amount || 0);
+    let bkashDue = 0;
+    let pCount = 0;
+    let pSales = 0;
+    let pPaid = 0;
+    let pDue = 0;
+
+    for (let i = 0; i < filteredSales.length; i++) {
+      const s = filteredSales[i];
+      if (!s.returned) {
+        totalSales += s.sell_price;
+        totalProfit += s.profit;
+        totalDue += s.due_amount;
+
+        const hasBkash = s.type === "bkash" || (s.type === "split" && Number(s.split_bkash) > 0);
+        if (hasBkash && s.due_amount > 0) {
+          bkashDue += s.due_amount;
+        }
+
+        pCount++;
+        pSales += Number(s.sell_price || 0);
+        pPaid += Number(s.paid_amount || 0);
+        pDue += Number(s.due_amount || 0);
+      }
     }
-    return { count, totalSales, totalPaid, totalDue };
+
+    return {
+      filteredTotalSales: totalSales,
+      filteredTotalProfit: totalProfit,
+      filteredTotalDue: totalDue,
+      bkashPendingDueTotal: bkashDue,
+      partialSummary: { count: pCount, totalSales: pSales, totalPaid: pPaid, totalDue: pDue },
+    };
   }, [filteredSales]);
 
   const allTimePartialCount = useMemo(() => {
@@ -663,11 +684,21 @@ export default function SalesPage() {
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
-              className="pl-8 h-8.5 text-xs rounded-xl font-balooda"
+              className="pl-8 pr-7 h-8.5 text-xs rounded-xl font-balooda"
               placeholder={lang === "bn" ? "পণ্য, ক্রেতা বা ট্র্যাকিং নম্বর..." : "Search product, customer, tracking..."}
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setPage(1); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1 cursor-pointer"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Unified Download & Export Dropdown */}
@@ -905,6 +936,27 @@ export default function SalesPage() {
           </p>
         </Card>
       </div>
+
+      {/* Search notice when searching all records */}
+      {isSearchActive && (
+        <div className="flex items-center justify-between p-2 px-3 rounded-xl bg-primary/10 border border-primary/20 text-xs font-balooda">
+          <div className="flex items-center gap-1.5 text-foreground font-medium truncate">
+            <Search className="size-3.5 text-primary shrink-0" />
+            <span className="truncate">
+              {lang === "bn"
+                ? `সকল রেকর্ডে খোঁজা হচ্ছে: "${search}" (${filteredSales.length}টি বিক্রি পাওয়া গেছে)`
+                : `Searching all records for: "${search}" (${filteredSales.length} records found)`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setPage(1); }}
+            className="text-xs text-primary hover:underline font-bold shrink-0 ml-2 cursor-pointer"
+          >
+            {lang === "bn" ? "রিসেট করুন" : "Reset"}
+          </button>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setPage(1); }}>
         {/* Mobile Category Dropdown Selector */}
@@ -1344,6 +1396,12 @@ function SalesTab({
                   {hasDue && !isCancelled && (
                     <span className="text-[10px] font-extrabold font-serif px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                       {lang === "bn" ? "বাকী:" : "Due:"} ৳{s.due_amount}
+                    </span>
+                  )}
+                  {s.tracking_code && (
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                      <Truck className="size-2.5 shrink-0" />
+                      <span>ID: {s.tracking_code}</span>
                     </span>
                   )}
                 </div>

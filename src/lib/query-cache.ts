@@ -40,32 +40,53 @@ export function readQueryCache<T>(queryKey: readonly unknown[]): T | undefined {
     const raw = localStorage.getItem(storageKey(queryKey));
     if (!raw) return undefined;
     const entry = JSON.parse(raw) as CacheEntry;
+    if (Date.now() - entry.updatedAt > MAX_AGE_MS) return undefined;
     return entry.data as T;
   } catch {
     return undefined;
   }
 }
 
-/** Persist query data to localStorage. */
+// Write debounce map to avoid rapid successive serialization
+const writeTimeouts = new Map<string, any>();
+
+/** Persist query data to localStorage asynchronously without blocking main thread. */
 export function writeQueryCache(queryKey: readonly unknown[], data: unknown) {
   if (typeof window === "undefined") return;
   if (isCashboxKey(queryKey)) return;
-  try {
-    const key = storageKey(queryKey);
-    const entry: CacheEntry = { data, updatedAt: Date.now() };
-    localStorage.setItem(key, JSON.stringify(entry));
-    const meta: CacheMeta = JSON.parse(localStorage.getItem(CACHE_META_KEY) ?? '{"keys":[]}');
-    if (!meta.keys.includes(key)) {
-      meta.keys.push(key);
-      if (meta.keys.length > 50) {
-        const removed = meta.keys.shift();
-        if (removed) localStorage.removeItem(removed);
-      }
-      localStorage.setItem(CACHE_META_KEY, JSON.stringify(meta));
-    }
-  } catch {
-    // quota exceeded — ignore
+
+  const key = storageKey(queryKey);
+  if (writeTimeouts.has(key)) {
+    clearTimeout(writeTimeouts.get(key));
   }
+
+  const timeoutId = setTimeout(() => {
+    writeTimeouts.delete(key);
+    try {
+      // For large lists (e.g. sales, products), persist the most recent 300 items
+      // so local storage quota isn't exceeded and UI does not lag
+      let payload = data;
+      if (Array.isArray(data) && data.length > 300) {
+        payload = data.slice(0, 300);
+      }
+
+      const entry: CacheEntry = { data: payload, updatedAt: Date.now() };
+      localStorage.setItem(key, JSON.stringify(entry));
+      const meta: CacheMeta = JSON.parse(localStorage.getItem(CACHE_META_KEY) ?? '{"keys":[]}');
+      if (!meta.keys.includes(key)) {
+        meta.keys.push(key);
+        if (meta.keys.length > 50) {
+          const removed = meta.keys.shift();
+          if (removed) localStorage.removeItem(removed);
+        }
+        localStorage.setItem(CACHE_META_KEY, JSON.stringify(meta));
+      }
+    } catch {
+      // quota exceeded — ignore
+    }
+  }, 100);
+
+  writeTimeouts.set(key, timeoutId);
 }
 
 /** Clear all app query cache from localStorage. */
