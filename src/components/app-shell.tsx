@@ -50,6 +50,7 @@ import { cashboxBalance } from "@/lib/cashbox-utils";
 
 import { CustomHomeIcon } from "@/components/custom-home-icon";
 import { AdminPopupDialog } from "@/components/admin-popup-dialog";
+import { OfflineSyncBadge } from "@/components/offline-sync-badge";
 
 type NavItem = {
   to: string;
@@ -441,7 +442,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Offline & Cloud Sync Realtime Status Pill */}
+              <OfflineSyncBadge />
+
               {/* Minimalist Top Owner/Employee Switcher Pill */}
               {activeEmpSession ? (
                 <button

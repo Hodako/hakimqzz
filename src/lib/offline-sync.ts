@@ -24,9 +24,14 @@ export function saveOfflineQueue(queue: QueuedAction[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    window.dispatchEvent(new CustomEvent("df-offline-queue-changed", { detail: { count: queue.length } }));
   } catch {
     // ignore
   }
+}
+
+export function getPendingOfflineCount(): number {
+  return getOfflineQueue().length;
 }
 
 /**
@@ -42,6 +47,10 @@ export function queueOfflineAction(actionName: string, args: any) {
   };
   queue.push(newAction);
   saveOfflineQueue(queue);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("df-offline-queue-changed", { detail: { count: queue.length } }));
+  }
 
   // Apply optimistic cache updates so user sees changes instantly!
   try {
@@ -144,6 +153,22 @@ function applyOptimisticUpdate(actionName: string, args: any) {
       return s;
     });
     writeQueryCache(["sales"], updatedSales);
+  }
+
+  else if (actionName === "createCustomerFn" || actionName === "createPartyFn") {
+    const parties = readQueryCache<any[]>(["parties"]) ?? [];
+    const customers = readQueryCache<any[]>(["customers"]) ?? [];
+    const newParty = {
+      id: crypto.randomUUID(),
+      name: args.data.name,
+      phone: args.data.phone ?? "",
+      address: args.data.address ?? "",
+      type: args.data.type || (actionName === "createCustomerFn" ? "customer" : "supplier"),
+      archived: false,
+      created_at: now,
+    };
+    writeQueryCache(["parties"], [newParty, ...parties]);
+    writeQueryCache(["customers"], [newParty, ...customers]);
   }
 
   else if (actionName === "deleteSaleFn") {
@@ -478,69 +503,94 @@ function applyOptimisticUpdate(actionName: string, args: any) {
 
 // Background sync loop controller
 let isSyncing = false;
+let registeredActionsMap: Record<string, Function> = {};
+
+export function getIsSyncing(): boolean {
+  return isSyncing;
+}
+
+export async function triggerManualSync(): Promise<{ success: boolean; synced: number; remaining: number }> {
+  if (typeof window === "undefined") return { success: false, synced: 0, remaining: 0 };
+  if (!navigator.onLine) {
+    toast.error("Cannot sync: Internet connection is currently offline.");
+    return { success: false, synced: 0, remaining: getPendingOfflineCount() };
+  }
+  return await executeSyncQueue();
+}
+
+async function executeSyncQueue(): Promise<{ success: boolean; synced: number; remaining: number }> {
+  if (isSyncing) return { success: false, synced: 0, remaining: getPendingOfflineCount() };
+  const queue = getOfflineQueue();
+  if (queue.length === 0) return { success: true, synced: 0, remaining: 0 };
+  if (typeof window !== "undefined" && !navigator.onLine) return { success: false, synced: 0, remaining: queue.length };
+
+  isSyncing = true;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("df-sync-active", { detail: { syncing: true, pending: queue.length } }));
+  }
+
+  const remainingQueue: QueuedAction[] = [];
+  let successCount = 0;
+  let discardedCount = 0;
+
+  for (const item of queue) {
+    const action = registeredActionsMap[item.actionName];
+    if (action) {
+      try {
+        await action(item.args);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to sync action ${item.actionName}:`, err);
+        const currentRetries = (item.retries ?? 0) + 1;
+        if (currentRetries >= 3) {
+          discardedCount++;
+          console.warn(`Action ${item.actionName} failed 3 times. Discarding from queue.`, item);
+        } else {
+          remainingQueue.push({ ...item, retries: currentRetries });
+        }
+      }
+    } else {
+      console.warn(`Action ${item.actionName} not found in sync register.`);
+      discardedCount++;
+    }
+  }
+
+  saveOfflineQueue(remainingQueue);
+  isSyncing = false;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("df-sync-active", { detail: { syncing: false, pending: remainingQueue.length } }));
+  }
+
+  if (successCount > 0) {
+    toast.success(`Successfully synced ${successCount} transactions to cloud!`);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("df-sync-complete"));
+    }
+  } else if (discardedCount > 0 && remainingQueue.length === 0) {
+    toast.error("Some offline changes failed validation and were discarded.");
+  }
+
+  return { success: true, synced: successCount, remaining: remainingQueue.length };
+}
 
 export function startBackgroundSync(actionsMap: Record<string, Function>) {
   if (typeof window === "undefined") return;
 
-  async function syncQueue() {
-    if (isSyncing) return;
-    const queue = getOfflineQueue();
-    if (queue.length === 0) return;
-
-    if (!navigator.onLine) return;
-
-    isSyncing = true;
-
-    const remainingQueue: QueuedAction[] = [];
-    let successCount = 0;
-    let discardedCount = 0;
-
-    for (const item of queue) {
-      const action = actionsMap[item.actionName];
-      if (action) {
-        try {
-          await action(item.args);
-          successCount++;
-        } catch (err) {
-          console.error(`Failed to sync action ${item.actionName}:`, err);
-          const currentRetries = (item.retries ?? 0) + 1;
-          if (currentRetries >= 3) {
-            discardedCount++;
-            console.warn(`Action ${item.actionName} failed 3 times. Discarding from queue.`, item);
-          } else {
-            remainingQueue.push({ ...item, retries: currentRetries });
-          }
-        }
-      } else {
-        console.warn(`Action ${item.actionName} not found in sync register.`);
-        discardedCount++;
-      }
-    }
-
-    saveOfflineQueue(remainingQueue);
-    isSyncing = false;
-
-    if (successCount > 0) {
-      toast.success(`Successfully synced ${successCount} transactions to cloud!`);
-      // Invalidate queries so that clean DB state is re-fetched
-      window.dispatchEvent(new CustomEvent("df-sync-complete"));
-    } else if (discardedCount > 0 && remainingQueue.length === 0) {
-      toast.error("Some offline changes failed validation and were discarded.");
-    }
-  }
+  registeredActionsMap = actionsMap;
 
   // Trigger sync on online event
   window.addEventListener("online", () => {
-    syncQueue();
+    executeSyncQueue();
   });
 
   // Periodically poll sync status every 15 seconds
   setInterval(() => {
-    syncQueue();
+    executeSyncQueue();
   }, 15000);
 
   // Run immediately on startup
   if (navigator.onLine) {
-    syncQueue();
+    executeSyncQueue();
   }
 }

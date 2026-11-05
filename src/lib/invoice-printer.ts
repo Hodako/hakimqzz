@@ -274,6 +274,15 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       electronPOS.printSilent({ html }).then((res: any) => {
         if (res && res.success) {
           console.log("[Invoice Printer] Printed silently via Electron POS!");
+          // Automatic ESC/POS cash drawer kick on cash or walk-in payment
+          if (
+            typeof electronPOS.openCashDrawer === "function" &&
+            (data.paymentMode?.toLowerCase().includes("cash") ||
+              data.paymentMode?.includes("নগদ") ||
+              (data.paidAmount || 0) > 0)
+          ) {
+            electronPOS.openCashDrawer().catch(() => {});
+          }
         }
       }).catch((e: any) => console.warn("[Invoice Printer] Silent print error:", e));
       return;

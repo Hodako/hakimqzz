@@ -4,7 +4,8 @@ contextBridge.exposeInMainWorld("electronPOS", {
   isElectron: true,
   isDesktopApp: true,
   platform: process.platform,
-  
+  cloudUrl: "https://hakim.qzz.io",
+
   // Get all installed Windows printers and default printer
   getPrinters: async () => {
     try {
@@ -44,6 +45,9 @@ contextBridge.exposeInMainWorld("electronPOS", {
       return { success: false, error: err.message };
     }
   },
+
+  // Server switching (Cloud https://hakim.qzz.io vs Local 127.0.0.1:3141)
+  switchServer: (target) => ipcRenderer.send("pos:switch-server", target),
 
   // App window controls
   minimize: () => ipcRenderer.send("pos:minimize"),

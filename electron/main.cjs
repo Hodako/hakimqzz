@@ -1,95 +1,129 @@
 /**
  * DreamFashion - Ultimate Windows POS Desktop Application
- * Connected with Next.js Server & 1-Click Silent Thermal Printing
+ * Connected with Cloud (https://hakim.qzz.io) & Local Offline Server
+ * 1-Click Silent Thermal Printing & Native POS Hardware Integration
  */
 
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, session } = require("electron");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 const { spawn } = require("child_process");
 const { startBridgeServer } = require("./pos-bridge.cjs");
 
 let mainWindow = null;
 let serverProcess = null;
-const SERVER_PORT = process.env.PORT || 3141;
-const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
 
-// Helper to check if server is responsive
-function checkServerReady(url) {
+const CLOUD_URL = process.env.POS_CLOUD_URL || "https://hakim.qzz.io";
+const LOCAL_PORT = process.env.PORT || 3141;
+const LOCAL_URL = `http://127.0.0.1:${LOCAL_PORT}`;
+
+// Check if an HTTP/HTTPS endpoint is responding
+function checkUrlReady(targetUrl, timeoutMs = 1500) {
   return new Promise((resolve) => {
-    const req = http.get(url, (res) => {
-      resolve(true);
-    });
-    req.on("error", () => resolve(false));
-    req.setTimeout(1000, () => {
-      req.abort();
+    try {
+      const parsed = new URL(targetUrl);
+      const client = parsed.protocol === "https:" ? https : http;
+      const req = client.get(targetUrl, (res) => {
+        resolve(res.statusCode >= 200 && res.statusCode < 500);
+      });
+      req.on("error", () => resolve(false));
+      req.setTimeout(timeoutMs, () => {
+        req.abort();
+        resolve(false);
+      });
+    } catch (_) {
       resolve(false);
-    });
+    }
   });
 }
 
 // Start Next.js server locally if not already running
-async function ensureServerRunning() {
-  const isRunning = await checkServerReady(SERVER_URL);
+async function ensureLocalServerRunning() {
+  const isRunning = await checkUrlReady(LOCAL_URL, 800);
   if (isRunning) {
-    console.log(`[Windows POS] Server is already running on ${SERVER_URL}`);
+    console.log(`[Windows POS] Local server is already running on ${LOCAL_URL}`);
     return;
   }
 
-  console.log(`[Windows POS] Starting local Next.js POS server on port ${SERVER_PORT}...`);
+  console.log(`[Windows POS] Starting local Next.js POS server on port ${LOCAL_PORT}...`);
   const rootDir = path.resolve(__dirname, "..");
-  
-  // Use node server.js or npm run start
+
   serverProcess = spawn("node", ["server.js"], {
     cwd: rootDir,
-    env: { ...process.env, PORT: String(SERVER_PORT), NODE_ENV: "production" },
+    env: { ...process.env, PORT: String(LOCAL_PORT), NODE_ENV: "production" },
     shell: true,
     stdio: "ignore",
     windowsHide: true,
   });
 
   serverProcess.on("error", (err) => {
-    console.error("[Windows POS] Failed to spawn server process:", err);
+    console.error("[Windows POS] Failed to spawn local server:", err);
   });
 
-  // Wait for server to become ready (up to 15 seconds)
+  // Wait for local server to become ready
   let attempts = 0;
-  while (attempts < 30) {
-    await new Promise((r) => setTimeout(r, 500));
-    const ready = await checkServerReady(SERVER_URL);
+  while (attempts < 20) {
+    await new Promise((r) => setTimeout(r, 400));
+    const ready = await checkUrlReady(LOCAL_URL, 600);
     if (ready) {
-      console.log(`[Windows POS] Server became ready after ${attempts * 500}ms!`);
+      console.log(`[Windows POS] Local server became ready after ${attempts * 400}ms!`);
       return;
     }
     attempts++;
   }
-  console.warn("[Windows POS] Server launch timed out; continuing to load window.");
 }
 
-function createWindow() {
+async function createWindow() {
+  // Use persistent partition so cloud auth cookies and localStorage survive app restarts
+  const partition = "persist:dreamfashion_pos";
+  const customSession = session.fromPartition(partition);
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1366,
+    height: 860,
     minWidth: 1024,
     minHeight: 680,
-    title: "Dream Fashion — Modern POS Terminal",
+    title: "Dream Fashion — Modern POS Terminal (https://hakim.qzz.io)",
     icon: path.join(__dirname, "../public/logo.png"),
     backgroundColor: "#0f172a",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
-      backgroundThrottling: false, // Keep POS active even when blurred
+      session: customSession,
+      backgroundThrottling: false, // Keep POS hardware and scan listeners alive in background
     },
   });
 
-  // Hide default menu for clean real POS experience
+  // Hide default menu bar for clean, professional POS screen
   mainWindow.setMenuBarVisibility(false);
 
-  // Load the application
-  mainWindow.loadURL(SERVER_URL).catch(() => {
-    console.log("[Windows POS] Loading fallback error screen...");
-    mainWindow.loadFile(path.join(__dirname, "error.html"));
+  // Check if Cloud is reachable; if not, fallback to local
+  console.log(`[Windows POS] Checking connection to cloud: ${CLOUD_URL}...`);
+  const isCloudOnline = await checkUrlReady(CLOUD_URL, 2000);
+
+  if (isCloudOnline) {
+    console.log(`[Windows POS] Connected to cloud! Loading ${CLOUD_URL}...`);
+    mainWindow.loadURL(CLOUD_URL);
+  } else {
+    console.log(`[Windows POS] Cloud not immediately reachable (offline mode). Starting local server...`);
+    await ensureLocalServerRunning();
+    mainWindow.loadURL(LOCAL_URL).catch(() => {
+      mainWindow.loadFile(path.join(__dirname, "error.html"));
+    });
+  }
+
+  // Handle load failures gracefully (e.g. WiFi disconnected during load)
+  mainWindow.webContents.on("did-fail-load", async (event, errorCode, errorDescription, validatedURL) => {
+    console.warn(`[Windows POS] Failed to load ${validatedURL} [${errorCode}: ${errorDescription}]`);
+    if (validatedURL.startsWith("https://hakim.qzz.io")) {
+      console.log("[Windows POS] Cloud failed, switching to local offline POS server...");
+      await ensureLocalServerRunning();
+      mainWindow.loadURL(LOCAL_URL).catch(() => {
+        mainWindow.loadFile(path.join(__dirname, "error.html"));
+      });
+    }
   });
 
   mainWindow.on("closed", () => {
@@ -159,7 +193,7 @@ async function performSilentPrint(html, printerName) {
             printWin.close();
           }
           if (success) {
-            console.log(`[Windows POS] Thermal receipt printed successfully to: ${targetPrinter}`);
+            console.log(`[Windows POS] Receipt printed silently to: ${targetPrinter}`);
             resolve({ success: true, printer: targetPrinter });
           } else {
             console.warn(`[Windows POS] Silent print failed: ${failureReason}`);
@@ -182,7 +216,6 @@ ipcMain.handle("pos:print-silent", async (event, options = {}) => {
 
 // 4. Open cash drawer via ESC/POS command
 ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
-  // ESC p 0 25 250 command to kick standard RJ11 drawer on receipt printer
   const drawerKickHtml = `
     <html>
       <head><style>@page { size: 10mm 10mm; margin: 0; }</style></head>
@@ -192,21 +225,30 @@ ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
   return await performSilentPrint(drawerKickHtml, printerName);
 });
 
+// 5. Server switching
+ipcMain.on("pos:switch-server", (event, target) => {
+  if (!mainWindow) return;
+  if (target === "cloud") {
+    mainWindow.loadURL(CLOUD_URL);
+  } else if (target === "local") {
+    ensureLocalServerRunning().then(() => {
+      mainWindow.loadURL(LOCAL_URL);
+    });
+  }
+});
+
 // ── App Lifecycle ───────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  // Start local POS bridge HTTP server so external browsers can also silent print
+  // Start local POS bridge HTTP server on 127.0.0.1:9123
   try {
     startBridgeServer(performSilentPrint);
   } catch (e) {
     console.warn("[Windows POS] Could not start POS bridge:", e);
   }
 
-  // Ensure server is up
-  await ensureServerRunning();
-
   // Create main UI window
-  createWindow();
+  await createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -217,7 +259,6 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    // Kill child server process if spawned by us
     if (serverProcess) {
       try {
         serverProcess.kill();
