@@ -140,7 +140,7 @@ function groupAllDataByDay(sales: any[], expenses: any[], days: number, ownerWal
 // ── Bento Grid KPICard ─────────────────────────────────────────────────────────────
 function KPICard({
   label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName,
-  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false, hotkey,
+  align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false,
   isPrivacyProtected = false, isRevealed = true,
 }: {
   label: string; value: string; sub?: string;
@@ -154,7 +154,6 @@ function KPICard({
   curve?: "none" | "sm" | "md" | "lg" | "xl" | "full";
   isBentoHero?: boolean;
   isDesktop?: boolean;
-  hotkey?: string | number;
   isPrivacyProtected?: boolean;
   isRevealed?: boolean;
 }) {
@@ -838,80 +837,7 @@ export default function Dashboard() {
     applyFilter(from, to);
   };
 
-  // Desktop keyboard hotkeys (1-9) for quick KPI navigation & fast action opening
-  useEffect(() => {
-    if (isMobile) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.tagName === "SELECT")) {
-        return;
-      }
-      if (e.ctrlKey || e.metaKey || e.altKey) {
-        return;
-      }
-      if (saleOpen || showFilter || showPopup || bentoCustomizerOpen) {
-        return;
-      }
-
-            const keyIndex = parseInt(e.key, 10);
-      const activeOrder = normalizeKpiOrder(kpiConfig.order);
-      if (!isNaN(keyIndex) && keyIndex >= 1 && keyIndex <= activeOrder.length) {
-        e.preventDefault();
-        const targetKpiKey = activeOrder[keyIndex - 1];
-        const normalizedKey = targetKpiKey === "bkash_bank" ? "sell_kpi" : targetKpiKey === "owners_wallet" ? "owner_wallet" : targetKpiKey;
-        const isHidden = (kpiConfig.hiddenKpis || []).includes(targetKpiKey) || (kpiConfig.hiddenKpis || []).includes(normalizedKey);
-        
-        if (isHidden && !revealedKpis[normalizedKey]) {
-          playTapSound();
-          setRevealedKpis(prev => ({ ...prev, [normalizedKey]: true }));
-          toast.info(lang === "bn" ? "পরিমাণ দৃশ্যমান করা হয়েছে" : "Amount revealed", { duration: 900 });
-          return;
-        }
-
-        if (targetKpiKey === "total_sales" || targetKpiKey === "sell_kpi" || targetKpiKey === "bkash_bank") {
-          playTapSound();
-          router.push("/sales");
-        } else if (targetKpiKey === "cash_sale") {
-          playTapSound();
-          setSalePresetType("cash");
-          setSaleOpen(true);
-        } else if (targetKpiKey === "online_sell") {
-          playTapSound();
-          setSalePresetType("online");
-          setSaleOpen(true);
-        } else if (targetKpiKey === "owner_wallet" || targetKpiKey === "owners_wallet") {
-          playTapSound();
-          router.push("/owner-expense");
-        } else if (targetKpiKey === "purchases" && canAccess(perms, "purchases")) {
-          playTapSound();
-          router.push("/purchases");
-        } else if (targetKpiKey === "profit") {
-          playTapSound();
-          router.push("/profits");
-        } else if (targetKpiKey === "loss") {
-          playTapSound();
-          router.push("/losses");
-        } else if (targetKpiKey === "expense" && canAccess(perms, "expenses")) {
-          playTapSound();
-          router.push("/expenses");
-        } else if (targetKpiKey === "due" && canAccess(perms, "parties")) {
-          playTapSound();
-          router.push("/dues");
-        } else if (targetKpiKey === "cashbox" && canAccess(perms, "cashbox")) {
-          playTapSound();
-          router.push("/cash-management/cashbox");
-        } else if (targetKpiKey === "somiti" && canAccess(perms, "expenses")) {
-          playTapSound();
-          router.push("/somiti");
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isMobile, saleOpen, showFilter, showPopup, bentoCustomizerOpen, kpiConfig.order, perms, router]);
-
+  
   const today = todayStart();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
@@ -1553,7 +1479,6 @@ export default function Dashboard() {
   }
 
     const renderKpiCard = (key: string, index: number) => {
-    const hotkey = index + 1 <= 9 ? index + 1 : undefined;
     const normalizedKey = key === "bkash_bank" ? "sell_kpi" : key === "owners_wallet" ? "owner_wallet" : key;
     if (normalizedKey === "credit_sale") return null;
     const isHidden = (kpiConfig.hiddenKpis || []).includes(key) || (kpiConfig.hiddenKpis || []).includes(normalizedKey);
@@ -1576,7 +1501,6 @@ export default function Dashboard() {
             icon={ShoppingBag}
             color="bg-indigo-600"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1595,7 +1519,6 @@ export default function Dashboard() {
             icon={ShoppingBag}
             color="bg-indigo-500"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1627,7 +1550,6 @@ export default function Dashboard() {
             icon={ShoppingBag}
             color="bg-pink-600"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1650,7 +1572,6 @@ export default function Dashboard() {
             icon={Truck}
             color="bg-purple-600"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1676,7 +1597,6 @@ export default function Dashboard() {
             icon={Wallet}
             color="bg-amber-600"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1695,7 +1615,6 @@ export default function Dashboard() {
             icon={ShoppingCart}
             color="bg-teal-500"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1720,7 +1639,6 @@ export default function Dashboard() {
             icon={profitToday >= 0 ? TrendingUp : TrendingDown}
             color={profitToday >= 0 ? "bg-emerald-500" : "bg-rose-500"}
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1739,7 +1657,6 @@ export default function Dashboard() {
             icon={TrendingDown}
             color="bg-rose-500"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1758,7 +1675,6 @@ export default function Dashboard() {
             icon={Receipt}
             color="bg-orange-500"
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1778,7 +1694,6 @@ export default function Dashboard() {
             color="bg-amber-600"
             trendUp={false}
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1807,7 +1722,6 @@ export default function Dashboard() {
             trendUp={displayedCashbox >= 0}
             trend={(!dateFilter.from && !dateFilter.to) ? (lang === "bn" ? "নিট ক্যাশ" : "Net Cash") : (lang === "bn" ? "ব্যালেন্স" : t("balance"))}
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1828,7 +1742,6 @@ export default function Dashboard() {
             trendUp={somitiTotal >= 0}
             trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
             isDesktop={true}
-            hotkey={hotkey}
             className="h-full cursor-pointer"
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
@@ -1845,7 +1758,6 @@ const renderWidget = (widgetId: string) => {
     switch (widgetId) {
       case "kpis":
         const renderDesktopCard = (key: string, index: number) => {
-          const hotkey = index + 1 <= 9 ? index + 1 : undefined;
           const isHidden = (kpiConfig.hiddenKpis || []).includes(key);
           const isRevealed = revealedKpis[key] ?? !isHidden;
           const privacyProps = { isPrivacyProtected: isHidden, isRevealed };
@@ -1862,7 +1774,6 @@ const renderWidget = (widgetId: string) => {
                   icon={ShoppingBag}
                   color="bg-indigo-600"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -1882,7 +1793,6 @@ const renderWidget = (widgetId: string) => {
                   icon={ShoppingBag}
                   color="bg-indigo-500"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -1911,7 +1821,6 @@ const renderWidget = (widgetId: string) => {
                   icon={CreditCard}
                   color="bg-amber-500"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -1940,7 +1849,6 @@ const renderWidget = (widgetId: string) => {
                   icon={Truck}
                   color="bg-purple-600"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -1970,7 +1878,6 @@ const renderWidget = (widgetId: string) => {
                   icon={Wallet}
                   color="bg-amber-600"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -1993,7 +1900,6 @@ const renderWidget = (widgetId: string) => {
                   icon={profitToday >= 0 ? TrendingUp : TrendingDown}
                   color={profitToday >= 0 ? "bg-emerald-500" : "bg-rose-500"}
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -2013,7 +1919,6 @@ const renderWidget = (widgetId: string) => {
                   icon={TrendingDown}
                   color="bg-rose-500"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -2033,7 +1938,6 @@ const renderWidget = (widgetId: string) => {
                   icon={Receipt}
                   color="bg-orange-500"
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -2054,7 +1958,6 @@ const renderWidget = (widgetId: string) => {
                   color="bg-amber-600"
                   trendUp={false}
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -2084,7 +1987,6 @@ const renderWidget = (widgetId: string) => {
                   trendUp={gridCashboxVal >= 0}
                   trend={(!dateFilter.from && !dateFilter.to) ? (lang === "bn" ? "নিট ক্যাশ" : "Net Cash") : (lang === "bn" ? "ব্যালেন্স" : t("balance"))}
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
@@ -2106,7 +2008,6 @@ const renderWidget = (widgetId: string) => {
                   trendUp={somitiTotal >= 0}
                   trend={lang === "bn" ? "নিট জমা" : "Net Balance"}
                   isDesktop={true}
-                  hotkey={hotkey}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}

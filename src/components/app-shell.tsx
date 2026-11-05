@@ -183,7 +183,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (key === "s" || isCtrlK || isSlash) {
+      // Never trigger global shortcuts if a modal dialog, drawer, or sheet is open
+      if (document.querySelector('[role="dialog"]') || document.querySelector('[data-state="open"]')) {
+        return;
+      }
+
+      if (isCtrlK || isSlash) {
         e.preventDefault();
         // Priority 1: Search inputs or filter inputs on the active page
         const searchInput = (
@@ -209,30 +214,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             searchBtn.click();
           }
         }
-      } else if (key === "i") {
-        e.preventDefault();
-        router.push("/invoices");
-      } else if (key === "p") {
-        e.preventDefault();
-        router.push("/products");
-      } else if (key === "e") {
-        e.preventDefault();
-        router.push("/expenses");
-      } else if (key === "r") {
-        e.preventDefault();
-        router.push("/reports");
-      } else if (key === "b") {
-        e.preventDefault();
-        router.push("/purchases");
-      } else if (key === "u") {
-        e.preventDefault();
-        router.push("/customers");
-      } else if (key === "c") {
-        e.preventDefault();
-        router.push("/cash-management");
-      } else if (key === "d") {
-        e.preventDefault();
-        router.push("/dashboard");
       }
     };
     

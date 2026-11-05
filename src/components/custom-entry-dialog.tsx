@@ -319,18 +319,10 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
     }
   };
 
-  // Keyboard shortcut listener for PC (Alt+1..6, Ctrl+Enter)
+  // Keyboard shortcut listener for PC (Ctrl+Enter to submit)
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey) {
-        if (e.key === "1") { e.preventDefault(); setEntryType("sale"); }
-        else if (e.key === "2") { e.preventDefault(); setEntryType("expense"); }
-        else if (e.key === "3") { e.preventDefault(); setEntryType("purchase"); }
-        else if (e.key === "4") { e.preventDefault(); setEntryType("deposit"); }
-        else if (e.key === "5") { e.preventDefault(); setEntryType("withdraw"); }
-        else if (e.key === "6") { e.preventDefault(); setEntryType("due_collection"); }
-      }
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         handleSubmit(undefined, false);
@@ -371,9 +363,7 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
 
             <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground bg-background/80 px-2.5 py-1 rounded-xl border border-border/60">
               <HelpCircle className="size-3.5 text-primary" />
-              <span>{lang === "bn" ? "শর্টকাট:" : "Hotkeys:"}</span>
-              <kbd className="font-mono font-bold text-foreground bg-muted px-1.5 py-0.5 rounded border border-border text-[10px]">Alt + 1..6</kbd>
-              <span className="opacity-40">|</span>
+              <span>{lang === "bn" ? "শর্টকাট:" : "Shortcut:"}</span>
               <kbd className="font-mono font-bold text-foreground bg-muted px-1.5 py-0.5 rounded border border-border text-[10px]">Ctrl + Enter</kbd>
             </div>
           </div>
@@ -454,7 +444,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <ShoppingBag className="size-3.5 text-emerald-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "বিক্রি" : "Sale"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+1</span>
               </TabsTrigger>
 
               <TabsTrigger
@@ -463,7 +452,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <Receipt className="size-3.5 text-rose-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "খরচ" : "Expense"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+2</span>
               </TabsTrigger>
 
               <TabsTrigger
@@ -472,7 +460,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <ShoppingCart className="size-3.5 text-indigo-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "ক্রয়" : "Buy"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+3</span>
               </TabsTrigger>
 
               <TabsTrigger
@@ -481,7 +468,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <ArrowDownLeft className="size-3.5 text-sky-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "টাকা জমা" : "Deposit"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+4</span>
               </TabsTrigger>
 
               <TabsTrigger
@@ -490,7 +476,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <ArrowUpRight className="size-3.5 text-amber-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "উত্তোলন" : "Withdraw"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+5</span>
               </TabsTrigger>
 
               <TabsTrigger
@@ -499,7 +484,6 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
               >
                 <HandCoins className="size-3.5 text-purple-500 shrink-0" />
                 <span className="truncate">{lang === "bn" ? "বাকি আদায়" : "Due Rec"}</span>
-                <span className="hidden md:inline text-[9px] px-1 bg-muted rounded font-mono text-muted-foreground">Alt+6</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
