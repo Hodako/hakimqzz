@@ -103,7 +103,36 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
   }
 
   const activeProfile = store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
-  const ownerIdBase = role === "employee" ? (user.owner_id || (user._id as any as string)) : (user._id as any as string);
+
+  let resolvedOwnerId = user.owner_id;
+  // If employee's owner_id is missing, self-referencing, or fallback, auto-resolve to real shop owner
+  if (role === "employee" && (!resolvedOwnerId || resolvedOwnerId === user._id || resolvedOwnerId === "classicworld_default_owner")) {
+    const db = await getDb();
+    const emp = await db.collection("employees").findOne({
+      $or: [
+        { _id: user._id as any },
+        { _id: (user as any).employee_id as any },
+        ...(user.phone ? [{ phone: user.phone }] : []),
+        ...(user.email ? [{ email: user.email }] : []),
+        ...(user.username ? [{ username: user.username }] : []),
+        ...((user as any).login_code ? [{ login_code: (user as any).login_code }] : []),
+      ]
+    });
+    if (emp && emp.owner_id && emp.owner_id !== user._id) {
+      resolvedOwnerId = emp.owner_id;
+      try {
+        await db.collection("users").updateOne(
+          { _id: user._id as any },
+          { $set: { owner_id: emp.owner_id } }
+        );
+        user.owner_id = emp.owner_id;
+        sessionUserCache.delete(payload.userId);
+      } catch (_) {}
+    }
+  }
+
+  const isOwner = role === "owner" && (!user.owner_id || user.owner_id === user._id);
+  const ownerIdBase = isOwner ? (user._id as any as string) : (resolvedOwnerId || (user._id as any as string));
   const ownerId = activeProfile === "default" ? ownerIdBase : `${ownerIdBase}:${activeProfile}`;
   const permissions = (user.permissions as PermissionSet) || (role === "owner" ? OWNER_PERMISSIONS : {});
 

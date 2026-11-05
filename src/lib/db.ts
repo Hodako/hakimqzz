@@ -18,11 +18,11 @@ async function getClient(): Promise<MongoClient> {
   const { MongoClient } = await import("mongodb");
 
   const options = {
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 15000,
+    connectTimeoutMS: 15000,
     socketTimeoutMS: 45000,
-    maxPoolSize: 25,
-    minPoolSize: 2,
+    maxPoolSize: 10,
+    minPoolSize: 0,
     maxIdleTimeMS: 60000,
     family: 4, // Force IPv4 to avoid secureConnect hangs on Windows/IPv6 networks
   };
@@ -30,28 +30,21 @@ async function getClient(): Promise<MongoClient> {
   const createPromise = () =>
     new MongoClient(uri, options).connect().catch((err) => {
       // Clear cached promise on failure (DNS / offline) so next request re-attempts connection
-      if (process.env.NODE_ENV === "development") {
-        const g = global as typeof globalThis & {
-          _mongoClientPromise?: Promise<MongoClient>;
-        };
-        delete g._mongoClientPromise;
-      }
+      const g = global as typeof globalThis & {
+        _mongoClientPromise?: Promise<MongoClient>;
+      };
+      delete g._mongoClientPromise;
       _clientPromise = undefined;
       throw err;
     });
 
-  if (process.env.NODE_ENV === "development") {
-    // Reuse connection across HMR reloads
-    const g = global as typeof globalThis & {
-      _mongoClientPromise?: Promise<MongoClient>;
-    };
-    if (!g._mongoClientPromise) {
-      g._mongoClientPromise = createPromise();
-    }
-    _clientPromise = g._mongoClientPromise;
-  } else {
-    _clientPromise = createPromise();
+  const g = global as typeof globalThis & {
+    _mongoClientPromise?: Promise<MongoClient>;
+  };
+  if (!g._mongoClientPromise) {
+    g._mongoClientPromise = createPromise();
   }
+  _clientPromise = g._mongoClientPromise;
 
   return _clientPromise;
 }

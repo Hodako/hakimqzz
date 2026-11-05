@@ -363,6 +363,24 @@ export async function employeeLoginFn(input: { data: { username: string; passwor
     throw err;
   }
 
+  // Ensure employee's owner_id is synced to their actual shop owner
+  const empRecord = await db.collection("employees").findOne({
+    $or: [
+      { _id: user._id as any },
+      { _id: (user as any).employee_id as any },
+      ...(user.phone ? [{ phone: user.phone }] : []),
+      ...(user.email ? [{ email: user.email }] : []),
+      ...(identifier ? [{ phone: identifier }, { email: identifier }, { username: identifier }] : []),
+    ],
+  });
+  if (empRecord && empRecord.owner_id && user.owner_id !== empRecord.owner_id) {
+    await db.collection("users").updateOne(
+      { _id: user._id as any },
+      { $set: { owner_id: empRecord.owner_id } }
+    );
+    user.owner_id = empRecord.owner_id;
+  }
+
   // Update last login timestamp
   await db.collection("users").updateOne(
     { _id: user._id as any },
@@ -489,9 +507,22 @@ export async function employeeCodeLoginFn(input: { data: { code: string } }) {
     }
   } else if (user) {
     targetUserId = user._id.toString();
+    const empMatch = await db.collection("employees").findOne({
+      $or: [
+        { _id: user._id as any },
+        { _id: (user as any).employee_id as any },
+        ...(user.phone ? [{ phone: user.phone }] : []),
+        ...(user.email ? [{ email: user.email }] : []),
+        ...(cleanCode ? [{ login_code: cleanCode }, { pin: cleanCode }] : []),
+      ]
+    });
+    const updateFields: any = { last_login_at: new Date().toISOString() };
+    if (empMatch && empMatch.owner_id && user.owner_id !== empMatch.owner_id) {
+      updateFields.owner_id = empMatch.owner_id;
+    }
     await db.collection("users").updateOne(
       { _id: user._id as any },
-      { $set: { last_login_at: new Date().toISOString() } }
+      { $set: updateFields }
     );
   }
 
@@ -693,7 +724,16 @@ export async function logoutFn() {
 export async function getProductsFn() {
   const session = await requireSession();
   const db = await getDb();
-  const items = await db.collection("products").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  let items = await db.collection("products").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+  // Safe profile fallback: if a custom activeProfile was selected but has 0 products,
+  // check if root owner has products so the merchant never sees an empty screen accidentally
+  if (items.length === 0 && session.ownerId.includes(":")) {
+    const rootOwnerId = session.ownerId.split(":")[0];
+    const rootItems = await db.collection("products").find({ owner_id: rootOwnerId }).sort({ created_at: -1 }).toArray();
+    if (rootItems.length > 0) {
+      items = rootItems;
+    }
+  }
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
