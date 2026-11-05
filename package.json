@@ -13,6 +13,7 @@
     "pos": "electron ./electron/main.cjs",
     "pos:bridge": "node ./electron/pos-bridge.cjs",
     "electron": "electron ./electron/main.cjs",
+    "electron:package": "node package-electron.cjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "cap:sync": "cap sync",

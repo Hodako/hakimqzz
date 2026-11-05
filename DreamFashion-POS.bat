@@ -4,7 +4,7 @@ color 0b
 
 echo =======================================================
 echo          DREAM FASHION - ULTIMATE POS SYSTEM
-echo          Connected to Next.js Engine & Hardware
+echo          Connected to Next.js Engine and Hardware
 echo =======================================================
 echo.
 
@@ -31,6 +31,10 @@ if %errorlevel% equ 0 (
 
 :: 3. Launch the Electron Windows POS Application
 echo [INFO] Launching Dream Fashion Desktop Application with 1-Click Silent Printing...
-npx electron ./electron/main.cjs
+if exist "dist-electron\DreamFashion-POS-win-x64\DreamFashion-POS.exe" (
+    start "" "dist-electron\DreamFashion-POS-win-x64\DreamFashion-POS.exe"
+) else (
+    npx electron ./electron/main.cjs
+)
 
 exit /b 0

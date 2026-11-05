@@ -16,13 +16,12 @@ import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Camera, Zap } from "lucide-react";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { playTapSound, playScanSuccessSound, playSaleSuccessSound, playErrorSound } from "@/lib/audio";
 import { getWhatsAppInvoiceUrl } from "@/lib/whatsapp-helper";
-import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 export type SalePaymentType = "cash" | "bkash" | "bank" | "credit" | "online" | "split";
@@ -77,7 +76,6 @@ export function SaleDialog({
   const [customerAddress, setCustomerAddress] = useState("");
   const [finalDiscount, setFinalDiscount] = useState("");
   const [busy, setBusy] = useState(false);
-  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
 
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
   const { data: rawCustomers = [] } = useCachedQuery(["customers"], getCustomers);
@@ -752,7 +750,7 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-20px)] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl max-h-[92dvh] flex flex-col overflow-hidden p-0 rounded-2xl border-border shadow-2xl">
+        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[96dvh] flex flex-col overflow-hidden p-0 rounded-3xl border-border shadow-2xl">
           <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -951,28 +949,12 @@ export function SaleDialog({
                       {t("select_product")}
                     </Label>
                     <div className="flex items-center gap-2">
-                      {isMobile && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-2xs rounded-lg"
-                          onClick={() => setCameraScannerOpen(true)}
-                          title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান করুন (ধারাবাহিক)" : "Scan Barcodes with Camera (Continuous)"}
-                        >
-                          <Camera className="size-3.5 text-primary animate-pulse" />
-                          <span>{lang === "bn" ? "ক্যামেরা স্ক্যানার" : "Camera Scanner"}</span>
-                          <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.2 rounded font-mono uppercase font-bold">
-                            {lang === "bn" ? "লাইভ" : "Live"}
-                          </span>
-                        </Button>
-                      )}
-                      <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
                     </div>
                   </div>
 
                   {/* Barcode scanner live status indicator */}
-                  <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium">
+                  <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium">
                     <span className="flex items-center gap-1.5 truncate">
                       <Zap className="size-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       {lang === "bn"
@@ -980,7 +962,7 @@ export function SaleDialog({
                         : "Barcode Scanner Active: Each scan auto-adds product to cart"}
                     </span>
                     <span className="text-[10px] font-mono opacity-80 shrink-0 ml-1">
-                      {isMobile ? (lang === "bn" ? "USB / ক্যামেরা" : "USB / Camera") : "USB / Barcode Gun"}
+                      USB / Barcode Gun
                     </span>
                   </div>
 
@@ -1094,58 +1076,109 @@ export function SaleDialog({
                       <span>{lang === "bn" ? "কার্ট খালি রয়েছে। পণ্য যোগ করুন।" : "Cart is empty. Add products to proceed."}</span>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                       {cart.map((line, i) => {
                         const p = products.find(x => x.id === line.productId);
                         return (
-                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-2.5 text-xs bg-card space-y-1.5 shadow-2xs">
-                            <div className="flex items-center justify-between font-semibold">
-                              <span className="truncate flex-1 text-zinc-900 dark:text-zinc-100 font-medium" title={p?.name}>
+                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-3 text-xs bg-card space-y-2 shadow-2xs hover:border-primary/40 transition-colors">
+                            <div className="flex items-center justify-between font-semibold gap-2">
+                              <span className="truncate flex-1 text-zinc-900 dark:text-zinc-100 font-bold text-xs sm:text-sm" title={p?.name}>
                                 {i + 1}. {p?.name}
                               </span>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-6 shrink-0 text-destructive hover:bg-destructive/10"
+                                className="size-6 shrink-0 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
                                 onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
+                                title={lang === "bn" ? "আইটেম মুছুন" : "Remove item"}
                               >
                                 <Trash2 className="size-3.5" />
                               </Button>
                             </div>
 
-                            <div className="flex items-center justify-between text-xs pt-0.5">
-                              <div className="flex items-center border border-border rounded-lg bg-background">
-                                <button
-                                  type="button"
-                                  className="size-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                                  onClick={() => {
-                                    const current = Number(line.qty) || 1;
-                                    if (current > 1) {
-                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current - 1) } : item));
-                                    } else {
-                                      setCart(prev => prev.filter((_, idx) => idx !== i));
-                                    }
-                                  }}
-                                >
-                                  <Minus className="size-3" />
-                                </button>
-                                <span className="px-2 font-mono font-bold text-xs">{line.qty}</span>
-                                <button
-                                  type="button"
-                                  className="size-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                                  onClick={() => {
-                                    const current = Number(line.qty) || 0;
-                                    setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current + 1) } : item));
-                                  }}
-                                >
-                                  <Plus className="size-3" />
-                                </button>
+                            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-border/50">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Direct Editable Unit Sell Price Input Box */}
+                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-lg border border-border/60">
+                                  <span className="text-[10.5px] font-bold text-muted-foreground">{lang === "bn" ? "দর (৳):" : "Price (৳):"}</span>
+                                  <Input
+                                    type="number"
+                                    step="any"
+                                    inputMode="decimal"
+                                    value={line.sellPrice}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, sellPrice: val } : item));
+                                    }}
+                                    className="h-6.5 w-20 sm:w-24 px-1.5 text-xs font-bold font-mono text-foreground text-right bg-background border-border/80 rounded focus-visible:ring-1"
+                                    placeholder="0"
+                                    title={lang === "bn" ? "বিক্রি দর পরিবর্তন করুন" : "Edit Sell Price"}
+                                  />
+                                </div>
+
+                                {/* Qty Stepper */}
+                                <div className="flex items-center border border-border rounded-lg bg-background">
+                                  <button
+                                    type="button"
+                                    className="size-6.5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                                    onClick={() => {
+                                      const current = Number(line.qty) || 1;
+                                      if (current > 1) {
+                                        setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current - 1) } : item));
+                                      } else {
+                                        setCart(prev => prev.filter((_, idx) => idx !== i));
+                                      }
+                                    }}
+                                  >
+                                    <Minus className="size-3" />
+                                  </button>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={line.qty}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: val } : item));
+                                    }}
+                                    className="h-6.5 w-11 px-0.5 text-center font-mono font-bold text-xs border-0 rounded-none bg-transparent"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="size-6.5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                                    onClick={() => {
+                                      const current = Number(line.qty) || 0;
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current + 1) } : item));
+                                    }}
+                                  >
+                                    <Plus className="size-3" />
+                                  </button>
+                                </div>
+
+                                {/* Discount per unit */}
+                                <div className="flex items-center gap-1 bg-muted/30 px-1.5 py-0.5 rounded-lg border border-border/50">
+                                  <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "ছাড়:" : "Disc:"}</span>
+                                  <Input
+                                    type="number"
+                                    step="any"
+                                    inputMode="decimal"
+                                    value={line.discount || ""}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, discount: val } : item));
+                                    }}
+                                    className="h-6.5 w-14 px-1 text-[11px] font-mono text-right bg-background border-border/70 rounded"
+                                    placeholder="0"
+                                  />
+                                </div>
                               </div>
 
+                              {/* Line Total */}
                               <div className="text-right">
-                                <div className="font-bold text-foreground font-serif">৳{lineTotal(line)}</div>
-                                <div className="text-[10px] text-muted-foreground">৳{line.sellPrice} × {line.qty}</div>
+                                <div className="font-bold text-foreground font-serif text-xs sm:text-sm">৳{lineTotal(line).toLocaleString()}</div>
+                                <div className="text-[10px] text-muted-foreground font-mono">
+                                  (৳{line.sellPrice || 0} {Number(line.discount) > 0 ? `- ৳${line.discount}` : ""}) × {line.qty}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1628,14 +1661,6 @@ export function SaleDialog({
           </form>
         </DialogContent>
       </Dialog>
-
-      <BarcodeScannerDialog
-        open={cameraScannerOpen}
-        onOpenChange={setCameraScannerOpen}
-        onScan={handleBarcodeScan}
-        continuous={true}
-        title={lang === "bn" ? "বারকোড স্ক্যানার (স্বয়ংক্রিয় যোগ)" : "Barcode Scanner (Auto-Add to Cart)"}
-      />
     </>
   );
 }
