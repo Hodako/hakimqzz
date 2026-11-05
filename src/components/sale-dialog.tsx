@@ -190,8 +190,11 @@ export function SaleDialog({
     setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
   }, [products, lang]);
 
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setType(presetType ?? "cash");
       setPartyId("");
       setPaid("");
@@ -208,6 +211,8 @@ export function SaleDialog({
         setCart([]);
       }
       setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
+    } else if (!open) {
+      wasOpenRef.current = false;
     }
   }, [open, presetType, presetProductId, presetCart, products]);
 
@@ -229,8 +234,8 @@ export function SaleDialog({
       lastKeyTime = now;
 
       // Hardware barcode scanners send keystrokes with ultra-low delay (typically 5ms - 45ms per character).
-      // If delay is greater than 60ms, user is typing manually by hand or paused.
-      if (delta > 60) {
+      // If delay is greater than 75ms, user is typing manually by hand or paused.
+      if (delta > 75) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -248,13 +253,13 @@ export function SaleDialog({
         return;
       }
 
-      // If delta <= 60ms: Rapid sequence!
+      // If delta <= 75ms: Rapid sequence!
       if (e.key === "Enter") {
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        // Verify that this was a scanner burst: at least 3 characters and average character interval <= 55ms
-        if (scanBuffer.length >= 3 && avgCharInterval <= 55) {
+        // Verify that this was a scanner burst: at least 2 characters and average character interval <= 65ms
+        if (scanBuffer.length >= 2 && avgCharInterval <= 65) {
           e.preventDefault();
           e.stopPropagation();
 

@@ -10,7 +10,7 @@ import {
   Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square,
   Palette, Sparkles, LayoutGrid, SlidersHorizontal, Layers, Eye, EyeOff,
   Truck, PackageCheck, CheckCircle2, XCircle, Clock, GripVertical, RotateCcw,
-  AlertTriangle, ArrowRight
+  AlertTriangle, ArrowRight, ScanLine
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements, getPurchases, getSomiti, getReturns, getOwnerWallet } from "@/lib/queries";
@@ -24,7 +24,7 @@ import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { ProductSearchSelect } from "@/components/product-search";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,8 @@ import { toast } from "sonner";
 import { createReminderFn, toggleReminderFn, deleteReminderFn, approveCourierPaymentFn, cancelCourierOrderFn, updateBusinessSettingsFn } from "@/lib/rpc";
 import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
-import { playTapSound } from "@/lib/audio";
+import { playTapSound, playScanSuccessSound, playErrorSound } from "@/lib/audio";
+import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -510,6 +511,8 @@ export default function Dashboard() {
   // Quick Sell Dialog state
   const [saleOpen, setSaleOpen] = useState(false);
   const [salePresetType, setSalePresetType] = useState<"cash" | "credit" | "online">("cash");
+  const [scannedPresetProductId, setScannedPresetProductId] = useState<string | undefined>(undefined);
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
 
   // Recent Activity Limit state
   const [activityLimit, setActivityLimit] = useState(5);
@@ -836,6 +839,181 @@ export default function Dashboard() {
 
     applyFilter(from, to);
   };
+  // Helper to find product by barcode, SKU, code, or ID
+  const findProductByBarcode = useCallback((rawCode: string) => {
+    const cleanCode = String(rawCode || "").trim().toLowerCase();
+    if (!cleanCode) return null;
+    const cleanNoZero = cleanCode.replace(/^0+/, "");
+    const allProds = products.data ?? [];
+
+    return allProds.find((p: any) => {
+      const pb = (p.barcode || "").trim().toLowerCase();
+      const pbNoZero = pb.replace(/^0+/, "");
+      const psku = ((p as any).sku || "").trim().toLowerCase();
+      const pskuNoZero = psku.replace(/^0+/, "");
+      const pcode = ((p as any).code || "").trim().toLowerCase();
+      const pcodeNoZero = pcode.replace(/^0+/, "");
+      const pqr = ((p as any).qr_code || "").trim().toLowerCase();
+      const pnum = ((p as any).product_number || "").trim().toLowerCase();
+      const pnumNoZero = pnum.replace(/^0+/, "");
+      const pid = String(p.id || "").trim().toLowerCase();
+      const pname = (p.name || "").trim().toLowerCase();
+
+      // 1. Exact barcode or without leading zeros
+      if (pb && (pb === cleanCode || (cleanNoZero && pbNoZero === cleanNoZero))) return true;
+      // 2. Exact SKU or Code
+      if (psku && (psku === cleanCode || (cleanNoZero && pskuNoZero === cleanNoZero))) return true;
+      if (pcode && (pcode === cleanCode || (cleanNoZero && pcodeNoZero === cleanNoZero))) return true;
+      // 3. QR Code
+      if (pqr && (pqr === cleanCode || cleanCode.includes(pqr) || pqr.includes(cleanCode))) return true;
+      // 4. Product Number
+      if (pnum && (pnum === cleanCode || (cleanNoZero && pnumNoZero === cleanNoZero))) return true;
+      // 5. Product ID
+      if (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode)))) return true;
+      // 6. Substring barcode if >= 4 chars
+      if (pb && pb.length >= 4 && (pb.includes(cleanCode) || cleanCode.includes(pb))) return true;
+      // 7. Exact name
+      if (pname && pname === cleanCode) return true;
+
+      return false;
+    });
+  }, [products.data]);
+
+  // Camera Barcode Scanner handler
+  const handleCameraBarcodeScan = (scannedCode: string) => {
+    const prod = findProductByBarcode(scannedCode);
+    if (prod) {
+      playScanSuccessSound();
+      setCameraScannerOpen(false);
+      setScannedPresetProductId(prod.id);
+      setSalePresetType("cash");
+      setSaleOpen(true);
+      toast.success(
+        lang === "bn"
+          ? `বারকোড স্ক্যান হয়েছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
+          : `Scanned: ${prod.name} (Added to New Sale)`
+      );
+    } else {
+      playErrorSound();
+      toast.error(
+        lang === "bn"
+          ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
+          : `No product found for Barcode: ${scannedCode}`
+      );
+    }
+  };
+
+  // Hardware Barcode Scanner listener on Home Page (Dashboard)
+  // When a barcode is scanned anywhere on the home page, automatically open the New Sale dialog and add the product!
+  useEffect(() => {
+    let scanBuffer = "";
+    let lastKeyTime = 0;
+    let burstStartTime = 0;
+    let burstTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let burstInitialValue = "";
+
+    const handleDashboardScannerKeyDown = (e: KeyboardEvent) => {
+      // If sale dialog or another modal is already open, let that modal's own scanner handle it
+      if (saleOpen || showPopup || bentoCustomizerOpen || cameraScannerOpen) {
+        return;
+      }
+
+      // Ignore modifier keys
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(e.key)) {
+        return;
+      }
+
+      const now = Date.now();
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+      const delta = now - lastKeyTime;
+      lastKeyTime = now;
+
+      // Scanners type consecutive keys very fast (< 75ms).
+      // If delta > 75ms, start a new buffer
+      if (delta > 75) {
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          scanBuffer = e.key;
+          burstStartTime = now;
+          if (isInput && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+            burstTarget = target;
+            burstInitialValue = target.value;
+          } else {
+            burstTarget = null;
+            burstInitialValue = "";
+          }
+        } else {
+          scanBuffer = "";
+          burstTarget = null;
+        }
+        return;
+      }
+
+      // If delta <= 75ms: Rapid sequence!
+      if (e.key === "Enter") {
+        const totalDuration = now - burstStartTime;
+        const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
+
+        // Verify scanner burst: at least 2 characters and average char interval <= 65ms
+        if (scanBuffer.length >= 2 && avgCharInterval <= 65) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // If characters leaked into a search bar or input, restore the input
+          if (burstTarget && document.body.contains(burstTarget)) {
+            const isSearchField = burstTarget.type === "search" ||
+              burstTarget.name?.includes("search") ||
+              burstTarget.id?.includes("search") ||
+              burstTarget.placeholder?.toLowerCase().includes("search") ||
+              burstTarget.placeholder?.includes("পণ্য") ||
+              burstTarget.placeholder?.includes("খুঁজুন");
+
+            if (isSearchField) {
+              burstTarget.value = "";
+              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+            } else {
+              burstTarget.value = burstInitialValue;
+              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          }
+
+          const scannedCode = scanBuffer.trim();
+          const prod = findProductByBarcode(scannedCode);
+          scanBuffer = "";
+          burstTarget = null;
+
+          if (prod) {
+            playScanSuccessSound();
+            setScannedPresetProductId(prod.id);
+            setSalePresetType("cash");
+            setSaleOpen(true);
+            toast.success(
+              lang === "bn"
+                ? `বারকোড স্ক্যান হয়েছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
+                : `Scanned: ${prod.name} (Added to New Sale)`
+            );
+          } else {
+            playErrorSound();
+            toast.error(
+              lang === "bn"
+                ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
+                : `No product found for Barcode: ${scannedCode}`
+            );
+          }
+          return;
+        }
+
+        scanBuffer = "";
+        burstTarget = null;
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", handleDashboardScannerKeyDown, true);
+    return () => window.removeEventListener("keydown", handleDashboardScannerKeyDown, true);
+  }, [saleOpen, showPopup, bentoCustomizerOpen, cameraScannerOpen, findProductByBarcode, lang]);
+
 
   
   const today = todayStart();
@@ -2644,15 +2822,26 @@ const renderWidget = (widgetId: string) => {
             <h1 className="text-xl font-bold font-serif">{t("dashboard")}</h1>
             <p className="text-xs text-muted-foreground">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
           </div>
-          <Button
-            variant={showFilter ? "default" : "outline"}
-            size="icon"
-            className="size-8"
-            onClick={() => setShowFilter(!showFilter)}
-            aria-label="Toggle filter"
-          >
-            <ArrowUpDown className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8 rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+              onClick={() => { playTapSound(); setCameraScannerOpen(true); }}
+              aria-label="Scan barcode"
+            >
+              <ScanLine className="size-4" />
+            </Button>
+            <Button
+              variant={showFilter ? "default" : "outline"}
+              size="icon"
+              className="size-8"
+              onClick={() => setShowFilter(!showFilter)}
+              aria-label="Toggle filter"
+            >
+              <ArrowUpDown className="size-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Date Filter Dropdown on Phone */}
@@ -2893,8 +3082,19 @@ const renderWidget = (widgetId: string) => {
           </Button>
         </div>
 
-        {/* Primary New Sale button */}
+        {/* Primary New Sale & Barcode Scan buttons */}
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { playTapSound(); setCameraScannerOpen(true); }}
+            className="h-8.5 px-3 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/10 font-bold shadow-xs cursor-pointer"
+            title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান" : "Scan Barcode via Camera"}
+          >
+            <ScanLine className="size-4 text-primary" />
+            <span className="hidden sm:inline">{lang === "bn" ? "বারকোড স্ক্যান" : "Scan Barcode"}</span>
+          </Button>
+
           <Button
             onClick={() => { playTapSound(); setSaleOpen(true); }}
             size="sm"
@@ -2902,7 +3102,6 @@ const renderWidget = (widgetId: string) => {
           >
             <ShoppingBag className="size-4" />
             <span>{t("new_sale")}</span>
-            <span className="text-[10px] font-mono opacity-80 ml-0.5 hidden sm:inline">[Space]</span>
           </Button>
         </div>
       </div>
