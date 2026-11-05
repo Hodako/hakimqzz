@@ -46,7 +46,7 @@ export interface PrintInvoiceParams {
 /**
  * Clean Thermal POS Receipt Print Engine (Optimized for 58mm/80mm Thermal Printers & A4)
  */
-export function printPwaInvoice(data: PrintInvoiceParams) {
+export async function printPwaInvoice(data: PrintInvoiceParams) {
   const now = new Date();
   const dateStr = data.invoiceDate || fmtDateTime(now);
 
@@ -271,10 +271,10 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
   if (typeof window !== "undefined") {
     const electronPOS = (window as any).electronPOS;
     if (electronPOS && typeof electronPOS.printSilent === "function") {
-      electronPOS.printSilent({ html }).then((res: any) => {
+      try {
+        const res = await electronPOS.printSilent({ html });
         if (res && res.success) {
           console.log("[Invoice Printer] Printed silently via Electron POS!");
-          // Automatic ESC/POS cash drawer kick on cash or walk-in payment
           if (
             typeof electronPOS.openCashDrawer === "function" &&
             (data.paymentMode?.toLowerCase().includes("cash") ||
@@ -283,34 +283,36 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
           ) {
             electronPOS.openCashDrawer().catch(() => {});
           }
+          return;
         }
-      }).catch((e: any) => console.warn("[Invoice Printer] Silent print error:", e));
-      return;
+      } catch (e: any) {
+        console.warn("[Invoice Printer] Silent print error:", e);
+      }
     }
 
     // Direct silent printing via Local Windows POS Bridge on 127.0.0.1:9123
     try {
       const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 1000);
-      fetch("http://127.0.0.1:9123/print", {
+      const tid = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch("http://127.0.0.1:9123/print", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html }),
         signal: controller.signal,
-      }).then((res) => {
-        clearTimeout(tid);
-        if (res.ok) {
-          console.log("[Invoice Printer] Printed silently via Local POS Bridge on 127.0.0.1:9123!");
-          if (
-            typeof data.paymentMode === "string" &&
-            (data.paymentMode.toLowerCase().includes("cash") ||
-              data.paymentMode.includes("নগদ") ||
-              (data.paidAmount || 0) > 0)
-          ) {
-            fetch("http://127.0.0.1:9123/open-drawer", { method: "POST" }).catch(() => {});
-          }
+      });
+      clearTimeout(tid);
+      if (res.ok) {
+        console.log("[Invoice Printer] Printed silently via Local POS Bridge on 127.0.0.1:9123!");
+        if (
+          typeof data.paymentMode === "string" &&
+          (data.paymentMode.toLowerCase().includes("cash") ||
+            data.paymentMode.includes("নগদ") ||
+            (data.paidAmount || 0) > 0)
+        ) {
+          fetch("http://127.0.0.1:9123/open-drawer", { method: "POST" }).catch(() => {});
         }
-      }).catch(() => {});
+        return;
+      }
     } catch (_) {}
   }
 

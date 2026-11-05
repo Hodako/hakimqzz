@@ -1,4 +1,4 @@
-const CACHE_NAME = "pos-pwa-v30";
+const CACHE_NAME = "pos-pwa-v35";
 
 const PRECACHE_ASSETS = [
   "/manifest.json",

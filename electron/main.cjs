@@ -6,10 +6,23 @@
 
 const { app, BrowserWindow, ipcMain, session } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const { spawn } = require("child_process");
 const { startBridgeServer } = require("./pos-bridge.cjs");
+
+// Find project root containing server.js whether running from electron/ or dist-electron/DreamFashion-POS-win-x64/resources/app/electron/
+function findProjectRootWithServer() {
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, "server.js"))) {
+      return dir;
+    }
+    dir = path.resolve(dir, "..");
+  }
+  return path.resolve(__dirname, "..");
+}
 
 // Enable native Chromium Kiosk Silent Printing - ZERO print confirm messages or dialog popups!
 app.commandLine.appendSwitch("kiosk-printing");
@@ -51,7 +64,7 @@ async function ensureLocalServerRunning() {
   }
 
   console.log(`[Windows POS] Starting local Next.js POS server on port ${LOCAL_PORT}...`);
-  const rootDir = path.resolve(__dirname, "..");
+  const rootDir = findProjectRootWithServer();
 
   serverProcess = spawn("node", ["server.js"], {
     cwd: rootDir,
@@ -67,7 +80,7 @@ async function ensureLocalServerRunning() {
 
   // Wait for local server to become ready
   let attempts = 0;
-  while (attempts < 20) {
+  while (attempts < 35) {
     await new Promise((r) => setTimeout(r, 400));
     const ready = await checkUrlReady(LOCAL_URL, 600);
     if (ready) {
@@ -110,6 +123,48 @@ async function createWindow() {
 
   // Hide default menu bar for clean, professional POS screen
   mainWindow.setMenuBarVisibility(false);
+
+  // Intercept any window.print() or iframe.contentWindow.print() so the Windows Print Confirm Dialog NEVER shows!
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents
+      .executeJavaScript(`
+        (function() {
+          if (window.__posSilentPrintHooked) return;
+          window.__posSilentPrintHooked = true;
+          if (window.electronPOS && typeof window.electronPOS.printSilent === "function") {
+            window.print = function() {
+              window.electronPOS.printSilent({ html: document.documentElement.outerHTML });
+            };
+            const hookIframe = (iframe) => {
+              try {
+                if (iframe && iframe.contentWindow) {
+                  iframe.contentWindow.print = function() {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc && doc.documentElement) {
+                      window.electronPOS.printSilent({ html: doc.documentElement.outerHTML });
+                    }
+                  };
+                }
+              } catch (_) {}
+            };
+            const obs = new MutationObserver((mutations) => {
+              for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                  if (node && node.tagName === "IFRAME") {
+                    hookIframe(node);
+                    node.addEventListener("load", () => hookIframe(node));
+                  }
+                }
+              }
+            });
+            if (document.body) {
+              obs.observe(document.body, { childList: true, subtree: true });
+            }
+          }
+        })();
+      `)
+      .catch(() => {});
+  });
 
   // Ensure local Next.js engine on port 3141 is running first (instant speed + offline + cloud DB)
   await ensureLocalServerRunning();
@@ -190,6 +245,7 @@ async function performSilentPrint(html, printerName) {
 
     try {
       await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      await new Promise((r) => setTimeout(r, 120));
 
       const printers = await printWin.webContents.getPrintersAsync();
       const defaultP = printers.find((p) => p.isDefault)?.name || printers[0]?.name || "";

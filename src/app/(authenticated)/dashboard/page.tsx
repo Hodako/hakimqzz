@@ -512,6 +512,7 @@ export default function Dashboard() {
   const [saleOpen, setSaleOpen] = useState(false);
   const [salePresetType, setSalePresetType] = useState<"cash" | "credit" | "online">("cash");
   const [scannedPresetProductId, setScannedPresetProductId] = useState<string | undefined>(undefined);
+  const [scannedCart, setScannedCart] = useState<{ productId: string; qty: string; sellPrice: string; discount?: string }[]>([]);
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
 
   // Recent Activity Limit state
@@ -920,14 +921,24 @@ export default function Dashboard() {
       const prod = findProductByBarcode(clean);
       if (prod) {
         playScanSuccessSound();
+        setScannedCart(prev => {
+          const idx = prev.findIndex(item => item.productId === prod.id);
+          if (idx !== -1) {
+            const updated = [...prev];
+            const currentQty = Number(updated[idx].qty) || 0;
+            updated[idx] = { ...updated[idx], qty: String(currentQty + 1) };
+            return updated;
+          }
+          return [...prev, { productId: prod.id, qty: "1", sellPrice: String(prod.sell_price || ""), discount: "" }];
+        });
         setScannedPresetProductId(prod.id);
         setSalePresetType("cash");
         setSaleOpen(true);
         window.dispatchEvent(new CustomEvent("df-add-product-to-sale", { detail: { productId: prod.id, product: prod } }));
         toast.success(
           lang === "bn"
-            ? `বারকোড স্ক্যান হয়েছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
-            : `Scanned: ${prod.name} (Added to New Sale)`
+            ? `পণ্য পাওয়া গেছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
+            : `Product found: ${prod.name} (Added to New Sale)`
         );
       } else {
         playErrorSound();
@@ -3023,10 +3034,14 @@ const renderWidget = (widgetId: string) => {
           open={saleOpen}
           onOpenChange={(v) => {
             setSaleOpen(v);
-            if (!v) setScannedPresetProductId(undefined);
+            if (!v) {
+              setScannedPresetProductId(undefined);
+              setScannedCart([]);
+            }
           }}
           presetType={salePresetType}
           presetProductId={scannedPresetProductId}
+          presetCart={scannedCart}
         />
       </div>
     );
@@ -3229,10 +3244,14 @@ const renderWidget = (widgetId: string) => {
         open={saleOpen}
         onOpenChange={(v) => {
           setSaleOpen(v);
-          if (!v) setScannedPresetProductId(undefined);
+          if (!v) {
+            setScannedPresetProductId(undefined);
+            setScannedCart([]);
+          }
         }}
         presetType={salePresetType}
         presetProductId={scannedPresetProductId}
+        presetCart={scannedCart}
       />
 
       {/* ── KPI STYLE CUSTOMIZER MODAL ───────────────────────── */}

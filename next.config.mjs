@@ -76,6 +76,10 @@ const nextConfig = {
     // Ignore TypeScript build errors temporarily during initial migration steps
     ignoreBuildErrors: true,
   },
+  webpack: (config) => {
+    config.cache = false;
+    return config;
+  },
   outputFileTracingRoot: __dirname,
 };
 
