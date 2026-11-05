@@ -267,6 +267,19 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
 </body>
 </html>`;
 
+  // Check 1-click direct silent printing in Windows POS Application or Local Bridge
+  if (typeof window !== "undefined") {
+    const electronPOS = (window as any).electronPOS;
+    if (electronPOS && typeof electronPOS.printSilent === "function") {
+      electronPOS.printSilent({ html }).then((res: any) => {
+        if (res && res.success) {
+          console.log("[Invoice Printer] Printed silently via Electron POS!");
+        }
+      }).catch((e: any) => console.warn("[Invoice Printer] Silent print error:", e));
+      return;
+    }
+  }
+
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.right = "0";

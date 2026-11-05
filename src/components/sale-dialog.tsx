@@ -233,9 +233,9 @@ export function SaleDialog({
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      // Hardware barcode scanners send keystrokes with ultra-low delay (typically 5ms - 45ms per character).
-      // If delay is greater than 75ms, user is typing manually by hand or paused.
-      if (delta > 75) {
+      // Hardware barcode scanners send keystrokes with ultra-low delay (typically 5ms - 65ms per character).
+      // If delay is greater than 110ms, user is typing manually by hand or paused.
+      if (delta > 110) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -253,13 +253,13 @@ export function SaleDialog({
         return;
       }
 
-      // If delta <= 75ms: Rapid sequence!
+      // If delta <= 110ms: Rapid sequence!
       if (e.key === "Enter") {
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        // Verify that this was a scanner burst: at least 2 characters and average character interval <= 65ms
-        if (scanBuffer.length >= 2 && avgCharInterval <= 65) {
+        // Verify that this was a scanner burst: at least 2 characters and average character interval <= 90ms
+        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
           e.preventDefault();
           e.stopPropagation();
 

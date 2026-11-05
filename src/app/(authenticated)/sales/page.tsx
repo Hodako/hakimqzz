@@ -312,7 +312,7 @@ export default function SalesPage() {
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      if (delta > 60) {
+      if (delta > 110) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -326,7 +326,7 @@ export default function SalesPage() {
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        if (scanBuffer.length >= 3 && avgCharInterval <= 55) {
+        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
           e.preventDefault();
           e.stopPropagation();
 

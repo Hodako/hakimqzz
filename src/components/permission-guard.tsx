@@ -14,8 +14,8 @@ export function PermissionGuard({ children }: { children: ReactNode }) {
 
   const perms = user ? resolvePermissions(user.role, user.permissions) : null;
   const required = permissionForPath(pathname);
-  const isEmployee = user?.role === "employee";
-  const allowed = !user || ( (!required || canAccess(perms ?? undefined, required)) && (!isEmployee || (!pathname.startsWith("/somiti") && !pathname.startsWith("/parties") && !pathname.startsWith("/customers") && !pathname.startsWith("/dues"))) );
+  // Allow access if no user (public/auth page), or route requires no permission, or user has required permission
+  const allowed = !user || (!required || canAccess(perms ?? undefined, required));
 
   useEffect(() => {
     if (!allowed) {

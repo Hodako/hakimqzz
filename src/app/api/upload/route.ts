@@ -4,17 +4,40 @@ import { requestStore } from "@/lib/request-store";
 import { requireSession } from "@/lib/session";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
+function getCorsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  if (origin && origin !== "null") {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  } else {
+    headers["Access-Control-Allow-Origin"] = "*";
+  }
+  return headers;
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(req),
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const origin = req.headers.get("origin") || "*";
+  const corsHeaders = getCorsHeaders(req);
   const ip = getClientIp(req);
 
-  const rateCheck = checkRateLimit(`upload_${ip}`, { limit: 40, windowMs: 60 * 1000 });
+  const isLocalOrLan = ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.");
+  const rateLimit = isLocalOrLan ? 500 : 120;
+  const rateCheck = checkRateLimit(`upload_${ip}`, { limit: rateLimit, windowMs: 60 * 1000 });
   if (!rateCheck.success) {
     return NextResponse.json({ error: "Upload rate limit exceeded. Please wait a moment." }, {
       status: 429,
       headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
+        ...corsHeaders,
         "Retry-After": String(rateCheck.resetInSeconds),
       },
     });
@@ -41,10 +64,7 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "Unauthorized" }, {
         status: 401,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -55,10 +75,7 @@ export async function POST(req: NextRequest) {
     if (!file || !(file instanceof Blob) || typeof (file as any).arrayBuffer !== "function") {
       return NextResponse.json({ error: "No valid image file provided" }, {
         status: 400,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -78,10 +95,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       return NextResponse.json({ error: "Image upload failed" }, {
         status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -89,10 +103,7 @@ export async function POST(req: NextRequest) {
     if (!json.success) {
       return NextResponse.json({ error: json.error?.message || "Upload failed" }, {
         status: 400,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        },
+        headers: corsHeaders,
       });
     }
 
@@ -116,31 +127,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ url: imageUrl, delete_url: deleteUrl }, {
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
+      headers: corsHeaders,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Something went wrong" }, {
       status: 500,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
+      headers: corsHeaders,
     });
   }
-}
-
-export async function OPTIONS(req: NextRequest) {
-  const origin = req.headers.get("origin") || "*";
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-      "Access-Control-Allow-Headers": "Content-Type, Cookie, Authorization, Accept, X-Requested-With",
-      "Access-Control-Allow-Credentials": "true",
-    },
-  });
 }

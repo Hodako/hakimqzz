@@ -929,9 +929,9 @@ export default function Dashboard() {
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      // Scanners type consecutive keys very fast (< 75ms).
-      // If delta > 75ms, start a new buffer
-      if (delta > 75) {
+      // Scanners type consecutive keys very fast (< 110ms).
+      // If delta > 110ms, start a new buffer
+      if (delta > 110) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -949,13 +949,13 @@ export default function Dashboard() {
         return;
       }
 
-      // If delta <= 75ms: Rapid sequence!
+      // If delta <= 110ms: Rapid sequence!
       if (e.key === "Enter") {
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        // Verify scanner burst: at least 2 characters and average char interval <= 65ms
-        if (scanBuffer.length >= 2 && avgCharInterval <= 65) {
+        // Verify scanner burst: at least 2 characters and average char interval <= 90ms
+        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
           e.preventDefault();
           e.stopPropagation();
 
@@ -2998,8 +2998,12 @@ const renderWidget = (widgetId: string) => {
 
         <SaleDialog
           open={saleOpen}
-          onOpenChange={setSaleOpen}
+          onOpenChange={(v) => {
+            setSaleOpen(v);
+            if (!v) setScannedPresetProductId(undefined);
+          }}
           presetType={salePresetType}
+          presetProductId={scannedPresetProductId}
         />
       </div>
     );
@@ -3203,8 +3207,12 @@ const renderWidget = (widgetId: string) => {
 
       <SaleDialog
         open={saleOpen}
-        onOpenChange={setSaleOpen}
+        onOpenChange={(v) => {
+          setSaleOpen(v);
+          if (!v) setScannedPresetProductId(undefined);
+        }}
         presetType={salePresetType}
+        presetProductId={scannedPresetProductId}
       />
 
       {/* ── KPI STYLE CUSTOMIZER MODAL ───────────────────────── */}

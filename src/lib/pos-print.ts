@@ -217,36 +217,90 @@ export function printPwaPosReceipt(data: {
 </body>
 </html>`;
 
-  const blob = new Blob([html], { type: "text/html; charset=utf-8" });
-  const blobUrl = URL.createObjectURL(blob);
+  // 1-Click Silent Print check: Electron Native POS App OR Local POS Bridge (Zero Dialog!)
+  executeDirectSilentPrint(html).then((handledSilently) => {
+    if (handledSilently) {
+      console.log("[POS Print] Receipt sent directly to printer silently!");
+      return;
+    }
 
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "none";
-  iframe.style.zIndex = "-9999";
-  document.body.appendChild(iframe);
+    // Browser Fallback (iframe print)
+    const blob = new Blob([html], { type: "text/html; charset=utf-8" });
+    const blobUrl = URL.createObjectURL(blob);
 
-  iframe.src = blobUrl;
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    iframe.style.zIndex = "-9999";
+    document.body.appendChild(iframe);
 
-  iframe.onload = () => {
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (e) {
-        window.print();
-      } finally {
-        setTimeout(() => {
-          try {
-            document.body.removeChild(iframe);
-            URL.revokeObjectURL(blobUrl);
-          } catch (_) {}
-        }, 1000);
+    iframe.src = blobUrl;
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          window.print();
+        } finally {
+          setTimeout(() => {
+            try {
+              document.body.removeChild(iframe);
+              URL.revokeObjectURL(blobUrl);
+            } catch (_) {}
+          }, 1000);
+        }
+      }, 300);
+    };
+  });
+}
+
+/**
+ * 1-Click Direct Silent Printing
+ * Connects directly to the Windows default printer or Electron POS bridge.
+ * Starts printing immediately with ZERO print dialog!
+ */
+export async function executeDirectSilentPrint(html: string, printerName?: string): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  // 1. Check if running inside DreamFashion Windows Desktop POS Application
+  const electronPOS = (window as any).electronPOS;
+  if (electronPOS && typeof electronPOS.printSilent === "function") {
+    try {
+      const res = await electronPOS.printSilent({ html, printerName });
+      if (res && res.success) {
+        return true;
       }
-    }, 300);
-  };
+    } catch (err) {
+      console.warn("[POS] Electron silent print attempt failed:", err);
+    }
+  }
+
+  // 2. Check if local Windows POS Bridge daemon is running on 127.0.0.1:9123
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1200);
+    const bridgeRes = await fetch("http://127.0.0.1:9123/print", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ html, printerName }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (bridgeRes.ok) {
+      const json = await bridgeRes.json();
+      if (json && json.success) {
+        return true;
+      }
+    }
+  } catch (_) {
+    // POS bridge not active; fallback to standard print
+  }
+
+  return false;
 }

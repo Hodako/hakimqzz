@@ -13,28 +13,41 @@ const allActions: Record<string, Function> = {
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10MB payload limit
 
+// CORS header helper ensuring credentials: true is never paired with wildcard *
+function getCorsHeaders(req: NextRequest): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+    "Access-Control-Allow-Headers": "Content-Type, Cookie, Authorization, Accept, X-Requested-With",
+    "Access-Control-Max-Age": "86400",
+  };
+  if (origin && origin !== "null") {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  } else {
+    // If no origin or same-origin / desktop client, allow all without credentials collision
+    headers["Access-Control-Allow-Origin"] = "*";
+  }
+  return headers;
+}
+
 // CORS preflight handler
 export async function OPTIONS(req: NextRequest) {
-  const origin = req.headers.get("origin") || "*";
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-      "Access-Control-Allow-Headers": "Content-Type, Cookie, Authorization, Accept, X-Requested-With",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Max-Age": "86400",
-    },
+    headers: getCorsHeaders(req),
   });
 }
 
 // Main RPC handler
 export async function POST(req: NextRequest) {
-  const origin = req.headers.get("origin") || "*";
+  const corsHeaders = getCorsHeaders(req);
   const ip = getClientIp(req);
 
-  // Anti-DDoS Rate Limiting Guard
-  const rateCheck = checkRateLimit(ip, { limit: 250, windowMs: 60 * 1000 });
+  // Anti-DDoS Rate Limiting Guard - 1500 req/min (high allowance for active POS terminals)
+  const isLocalOrLan = ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.");
+  const rateLimit = isLocalOrLan ? 5000 : 1500;
+  const rateCheck = checkRateLimit(ip, { limit: rateLimit, windowMs: 60 * 1000 });
   if (!rateCheck.success) {
     return new NextResponse(
       JSON.stringify({ error: rateCheck.blocked ? "IP temporarily blocked due to excessive requests" : "Too Many Requests" }),
@@ -42,8 +55,7 @@ export async function POST(req: NextRequest) {
         status: 429,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
+          ...corsHeaders,
           "Retry-After": String(rateCheck.resetInSeconds),
         },
       }
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
     if (contentLength > MAX_BODY_BYTES) {
       return new NextResponse(JSON.stringify({ error: "Payload too large" }), {
         status: 413,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
@@ -96,10 +108,7 @@ export async function POST(req: NextRequest) {
       if (!action || typeof action !== "function") {
         return new NextResponse(`Action ${actionName} not found`, {
           status: 404,
-          headers: {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-          },
+          headers: corsHeaders,
         });
       }
 
@@ -107,15 +116,13 @@ export async function POST(req: NextRequest) {
       const result = await action(safeActionArgs);
 
       return NextResponse.json(result, {
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        },
+        headers: corsHeaders,
       });
     });
   } catch (error: any) {
     const status = error?.statusCode || (
       error?.message === "Invalid email or password" || error?.message?.includes("Unauthorized") ? 401 :
+      error?.message?.includes("Access denied") || error?.message?.includes("forbidden") ? 403 :
       error?.message?.includes("not found") || error?.message?.includes("required") || error?.message?.includes("balance") ? 400 : 500
     );
 
@@ -127,10 +134,7 @@ export async function POST(req: NextRequest) {
 
     return new NextResponse(error?.message || "Internal Server Error", {
       status,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-      },
+      headers: corsHeaders,
     });
   }
 }

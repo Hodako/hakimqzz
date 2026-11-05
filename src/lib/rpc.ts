@@ -111,8 +111,8 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
     });
     clearTimeout(timeoutId);
 
-    // Auto-refresh token and retry on 401 Unauthorized
-    if (res.status === 401 && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn") {
+    // Auto-refresh token and retry on 401 Unauthorized or 403 Forbidden (re-sync session)
+    if ((res.status === 401 || res.status === 403) && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn") {
       try {
         const { auth } = await import("@/lib/firebase");
         let syncEmail = auth.currentUser?.email;
