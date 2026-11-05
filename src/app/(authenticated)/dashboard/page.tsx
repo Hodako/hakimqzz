@@ -35,6 +35,7 @@ import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
 import { playTapSound, playScanSuccessSound, playErrorSound } from "@/lib/audio";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
+import { createHidScanBuffer, findProductsByScannedCode, getPosHardwareSettings } from "@/lib/pos-hardware";
 
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -840,44 +841,10 @@ export default function Dashboard() {
 
     applyFilter(from, to);
   };
-  // Helper to find product by barcode, SKU, code, or ID
+  // Helper to find product by barcode, SKU, code, or ID (Classic-World System)
   const findProductByBarcode = useCallback((rawCode: string) => {
-    const cleanCode = String(rawCode || "").trim().toLowerCase();
-    if (!cleanCode) return null;
-    const cleanNoZero = cleanCode.replace(/^0+/, "");
-    const allProds = products.data ?? [];
-
-    return allProds.find((p: any) => {
-      const pb = (p.barcode || "").trim().toLowerCase();
-      const pbNoZero = pb.replace(/^0+/, "");
-      const psku = ((p as any).sku || "").trim().toLowerCase();
-      const pskuNoZero = psku.replace(/^0+/, "");
-      const pcode = ((p as any).code || "").trim().toLowerCase();
-      const pcodeNoZero = pcode.replace(/^0+/, "");
-      const pqr = ((p as any).qr_code || "").trim().toLowerCase();
-      const pnum = ((p as any).product_number || "").trim().toLowerCase();
-      const pnumNoZero = pnum.replace(/^0+/, "");
-      const pid = String(p.id || "").trim().toLowerCase();
-      const pname = (p.name || "").trim().toLowerCase();
-
-      // 1. Exact barcode or without leading zeros
-      if (pb && (pb === cleanCode || (cleanNoZero && pbNoZero === cleanNoZero))) return true;
-      // 2. Exact SKU or Code
-      if (psku && (psku === cleanCode || (cleanNoZero && pskuNoZero === cleanNoZero))) return true;
-      if (pcode && (pcode === cleanCode || (cleanNoZero && pcodeNoZero === cleanNoZero))) return true;
-      // 3. QR Code
-      if (pqr && (pqr === cleanCode || cleanCode.includes(pqr) || pqr.includes(cleanCode))) return true;
-      // 4. Product Number
-      if (pnum && (pnum === cleanCode || (cleanNoZero && pnumNoZero === cleanNoZero))) return true;
-      // 5. Product ID
-      if (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode)))) return true;
-      // 6. Substring barcode if >= 4 chars
-      if (pb && pb.length >= 4 && (pb.includes(cleanCode) || cleanCode.includes(pb))) return true;
-      // 7. Exact name
-      if (pname && pname === cleanCode) return true;
-
-      return false;
-    });
+    const matches = findProductsByScannedCode(products.data ?? [], rawCode);
+    return matches[0] || null;
   }, [products.data]);
 
   // Camera Barcode Scanner handler
@@ -904,21 +871,17 @@ export default function Dashboard() {
     }
   };
 
-  // Hardware Barcode Scanner listener on Home Page (Dashboard)
+  // Hardware Barcode Scanner listener on Home Page (Dashboard) - Classic-World System
   // When a barcode is scanned anywhere on the home page, automatically open the New Sale dialog and add the product!
   useEffect(() => {
-    let scanBuffer = "";
-    let lastKeyTime = 0;
-    let burstStartTime = 0;
-    let burstTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
-    let burstInitialValue = "";
-    let scanTimeout: any = null;
+    if (saleOpen || purchaseOpen) return;
 
     const processScannedCode = (scannedCode: string) => {
       const clean = (scannedCode || "").trim();
       if (!clean || clean.length < 2) return;
       console.log("[Dashboard Barcode Scanner] Detected barcode:", clean);
-      const prod = findProductByBarcode(clean);
+      const matches = findProductsByScannedCode(products.data ?? [], clean);
+      const prod = matches[0];
       if (prod) {
         playScanSuccessSound();
         setScannedCart(prev => {
@@ -950,112 +913,28 @@ export default function Dashboard() {
       }
     };
 
+    const suffix = getPosHardwareSettings().scannerSuffix;
+    const hidBuffer = createHidScanBuffer(suffix);
+
     const handleDashboardScannerKeyDown = (e: KeyboardEvent) => {
-      // If sale dialog is already open, let the sale dialog's own scanner handle it
-      if (saleOpen) {
-        return;
-      }
-
-      // Ignore modifier keys
-      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) {
-        return;
-      }
-
-      const now = Date.now();
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
-      const delta = now - lastKeyTime;
-      lastKeyTime = now;
+      if (isInput) return;
 
-      // When scanning with handheld guns (USB / Wireless), keys arrive with < 240ms interval.
-      // If gap > 240ms, start a new scan buffer
-      if (delta > 240) {
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-          scanBuffer = e.key;
-          burstStartTime = now;
-          if (isInput && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
-            burstTarget = target;
-            burstInitialValue = target.value;
-          } else {
-            burstTarget = null;
-            burstInitialValue = "";
-          }
-        } else {
-          scanBuffer = "";
-          burstTarget = null;
-        }
-        return;
-      }
-
-      // If delta <= 240ms: Rapid sequence!
-      if (e.key === "Enter" || e.key === "Tab") {
-        clearTimeout(scanTimeout);
-        const totalDuration = now - burstStartTime;
-        const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
-
-        // If not in input, ANY length >= 2 is valid. If in input, verify burst speed
-        const isScannerBurst = (!isInput && scanBuffer.length >= 2) || (scanBuffer.length >= 2 && avgCharInterval <= 180);
-
-        if (isScannerBurst) {
-          e.preventDefault();
-          e.stopPropagation();
-
-          // If characters leaked into a search bar or input, restore the input
-          if (burstTarget && document.body.contains(burstTarget)) {
-            const isSearchField = burstTarget.type === "search" ||
-              burstTarget.name?.includes("search") ||
-              burstTarget.id?.includes("search") ||
-              burstTarget.placeholder?.toLowerCase().includes("search") ||
-              burstTarget.placeholder?.includes("পণ্য") ||
-              burstTarget.placeholder?.includes("খুঁজুন");
-
-            if (isSearchField) {
-              burstTarget.value = "";
-              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
-            } else {
-              burstTarget.value = burstInitialValue;
-              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
-            }
-          }
-
-          const scannedCode = scanBuffer;
-          scanBuffer = "";
-          burstTarget = null;
-          processScannedCode(scannedCode);
-          return;
-        }
-
-        scanBuffer = "";
-        burstTarget = null;
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        scanBuffer += e.key;
-
-        // Auto-flush timer for scanners configured without an Enter/Tab suffix
-        clearTimeout(scanTimeout);
-        scanTimeout = setTimeout(() => {
-          if (scanBuffer.length >= 3) {
-            const avg = (Date.now() - burstStartTime) / scanBuffer.length;
-            if (!isInput || avg <= 180) {
-              if (burstTarget && document.body.contains(burstTarget)) {
-                burstTarget.value = burstInitialValue;
-                burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
-              }
-              const code = scanBuffer;
-              scanBuffer = "";
-              burstTarget = null;
-              processScannedCode(code);
-            }
-          }
-        }, 220);
+      const scanned = hidBuffer.consumeKey(e, processScannedCode);
+      if (scanned) {
+        e.preventDefault();
+        e.stopPropagation();
+        processScannedCode(scanned);
       }
     };
 
     window.addEventListener("keydown", handleDashboardScannerKeyDown, true);
     return () => {
-      clearTimeout(scanTimeout);
+      hidBuffer.clear();
       window.removeEventListener("keydown", handleDashboardScannerKeyDown, true);
     };
-  }, [saleOpen, findProductByBarcode, lang]);
+  }, [saleOpen, purchaseOpen, products.data, lang]);
 
 
   
