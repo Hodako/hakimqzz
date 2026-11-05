@@ -2856,15 +2856,6 @@ const renderWidget = (widgetId: string) => {
           </div>
           <div className="flex items-center gap-1.5">
             <Button
-              variant="outline"
-              size="icon"
-              className="size-8 rounded-xl border-primary/30 text-primary hover:bg-primary/10"
-              onClick={() => { playTapSound(); setCameraScannerOpen(true); }}
-              aria-label="Scan barcode"
-            >
-              <ScanLine className="size-4" />
-            </Button>
-            <Button
               variant={showFilter ? "default" : "outline"}
               size="icon"
               className="size-8"

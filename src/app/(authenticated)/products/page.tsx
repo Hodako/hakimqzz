@@ -429,15 +429,6 @@ export default function ProductsPage() {
           </Button>
           <Button
             size="sm"
-            variant="outline"
-            className="h-8 w-8 p-0 shrink-0"
-            title={lang === "bn" ? "বারকোড স্ক্যান" : "Scan Barcode"}
-            onClick={() => setScannerOpen(true)}
-          >
-            <Scan className="size-3.5 text-primary" />
-          </Button>
-          <Button
-            size="sm"
             variant={showCartPanel ? "default" : "outline"}
             className="hidden md:inline-flex h-8 text-[10px] sm:text-xs relative"
             onClick={() => setShowCartPanel(prev => !prev)}

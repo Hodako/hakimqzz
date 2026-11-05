@@ -79,16 +79,24 @@ async function ensureLocalServerRunning() {
 }
 
 async function createWindow() {
-  // Use persistent partition so cloud auth cookies and localStorage survive app restarts
+  // Use persistent partition so auth cookies and localStorage survive app restarts
   const partition = "persist:dreamfashion_pos";
   const customSession = session.fromPartition(partition);
+
+  // Clear HTTP cache & stale service workers on startup so UI updates always appear immediately
+  try {
+    await customSession.clearCache();
+    await customSession.clearStorageData({ storages: ["serviceworkers", "cachestorage"] });
+  } catch (err) {
+    console.warn("[Windows POS] Cache clear warning:", err);
+  }
 
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 860,
     minWidth: 1024,
     minHeight: 680,
-    title: "Dream Fashion — Modern POS Terminal (https://hakim.qzz.io)",
+    title: "Dream Fashion — Ultimate POS System",
     icon: path.join(__dirname, "../public/logo.png"),
     backgroundColor: "#0f172a",
     webPreferences: {
@@ -103,19 +111,21 @@ async function createWindow() {
   // Hide default menu bar for clean, professional POS screen
   mainWindow.setMenuBarVisibility(false);
 
-  // Check if Cloud is reachable; if not, fallback to local
-  console.log(`[Windows POS] Checking connection to cloud: ${CLOUD_URL}...`);
-  const isCloudOnline = await checkUrlReady(CLOUD_URL, 2000);
+  // Ensure local Next.js engine on port 3141 is running first (instant speed + offline + cloud DB)
+  await ensureLocalServerRunning();
+  const isLocalReady = await checkUrlReady(LOCAL_URL, 1500);
 
-  if (isCloudOnline) {
-    console.log(`[Windows POS] Connected to cloud! Loading ${CLOUD_URL}...`);
-    mainWindow.loadURL(CLOUD_URL);
+  if (isLocalReady) {
+    console.log(`[Windows POS] Connected to Local Next.js Engine (${LOCAL_URL})!`);
+    mainWindow.loadURL(LOCAL_URL);
   } else {
-    console.log(`[Windows POS] Cloud not immediately reachable (offline mode). Starting local server...`);
-    await ensureLocalServerRunning();
-    mainWindow.loadURL(LOCAL_URL).catch(() => {
+    console.log(`[Windows POS] Local engine unavailable, connecting to cloud: ${CLOUD_URL}...`);
+    const isCloudOnline = await checkUrlReady(CLOUD_URL, 2500);
+    if (isCloudOnline) {
+      mainWindow.loadURL(CLOUD_URL);
+    } else {
       mainWindow.loadFile(path.join(__dirname, "error.html"));
-    });
+    }
   }
 
   // Handle load failures gracefully (e.g. WiFi disconnected during load)

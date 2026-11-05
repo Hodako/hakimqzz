@@ -297,19 +297,6 @@ export function ProductDialog({
                       </button>
                     )}
                   </div>
-                  {isMobile && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 min-w-[44px] px-2.5 shrink-0 flex items-center justify-center cursor-pointer"
-                      onClick={() => setScannerOpen(true)}
-                      title={lang === "bn" ? "ক্যামেরা বারকোড স্ক্যানার" : "Camera Barcode Scanner"}
-                      aria-label={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
-                    >
-                      <Scan className="size-4 text-primary" />
-                    </Button>
-                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-0.5">
                   <Zap className="size-3 animate-pulse shrink-0" />
@@ -394,17 +381,6 @@ export function ProductDialog({
           </form>
         </DialogContent>
       </Dialog>
-
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onScan={(code) => {
-          setBarcode(code);
-          playScanSuccessSound();
-          toast.success(lang === "bn" ? `বারকোড যোগ করা হয়েছে: ${code}` : `Barcode set: ${code}`);
-        }}
-        title={lang === "bn" ? "পণ্য বারকোড স্ক্যান করুন" : "Scan Product Barcode"}
-      />
     </>
   );
 }

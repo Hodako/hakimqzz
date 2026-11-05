@@ -797,17 +797,6 @@ export default function ProductAnalyticsPage() {
                       {lang === "bn" ? "যোগ করুন" : "Add"}
                     </Button>
                   </div>
-
-                  {/* Camera Scanner Button */}
-                  <Button
-                    size="lg"
-                    onClick={() => setScannerOpen(true)}
-                    className="h-12 px-5 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
-                  >
-                    <QrCode className="size-5" />
-                    <span className="hidden sm:inline">{lang === "bn" ? "ক্যামেরা স্ক্যানার" : "Camera Scanner"}</span>
-                    <span className="sm:hidden">{lang === "bn" ? "ক্যামেরা" : "Camera"}</span>
-                  </Button>
                 </div>
 
                 {/* Sound & Controls Toolbar */}
@@ -968,16 +957,9 @@ export default function ProductAnalyticsPage() {
                   </h4>
                   <p className="text-xs max-w-md mx-auto">
                     {lang === "bn"
-                      ? "উপরে বারকোড ইনপুট বক্সে কোড লিখে Enter চাপুন অথবা 'ক্যামেরা স্ক্যানার' বোতাম চেপে ক্যামেরা দিয়ে দ্রুত স্ক্যান করুন।"
-                      : "Scan barcodes using the camera scanner or enter codes in the input field above to calculate stock worth in real time."}
+                      ? "উপরে বারকোড ইনপুট বক্সে কোড লিখে Enter চাপুন অথবা বারকোড গান দিয়ে দ্রুত স্ক্যান করুন।"
+                      : "Scan barcodes using your barcode scanner gun or enter codes in the input field above to calculate stock worth in real time."}
                   </p>
-                  <Button
-                    onClick={() => setScannerOpen(true)}
-                    className="gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    <QrCode className="size-4" />
-                    {lang === "bn" ? "ক্যামেরা দিয়ে স্ক্যান শুরু করুন" : "Open Camera Scanner"}
-                  </Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">

@@ -750,7 +750,7 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-16px)] sm:max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[96dvh] flex flex-col overflow-hidden p-0 rounded-3xl border-border shadow-2xl">
+        <DialogContent className="w-[98vw] sm:max-w-[95vw] md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] max-h-[96dvh] flex flex-col overflow-hidden p-0 rounded-3xl border-border shadow-2xl">
           <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -945,7 +945,7 @@ export function SaleDialog({
                 <div className="border border-border/90 bg-card/60 rounded-xl p-3.5 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Scan className="size-3.5 text-primary" />
+                      <ShoppingCart className="size-3.5 text-primary" />
                       {t("select_product")}
                     </Label>
                     <div className="flex items-center gap-2">
@@ -966,23 +966,61 @@ export function SaleDialog({
                     </span>
                   </div>
 
-                  <ProductSearchSelect
-                    products={products}
-                    value={draft.productId}
-                    onScanDirect={handleBarcodeScan}
-                    onChange={v => {
-                      const p = products.find(x => x.id === v);
-                      setDraft(d => ({
-                        ...d,
-                        productId: v,
-                        qty: d.qty || "1",
-                        sellPrice: p && p.sell_price > 0 ? String(p.sell_price) : "",
-                        discount: "",
-                      }));
-                    }}
-                  />
+                  {/* Product Name & Direct Sell Price Input Box side-by-side */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                    <div className="sm:col-span-7 space-y-1">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                        {lang === "bn" ? "পণ্যের নাম / বারকোড" : "Product Name / Barcode"}
+                      </Label>
+                      <ProductSearchSelect
+                        products={products}
+                        value={draft.productId}
+                        onScanDirect={handleBarcodeScan}
+                        onChange={v => {
+                          const p = products.find(x => x.id === v);
+                          setDraft(d => ({
+                            ...d,
+                            productId: v,
+                            qty: d.qty || "1",
+                            sellPrice: p && p.sell_price > 0 ? String(p.sell_price) : "",
+                            discount: "",
+                          }));
+                        }}
+                      />
+                    </div>
+                    <div className="sm:col-span-5 space-y-1">
+                      <Label className="text-[11px] font-bold text-primary">
+                        {lang === "bn" ? "বিক্রি মূল্য (Sell Price ৳)" : "Sell Price (৳)"}
+                      </Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        inputMode="decimal"
+                        pattern="[0-9.]*"
+                        placeholder={lang === "bn" ? "বিক্রি দর লিখুন (৳)" : "Enter Sell Price (৳)"}
+                        value={draft.productId ? draft.sellPrice : (cart.length > 0 ? cart[cart.length - 1].sellPrice : draft.sellPrice)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (draft.productId) {
+                            setDraft(d => ({ ...d, sellPrice: val }));
+                          } else if (cart.length > 0) {
+                            setCart(prev => prev.map((item, idx) => idx === prev.length - 1 ? { ...item, sellPrice: val } : item));
+                          } else {
+                            setDraft(d => ({ ...d, sellPrice: val }));
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (draft.productId) addToCart();
+                          }
+                        }}
+                        className="h-9 font-bold font-mono text-sm border-primary/50 bg-background focus-visible:ring-primary"
+                      />
+                    </div>
+                  </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Field label={t("qty")}>
                       <Input
                         type="number"
@@ -999,24 +1037,7 @@ export function SaleDialog({
                         }}
                       />
                     </Field>
-                    <Field label={t("sell_price")}>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        pattern="[0-9.]*"
-                        placeholder={t("sell_price")}
-                        value={draft.sellPrice}
-                        onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (draft.productId) addToCart();
-                          }
-                        }}
-                      />
-                    </Field>
-                    <Field label={lang === "bn" ? "ছাড়" : "Discount"}>
+                    <Field label={lang === "bn" ? "ছাড় (Discount ৳)" : "Discount (৳)"}>
                       <Input
                         type="number"
                         step="any"
@@ -1080,16 +1101,45 @@ export function SaleDialog({
                       {cart.map((line, i) => {
                         const p = products.find(x => x.id === line.productId);
                         return (
-                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-3 text-xs bg-card space-y-2 shadow-2xs hover:border-primary/40 transition-colors">
-                            <div className="flex items-center justify-between font-semibold gap-2">
-                              <span className="truncate flex-1 text-zinc-900 dark:text-zinc-100 font-bold text-xs sm:text-sm" title={p?.name}>
-                                {i + 1}. {p?.name}
-                              </span>
+                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-3 text-xs bg-card space-y-2.5 shadow-2xs hover:border-primary/40 transition-colors">
+                            {/* Top Row: Product Name + Prominent Sell Price Input Box + Remove Button */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate text-zinc-900 dark:text-zinc-100 font-bold text-xs sm:text-sm" title={p?.name}>
+                                  {i + 1}. {p?.name}
+                                </span>
+                                {p?.barcode && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    Barcode: {p.barcode}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Direct Sell Price Input Box right beside Product Name */}
+                              <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/30 shrink-0">
+                                <span className="text-[11px] font-bold text-primary whitespace-nowrap">
+                                  {lang === "bn" ? "বিক্রি দর (৳):" : "Sell Price (৳):"}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  inputMode="decimal"
+                                  value={line.sellPrice}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setCart(prev => prev.map((item, idx) => idx === i ? { ...item, sellPrice: val } : item));
+                                  }}
+                                  className="h-7 w-24 sm:w-28 px-2 text-xs sm:text-sm font-bold font-mono text-foreground text-right bg-background border-primary/40 rounded focus-visible:ring-1 focus-visible:ring-primary"
+                                  placeholder={lang === "bn" ? "দর লিখুন" : "Price"}
+                                  title={lang === "bn" ? "বিক্রি দর পরিবর্তন করুন" : "Edit Sell Price"}
+                                />
+                              </div>
+
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-6 shrink-0 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                                className="size-7 shrink-0 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
                                 onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
                                 title={lang === "bn" ? "আইটেম মুছুন" : "Remove item"}
                               >
@@ -1097,26 +1147,9 @@ export function SaleDialog({
                               </Button>
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-border/50">
+                            {/* Bottom Row: Qty Stepper + Discount + Line Total */}
+                            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-border/50">
                               <div className="flex flex-wrap items-center gap-2">
-                                {/* Direct Editable Unit Sell Price Input Box */}
-                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-lg border border-border/60">
-                                  <span className="text-[10.5px] font-bold text-muted-foreground">{lang === "bn" ? "দর (৳):" : "Price (৳):"}</span>
-                                  <Input
-                                    type="number"
-                                    step="any"
-                                    inputMode="decimal"
-                                    value={line.sellPrice}
-                                    onChange={e => {
-                                      const val = e.target.value;
-                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, sellPrice: val } : item));
-                                    }}
-                                    className="h-6.5 w-20 sm:w-24 px-1.5 text-xs font-bold font-mono text-foreground text-right bg-background border-border/80 rounded focus-visible:ring-1"
-                                    placeholder="0"
-                                    title={lang === "bn" ? "বিক্রি দর পরিবর্তন করুন" : "Edit Sell Price"}
-                                  />
-                                </div>
-
                                 {/* Qty Stepper */}
                                 <div className="flex items-center border border-border rounded-lg bg-background">
                                   <button
@@ -1156,8 +1189,8 @@ export function SaleDialog({
                                 </div>
 
                                 {/* Discount per unit */}
-                                <div className="flex items-center gap-1 bg-muted/30 px-1.5 py-0.5 rounded-lg border border-border/50">
-                                  <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "ছাড়:" : "Disc:"}</span>
+                                <div className="flex items-center gap-1 bg-muted/30 px-2 py-0.5 rounded-lg border border-border/50">
+                                  <span className="text-[10.5px] font-medium text-muted-foreground">{lang === "bn" ? "ছাড় (৳):" : "Disc (৳):"}</span>
                                   <Input
                                     type="number"
                                     step="any"
@@ -1167,7 +1200,7 @@ export function SaleDialog({
                                       const val = e.target.value;
                                       setCart(prev => prev.map((item, idx) => idx === i ? { ...item, discount: val } : item));
                                     }}
-                                    className="h-6.5 w-14 px-1 text-[11px] font-mono text-right bg-background border-border/70 rounded"
+                                    className="h-6.5 w-16 px-1.5 text-[11px] font-mono text-right bg-background border-border/70 rounded"
                                     placeholder="0"
                                   />
                                 </div>

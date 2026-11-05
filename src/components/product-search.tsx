@@ -249,30 +249,9 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
                 </div>
               )}
             </div>
-            
-            {isMobile && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 px-3 shrink-0 text-xs flex items-center gap-1 border-dashed cursor-pointer min-h-[44px]"
-                onClick={() => setScannerOpen(true)}
-                title="Scan Barcode"
-              >
-                <Scan className="size-4 text-primary" />
-              </Button>
-            )}
           </div>
         )}
       </div>
-
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onScan={handleBarcodeScanned}
-        continuous={!!onScanDirect}
-        title={lang === "bn" ? "পণ্য স্ক্যান করুন (বারকোড)" : "Scan Product Barcode"}
-      />
     </>
   );
 }
