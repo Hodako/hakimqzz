@@ -22,8 +22,9 @@ import Link from "next/link";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { downloadCsv, exportDateStamp } from "@/lib/export";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Plus, Download, DollarSign, Wallet, Users, ArrowRight, Share2 } from "lucide-react";
+import { Search, Plus, Download, DollarSign, Wallet, Users, ArrowRight, Share2, Sparkles } from "lucide-react";
 import { getWhatsAppDueReminderUrl } from "@/lib/whatsapp-helper";
+import { useAuth } from "@/hooks/use-auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,8 @@ type DuesTab = "all" | "outstanding" | "settled";
 
 export default function DuesPage() {
   const { lang, t } = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin";
   const qc = useQueryClient();
 
   const parties = useCachedQuery(["customers"], getCustomers);
@@ -57,6 +60,7 @@ export default function DuesPage() {
 
   // Form Inputs
   const [amount, setAmount] = useState("");
+  const [discount, setDiscount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -105,7 +109,7 @@ export default function DuesPage() {
 
   const paidByParty: Record<string, number> = {};
   (allPayments.data ?? []).forEach(p => {
-    paidByParty[p.party_id] = (paidByParty[p.party_id] ?? 0) + Number(p.amount);
+    paidByParty[p.party_id] = (paidByParty[p.party_id] ?? 0) + Number(p.amount) + (Number((p as any).discount) || 0);
   });
 
   const payablesByParty: Record<string, number> = {};
@@ -173,6 +177,7 @@ export default function DuesPage() {
   const triggerCollect = (party: any) => {
     setSelectedParty(party);
     setAmount("");
+    setDiscount("");
     setNote("");
     setCollectOpen(true);
   };
@@ -187,13 +192,15 @@ export default function DuesPage() {
   // Form Submissions
   const submitCollection = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedParty || !amount || Number(amount) <= 0) return;
-    const amt = Number(amount);
+    const amt = Number(amount) || 0;
+    const disc = isAdmin ? Math.max(0, Number(discount) || 0) : 0;
+    if (!selectedParty || (amt <= 0 && disc <= 0)) return;
     const tempId = `temp-${Date.now()}`;
     const optimisticPayment: Payment = {
       id: tempId,
       party_id: selectedParty.id,
       amount: amt,
+      discount: disc,
       note: note.trim() || null,
       created_at: new Date().toISOString()
     };
@@ -201,7 +208,11 @@ export default function DuesPage() {
     const prevPayments = qc.getQueryData<Payment[]>(["all-payments"]);
     setCachedData<Payment[]>(qc, ["all-payments"], old => [optimisticPayment, ...(old ?? [])]);
     setCollectOpen(false);
-    toast.success(lang === "bn" ? "আদায় সফলভাবে সংরক্ষণ হয়েছে" : "Payment collection recorded");
+    toast.success(
+      lang === "bn"
+        ? (disc > 0 ? `আদায় (৳${amt}) ও ছাড় (৳${disc}) সফলভাবে সংরক্ষণ হয়েছে` : "আদায় সফলভাবে সংরক্ষণ হয়েছে")
+        : (disc > 0 ? `Payment (৳${amt}) & Discount (৳${disc}) recorded` : "Payment collection recorded")
+    );
 
     setBusy(true);
     try {
@@ -209,10 +220,11 @@ export default function DuesPage() {
         data: {
           party_id: selectedParty.id,
           amount: amt,
+          discount: disc,
           note: note.trim() || null
         }
       });
-      await refreshQueries(qc, ["all-payments"], ["sales"], ["parties"], ["all-party-receivables"]);
+      await refreshQueries(qc, ["all-payments"], ["sales"], ["parties"], ["all-party-receivables"], ["cashbox"]);
     } catch (err: any) {
       if (prevPayments) setCachedData(qc, ["all-payments"], prevPayments);
       toast.error(err.message || String(err));
@@ -491,24 +503,63 @@ export default function DuesPage() {
               {lang === "bn" ? `${selectedParty?.name} এর থেকে বকেয়া আদায়` : `Collect Dues from ${selectedParty?.name}`}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={submitCollection} className="space-y-4">
+          <form onSubmit={submitCollection} className="space-y-3.5">
             {selectedParty && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-xs flex justify-between items-center text-amber-800 dark:text-amber-400 font-medium">
-                <span>{lang === "bn" ? "বর্তমান বকেয়া জমা:" : "Current Outstanding Dues:"}</span>
-                <span className="font-bold text-sm font-serif">{fmtMoney(selectedParty.outstanding)}</span>
+              <div className="space-y-1.5 p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-border text-xs font-medium">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">{lang === "bn" ? "বর্তমান বকেয়া জমা:" : "Current Outstanding Dues:"}</span>
+                  <span className="font-bold text-sm font-serif text-rose-600 dark:text-rose-400">{fmtMoney(selectedParty.outstanding)}</span>
+                </div>
+                {isAdmin && Number(discount) > 0 && (
+                  <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 text-[11px] font-semibold pt-1 border-t border-border/50">
+                    <span>{lang === "bn" ? "প্রদত্ত ছাড় (মওকুফ):" : "Discount (Waived):"}</span>
+                    <span>−{fmtMoney(Number(discount) || 0)}</span>
+                  </div>
+                )}
+                {(Number(amount) > 0 || (isAdmin && Number(discount) > 0)) && (
+                  <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pt-1 border-t border-border/50">
+                    <span>{lang === "bn" ? "আদায় পরবর্তী অবশিষ্ট বকেয়া:" : "Remaining Due After:"}</span>
+                    <span>
+                      {fmtMoney(Math.max(0, (selectedParty.outstanding || 0) - (Number(amount) || 0) - (isAdmin ? (Number(discount) || 0) : 0)))}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-xs">{lang === "bn" ? "আদায়ের পরিমাণ (টাকা)" : "Collection Amount (Tk)"}</Label>
+              <Label className="text-xs font-semibold">{lang === "bn" ? "আদায়ের পরিমাণ (টাকা) *" : "Collection Amount (Tk) *"}</Label>
               <Input
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
+                step="any"
                 required
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 placeholder="e.g. 1500"
               />
             </div>
+
+            {isAdmin && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                    <Sparkles className="size-3" />
+                    {lang === "bn" ? "ছাড় / ডিসকাউন্ট (টাকা) [অ্যাডমিন]" : "Discount (Tk) [Admin]"}
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "বকেয়া মওকুফ" : "Due waiver"}</span>
+                </div>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={discount}
+                  onChange={e => setDiscount(e.target.value)}
+                  placeholder="0.00"
+                  className="border-amber-500/40 focus:border-amber-500 font-serif"
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
               <Label className="text-xs">{lang === "bn" ? "নোট / মন্তব্য" : "Note / Remarks"}</Label>
               <Input

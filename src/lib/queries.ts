@@ -66,6 +66,7 @@ export type Sale = {
 };
 export type Payment = {
   id: string; party_id: string; amount: number; note: string | null; created_at: string;
+  discount?: number;
   payment_method?: string;
   split_cash?: number;
   split_bkash?: number;
@@ -109,6 +110,10 @@ export type Employee = {
   phone?: string | null;
   email?: string | null;
   username?: string | null;
+  login_code?: string | null;
+  pin?: string | null;
+  plain_password?: string | null;
+  password?: string | null;
   role: string;
   designation?: string;
   base_salary?: number;

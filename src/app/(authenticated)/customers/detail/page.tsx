@@ -2,7 +2,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Trash2, Pencil, Plus, ShoppingBag, BookOpen, User, Phone, MapPin, Wallet } from "lucide-react";
+import { ArrowLeft, Trash2, Pencil, Plus, ShoppingBag, BookOpen, User, Phone, MapPin, Wallet, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import {
   getPaymentsForParty, getSalesForParty, getCustomer,
   getPartyReceivables,
@@ -78,7 +79,7 @@ export default function CustomerDetail() {
 
   const saleDue = allPartySales.reduce((a, s) => a + Number(s.due_amount), 0);
   const extraReceivable = (receivables.data ?? []).reduce((a, r) => a + Number(r.amount), 0);
-  const paidTotal = (payments.data ?? []).reduce((a, p) => a + Number(p.amount), 0);
+  const paidTotal = (payments.data ?? []).reduce((a, p) => a + Number(p.amount) + (Number((p as any).discount) || 0), 0);
   const netBalance = saleDue + extraReceivable - paidTotal;
 
   type Entry = {
@@ -98,11 +99,21 @@ export default function CustomerDetail() {
       label: r.note || (lang === "bn" ? "বাকী যোগ" : "Money Owed"), amount: Number(r.amount),
       kind: "receivable" as const, deletable: true,
     })),
-    ...(payments.data ?? []).map(p => ({
-      id: "p" + p.id, rawId: p.id, date: p.created_at || (p as any).date || "",
-      label: p.note || (lang === "bn" ? "টাকা জমা/আদায়" : "Payment Received"), amount: -Number(p.amount),
-      kind: "payment" as const, deletable: true,
-    })),
+    ...(payments.data ?? []).map(p => {
+      const disc = Number((p as any).discount) || 0;
+      const amt = Number(p.amount);
+      return {
+        id: "p" + p.id,
+        rawId: p.id,
+        date: p.created_at || (p as any).date || "",
+        label: p.note
+          ? `${p.note}${disc > 0 ? ` (${lang === "bn" ? "ছাড়" : "Dis"}: ৳${disc})` : ""}`
+          : (lang === "bn" ? `টাকা জমা/আদায়${disc > 0 ? ` (ছাড়: ৳${disc})` : ""}` : `Payment Received${disc > 0 ? ` (Dis: ৳${disc})` : ""}`),
+        amount: -(amt + disc),
+        kind: "payment" as const,
+        deletable: true,
+      };
+    }),
   ].sort((a, b) => +new Date(b.date || 0) - +new Date(a.date || 0));
 
   const { items: pagedPurchases, totalPages: purchaseTotalPages, safePage: safePurchasesPage } = paginate(allPartySales, purchasesPage, pageSize);
@@ -459,7 +470,7 @@ export default function CustomerDetail() {
         </TabsContent>
       </Tabs>
 
-      <CollectDialog partyId={id} open={collectOpen} onOpenChange={setCollectOpen} />
+      <CollectDialog partyId={id} currentDue={netBalance} open={collectOpen} onOpenChange={setCollectOpen} />
       <EditCustomerDialog customer={customer} open={editOpen} onOpenChange={setEditOpen} />
       {addKind && (
         <AddLedgerDialog partyId={id} kind={addKind} open={!!addKind} onOpenChange={v => { if (!v) setAddKind(null); }} />
@@ -704,31 +715,39 @@ function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: strin
   );
 }
 
-function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+function CollectDialog({ partyId, currentDue, open, onOpenChange }: { partyId: string; currentDue?: number; open: boolean; onOpenChange: (v: boolean) => void }) {
   const { lang, t } = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin";
   const qc = useQueryClient();
   const [amount, setAmount] = useState("");
+  const [discount, setDiscount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setAmount(""); setNote(""); }
+    if (!open) { setAmount(""); setDiscount(""); setNote(""); }
   }, [open]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const amt = Number(amount) || 0;
-    if (amt <= 0) return;
+    const disc = isAdmin ? Math.max(0, Number(discount) || 0) : 0;
+    if (amt <= 0 && disc <= 0) return;
     const tempId = `temp-${Date.now()}`;
-    const entry: Payment = { id: tempId, party_id: partyId, amount: amt, note: note || null, created_at: new Date().toISOString() };
+    const entry: Payment = { id: tempId, party_id: partyId, amount: amt, discount: disc, note: note || null, created_at: new Date().toISOString() };
 
     setCachedData<Payment[]>(qc, ["payments", partyId], old => [entry, ...(old ?? [])]);
     onOpenChange(false);
-    toast.success(t("save"));
+    toast.success(
+      lang === "bn"
+        ? (disc > 0 ? `আদায় (৳${amt}) ও ছাড় (৳${disc}) সফলভাবে সংরক্ষণ হয়েছে` : t("save"))
+        : (disc > 0 ? `Collected (৳${amt}) & Discount (৳${disc}) recorded` : t("save"))
+    );
 
     setBusy(true);
     try {
-      const saved = await createPaymentFn({ data: { party_id: partyId, amount: amt, note: note || null } });
+      const saved = await createPaymentFn({ data: { party_id: partyId, amount: amt, discount: disc, note: note || null } });
       setCachedData<Payment[]>(qc, ["payments", partyId], old =>
         (old ?? []).map(p => (p.id === tempId ? { ...saved, id: saved.id } : p)),
       );
@@ -750,9 +769,32 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3.5 py-1">
+          {currentDue !== undefined && currentDue > 0 && (
+            <div className="space-y-1.5 p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-border text-xs font-medium">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">{lang === "bn" ? "বর্তমান বকেয়া জমা:" : "Current Outstanding Dues:"}</span>
+                <span className="font-bold text-sm font-serif text-rose-600 dark:text-rose-400">{fmtMoney(currentDue)}</span>
+              </div>
+              {isAdmin && Number(discount) > 0 && (
+                <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 text-[11px] font-semibold pt-1 border-t border-border/50">
+                  <span>{lang === "bn" ? "প্রদত্ত ছাড় (মওকুফ):" : "Discount (Waived):"}</span>
+                  <span>−{fmtMoney(Number(discount) || 0)}</span>
+                </div>
+              )}
+              {(Number(amount) > 0 || (isAdmin && Number(discount) > 0)) && (
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pt-1 border-t border-border/50">
+                  <span>{lang === "bn" ? "আদায় পরবর্তী অবশিষ্ট বকেয়া:" : "Remaining Due After:"}</span>
+                  <span>
+                    {fmtMoney(Math.max(0, currentDue - (Number(amount) || 0) - (isAdmin ? (Number(discount) || 0) : 0)))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground font-semibold">
-              {lang === "bn" ? "আদায়কৃত টাকার পরিমাণ" : "Collected Amount"}
+              {lang === "bn" ? "আদায়কৃত টাকার পরিমাণ *" : "Collected Amount *"}
             </Label>
             <Input
               required
@@ -767,6 +809,29 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
               autoFocus
             />
           </div>
+
+          {isAdmin && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="size-3" />
+                  {lang === "bn" ? "ছাড় / ডিসকাউন্ট (টাকা) [অ্যাডমিন]" : "Discount (Tk) [Admin]"}
+                </Label>
+                <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "বকেয়া মওকুফ" : "Due waiver"}</span>
+              </div>
+              <Input
+                type="number"
+                step="any"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                placeholder="0.00"
+                value={discount}
+                onChange={e => setDiscount(e.target.value)}
+                className="h-9 text-xs rounded-xl font-serif border-amber-500/40 focus:border-amber-500"
+              />
+            </div>
+          )}
+
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground font-semibold">
               {lang === "bn" ? "মন্তব্য বা বিবরণ" : "Note / Receipt No"}

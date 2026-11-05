@@ -208,19 +208,29 @@ export function UniversalSearch({ role, permissions }: UniversalSearchProps) {
               {canAccess(perms, "sales") && filtered.sales.length > 0 && (
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 font-semibold">{t("sales")}</div>
-                  {filtered.sales.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => go("/sales")}
-                      className="w-full flex items-center justify-between text-left text-xs px-2.5 py-2 hover:bg-muted active:bg-muted/70 rounded-md gap-2.5 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <ShoppingBag className="size-4 opacity-70 text-primary shrink-0" />
-                        <span className="truncate font-medium">{s.product_name}</span>
-                      </div>
-                      <span className="font-semibold text-primary shrink-0">{fmtMoney(s.sell_price * s.qty)}</span>
-                    </button>
-                  ))}
+                  {filtered.sales.map(s => {
+                    const searchTarget = (s as any).tracking_code || s.product_name;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => go(`/sales?search=${encodeURIComponent(searchTarget)}`)}
+                        className="w-full flex items-center justify-between text-left text-xs px-2.5 py-2 hover:bg-muted active:bg-muted/70 rounded-md gap-2.5 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <ShoppingBag className="size-4 opacity-70 text-primary shrink-0" />
+                          <div className="truncate">
+                            <span className="truncate font-medium block">{s.product_name}</span>
+                            {(s as any).tracking_code && (
+                              <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400">
+                                🚚 {(s as any).tracking_code}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="font-semibold text-primary shrink-0">{fmtMoney(s.sell_price * s.qty)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -291,13 +301,27 @@ export function UniversalSearch({ role, permissions }: UniversalSearchProps) {
             <>
               <CommandSeparator />
               <CommandGroup heading={t("sales")}>
-                {filtered.sales.map(s => (
-                  <CommandItem key={s.id} value={`sale-${s.id}-${s.product_name}`} onSelect={() => go("/sales")}>
-                    <ShoppingBag className="icon-sm mr-2 opacity-60" />
-                    <span className="truncate">{s.product_name}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">{fmtMoney(s.sell_price * s.qty)}</span>
-                  </CommandItem>
-                ))}
+                {filtered.sales.map(s => {
+                  const searchTarget = (s as any).tracking_code || s.product_name;
+                  return (
+                    <CommandItem
+                      key={s.id}
+                      value={`sale-${s.id}-${s.product_name}-${(s as any).tracking_code || ""}`}
+                      onSelect={() => go(`/sales?search=${encodeURIComponent(searchTarget)}`)}
+                    >
+                      <ShoppingBag className="icon-sm mr-2 opacity-60" />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="truncate">{s.product_name}</span>
+                        {(s as any).tracking_code && (
+                          <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400">
+                            🚚 {(s as any).tracking_code}
+                          </span>
+                        )}
+                      </div>
+                      <span className="ml-auto text-xs text-muted-foreground">{fmtMoney(s.sell_price * s.qty)}</span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             </>
           )}

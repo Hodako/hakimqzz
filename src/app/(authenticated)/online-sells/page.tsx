@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, useDeferredValue } from "react";
+import { useState, useMemo, useDeferredValue, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { useT } from "@/lib/i18n";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
+import { OrderInfoDialog } from "@/components/order-info-dialog";
 import {
   Truck,
   PackageCheck,
@@ -26,6 +27,7 @@ import {
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { approveCourierPaymentFn, cancelCourierOrderFn } from "@/lib/rpc";
@@ -43,6 +45,16 @@ export default function OnlineSellsPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const q = p.get("search") || p.get("tracking") || p.get("q");
+      if (q) {
+        setSearch(q);
+      }
+    }
+  }, []);
 
   // Filter for online sales only (includes sales with courier status or tracking code)
   const onlineSales = useMemo(() => {
@@ -106,7 +118,7 @@ export default function OnlineSellsPage() {
           null;
 
         return {
-          id: first.id,
+          id: cartId ? `cart-${cartId}` : first.id,
           cart_id: cartId,
           items,
           product_name: names,
@@ -261,6 +273,9 @@ export default function OnlineSellsPage() {
   const toggleOrder = (id: string) => {
     setExpandedOrders((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const [infoOrder, setInfoOrder] = useState<any | null>(null);
+  const [infoItemId, setInfoItemId] = useState<string | null>(null);
 
   return (
     <div className="space-y-3 pb-12 font-hind">
@@ -465,6 +480,23 @@ export default function OnlineSellsPage() {
                         <span className="text-[10px] sm:text-[10.5px] font-bold font-hind text-emerald-700 dark:text-emerald-300">
                           {lang === "bn" ? "লাভ:" : "Profit:"} {isCancelled ? "৳০" : fmtMoney(item.profit)}
                         </span>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoOrder(item);
+                            setInfoItemId(item.items[0]?.id || null);
+                          }}
+                          className="h-6 px-1.5 text-[10px] font-bold rounded-md bg-background hover:bg-muted text-foreground border border-black/30 dark:border-white/20 gap-1 cursor-pointer shrink-0"
+                          title={lang === "bn" ? "অর্ডারের পূর্ণ বিবরণ দেখুন" : "View Order Info"}
+                        >
+                          <Info className="size-3 text-primary" />
+                          <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                        </Button>
+
                         <span className="p-0.5 rounded text-muted-foreground/70 hover:text-foreground">
                           {isExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                         </span>
@@ -496,21 +528,78 @@ export default function OnlineSellsPage() {
 
                       {/* Multi-Item Breakdown List if Group */}
                       {item.items.length > 1 && (
-                        <div className="space-y-0.5 bg-background/80 p-1.5 sm:p-2 rounded-lg border-[0.5px] border-black/20 dark:border-white/20">
-                          <span className="text-[9.5px] font-bold uppercase text-muted-foreground tracking-wider block font-hind">
-                            {lang === "bn" ? "অর্ডার আইটেম সমূহ" : "Order Items"}
-                          </span>
-                          {item.items.map((it: any, idx: number) => (
-                            <div key={it.id} className="flex justify-between items-center text-xs py-0.5 border-b border-border/30 last:border-0 font-hind">
-                              <div className="truncate mr-2">
-                                <span className="font-bold text-zinc-800 dark:text-zinc-200">{idx + 1}. {it.product_name}</span>
-                                <span className="text-muted-foreground font-mono ml-1">×{it.qty}</span>
+                        <div className="space-y-1 bg-background/90 p-2 rounded-xl border border-border/70">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider block font-hind">
+                              {lang === "bn" ? "অর্ডার আইটেম সমূহ (ক্লিক করে বিবরণ দেখুন):" : "Order Items (Click to view info):"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {item.items.length} {lang === "bn" ? "টি আইটেম" : "items"}
+                            </span>
+                          </div>
+                          {item.items.map((it: any, idx: number) => {
+                            const itTrack = it.tracking_code || it.tracking_id || it.consignment_id;
+                            const q = deferredSearch.trim().toLowerCase();
+                            const matchesSearch = Boolean(q) && (
+                              (itTrack && itTrack.toLowerCase().includes(q)) ||
+                              (it.product_name && it.product_name.toLowerCase().includes(q))
+                            );
+
+                            return (
+                              <div
+                                key={it.id || idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInfoOrder(item);
+                                  setInfoItemId(it.id);
+                                }}
+                                className={`flex justify-between items-center text-xs p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-primary/5 active:scale-[0.99] font-hind ${
+                                  matchesSearch
+                                    ? "bg-purple-500/10 border-purple-500/40"
+                                    : "bg-card border-border/50 hover:border-primary/40"
+                                }`}
+                              >
+                                <div className="truncate mr-2 flex items-center gap-1.5 min-w-0">
+                                  <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">
+                                    {idx + 1}. {it.product_name}
+                                  </span>
+                                  <span className="text-muted-foreground font-mono text-[10px] shrink-0 font-bold">
+                                    ×{it.qty}
+                                  </span>
+                                  {itTrack && (
+                                    <span className="font-mono text-[9px] bg-purple-500/15 text-purple-700 dark:text-purple-300 px-1 py-0.2 rounded shrink-0">
+                                      {itTrack}
+                                    </span>
+                                  )}
+                                  {matchesSearch && (
+                                    <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1 py-0.2 rounded shrink-0">
+                                      ✓ মিলছে
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                                    {fmtMoney(Number(it.sell_price) * it.qty)}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInfoOrder(item);
+                                      setInfoItemId(it.id);
+                                    }}
+                                    className="h-6 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md gap-0.5 cursor-pointer"
+                                  >
+                                    <Info className="size-3" />
+                                    <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                                  </Button>
+                                </div>
                               </div>
-                              <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100 shrink-0">
-                                {fmtMoney(Number(it.sell_price) * it.qty)}
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
@@ -531,8 +620,8 @@ export default function OnlineSellsPage() {
                             <Button
                               size="sm"
                               style={{ backgroundColor: "#ADFF2F" }}
-                              onClick={(e) => { e.stopPropagation(); handleApprove(item.id); }}
-                              disabled={actionBusyId === item.id}
+                              onClick={(e) => { e.stopPropagation(); handleApprove(item.items[0]?.id || item.id); }}
+                              disabled={actionBusyId === item.id || (item.items[0] && actionBusyId === item.items[0].id)}
                               className="h-7 px-2.5 text-xs font-bold rounded-lg text-zinc-950 gap-1 border border-black/20 hover:brightness-95 transition-all shadow-2xs cursor-pointer"
                             >
                               <PackageCheck className="size-3 text-zinc-950" />
@@ -542,8 +631,8 @@ export default function OnlineSellsPage() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={(e) => { e.stopPropagation(); handleCancel(item.id); }}
-                              disabled={actionBusyId === item.id}
+                              onClick={(e) => { e.stopPropagation(); handleCancel(item.items[0]?.id || item.id); }}
+                              disabled={actionBusyId === item.id || (item.items[0] && actionBusyId === item.items[0].id)}
                               className="h-7 px-2 text-xs font-bold rounded-lg gap-1 cursor-pointer"
                             >
                               <RotateCcw className="size-3" />
@@ -563,6 +652,14 @@ export default function OnlineSellsPage() {
 
       <FAB onClick={() => setOpen(true)} />
       <SaleDialog open={open} onOpenChange={setOpen} presetType="online" />
+      <OrderInfoDialog
+        order={infoOrder}
+        open={!!infoOrder}
+        onOpenChange={(v) => {
+          if (!v) setInfoOrder(null);
+        }}
+        initialSelectedItemId={infoItemId}
+      />
     </div>
   );
 }

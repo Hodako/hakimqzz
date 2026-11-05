@@ -21,6 +21,9 @@ async function getClient(): Promise<MongoClient> {
     serverSelectionTimeoutMS: 5000,
     connectTimeoutMS: 5000,
     socketTimeoutMS: 45000,
+    maxPoolSize: 25,
+    minPoolSize: 2,
+    maxIdleTimeMS: 60000,
     family: 4, // Force IPv4 to avoid secureConnect hangs on Windows/IPv6 networks
   };
 
@@ -53,30 +56,39 @@ async function getClient(): Promise<MongoClient> {
   return _clientPromise;
 }
 
-let indexesInitialized = false;
+let _indexesPromise: Promise<void> | null = null;
 
-async function ensureIndexes(db: Db) {
-  if (indexesInitialized) return;
-  indexesInitialized = true;
-  try {
-    await Promise.all([
-      db.collection("products").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("products").createIndex({ owner_id: 1, name: 1 }),
-      db.collection("sales").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("sales").createIndex({ owner_id: 1, tracking_code: 1 }, { sparse: true }),
-      db.collection("sales").createIndex({ owner_id: 1, cart_id: 1 }, { sparse: true }),
-      db.collection("sales").createIndex({ owner_id: 1, type: 1 }),
-      db.collection("purchases").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("cashbox_entries").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("expenses").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("somiti_entries").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("owner_withdrawals").createIndex({ owner_id: 1, created_at: -1 }),
-      db.collection("parties").createIndex({ owner_id: 1, name: 1 }),
-      db.collection("reminders").createIndex({ owner_id: 1, created_at: -1 }),
-    ]);
-  } catch (err) {
-    console.error("Failed to ensure indexes:", err);
-  }
+async function ensureIndexes(db: Db): Promise<void> {
+  if (_indexesPromise) return _indexesPromise;
+  _indexesPromise = (async () => {
+    try {
+      await Promise.all([
+        db.collection("products").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("products").createIndex({ owner_id: 1, name: 1 }),
+        db.collection("products").createIndex({ owner_id: 1, barcode: 1 }, { sparse: true }),
+        db.collection("sales").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("sales").createIndex({ owner_id: 1, tracking_code: 1 }, { sparse: true }),
+        db.collection("sales").createIndex({ owner_id: 1, cart_id: 1 }, { sparse: true }),
+        db.collection("sales").createIndex({ owner_id: 1, type: 1 }),
+        db.collection("purchases").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("cashbox_entries").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("expenses").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("somiti_entries").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("owner_withdrawals").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("parties").createIndex({ owner_id: 1, name: 1 }),
+        db.collection("reminders").createIndex({ owner_id: 1, created_at: -1 }),
+        db.collection("users").createIndex({ username: 1 }, { sparse: true }),
+        db.collection("users").createIndex({ phone: 1 }, { sparse: true }),
+        db.collection("users").createIndex({ email: 1 }, { sparse: true }),
+        db.collection("users").createIndex({ employee_id: 1 }, { sparse: true }),
+        db.collection("employees").createIndex({ owner_id: 1, login_code: 1 }, { sparse: true }),
+        db.collection("employees").createIndex({ owner_id: 1, phone: 1 }, { sparse: true }),
+      ]);
+    } catch (err) {
+      console.error("Failed to ensure indexes:", err);
+    }
+  })();
+  return _indexesPromise;
 }
 
 export async function getDb(): Promise<Db> {

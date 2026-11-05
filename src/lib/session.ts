@@ -16,6 +16,22 @@ export type AppSession = {
   profileId: string;
 };
 
+// In-memory session cache to avoid repeated roundtrips across international networks to MongoDB Atlas
+interface CachedSessionUser {
+  user: any;
+  cachedAt: number;
+}
+const sessionUserCache = new Map<string, CachedSessionUser>();
+const SESSION_CACHE_TTL_MS = 30000; // 30 seconds
+
+export function clearSessionUserCache(userId?: string) {
+  if (userId) {
+    sessionUserCache.delete(userId);
+  } else {
+    sessionUserCache.clear();
+  }
+}
+
 export async function requireSession(requireActivated = true): Promise<AppSession> {
   const store = requestStore.getStore();
   let token = store?.token;
@@ -37,29 +53,41 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
   const payload = await verifyToken(token);
   if (!payload) throw new Error("Unauthorized");
 
-  const db = await getDb();
-  let user: any = await db.collection("users").findOne({ _id: payload.userId } as any);
-  if (!user && payload.email) {
-    user = await db.collection("users").findOne({ email: payload.email.toLowerCase().trim() } as any);
+  const nowTime = Date.now();
+  let user: any = null;
+  const cached = sessionUserCache.get(payload.userId);
+  if (cached && nowTime - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+    user = cached.user;
   }
+
   if (!user) {
-    const isEmp = payload.role === "employee" || String(payload.userId).includes("emp");
-    const newOwnerId = isEmp ? "classicworld_default_owner" : payload.userId;
-    const now = new Date().toISOString();
-    user = {
-      _id: payload.userId,
-      email: payload.email || "user@classicworld.pos",
-      full_name: isEmp ? "Employee" : "Shop Owner",
-      role: isEmp ? "employee" : "owner",
-      owner_id: newOwnerId,
-      activated: true,
-      status: "active",
-      created_at: now,
-      updated_at: now,
-    };
-    try {
-      await db.collection("users").insertOne(user as any);
-    } catch (_) {}
+    const db = await getDb();
+    user = await db.collection("users").findOne({ _id: payload.userId } as any);
+    if (!user && payload.email) {
+      user = await db.collection("users").findOne({ email: payload.email.toLowerCase().trim() } as any);
+    }
+    if (!user) {
+      const isEmp = payload.role === "employee" || String(payload.userId).includes("emp");
+      const newOwnerId = isEmp ? "classicworld_default_owner" : payload.userId;
+      const now = new Date().toISOString();
+      user = {
+        _id: payload.userId,
+        email: payload.email || "user@classicworld.pos",
+        full_name: isEmp ? "Employee" : "Shop Owner",
+        role: isEmp ? "employee" : "owner",
+        owner_id: newOwnerId,
+        activated: true,
+        status: "active",
+        created_at: now,
+        updated_at: now,
+      };
+      try {
+        await db.collection("users").insertOne(user as any);
+      } catch (_) {}
+    }
+    if (user) {
+      sessionUserCache.set(payload.userId, { user, cachedAt: nowTime });
+    }
   }
 
   const role = (user.role as AppSession["role"]) || (payload.role as AppSession["role"]) || "owner";
@@ -67,6 +95,7 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
 
   const businessId = (user.business_id as string) || null;
   if (businessId) {
+    const db = await getDb();
     const biz = await db.collection("businesses").findOne({ _id: businessId } as any);
     if (biz && biz.status === "suspended") {
       throw new Error("Business suspended. Please contact administrator.");

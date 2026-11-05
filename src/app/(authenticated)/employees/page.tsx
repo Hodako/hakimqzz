@@ -23,6 +23,8 @@ import {
   Printer,
   X,
   Check,
+  CheckCheck,
+  Copy,
   RefreshCw,
   AlertCircle,
   HelpCircle,
@@ -32,6 +34,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Sparkles,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -64,6 +67,7 @@ import { toast } from "sonner";
 import {
   addEmployeeFn,
   updateEmployeeFn,
+  regenerateEmployeeLoginCodeFn,
   deleteEmployeeFn,
   createEmployeeSalaryFn,
   deleteEmployeeSalaryFn,
@@ -107,6 +111,9 @@ export default function EmployeesPage() {
   const [empStatus, setEmpStatus] = useState<"active" | "inactive">("active");
   const [empPassword, setEmpPassword] = useState("1234");
   const [empPin, setEmpPin] = useState("1234");
+  const [empLoginCode, setEmpLoginCode] = useState("");
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [empPermissions, setEmpPermissions] = useState({
     can_sales: true,
     can_customers: true,
@@ -234,6 +241,66 @@ export default function EmployeesPage() {
     return pendingShoppingsForSal.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
   }, [pendingShoppingsForSal]);
 
+  // Helper to calculate early money (advance) and remaining salary balance for an employee in a given month
+  const getEmployeeSalaryStats = (empId: string, monthStr: string, deductShop: boolean = true) => {
+    const emp = employees.find(x => x.id === empId);
+    const baseSal = Number(emp?.base_salary) || 0;
+    if (!emp || baseSal <= 0) {
+      return { baseSal: 0, earlyMoney: 0, shoppingDeductions: 0, remaining: 0, salariesPaid: 0, advancesPaid: 0 };
+    }
+
+    // 1. Salaries already paid for this employee in this month
+    const salariesInMonth = salaries.filter(s =>
+      (s.employee_id === empId || (!s.employee_id && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
+      s.month === monthStr
+    );
+    const salariesPaid = salariesInMonth.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+    // 2. Advance / early money expenses taken for this employee in this month
+    const advancesInMonth = expenses.filter(e =>
+      (e.employee_id === empId || (!e.employee_id && e.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
+      (e.category === "advance" || e.category === "salary_advance" || (e.note || "").toLowerCase().includes("advance") || (e.note || "").toLowerCase().includes("অগ্রিম")) &&
+      (e.date || "").startsWith(monthStr)
+    );
+    const advancesPaid = advancesInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    const earlyMoney = salariesPaid + advancesPaid;
+
+    // 3. Pending shopping deductions
+    const pendings = shoppings.filter(s =>
+      (s.employee_id === empId || (!s.employee_id && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
+      s.payment_status === "deduct_from_salary" &&
+      !(s as any).settled
+    );
+    const shoppingDeductions = deductShop ? pendings.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0) : 0;
+
+    const remaining = Math.max(0, baseSal - earlyMoney - shoppingDeductions);
+
+    return {
+      baseSal,
+      earlyMoney,
+      salariesPaid,
+      advancesPaid,
+      shoppingDeductions,
+      remaining,
+    };
+  };
+
+  const selectedSalaryEmpCalc = useMemo(() => {
+    if (!salEmpId) return null;
+    return getEmployeeSalaryStats(salEmpId, salMonth, deductShoppings);
+  }, [salEmpId, salMonth, deductShoppings, salaries, expenses, shoppings, employees]);
+
+  const selectedExpEmp = useMemo(() => {
+    return employees.find(x => x.id === expEmpId) || null;
+  }, [employees, expEmpId]);
+
+  const selectedExpEmpCalc = useMemo(() => {
+    if (!expEmpId) return null;
+    const currentMonth = expDate.slice(0, 7) || new Date().toISOString().slice(0, 7);
+    return getEmployeeSalaryStats(expEmpId, currentMonth, true);
+  }, [expEmpId, expDate, salaries, expenses, shoppings, employees]);
+
   // Identify currently logged-in employee
   const currentEmployee = useMemo(() => {
     if (!user) return null;
@@ -328,6 +395,7 @@ export default function EmployeesPage() {
             designation: empDesignation,
             base_salary: Number(empSalary) || 0,
             status: empStatus,
+            login_code: empLoginCode.trim() || undefined,
             password: empPassword.trim() || "1234",
             plain_password: empPassword.trim() || "1234",
             pin: empPin.trim() || empPassword.trim() || "1234",
@@ -344,6 +412,7 @@ export default function EmployeesPage() {
             designation: empDesignation,
             base_salary: Number(empSalary) || 0,
             status: empStatus,
+            login_code: empLoginCode.trim() || undefined,
             password: empPassword.trim() || "1234",
             plain_password: empPassword.trim() || "1234",
             pin: empPin.trim() || empPassword.trim() || "1234",
@@ -362,6 +431,7 @@ export default function EmployeesPage() {
       setEmpSalary("");
       setEmpPassword("1234");
       setEmpPin("1234");
+      setEmpLoginCode("");
     } catch (err: any) {
       toast.error(err.message || "Failed to save employee");
     } finally {
@@ -430,8 +500,13 @@ export default function EmployeesPage() {
           note: expNote.trim() || null,
         },
       });
-      toast.success(lang === "bn" ? "কর্মচারী খরচ যুক্ত হয়েছে" : "Employee expense recorded");
+      toast.success(
+        lang === "bn"
+          ? (expCat === "advance" ? "কর্মচারীর অগ্রিম টাকা (Early Money) সংরক্ষিত হয়েছে" : "কর্মচারী খরচ যুক্ত হয়েছে")
+          : (expCat === "advance" ? "Employee early money/advance recorded" : "Employee expense recorded")
+      );
       qc.invalidateQueries({ queryKey: ["employee_expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_salaries"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
       setAddExpOpen(false);
@@ -524,8 +599,9 @@ export default function EmployeesPage() {
                 setEmpPhone("");
                 setEmpEmail("");
                 setEmpSalary("");
-      setEmpPassword("1234");
-      setEmpPin("1234");
+                setEmpPassword("1234");
+                setEmpPin("1234");
+                setEmpLoginCode(Math.floor(100000 + Math.random() * 900000).toString());
                 setAddEmpOpen(true);
               }}
               size="sm"
@@ -670,7 +746,17 @@ export default function EmployeesPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setAddEmpOpen(true)}
+                  onClick={() => {
+                    setEditingEmp(null);
+                    setEmpName("");
+                    setEmpPhone("");
+                    setEmpEmail("");
+                    setEmpSalary("");
+                    setEmpPassword("1234");
+                    setEmpPin("1234");
+                    setEmpLoginCode(Math.floor(100000 + Math.random() * 900000).toString());
+                    setAddEmpOpen(true);
+                  }}
                   className="text-xs rounded-xl"
                 >
                   {lang === "bn" ? "প্রথম কর্মচারী যোগ করুন" : "Add first employee"}
@@ -706,10 +792,86 @@ export default function EmployeesPage() {
                             </span>
                           )}
                           {e.base_salary ? (
-                            <span className="font-semibold text-foreground font-charukola">
-                              {lang === "bn" ? "মাসিক বেতন:" : "Salary:"} {fmtMoney(e.base_salary)}
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-foreground font-charukola">
+                                {lang === "bn" ? "মাসিক বেতন:" : "Salary:"} {fmtMoney(e.base_salary)}
+                              </span>
+                              {(() => {
+                                const currentMonth = new Date().toISOString().slice(0, 7);
+                                const stats = getEmployeeSalaryStats(e.id, currentMonth);
+                                return (
+                                  <>
+                                    {stats.earlyMoney > 0 && (
+                                      <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-medium">
+                                        {lang === "bn" ? "অগ্রিম উত্তোলিত:" : "Early Taken:"} ৳{fmtMoney(stats.earlyMoney)}
+                                      </Badge>
+                                    )}
+                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold">
+                                      <Wallet className="size-2.5 mr-1 text-emerald-600 inline" />
+                                      {lang === "bn" ? "অবশিষ্ট বেতন:" : "Remaining Salary:"} ৳{fmtMoney(stats.remaining)}
+                                    </Badge>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           ) : null}
+                        </div>
+
+                        {/* WhatsApp-Style Login Code Badge */}
+                        <div className="pt-1 flex items-center gap-2 flex-wrap">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs shadow-xs">
+                            <span className="font-semibold flex items-center gap-1 text-[11px]">
+                              <KeyRound className="size-3 text-emerald-600 dark:text-emerald-400" />
+                              {lang === "bn" ? "লগইন কোড:" : "Login Code:"}
+                            </span>
+                            <span className="font-mono font-bold tracking-widest text-emerald-950 dark:text-emerald-100 bg-emerald-500/20 px-2 py-0.5 rounded-lg text-xs select-all">
+                              {e.login_code
+                                ? (e.login_code.length === 6
+                                    ? `${e.login_code.slice(0, 3)}-${e.login_code.slice(3)}`
+                                    : e.login_code)
+                                : "---"}
+                            </span>
+                            <button
+                              type="button"
+                              title={lang === "bn" ? "কোড কপি করুন" : "Copy Code"}
+                              onClick={() => {
+                                if (e.login_code) {
+                                  navigator.clipboard.writeText(e.login_code);
+                                  setCopiedCodeId(e.id);
+                                  toast.success(lang === "bn" ? `লগইন কোড ${e.login_code} কপি হয়েছে!` : `Login code ${e.login_code} copied!`);
+                                  setTimeout(() => setCopiedCodeId(null), 2000);
+                                }
+                              }}
+                              className="p-1 rounded-md hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer"
+                            >
+                              {copiedCodeId === e.id ? <CheckCheck className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              title={lang === "bn" ? "নতুন কোড জেনারেট করুন" : "Generate new code"}
+                              disabled={regeneratingId === e.id}
+                              onClick={async () => {
+                                if (confirm(lang === "bn" ? "আপনি কি এই কর্মচারীর জন্য নতুন ৬-সংখ্যার লগইন কোড জেনারেট করতে চান?" : "Generate a new 6-digit login code for this employee?")) {
+                                  setRegeneratingId(e.id);
+                                  try {
+                                    const res = await regenerateEmployeeLoginCodeFn({ data: { id: e.id } });
+                                    qc.invalidateQueries({ queryKey: ["employees"] });
+                                    toast.success(lang === "bn" ? `নতুন লগইন কোড: ${res.login_code}` : `New login code: ${res.login_code}`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || "Failed to regenerate code");
+                                  } finally {
+                                    setRegeneratingId(null);
+                                  }
+                                }
+                              }}
+                              className="p-1 rounded-md hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer"
+                            >
+                              <RefreshCw className={`size-3.5 ${regeneratingId === e.id ? "animate-spin" : ""}`} />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground/80 hidden md:inline">
+                            {lang === "bn" ? "💬 কর্মচারী লগইন পেজে এই কোডটি লিখবে" : "💬 Employee inputs this code to sign in"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -719,7 +881,7 @@ export default function EmployeesPage() {
                         variant="outline"
                         size="sm"
                         className="h-8 text-xs rounded-xl gap-1"
-                                                onClick={() => {
+                        onClick={() => {
                           setEditingEmp(e);
                           setEmpName(e.name || "");
                           setEmpPhone(e.phone || "");
@@ -727,6 +889,7 @@ export default function EmployeesPage() {
                           setEmpDesignation(e.designation || "Sales Staff");
                           setEmpSalary(e.base_salary ? String(e.base_salary) : "");
                           setEmpStatus(e.status || "active");
+                          setEmpLoginCode(e.login_code || (e as any).pin || "123456");
                           setEmpPassword((e as any).plain_password || (e as any).password || (e as any).pin || "1234");
                           setEmpPin((e as any).pin || (e as any).plain_password || (e as any).password || "1234");
                           setEmpPermissions({
@@ -797,6 +960,16 @@ export default function EmployeesPage() {
                           <Badge variant="secondary" className="text-[10px]">
                             {s.payment_method}
                           </Badge>
+                          {(() => {
+                            const emp = employees.find(x => x.id === s.employee_id || x.name.toLowerCase() === s.employee_name.toLowerCase());
+                            if (!emp || !emp.base_salary) return null;
+                            const stats = getEmployeeSalaryStats(emp.id, s.month);
+                            return (
+                              <Badge variant="outline" className={`text-[10px] font-semibold ${stats.remaining > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"}`}>
+                                {stats.remaining > 0 ? `${lang === "bn" ? "অবশিষ্ট বেতন:" : "Remaining:"} ৳${fmtMoney(stats.remaining)}` : (lang === "bn" ? "পরিশোধ সম্পন্ন" : "Fully Settled")}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         {s.note && <p className="text-xs text-muted-foreground truncate">{s.note}</p>}
                       </div>
@@ -857,8 +1030,14 @@ export default function EmployeesPage() {
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-foreground">{e.employee_name}</span>
-                          <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20">
-                            {e.category === "food" ? (lang === "bn" ? "খাবার ভাতা" : "Food") : e.category === "travel" ? (lang === "bn" ? "যাতায়াত" : "Travel") : (lang === "bn" ? "অন্যান্য" : "Other")}
+                          <Badge variant="outline" className={`text-[10px] ${e.category === "advance" ? "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30 font-bold" : "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20"}`}>
+                            {e.category === "advance"
+                              ? (lang === "bn" ? "অগ্রিম টাকা (Early Money)" : "Early Money / Advance")
+                              : e.category === "food" ? (lang === "bn" ? "খাবার ভাতা" : "Food")
+                              : e.category === "travel" ? (lang === "bn" ? "যাতায়াত" : "Travel")
+                              : e.category === "tea" ? (lang === "bn" ? "নাস্তা / চা" : "Tea / Snacks")
+                              : e.category === "bonus" ? (lang === "bn" ? "বোনাস" : "Bonus")
+                              : (lang === "bn" ? "অন্যান্য" : "Other")}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">{e.date}</span>
                         </div>
@@ -1119,6 +1298,61 @@ export default function EmployeesPage() {
             </div>
 
             
+            {/* WhatsApp 6-Digit Login Code */}
+            <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/25 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                  <KeyRound className="size-3.5 text-emerald-600" />
+                  {lang === "bn" ? "হোয়াটসঅ্যাপ স্টাইল ৬-সংখ্যার লগইন কোড" : "WhatsApp Style 6-Digit Login Code"}
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+                    setEmpLoginCode(newCode);
+                    toast.success(lang === "bn" ? "নতুন কোড তৈরি করা হয়েছে" : "New code generated");
+                  }}
+                  className="h-7 px-2 text-[11px] rounded-lg text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="size-3" />
+                  <span>{lang === "bn" ? "নতুন কোড" : "Generate"}</span>
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  maxLength={6}
+                  placeholder="e.g. 123456"
+                  value={empLoginCode}
+                  onChange={e => setEmpLoginCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+                  className="h-10 text-base font-bold font-mono tracking-widest bg-background text-emerald-900 dark:text-emerald-100 text-center"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (empLoginCode) {
+                      navigator.clipboard.writeText(empLoginCode);
+                      toast.success(lang === "bn" ? `কোড ${empLoginCode} কপি হয়েছে!` : `Code ${empLoginCode} copied!`);
+                    }
+                  }}
+                  className="h-10 px-3 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 shrink-0 cursor-pointer"
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 leading-tight">
+                {lang === "bn"
+                  ? "💬 কর্মচারীকে এই কোডটি দিন। Employee Login পেজে এই কোডটি দিয়ে সে এক ক্লিকেই লগইন করতে পারবে।"
+                  : "💬 Give this code to your staff. They can enter it on the Employee Login page to sign in instantly."}
+              </p>
+            </div>
+
             {/* Login Credentials: Password & PIN */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-indigo-500/5 p-3 rounded-xl border border-indigo-500/20">
               <div className="space-y-1">
@@ -1238,16 +1472,8 @@ export default function EmployeesPage() {
               <Label className="text-xs">{lang === "bn" ? "কর্মচারী নির্বাচন *" : "Select Employee *"}</Label>
               <Select value={salEmpId} onValueChange={v => {
                 setSalEmpId(v);
-                const emp = employees.find(x => x.id === v);
-                const pendings = shoppings.filter(s =>
-                  (s.employee_id === v || (!s.employee_id && emp && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
-                  s.payment_status === "deduct_from_salary" &&
-                  !(s as any).settled
-                );
-                const shopTotal = pendings.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-                const baseSal = Number(emp?.base_salary) || 0;
-                const net = deductShoppings ? Math.max(baseSal - shopTotal, 0) : baseSal;
-                setSalAmount(String(net));
+                const stats = getEmployeeSalaryStats(v, salMonth, deductShoppings);
+                setSalAmount(String(stats.remaining));
               }}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder={lang === "bn" ? "কর্মচারী বাছাই করুন" : "Select employee"} />
@@ -1261,6 +1487,40 @@ export default function EmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Early Money & Remaining Salary Balance Display */}
+            {selectedSalaryEmpCalc && selectedSalaryEmpCalc.baseSal > 0 && (
+              <div className="space-y-2">
+                {selectedSalaryEmpCalc.earlyMoney > 0 && (
+                  <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                        <Clock className="size-3.5" />
+                        {lang === "bn" ? "পূর্বে গৃহীত অগ্রিম / উত্তোলিত টাকা" : "Early Money / Advance Taken"}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] bg-purple-500/20 text-purple-800 dark:text-purple-300 border-purple-500/30 font-bold">
+                        −৳{fmtMoney(selectedSalaryEmpCalc.earlyMoney)}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      {lang === "bn"
+                        ? `এই কর্মচারীর চলতি মাসে ইতিমধ্যে ৳${fmtMoney(selectedSalaryEmpCalc.earlyMoney)} অগ্রিম টাকা উত্তোলন করা হয়েছে।`
+                        : `Employee has already drawn ৳${fmtMoney(selectedSalaryEmpCalc.earlyMoney)} early/advance money this month.`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs flex justify-between items-center font-semibold">
+                  <span className="text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Wallet className="size-3.5 text-emerald-600" />
+                    {lang === "bn" ? "অবশিষ্ট বেতন ব্যালেন্স:" : "Remaining Salary Balance:"}
+                  </span>
+                  <span className="text-sm font-bold font-charukola text-emerald-700 dark:text-emerald-300 font-serif">
+                    ৳{fmtMoney(selectedSalaryEmpCalc.remaining)}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {shoppingDeductionTotal > 0 && (
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1.5">
@@ -1285,9 +1545,10 @@ export default function EmployeesPage() {
                     onCheckedChange={(checked) => {
                       const isChecked = Boolean(checked);
                       setDeductShoppings(isChecked);
-                      const baseSal = Number(selectedSalaryEmp?.base_salary) || 0;
-                      const net = isChecked ? Math.max(baseSal - shoppingDeductionTotal, 0) : baseSal;
-                      setSalAmount(String(net));
+                      if (salEmpId) {
+                        const stats = getEmployeeSalaryStats(salEmpId, salMonth, isChecked);
+                        setSalAmount(String(stats.remaining));
+                      }
                     }}
                   />
                   <Label htmlFor="deduct_shop" className="text-[11px] font-semibold cursor-pointer">
@@ -1303,7 +1564,14 @@ export default function EmployeesPage() {
                 <Input
                   type="month"
                   value={salMonth}
-                  onChange={e => setSalMonth(e.target.value)}
+                  onChange={e => {
+                    const m = e.target.value;
+                    setSalMonth(m);
+                    if (salEmpId) {
+                      const stats = getEmployeeSalaryStats(salEmpId, m, deductShoppings);
+                      setSalAmount(String(stats.remaining));
+                    }
+                  }}
                   className="h-8.5 text-xs"
                 />
               </div>
@@ -1396,6 +1664,7 @@ export default function EmployeesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="advance">{lang === "bn" ? "💵 অগ্রিম টাকা (Early Money)" : "💵 Early Money / Advance"}</SelectItem>
                     <SelectItem value="food">{lang === "bn" ? "খাবার / লাঞ্চ" : "Food / Lunch"}</SelectItem>
                     <SelectItem value="travel">{lang === "bn" ? "যাতায়াত / ভাড়া" : "Travel"}</SelectItem>
                     <SelectItem value="tea">{lang === "bn" ? "নাস্তা / চা" : "Tea / Snacks"}</SelectItem>
@@ -1417,6 +1686,37 @@ export default function EmployeesPage() {
                 />
               </div>
             </div>
+
+            {/* Remaining Salary Balance display when employee is selected */}
+            {selectedExpEmpCalc && selectedExpEmpCalc.baseSal > 0 && (
+              <div className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-border text-xs space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">{lang === "bn" ? "কর্মচারীর মূল মাসিক বেতন:" : "Monthly Base Salary:"}</span>
+                  <span className="font-semibold font-serif">৳{fmtMoney(selectedExpEmpCalc.baseSal)}</span>
+                </div>
+                {selectedExpEmpCalc.earlyMoney > 0 && (
+                  <div className="flex justify-between items-center text-purple-600 dark:text-purple-400 text-[11px]">
+                    <span>{lang === "bn" ? "চলতি মাসে ইতিমধ্যে উত্তোলিত অগ্রিম:" : "Already Taken Early Money:"}</span>
+                    <span className="font-semibold font-serif">−৳{fmtMoney(selectedExpEmpCalc.earlyMoney)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold border-t border-border/50 pt-1">
+                  <span className="flex items-center gap-1">
+                    <Wallet className="size-3 text-emerald-600" />
+                    {lang === "bn" ? "বর্তমান অবশিষ্ট বেতন:" : "Current Remaining Salary:"}
+                  </span>
+                  <span className="font-serif text-sm">৳{fmtMoney(selectedExpEmpCalc.remaining)}</span>
+                </div>
+                {Number(expAmount) > 0 && expCat === "advance" && (
+                  <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 text-[11px] font-semibold pt-1 border-t border-dashed border-border/50">
+                    <span>{lang === "bn" ? "এই অগ্রিমের পর অবশিষ্ট বেতন থাকবে:" : "After This Advance Remaining:"}</span>
+                    <span className="font-serif font-bold">
+                      ৳{fmtMoney(Math.max(0, selectedExpEmpCalc.remaining - (Number(expAmount) || 0)))}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs">{lang === "bn" ? "বিবরণ / নোট" : "Note"}</Label>

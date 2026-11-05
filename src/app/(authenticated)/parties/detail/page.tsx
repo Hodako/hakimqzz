@@ -3,7 +3,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowDownToLine, Trash2, Pencil, Plus, Download, Printer, Loader2, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { ArrowLeft, ArrowDownToLine, Trash2, Pencil, Plus, Download, Printer, Loader2, FileSpreadsheet, ChevronDown, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import {
   getPaymentsForParty, getSalesForParty, getParty,
   getPartyReceivables, getPartyPayables, getPayableSettlements,
@@ -32,8 +33,8 @@ import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PartyReturnDialog } from "@/components/party-return-dialog";
-import { useAuth } from "@/hooks/use-auth";
 import { generatePartyStatementPdf } from "@/lib/pdf-report-generator";
+
 import { downloadCsv } from "@/lib/export";
 import {
   DropdownMenu,
@@ -85,7 +86,7 @@ export default function PartyDetail() {
 
   const saleDue = (sales.data ?? []).filter(s => !s.returned).reduce((a, s) => a + Number(s.due_amount), 0);
   const extraReceivable = (receivables.data ?? []).reduce((a, r) => a + Number(r.amount), 0);
-  const paidTotal = (payments.data ?? []).reduce((a, p) => a + Number(p.amount), 0);
+  const paidTotal = (payments.data ?? []).reduce((a, p) => a + Number(p.amount) + (Number((p as any).discount) || 0), 0);
   const outstanding = Math.max(saleDue + extraReceivable - paidTotal, 0);
 
   const payableTotal = (payables.data ?? []).reduce((a, p) => a + Number(p.amount), 0);
@@ -115,11 +116,18 @@ export default function PartyDetail() {
       label: r.note || t("money_owed"), amount: Number(r.amount),
       kind: "receivable" as const, deletable: true,
     })) : []),
-    ...(showReceivable ? (payments.data ?? []).map(p => ({
-      id: "p" + p.id, rawId: p.id, date: p.created_at || (p as any).date || "",
-      label: p.note || t("collect_payment"), amount: -Number(p.amount),
-      kind: "payment" as const, deletable: true,
-    })) : []),
+    ...(showReceivable ? (payments.data ?? []).map(p => {
+      const disc = Number((p as any).discount) || 0;
+      const amt = Number(p.amount);
+      return {
+        id: "p" + p.id, rawId: p.id, date: p.created_at || (p as any).date || "",
+        label: p.note
+          ? `${p.note}${disc > 0 ? ` (${lang === "bn" ? "ছাড়" : "Dis"}: ৳${disc})` : ""}`
+          : `${t("collect_payment")}${disc > 0 ? ` (${lang === "bn" ? "ছাড়" : "Dis"}: ৳${disc})` : ""}`,
+        amount: -(amt + disc),
+        kind: "payment" as const, deletable: true,
+      };
+    }) : []),
     ...(showPayable ? (payables.data ?? []).map(p => ({
       id: "pb" + p.id, rawId: p.id, date: p.created_at || (p as any).date || "",
       label: p.note || t("money_payable"), amount: Number(p.amount),
@@ -452,7 +460,7 @@ export default function PartyDetail() {
         </TabsContent>
       </Tabs>
 
-      <CollectDialog partyId={id} open={collectOpen} onOpenChange={setCollectOpen} />
+      <CollectDialog partyId={id} currentDue={outstanding} open={collectOpen} onOpenChange={setCollectOpen} />
       <PayPartyDialog partyId={id} open={payOpen} onOpenChange={setPayOpen} />
       <EditPartyDialog party={party} open={editOpen} onOpenChange={setEditOpen} />
       {addKind && (
@@ -607,31 +615,39 @@ function AddLedgerDialog({ partyId, kind, open, onOpenChange }: { partyId: strin
   );
 }
 
-function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { t } = useT();
+function CollectDialog({ partyId, currentDue, open, onOpenChange }: { partyId: string; currentDue?: number; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { lang, t } = useT();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin";
   const qc = useQueryClient();
   const [amount, setAmount] = useState("");
+  const [discount, setDiscount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setAmount(""); setNote(""); }
+    if (!open) { setAmount(""); setDiscount(""); setNote(""); }
   }, [open]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const amt = Number(amount) || 0;
-    if (amt <= 0) return;
+    const disc = isAdmin ? Math.max(0, Number(discount) || 0) : 0;
+    if (amt <= 0 && disc <= 0) return;
     const tempId = `temp-${Date.now()}`;
-    const entry: Payment = { id: tempId, party_id: partyId, amount: amt, note: note || null, created_at: new Date().toISOString() };
+    const entry: Payment = { id: tempId, party_id: partyId, amount: amt, discount: disc, note: note || null, created_at: new Date().toISOString() };
 
     setCachedData<Payment[]>(qc, ["payments", partyId], old => [entry, ...(old ?? [])]);
     onOpenChange(false);
-    toast.success(t("save"));
+    toast.success(
+      lang === "bn"
+        ? (disc > 0 ? `আদায় (৳${amt}) ও ছাড় (৳${disc}) সংরক্ষণ হয়েছে` : t("save"))
+        : (disc > 0 ? `Collected (৳${amt}) & Discount (৳${disc}) recorded` : t("save"))
+    );
 
     setBusy(true);
     try {
-      const saved = await createPaymentFn({ data: { party_id: partyId, amount: amt, note: note || null } });
+      const saved = await createPaymentFn({ data: { party_id: partyId, amount: amt, discount: disc, note: note || null } });
       setCachedData<Payment[]>(qc, ["payments", partyId], old =>
         (old ?? []).map(p => (p.id === tempId ? { ...saved, id: saved.id } as any : p)),
       );
@@ -646,14 +662,67 @@ function CollectDialog({ partyId, open, onOpenChange }: { partyId: string; open:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t("collect_payment")}</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-            <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader><DialogTitle className="font-serif">{t("collect_payment")}</DialogTitle></DialogHeader>
+        <form onSubmit={submit} className="space-y-3.5">
+          {currentDue !== undefined && currentDue > 0 && (
+            <div className="space-y-1.5 p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-border text-xs font-medium">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">{lang === "bn" ? "বর্তমান বকেয়া জমা:" : "Current Outstanding Dues:"}</span>
+                <span className="font-bold text-sm font-serif text-rose-600 dark:text-rose-400">{fmtMoney(currentDue)}</span>
+              </div>
+              {isAdmin && Number(discount) > 0 && (
+                <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 text-[11px] font-semibold pt-1 border-t border-border/50">
+                  <span>{lang === "bn" ? "প্রদত্ত ছাড় (মওকুফ):" : "Discount (Waived):"}</span>
+                  <span>−{fmtMoney(Number(discount) || 0)}</span>
+                </div>
+              )}
+              {(Number(amount) > 0 || (isAdmin && Number(discount) > 0)) && (
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pt-1 border-t border-border/50">
+                  <span>{lang === "bn" ? "আদায় পরবর্তী অবশিষ্ট বকেয়া:" : "Remaining Due After:"}</span>
+                  <span>
+                    {fmtMoney(Math.max(0, currentDue - (Number(amount) || 0) - (isAdmin ? (Number(discount) || 0) : 0)))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground font-semibold">{t("amount")} *</Label>
+            <Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} className="h-9 text-xs rounded-xl font-serif font-semibold" autoFocus />
+          </div>
+
+          {isAdmin && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="size-3" />
+                  {lang === "bn" ? "ছাড় / ডিসকাউন্ট (টাকা) [অ্যাডমিন]" : "Discount (Tk) [Admin]"}
+                </Label>
+                <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "বকেয়া মওকুফ" : "Due waiver"}</span>
+              </div>
+              <Input
+                type="number"
+                step="any"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                placeholder="0.00"
+                value={discount}
+                onChange={e => setDiscount(e.target.value)}
+                className="h-9 text-xs rounded-xl font-serif border-amber-500/40 focus:border-amber-500"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground font-semibold">{t("note")}</Label>
+            <Input value={note} onChange={e => setNote(e.target.value)} className="h-9 text-xs rounded-xl" />
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl">{t("cancel")}</Button>
+            <Button type="submit" disabled={busy} size="sm" className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white">{busy ? "…" : t("save")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

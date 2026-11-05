@@ -269,6 +269,7 @@ export const getRemindersFn = makeReadAction("getRemindersFn");
 // ─── Export Network-Only Auth/Writes ─────────────────────────────────────────
 export const loginFn = makeReadAction("loginFn");
 export const employeeLoginFn = makeReadAction("employeeLoginFn");
+export const employeeCodeLoginFn = makeReadAction("employeeCodeLoginFn");
 export const registerFn = makeReadAction("registerFn");
 export const firebaseAuthSyncFn = makeReadAction("firebaseAuthSyncFn");
 export const logoutFn = makeReadAction("logoutFn");
@@ -361,6 +362,7 @@ export const getEmployeesFn = makeReadAction("getEmployeesFn");
 export const createEmployeeFn = makeWriteAction("createEmployeeFn");
 export const addEmployeeFn = createEmployeeFn;
 export const updateEmployeeFn = makeWriteAction("updateEmployeeFn");
+export const regenerateEmployeeLoginCodeFn = makeWriteAction("regenerateEmployeeLoginCodeFn");
 export const deleteEmployeeFn = makeWriteAction("deleteEmployeeFn");
 
 export const getEmployeeSalariesFn = makeReadAction("getEmployeeSalariesFn");

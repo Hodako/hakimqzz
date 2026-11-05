@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState, useMemo, useDeferredValue } from "react";
+import { useState, useMemo, useDeferredValue, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
+import { OrderInfoDialog } from "@/components/order-info-dialog";
 import {
   RotateCcw,
   Search,
@@ -45,11 +46,13 @@ import {
   CloudUpload,
   RefreshCw,
   Split,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn, approveCourierPaymentFn, cancelCourierOrderFn, acceptDigitalPaymentFn, toggleGoogleSheetsSyncFn, bulkExportToGoogleSheetsFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
+import { playScanSuccessSound, playErrorSound } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import {
@@ -228,7 +231,7 @@ function groupSales(sales: Sale[]): GroupedSale[] {
       (items.some(x => x.type === "online") ? "Courier" : null);
 
     grouped.push({
-      id: firstItem.id,
+      id: cartId ? `cart-${cartId}` : firstItem.id,
       isGroup: true,
       cart_id: cartId,
       product_name: names,
@@ -267,6 +270,7 @@ export default function SalesPage() {
   const { data: biz, refetch: refetchBiz } = useCachedQuery(["business-settings"], getBusinessSettingsFn);
 
   const [open, setOpen] = useState(false);
+  const [scannedPresetProductId, setScannedPresetProductId] = useState<string | undefined>(undefined);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -280,6 +284,98 @@ export default function SalesPage() {
   const [page, setPage] = useState(1);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const pageSize = isMobile ? 12 : 20;
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const q = p.get("search") || p.get("tracking") || p.get("q");
+      if (q) {
+        setSearch(q);
+        setPage(1);
+      }
+    }
+  }, []);
+
+  // Hardware Barcode Scanner listener on Sales page:
+  // If user scans a product barcode while SaleDialog is closed, auto-open SaleDialog and add the product!
+  useEffect(() => {
+    if (open) return; // Handled by SaleDialog when open
+
+    let scanBuffer = "";
+    let lastKeyTime = 0;
+    let burstStartTime = 0;
+
+    const handleGlobalScanKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+      const delta = now - lastKeyTime;
+      lastKeyTime = now;
+
+      if (delta > 60) {
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          scanBuffer = e.key;
+          burstStartTime = now;
+        } else {
+          scanBuffer = "";
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        const totalDuration = now - burstStartTime;
+        const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
+
+        if (scanBuffer.length >= 3 && avgCharInterval <= 55) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const cleanCode = scanBuffer.trim().toLowerCase();
+          const cleanNoZero = cleanCode.replace(/^0+/, "");
+          const prod = products.find((p: any) => {
+            const pb = (p.barcode || "").trim().toLowerCase();
+            const psku = ((p as any).sku || "").trim().toLowerCase();
+            const pcode = ((p as any).code || "").trim().toLowerCase();
+            const pnum = ((p as any).product_number || "").trim().toLowerCase();
+            const pid = String(p.id || "").trim().toLowerCase();
+            return (
+              (pb && (pb === cleanCode || (cleanNoZero && pb.replace(/^0+/, "") === cleanNoZero))) ||
+              (psku && (psku === cleanCode || (cleanNoZero && psku.replace(/^0+/, "") === cleanNoZero))) ||
+              (pcode && (pcode === cleanCode || (cleanNoZero && pcode.replace(/^0+/, "") === cleanNoZero))) ||
+              (pnum && (pnum === cleanCode || (cleanNoZero && pnum.replace(/^0+/, "") === cleanNoZero))) ||
+              (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode))))
+            );
+          });
+
+          scanBuffer = "";
+
+          if (prod) {
+            playScanSuccessSound();
+            setScannedPresetProductId(prod.id);
+            setOpen(true);
+            toast.success(
+              lang === "bn"
+                ? `বারকোড স্ক্যান হয়েছে: ${prod.name}`
+                : `Scanned product: ${prod.name}`
+            );
+          } else {
+            playErrorSound();
+            toast.error(
+              lang === "bn"
+                ? `বারকোড (${cleanCode}) দ্বারা পণ্য পাওয়া যায়নি`
+                : `No product found for Barcode: ${cleanCode}`
+            );
+          }
+        }
+        scanBuffer = "";
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalScanKeyDown, true);
+    return () => window.removeEventListener("keydown", handleGlobalScanKeyDown, true);
+  }, [open, products, lang]);
 
   const handleSyncGoogleSheets = async () => {
     setIsSyncingSheets(true);
@@ -1079,12 +1175,20 @@ export default function SalesPage() {
             onEdit={setEditSale}
             productCategoryMap={productCategoryMap}
             onResetDateRange={dateRange !== "all" ? () => { setDateRange("all"); setPage(1); } : undefined}
+            searchQuery={deferredSearch}
           />
         </div>
       </Tabs>
 
       <FAB onClick={() => setOpen(true)} />
-      <SaleDialog open={open} onOpenChange={setOpen} />
+      <SaleDialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setScannedPresetProductId(undefined);
+        }}
+        presetProductId={scannedPresetProductId}
+      />
       {editSale && (
         <EditSaleDialog sale={editSale} open={!!editSale} onOpenChange={v => { if (!v) setEditSale(null); }} />
       )}
@@ -1103,6 +1207,7 @@ function SalesTab({
   onEdit,
   productCategoryMap,
   onResetDateRange,
+  searchQuery,
 }: {
   items: GroupedSale[];
   page: number;
@@ -1111,12 +1216,15 @@ function SalesTab({
   onEdit: (sale: Sale) => void;
   productCategoryMap: Map<string, string>;
   onResetDateRange?: () => void;
+  searchQuery?: string;
 }) {
   const { lang, t } = useT();
   const qc = useQueryClient();
   const { items: paged, totalPages, safePage } = paginate(items, page, pageSize);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [infoOrder, setInfoOrder] = useState<any | null>(null);
+  const [infoItemId, setInfoItemId] = useState<string | null>(null);
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
@@ -1438,6 +1546,23 @@ function SalesTab({
                       {isCancelled ? (lang === "bn" ? "বাতিল" : "Cancelled") : (s.type ? s.type.toUpperCase() : "PAID")}
                     </span>
                   )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInfoOrder(s);
+                      setInfoItemId(s.items[0]?.id || null);
+                    }}
+                    className="h-6 px-1.5 text-[10px] font-bold rounded-md bg-background hover:bg-muted text-foreground border border-black/30 dark:border-white/20 gap-1 cursor-pointer shrink-0 font-balooda"
+                    title={lang === "bn" ? "অর্ডারের পূর্ণ বিবরণ দেখুন" : "View Order Info"}
+                  >
+                    <Info className="size-3 text-primary" />
+                    <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                  </Button>
+
                   <span className="p-0.5 rounded text-muted-foreground/70 hover:text-foreground">
                     {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                   </span>
@@ -1482,8 +1607,8 @@ function SalesTab({
                       <div className="flex items-center gap-1.5 w-full sm:w-auto">
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleApproveCourier(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleApproveCourier(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2 text-[11px] font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs flex-1 sm:flex-initial cursor-pointer"
                         >
                           <PackageCheck className="size-3" />
@@ -1493,8 +1618,8 @@ function SalesTab({
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={(e) => { e.stopPropagation(); handleCancelCourier(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleCancelCourier(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2 text-[11px] font-semibold rounded-md gap-1 flex-1 sm:flex-initial cursor-pointer"
                         >
                           <RotateCcw className="size-3" />
@@ -1530,8 +1655,8 @@ function SalesTab({
                         </span>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleAcceptDigitalPayment(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleAcceptDigitalPayment(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2.5 text-[11px] font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs cursor-pointer font-balooda"
                         >
                           <CheckCircle2 className="size-3" />
@@ -1586,30 +1711,83 @@ function SalesTab({
 
                 {/* Multi-Item Breakdown List if Group */}
                 {isGroup && (
-                  <div className="space-y-1 bg-background/80 p-2 rounded-lg border-[0.5px] border-black/20 dark:border-white/20">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider block font-balooda">
-                      {lang === "bn" ? "কার্ট আইটেম তালিকা" : "Cart Items"}
-                    </span>
+                  <div className="space-y-1 bg-background/90 p-2 rounded-xl border border-border/70">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider block font-balooda">
+                        {lang === "bn" ? "কার্ট আইটেম তালিকা (ক্লিক করে বিবরণ দেখুন):" : "Cart Items (Click to view info):"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {s.items.length} {lang === "bn" ? "টি আইটেম" : "items"}
+                      </span>
+                    </div>
                     {s.items.map((item, idx) => {
                       const itemProfit = item.profit !== undefined
                         ? Number(item.profit)
                         : (Number(item.sell_price) - Number(item.buy_price || 0)) * (Number(item.qty) || 1);
+                      const itTrack = (item as any).tracking_code || (item as any).tracking_id || (item as any).consignment_id;
+                      const q = (searchQuery || "").trim().toLowerCase();
+                      const matchesSearch = Boolean(q) && (
+                        (itTrack && itTrack.toLowerCase().includes(q)) ||
+                        (item.product_name && item.product_name.toLowerCase().includes(q))
+                      );
+
                       return (
-                        <div key={item.id} className="flex justify-between items-center text-xs py-1 border-b border-border/30 last:border-0 font-balooda">
-                          <div className="truncate mr-2">
-                            <span className="font-bold text-foreground">{idx + 1}. {item.product_name}</span>
-                            <span className="text-muted-foreground font-mono ml-1">×{item.qty}</span>
+                        <div
+                          key={item.id || idx}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoOrder(s);
+                            setInfoItemId(item.id);
+                          }}
+                          className={`flex justify-between items-center text-xs p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-primary/5 active:scale-[0.99] font-balooda ${
+                            matchesSearch
+                              ? "bg-purple-500/10 border-purple-500/40"
+                              : "bg-card border-border/50 hover:border-primary/40"
+                          }`}
+                        >
+                          <div className="truncate mr-2 flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-foreground truncate">{idx + 1}. {item.product_name}</span>
+                            <span className="text-muted-foreground font-mono text-[10px] shrink-0 font-bold">×{item.qty}</span>
+                            {itTrack && (
+                              <span className="font-mono text-[9px] bg-purple-500/15 text-purple-700 dark:text-purple-300 px-1 py-0.2 rounded shrink-0">
+                                {itTrack}
+                              </span>
+                            )}
+                            {matchesSearch && (
+                              <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1 py-0.2 rounded shrink-0">
+                                ✓ মিলছে
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold font-serif bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                               {lang === "bn" ? "লাভ" : "Profit"}: {fmtMoney(itemProfit)}
                             </span>
                             <span className="font-mono font-bold text-foreground">{fmtMoney(Number(item.sell_price) * (Number(item.qty) || 1))}</span>
+                            
                             <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInfoOrder(s);
+                                setInfoItemId(item.id);
+                              }}
+                              className="h-6 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md gap-0.5 cursor-pointer"
+                              title={lang === "bn" ? "এই কাস্টম আইটেমের বিবরণ দেখুন" : "View Item Info"}
+                            >
+                              <Info className="size-3" />
+                              <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                            </Button>
+
+                            <Button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                               variant="ghost"
                               size="icon"
-                              className="size-5 text-muted-foreground hover:text-foreground cursor-pointer"
+                              className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                              title={lang === "bn" ? "এই আইটেম এডিট করুন" : "Edit Item"}
                             >
                               <Pencil className="size-3" />
                             </Button>
@@ -1645,7 +1823,7 @@ function SalesTab({
                       </Button>
                     )}
                     <Button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(s.items[0].id); }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(s.items[0]?.id || s.id); }}
                       variant="outline"
                       size="sm"
                       className="h-7 px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 gap-1 rounded-lg border-[0.5px] border-rose-500/30"
@@ -1670,6 +1848,14 @@ function SalesTab({
         loading={isDeleting}
         title={lang === "bn" ? "বিক্রি রেকর্ড মুছে ফেলবেন?" : "Delete Sale Record?"}
         description={lang === "bn" ? "এই বিক্রয়টি মুছে ফেললে পণ্যের স্টক এবং ক্যাশবক্স স্বয়ংক্রিয়ভাবে সমন্বয় করা হবে।" : "Deleting this sale will adjust product stock and cashbox ledger."}
+      />
+
+      <OrderInfoDialog
+        order={infoOrder}
+        open={!!infoOrder}
+        onOpenChange={v => { if (!v) setInfoOrder(null); }}
+        onEdit={onEdit}
+        initialSelectedItemId={infoItemId}
       />
     </div>
   );

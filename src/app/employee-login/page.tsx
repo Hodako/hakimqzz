@@ -2,16 +2,17 @@
 
 import React, { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import { UserCheck, Lock, Smartphone, ArrowRight, Store, Mail, User, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { UserCheck, Lock, Smartphone, ArrowRight, Store, Mail, User, Eye, EyeOff, RefreshCw, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { useAuth, type AuthUser } from "@/hooks/use-auth";
-import { employeeLoginFn, registerFn, firebaseAuthSyncFn } from "@/lib/rpc";
+import { employeeLoginFn, employeeCodeLoginFn, registerFn, firebaseAuthSyncFn } from "@/lib/rpc";
 import { auth, googleProvider } from "@/lib/firebase";
 import {
   signInWithPopup,
@@ -26,6 +27,8 @@ function EmployeeLoginForm() {
   const { login } = useAuth();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [loginMethod, setLoginMethod] = useState<"code" | "password">("code");
+  const [code, setCode] = useState("");
 
   // Sign in state
   const [identifier, setIdentifier] = useState("");
@@ -48,6 +51,31 @@ function EmployeeLoginForm() {
     }
     login(u);
     router.push("/dashboard");
+  }
+
+  async function handleCodeLogin(overrideCode?: string) {
+    const raw = (overrideCode !== undefined ? overrideCode : code).trim();
+    const cleanCode = raw.replace(/[^0-9a-zA-Z]/g, "");
+    if (!cleanCode || cleanCode.length < 4) {
+      toast.error(lang === "bn" ? "দোকান মালিকের কাছ থেকে পাওয়া ৬-সংখ্যার কোডটি লিখুন" : "Please enter the 6-digit code from your shop owner");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await employeeCodeLoginFn({
+        data: {
+          code: cleanCode,
+        },
+      });
+
+      toast.success(lang === "bn" ? "কর্মচারী হিসেবে সফলভাবে লগইন হয়েছে!" : "Logged in as shop employee!");
+      afterAuth(res.user as AuthUser);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Invalid code. Check with your shop owner.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -197,7 +225,7 @@ function EmployeeLoginForm() {
           </h1>
           <p className="text-xs text-slate-400 max-w-xs mx-auto">
             {mode === "signin"
-              ? (lang === "bn" ? "দোকান মালিক কর্তৃক প্রদত্ত পিন অথবা পাসওয়ার্ড দিয়ে লগইন করুন" : "Sign in with the 4-digit PIN or password assigned by your shop owner")
+              ? (lang === "bn" ? "দোকান মালিক কর্তৃক প্রদত্ত ৬-সংখ্যার কোড অথবা পিন দিয়ে লগইন করুন" : "Sign in with the 6-digit code or PIN assigned by your shop owner")
               : (lang === "bn" ? "কর্মচারী হিসেবে নতুন অ্যাকাউন্ট তৈরি করুন" : "Register a new employee account")}
           </p>
         </div>
@@ -226,67 +254,190 @@ function EmployeeLoginForm() {
           </div>
 
           {mode === "signin" ? (
-            <form onSubmit={handleLogin} className="space-y-3.5">
-              <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-2.5 text-xs text-indigo-300 flex items-center gap-2">
-                <Lock className="size-4 shrink-0 text-indigo-400" />
-                <span>{lang === "bn" ? "দোকান মালিকের দেওয়া ৪-সংখ্যার পিন অথবা পাসওয়ার্ড দিয়ে সরাসরি লগইন করুন।" : "Log in using the 4-digit PIN or password set by your store owner."}</span>
+            <div className="space-y-4">
+              {/* Method Switch: WhatsApp Code vs Username/PIN */}
+              <div className="flex rounded-xl bg-slate-950/70 p-1 border border-slate-800 text-xs font-medium gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod("code")}
+                  className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    loginMethod === "code"
+                      ? "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/30"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <KeyRound className="size-3.5" />
+                  <span>{lang === "bn" ? "হোয়াটসঅ্যাপ কোড" : "WhatsApp Code"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod("password")}
+                  className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    loginMethod === "password"
+                      ? "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Lock className="size-3.5" />
+                  <span>{lang === "bn" ? "পিন / পাসওয়ার্ড" : "PIN / Password"}</span>
+                </button>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Smartphone className="size-3.5 text-indigo-400" />
-                  {lang === "bn" ? "ইউজারনেম, মোবাইল বা ইমেইল" : "Username, Phone or Email"}
-                </Label>
-                <Input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={lang === "bn" ? "মোবাইল নম্বর বা ইউজারনেম" : "Phone or Username"}
-                  required
-                  className="h-11 sm:h-12 rounded-xl bg-slate-800/90 border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 w-full"
-                />
-              </div>
+              {loginMethod === "code" ? (
+                /* ─── WhatsApp-Style 6-Digit Code Login ─── */
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleCodeLogin();
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/25 p-3 text-xs text-emerald-300 flex items-start gap-2.5">
+                    <div className="size-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <KeyRound className="size-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-emerald-200">
+                        {lang === "bn" ? "৬-সংখ্যার কোড দিয়ে দ্রুত লগইন" : "Instant WhatsApp Code Login"}
+                      </div>
+                      <p className="text-[11px] text-emerald-300/80 leading-relaxed font-balooda">
+                        {lang === "bn"
+                          ? "দোকান মালিকের একাউন্ট (Employee সেকশন) থেকে পাওয়া ৬-সংখ্যার কোডটি লিখুন।"
+                          : "Enter the 6-digit code provided in the shop owner's Employee section."}
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Lock className="size-3.5 text-indigo-400" />
-                    {lang === "bn" ? "পিন বা পাসওয়ার্ড" : "PIN or Password"}
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  <div className="space-y-2 text-center py-1">
+                    <Label className="text-xs font-semibold text-slate-300 block text-center">
+                      {lang === "bn" ? "৬-সংখ্যার কোডটি দিন (Input Code)" : "Enter 6-Digit Code"}
+                    </Label>
+                    <div className="flex justify-center py-2">
+                      <InputOTP
+                        maxLength={6}
+                        value={code}
+                        onChange={(val) => setCode(val)}
+                        onComplete={(val) => handleCodeLogin(val)}
+                        autoFocus
+                      >
+                        <InputOTPGroup className="gap-1.5 sm:gap-2">
+                          <InputOTPSlot index={0} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                          <InputOTPSlot index={1} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                          <InputOTPSlot index={2} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                        </InputOTPGroup>
+                        <InputOTPSeparator className="text-slate-600 px-1 sm:px-1.5" />
+                        <InputOTPGroup className="gap-1.5 sm:gap-2">
+                          <InputOTPSlot index={3} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                          <InputOTPSlot index={4} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                          <InputOTPSlot index={5} className="w-10 h-12 sm:w-12 sm:h-14 text-lg sm:text-xl font-bold font-mono bg-slate-800/90 border-slate-700 rounded-xl text-emerald-400 ring-emerald-500" />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-balooda">
+                      {lang === "bn" ? "💡 কোডটি পূরণ হওয়ামাত্রই স্বয়ংক্রিয়ভাবে লগইন হবে" : "💡 Automatically signs in once all 6 digits are typed"}
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={busy || code.trim().length < 4}
+                    className="w-full h-11 sm:h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] gap-2 cursor-pointer"
                   >
-                    {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                    <span>{showPassword ? (lang === "bn" ? "লুকান" : "Hide") : (lang === "bn" ? "দেখান" : "Show")}</span>
-                  </button>
-                </div>
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={lang === "bn" ? "৪-সংখ্যার পিন অথবা পাসওয়ার্ড" : "4-digit PIN or password"}
-                  required
-                  className="h-11 sm:h-12 rounded-xl bg-slate-800/90 border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 w-full"
-                />
-              </div>
+                    {busy ? (
+                      <RefreshCw className="size-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>{lang === "bn" ? "কোড দিয়ে প্রবেশ করুন" : "Sign In with Code"}</span>
+                        <ArrowRight className="size-4" />
+                      </>
+                    )}
+                  </Button>
 
-              <Button
-                type="submit"
-                disabled={busy}
-                className="w-full h-11 sm:h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98] gap-2 mt-1 cursor-pointer"
-              >
-                {busy ? (
-                  <RefreshCw className="size-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>{lang === "bn" ? "লগইন করুন" : "Sign In as Employee"}</span>
-                    <ArrowRight className="size-4" />
-                  </>
-                )}
-              </Button>
-            </form>
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod("password")}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-4 cursor-pointer"
+                    >
+                      {lang === "bn" ? "অথবা পিন বা পাসওয়ার্ড দিয়ে লগইন করুন" : "Or sign in with PIN or password"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ─── Username & Password/PIN Login ─── */
+                <form onSubmit={handleLogin} className="space-y-3.5">
+                  <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-2.5 text-xs text-indigo-300 flex items-center gap-2">
+                    <Lock className="size-4 shrink-0 text-indigo-400" />
+                    <span>{lang === "bn" ? "দোকান মালিকের দেওয়া ৪-সংখ্যার পিন অথবা পাসওয়ার্ড দিয়ে সরাসরি লগইন করুন।" : "Log in using the 4-digit PIN or password set by your store owner."}</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Smartphone className="size-3.5 text-indigo-400" />
+                      {lang === "bn" ? "ইউজারনেম, মোবাইল বা ইমেইল" : "Username, Phone or Email"}
+                    </Label>
+                    <Input
+                      type="text"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder={lang === "bn" ? "মোবাইল নম্বর বা ইউজারনেম" : "Phone or Username"}
+                      required
+                      className="h-11 sm:h-12 rounded-xl bg-slate-800/90 border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 w-full"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Lock className="size-3.5 text-indigo-400" />
+                        {lang === "bn" ? "পিন বা পাসওয়ার্ড" : "PIN or Password"}
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                        <span>{showPassword ? (lang === "bn" ? "লুকান" : "Hide") : (lang === "bn" ? "দেখান" : "Show")}</span>
+                      </button>
+                    </div>
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={lang === "bn" ? "৪-সংখ্যার পিন অথবা পাসওয়ার্ড" : "4-digit PIN or password"}
+                      required
+                      className="h-11 sm:h-12 rounded-xl bg-slate-800/90 border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 w-full"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full h-11 sm:h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] gap-2 mt-1 cursor-pointer"
+                  >
+                    {busy ? (
+                      <RefreshCw className="size-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>{lang === "bn" ? "লগইন করুন" : "Sign In as Employee"}</span>
+                        <ArrowRight className="size-4" />
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod("code")}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-4 cursor-pointer"
+                    >
+                      {lang === "bn" ? "অথবা হোয়াটসঅ্যাপ কোড দিয়ে লগইন করুন" : "Or sign in with WhatsApp Code"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           ) : (
             <form onSubmit={handleSignUp} className="space-y-3.5">
               <div className="space-y-1.5">

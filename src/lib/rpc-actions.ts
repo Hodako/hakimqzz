@@ -262,7 +262,7 @@ export async function employeeLoginFn(input: { data: { username: string; passwor
   const cleanPhone = identifier.replace(/[^0-9]/g, "");
 
   // Support login via username, phone, or email
-  const user = await db.collection("users").findOne({
+  let user = await db.collection("users").findOne({
     role: "employee",
     $or: [
       { username: identifier },
@@ -277,6 +277,79 @@ export async function employeeLoginFn(input: { data: { username: string; passwor
         : []),
     ],
   });
+
+  // If not found in users, check if registered in employees collection
+  if (!user) {
+    const emp = await db.collection("employees").findOne({
+      $or: [
+        { phone: identifier },
+        { email: identifier },
+        { name: identifier },
+        { username: identifier },
+        ...(cleanPhone.length >= 10
+          ? [
+              { phone: cleanPhone },
+              { phone: cleanPhone.startsWith("88") ? cleanPhone : `88${cleanPhone}` },
+              { phone: cleanPhone.startsWith("880") ? cleanPhone.slice(2) : cleanPhone },
+            ]
+          : []),
+      ],
+    });
+
+    if (emp) {
+      const pwdMatch =
+        emp.password === data.password ||
+        emp.pin === data.password ||
+        (emp as any).plain_password === data.password ||
+        (await comparePassword(data.password, emp.password as string, (emp as any).plain_password as string));
+
+      if (pwdMatch) {
+        if (emp.status === "inactive") {
+          const err = new Error("Employee account is currently inactive. Please contact your shop owner.");
+          (err as any).statusCode = 403;
+          throw err;
+        }
+
+        const targetUserId = emp._id.toString();
+        const existingUser = await db.collection("users").findOne({
+          $or: [{ _id: targetUserId as any }, { employee_id: targetUserId }],
+        });
+
+        if (existingUser) {
+          user = existingUser;
+          await db.collection("users").updateOne(
+            { _id: existingUser._id as any },
+            {
+              $set: {
+                owner_id: emp.owner_id,
+                permissions: emp.permissions || existingUser.permissions,
+                status: emp.status || "active",
+                is_active: emp.status !== "inactive",
+                last_login_at: new Date().toISOString(),
+              },
+            }
+          );
+        } else {
+          user = {
+            _id: targetUserId as any,
+            employee_id: targetUserId,
+            full_name: emp.name || "Employee",
+            phone: emp.phone || null,
+            email: emp.email || `${cleanPhone || targetUserId}@dreamfashion.pos`,
+            role: "employee",
+            owner_id: emp.owner_id,
+            permissions: emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS,
+            status: emp.status || "active",
+            is_active: emp.status !== "inactive",
+            login_code: emp.login_code || null,
+            created_at: emp.created_at || new Date().toISOString(),
+            last_login_at: new Date().toISOString(),
+          };
+          await db.collection("users").insertOne(user as any);
+        }
+      }
+    }
+  }
 
   if (!user || !(await comparePassword(data.password, user.password as string, user.plain_password as string))) {
     const err = new Error("Invalid employee username, phone or password");
@@ -300,6 +373,138 @@ export async function employeeLoginFn(input: { data: { username: string; passwor
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, user._id as any as string);
+  return { user: mapped, token };
+}
+
+export async function generateUniqueEmployeeCode(db: any): Promise<string> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const existingEmp = await db.collection("employees").findOne({ login_code: code });
+    if (!existingEmp) {
+      const existingUser = await db.collection("users").findOne({ login_code: code });
+      if (!existingUser) {
+        return code;
+      }
+    }
+  }
+  return String(Date.now()).slice(-6);
+}
+
+export async function employeeCodeLoginFn(input: { data: { code: string } }) {
+  const { data = {} }: any = input ?? {};
+  const rawCode = (data.code || "").toString().trim();
+  const cleanCode = rawCode.replace(/[^0-9a-zA-Z]/g, "");
+
+  if (!cleanCode || cleanCode.length < 4) {
+    const err = new Error("অনুগ্রহ করে সঠিক ৬-সংখ্যার কোড দিন / Please enter a valid 6-digit login code");
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const db = await getDb();
+
+  // Search by login_code or pin in employees collection
+  let emp = await db.collection("employees").findOne({
+    $or: [
+      { login_code: cleanCode },
+      { login_code: rawCode },
+      { pin: cleanCode },
+    ],
+  });
+
+  // Also check users collection if employee was created or mapped there
+  let user = await db.collection("users").findOne({
+    role: "employee",
+    $or: [
+      { login_code: cleanCode },
+      { login_code: rawCode },
+      { pin: cleanCode },
+    ],
+  });
+
+  if (!emp && !user) {
+    const err = new Error("ভুল কোড! দোকান মালিকের একাউন্টের কর্মচারী (Employee) সেকশন থেকে কোডটি সংগ্রহ করুন। (Invalid login code)");
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  // Check if inactive or suspended
+  if (emp && emp.status === "inactive") {
+    const err = new Error("কর্মচারী একাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে। অনুগ্রহ করে দোকান মালিকের সাথে যোগাযোগ করুন। (Account inactive)");
+    (err as any).statusCode = 403;
+    throw err;
+  }
+  if (user && (user.is_active === false || user.status === "frozen" || user.status === "suspended")) {
+    const err = new Error("কর্মচারী একাউন্টটি বর্তমানে নিষ্ক্রিয় রয়েছে। অনুগ্রহ করে দোকান মালিকের সাথে যোগাযোগ করুন। (Account inactive)");
+    (err as any).statusCode = 403;
+    throw err;
+  }
+
+  let targetUserId = "";
+  if (emp) {
+    targetUserId = emp._id.toString();
+    const existingUser = await db.collection("users").findOne({
+      $or: [
+        { _id: targetUserId as any },
+        { employee_id: targetUserId },
+        ...(emp.phone ? [{ phone: emp.phone, role: "employee" }] : []),
+        ...(emp.email ? [{ email: emp.email.toLowerCase(), role: "employee" }] : []),
+      ],
+    });
+
+    if (existingUser) {
+      targetUserId = existingUser._id.toString();
+      await db.collection("users").updateOne(
+        { _id: existingUser._id as any },
+        {
+          $set: {
+            owner_id: emp.owner_id,
+            permissions: emp.permissions || existingUser.permissions,
+            status: emp.status || "active",
+            is_active: emp.status !== "inactive",
+            login_code: emp.login_code || cleanCode,
+            last_login_at: new Date().toISOString(),
+          },
+        }
+      );
+    } else {
+      const newUser = {
+        _id: targetUserId as any,
+        employee_id: targetUserId,
+        full_name: emp.name || "Employee",
+        phone: emp.phone || null,
+        email: emp.email || `${cleanCode}@dreamfashion.pos`,
+        role: "employee",
+        owner_id: emp.owner_id,
+        permissions: emp.permissions || DEFAULT_EMPLOYEE_PERMISSIONS,
+        status: emp.status || "active",
+        is_active: emp.status !== "inactive",
+        login_code: emp.login_code || cleanCode,
+        plain_password: (emp as any).plain_password || emp.password || emp.pin || null,
+        pin: emp.pin || null,
+        created_at: emp.created_at || new Date().toISOString(),
+        last_login_at: new Date().toISOString(),
+      };
+      await db.collection("users").insertOne(newUser as any);
+    }
+  } else if (user) {
+    targetUserId = user._id.toString();
+    await db.collection("users").updateOne(
+      { _id: user._id as any },
+      { $set: { last_login_at: new Date().toISOString() } }
+    );
+  }
+
+  const userDoc = await db.collection("users").findOne({ _id: targetUserId as any });
+  const token = await signToken({
+    userId: targetUserId,
+    email: (userDoc?.email as string) || `${cleanCode}@dreamfashion.pos`,
+    role: "employee",
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+  const mapped = await mapUser(db, targetUserId);
   return { user: mapped, token };
 }
 
@@ -1883,6 +2088,7 @@ export async function createPaymentFn(input: {
   data: {
     party_id: string;
     amount: number;
+    discount?: number;
     payment_method?: string;
     split_cash?: number;
     split_bkash?: number;
@@ -1896,7 +2102,8 @@ export async function createPaymentFn(input: {
   const db = await getDb();
   const id = crypto.randomUUID();
   const isoDate = data.created_at || new Date().toISOString();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: isoDate };
+  const discountAmt = Math.max(0, Number(data.discount) || 0);
+  const doc = { _id: id, owner_id: session.ownerId, ...data, discount: discountAmt, created_at: isoDate };
   await db.collection("payments").insertOne(doc as any);
 
   // Also insert cashbox entry when party pays
@@ -1915,10 +2122,11 @@ export async function createPaymentFn(input: {
     const methodNote = isSplit
       ? ` [Cash: ৳${cashAmt}, bKash: ৳${Number(data.split_bkash) || 0}]`
       : (data.payment_method ? ` [${data.payment_method.toUpperCase()}]` : "");
+    const discountNote = discountAmt > 0 ? ` [Discount: ৳${discountAmt}]` : "";
     await insertCashboxEntry(db, session.ownerId, {
       kind: "deposit",
       amount: cashAmt,
-      note: data.note ? `${data.note}${methodNote}` : `Collected dues from ${partyName}${methodNote}`,
+      note: data.note ? `${data.note}${methodNote}${discountNote}` : `Collected dues from ${partyName}${methodNote}${discountNote}`,
       ref_id: id,
       created_at: isoDate,
     });
@@ -5041,7 +5249,28 @@ export async function getEmployeesFn(): Promise<any[]> {
   const session = await requireSession();
   const db = await getDb();
   const items = await db.collection("employees").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
-  return items.map((e) => ({ ...e, id: e._id.toString() }));
+
+  // Ensure every employee record has a 6-digit login_code
+  const mapped = await Promise.all(
+    items.map(async (e) => {
+      let code = e.login_code;
+      if (!code) {
+        code = await generateUniqueEmployeeCode(db);
+        await db.collection("employees").updateOne(
+          { _id: e._id },
+          { $set: { login_code: code } }
+        );
+        // Sync to users collection if present
+        await db.collection("users").updateOne(
+          { $or: [{ _id: e._id }, { employee_id: e._id.toString() }] },
+          { $set: { login_code: code } }
+        );
+      }
+      return { ...e, id: e._id.toString(), login_code: code };
+    })
+  );
+
+  return mapped;
 }
 
 export async function createEmployeeFn(input: { data: any }) {
@@ -5049,6 +5278,7 @@ export async function createEmployeeFn(input: { data: any }) {
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
+  const login_code = data.login_code || (await generateUniqueEmployeeCode(db));
   const doc = {
     _id: id,
     owner_id: session.ownerId,
@@ -5056,7 +5286,9 @@ export async function createEmployeeFn(input: { data: any }) {
     phone: data.phone || null,
     email: data.email || null,
     username: data.username || null,
+    login_code,
     password: data.password || data.pin || null,
+    plain_password: data.plain_password || data.password || data.pin || null,
     pin: data.pin || null,
     role: data.role || "staff",
     designation: data.designation || "Sales Staff",
@@ -5077,6 +5309,34 @@ export async function createEmployeeFn(input: { data: any }) {
     created_at: new Date().toISOString(),
   };
   await db.collection("employees").insertOne(doc as any);
+
+  // Sync / create corresponding user record in users collection
+  try {
+    await db.collection("users").updateOne(
+      { _id: id as any },
+      {
+        $set: {
+          _id: id,
+          employee_id: id,
+          full_name: doc.name,
+          phone: doc.phone,
+          email: doc.email || `${login_code}@dreamfashion.pos`,
+          role: "employee",
+          owner_id: session.ownerId,
+          permissions: doc.permissions,
+          status: doc.status,
+          is_active: doc.status === "active",
+          login_code,
+          plain_password: doc.plain_password,
+          pin: doc.pin,
+          created_at: doc.created_at,
+          updated_at: doc.created_at,
+        },
+      },
+      { upsert: true }
+    );
+  } catch (_) {}
+
   return { ...doc, id };
 }
 
@@ -5085,11 +5345,61 @@ export async function updateEmployeeFn(input: { data: any }) {
   const session = await requireSession();
   const db = await getDb();
   const { id, ...updates } = data;
+  const now = new Date().toISOString();
   await db.collection("employees").updateOne(
     { _id: id as any, owner_id: session.ownerId },
-    { $set: { ...updates, updated_at: new Date().toISOString() } }
+    { $set: { ...updates, updated_at: now } }
   );
+
+  // Sync updates to users collection
+  try {
+    const userUpdates: any = { updated_at: now };
+    if (updates.name) userUpdates.full_name = updates.name;
+    if (updates.phone !== undefined) userUpdates.phone = updates.phone;
+    if (updates.email !== undefined) userUpdates.email = updates.email;
+    if (updates.status) {
+      userUpdates.status = updates.status;
+      userUpdates.is_active = updates.status === "active";
+    }
+    if (updates.permissions) userUpdates.permissions = updates.permissions;
+    if (updates.login_code) userUpdates.login_code = updates.login_code;
+    if (updates.plain_password || updates.password) {
+      userUpdates.plain_password = updates.plain_password || updates.password;
+    }
+    if (updates.pin) userUpdates.pin = updates.pin;
+
+    await db.collection("users").updateOne(
+      { $or: [{ _id: id as any }, { employee_id: id }] },
+      { $set: userUpdates }
+    );
+  } catch (_) {}
+
   return { success: true, id };
+}
+
+export async function regenerateEmployeeLoginCodeFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const empId = data.id;
+  if (!empId) {
+    throw new Error("Employee ID is required");
+  }
+
+  const newCode = await generateUniqueEmployeeCode(db);
+  const now = new Date().toISOString();
+
+  await db.collection("employees").updateOne(
+    { _id: empId as any, owner_id: session.ownerId },
+    { $set: { login_code: newCode, updated_at: now } }
+  );
+
+  await db.collection("users").updateOne(
+    { $or: [{ _id: empId as any }, { employee_id: empId }] },
+    { $set: { login_code: newCode, updated_at: now } }
+  );
+
+  return { success: true, id: empId, login_code: newCode };
 }
 
 export async function deleteEmployeeFn(input: { data: { id: string } }) {
@@ -5097,6 +5407,9 @@ export async function deleteEmployeeFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   await db.collection("employees").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  try {
+    await db.collection("users").deleteOne({ $or: [{ _id: data.id as any }, { employee_id: data.id }] });
+  } catch (_) {}
   return { success: true, id: data.id };
 }
 

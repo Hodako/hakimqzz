@@ -49,6 +49,8 @@ export default function ProductsPage() {
 
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
+  const [initialBarcode, setInitialBarcode] = useState<string | null>(null);
+  const pageScanBufferRef = useRef<{ char: string; time: number }[]>([]);
   const [saleProduct, setSaleProduct] = useState<string | undefined>();
   const [saleOpen, setSaleOpen] = useState(false);
   const [buyOpen, setBuyOpen] = useState(false);
@@ -196,6 +198,94 @@ export default function ProductsPage() {
   const categories = useMemo(() => {
     return Array.from(new Set(allProducts.map(p => p.category).filter(Boolean))) as string[];
   }, [allProducts]);
+
+  // Hardware barcode scanner listener on products page (when dialogs are closed)
+  useEffect(() => {
+    if (open || saleOpen || buyOpen || returnOpen || exchangeOpen || !!productToDelete) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(e.key)) return;
+
+      const now = performance.now();
+      const buffer = pageScanBufferRef.current;
+
+      if (e.key === "Enter") {
+        if (buffer.length >= 3) {
+          let totalInterval = 0;
+          for (let i = 1; i < buffer.length; i++) {
+            totalInterval += buffer[i].time - buffer[i - 1].time;
+          }
+          const avgInterval = totalInterval / (buffer.length - 1);
+
+          if (avgInterval <= 55) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const scannedCode = buffer.map(b => b.char).join("").trim();
+            pageScanBufferRef.current = [];
+
+            if (scannedCode) {
+              setSearch(scannedCode);
+              setSearchVisible(true);
+              const found = allProducts.find(
+                p => p.barcode?.toLowerCase() === scannedCode.toLowerCase() || p.id === scannedCode
+              );
+              if (found) {
+                toast.success(lang === "bn" ? `পণ্য পাওয়া গেছে: ${found.name}` : `Product found: ${found.name}`);
+                setSellCart(prev => {
+                  const idx = prev.findIndex(item => item.product.id === found.id);
+                  if (idx !== -1) {
+                    const updated = [...prev];
+                    updated[idx] = { ...updated[idx], qty: updated[idx].qty + 1 };
+                    return updated;
+                  } else {
+                    return [...prev, { product: found, qty: 1, sellPrice: found.sell_price }];
+                  }
+                });
+                setShowCartPanel(true);
+              } else {
+                toast.error(
+                  lang === "bn"
+                    ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
+                    : `No product found for barcode: ${scannedCode}`,
+                  {
+                    action: {
+                      label: lang === "bn" ? "+ নতুন পণ্য যোগ করুন" : "+ Add New Product",
+                      onClick: () => {
+                        setEditing(null);
+                        setInitialBarcode(scannedCode);
+                        setOpen(true);
+                      },
+                    },
+                  }
+                );
+              }
+            }
+            return;
+          }
+        }
+        pageScanBufferRef.current = [];
+        return;
+      }
+
+      if (e.key.length === 1) {
+        if (buffer.length > 0) {
+          const lastTime = buffer[buffer.length - 1].time;
+          if (now - lastTime > 75) {
+            pageScanBufferRef.current = [];
+          }
+        }
+        pageScanBufferRef.current.push({ char: e.key, time: now });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      pageScanBufferRef.current = [];
+    };
+  }, [open, saleOpen, buyOpen, returnOpen, exchangeOpen, productToDelete, allProducts, lang]);
 
   // Filters (Name, Barcode, Unique Product Number, Code, SKU, QR, ID, Attributes, Category)
   const searchFiltered = allProducts.filter(p => {
@@ -677,6 +767,7 @@ export default function ProductsPage() {
               }}
               onEdit={() => {
                 setEditing(p);
+                setInitialBarcode(null);
                 setOpen(true);
               }}
               onArchive={() => toggleArchive(p)}
@@ -701,8 +792,8 @@ export default function ProductsPage() {
 
       <PaginationBar page={safePage} totalPages={totalPages} total={filteredProducts.length} pageSize={pageSize} onPageChange={setPage} />
 
-      <FAB onClick={() => { setEditing(null); setOpen(true); }} />
-      <ProductDialog open={open} onOpenChange={setOpen} product={editing} />
+      <FAB onClick={() => { setEditing(null); setInitialBarcode(null); setOpen(true); }} />
+      <ProductDialog open={open} onOpenChange={setOpen} product={editing} initialBarcode={initialBarcode} />
       <SaleDialog
         open={saleOpen}
         onOpenChange={(v) => {
@@ -776,7 +867,21 @@ export default function ProductsPage() {
             });
             setShowCartPanel(true);
           } else {
-            toast.error(lang === "bn" ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for barcode: ${scannedCode}`);
+            toast.error(
+              lang === "bn"
+                ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
+                : `No product found for barcode: ${scannedCode}`,
+              {
+                action: {
+                  label: lang === "bn" ? "+ নতুন পণ্য যোগ করুন" : "+ Add New Product",
+                  onClick: () => {
+                    setEditing(null);
+                    setInitialBarcode(scannedCode);
+                    setOpen(true);
+                  },
+                },
+              }
+            );
           }
         }}
         title={lang === "bn" ? "বারকোড স্ক্যান করুন" : "Scan Barcode"}

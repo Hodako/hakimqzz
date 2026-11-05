@@ -52,7 +52,7 @@ export default function PartiesPage() {
 
   const paidByParty: Record<string, number> = {};
   (allPayments.data ?? []).forEach(p => {
-    paidByParty[p.party_id] = (paidByParty[p.party_id] ?? 0) + Number(p.amount);
+    paidByParty[p.party_id] = (paidByParty[p.party_id] ?? 0) + Number(p.amount) + (Number((p as any).discount) || 0);
   });
 
   const extraByParty: Record<string, number> = {};

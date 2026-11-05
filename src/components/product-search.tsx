@@ -16,10 +16,11 @@ interface ProductSearchProps {
   onChange: (id: string) => void;
   showPrice?: boolean;
   placeholder?: string;
+  onScanDirect?: (code: string) => void;
 }
 
 /** Searchable product picker for buy/sell dialogs. Inline design avoids modal/keyboard conflicts. */
-export function ProductSearchSelect({ products, value, onChange, showPrice, placeholder }: ProductSearchProps) {
+export function ProductSearchSelect({ products, value, onChange, showPrice, placeholder, onScanDirect }: ProductSearchProps) {
   const { t, lang } = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,6 +71,13 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
   };
 
   const handleBarcodeScanned = (code: string) => {
+    if (onScanDirect) {
+      onScanDirect(code);
+      setIsOpen(false);
+      setSearchQuery("");
+      return;
+    }
+
     const rawCode = String(code || "").trim();
     const cleanCode = rawCode.toLowerCase();
     const strippedCode = cleanCode.replace(/^0+/, "");
@@ -154,10 +162,41 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
                     setIsOpen(true);
                     setHighlightIndex(prev => Math.max(prev - 1, 0));
                   } else if (e.key === "Enter") {
+                    if (onScanDirect && searchQuery.trim()) {
+                      const q = searchQuery.trim().toLowerCase();
+                      const qNoZero = q.replace(/^0+/, "");
+                      const directMatch = products.find(p => {
+                        const pb = (p.barcode || "").trim().toLowerCase();
+                        const psku = ((p as any).sku || "").trim().toLowerCase();
+                        const pcode = ((p as any).code || "").trim().toLowerCase();
+                        const pnum = ((p as any).product_number || "").trim().toLowerCase();
+                        return (
+                          (pb && (pb === q || pb.replace(/^0+/, "") === qNoZero)) ||
+                          (psku && (psku === q || psku.replace(/^0+/, "") === qNoZero)) ||
+                          (pcode && (pcode === q || pcode.replace(/^0+/, "") === qNoZero)) ||
+                          (pnum && (pnum === q || pnum.replace(/^0+/, "") === qNoZero)) ||
+                          p.name?.toLowerCase() === q
+                        );
+                      });
+                      if (directMatch) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onScanDirect(searchQuery.trim());
+                        setSearchQuery("");
+                        setIsOpen(false);
+                        return;
+                      }
+                    }
                     if (filteredProducts.length > 0 && filteredProducts[highlightIndex]) {
                       e.preventDefault();
                       e.stopPropagation();
-                      handleSelect(filteredProducts[highlightIndex].id);
+                      if (onScanDirect && filteredProducts.length === 1) {
+                        onScanDirect(filteredProducts[highlightIndex].barcode || filteredProducts[highlightIndex].id);
+                        setSearchQuery("");
+                        setIsOpen(false);
+                      } else {
+                        handleSelect(filteredProducts[highlightIndex].id);
+                      }
                     }
                   } else if (e.key === "Escape") {
                     setIsOpen(false);
@@ -227,7 +266,8 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
         open={scannerOpen}
         onOpenChange={setScannerOpen}
         onScan={handleBarcodeScanned}
-        title={lang === "bn" ? "পণ্য খুঁজুন (বারকোড)" : "Scan Product Barcode"}
+        continuous={!!onScanDirect}
+        title={lang === "bn" ? "পণ্য স্ক্যান করুন (বারকোড)" : "Scan Product Barcode"}
       />
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,13 @@ import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles } from "lucide-react";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Camera, Zap } from "lucide-react";
 import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { playTapSound, playScanSuccessSound, playSaleSuccessSound, playErrorSound } from "@/lib/audio";
 import { getWhatsAppInvoiceUrl } from "@/lib/whatsapp-helper";
+import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 export type SalePaymentType = "cash" | "bkash" | "bank" | "credit" | "online" | "split";
@@ -74,6 +75,7 @@ export function SaleDialog({
   const [customerAddress, setCustomerAddress] = useState("");
   const [finalDiscount, setFinalDiscount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
 
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
   const { data: rawCustomers = [] } = useCachedQuery(["customers"], getCustomers);
@@ -108,40 +110,67 @@ export function SaleDialog({
     }
   }
 
-  const handleBarcodeScan = (scannedCode: string) => {
-    const clean = String(scannedCode || "").trim().toLowerCase();
+  const handleBarcodeScan = useCallback((scannedCode: string) => {
+    const raw = String(scannedCode || "").trim();
+    if (!raw) return;
+    const clean = raw.toLowerCase();
+    const cleanNoZero = clean.replace(/^0+/, "");
+
     const prod = products.find(p => {
       const pBarcode = (p.barcode || "").trim().toLowerCase();
+      const pBarcodeNoZero = pBarcode.replace(/^0+/, "");
       const pQr = ((p as any).qr_code || "").trim().toLowerCase();
       const pCode = ((p as any).code || "").trim().toLowerCase();
+      const pCodeNoZero = pCode.replace(/^0+/, "");
       const pSku = ((p as any).sku || "").trim().toLowerCase();
+      const pSkuNoZero = pSku.replace(/^0+/, "");
       const pNum = ((p as any).product_number || "").trim().toLowerCase();
+      const pNumNoZero = pNum.replace(/^0+/, "");
       const pId = String(p.id || "").trim().toLowerCase();
       const pName = (p.name || "").trim().toLowerCase();
 
-      return (
-        (pBarcode && (pBarcode === clean || clean.includes(pBarcode))) ||
-        (pQr && (pQr === clean || clean.includes(pQr))) ||
-        (pCode && (pCode === clean || clean.includes(pCode))) ||
-        (pSku && (pSku === clean || clean.includes(pSku))) ||
-        (pNum && (pNum === clean || clean.includes(pNum))) ||
-        (pId && (pId === clean || clean.includes(pId))) ||
-        (pName && pName === clean)
-      );
+      // 1. Exact barcode or without leading zero
+      if (pBarcode && (pBarcode === clean || (cleanNoZero && pBarcodeNoZero === cleanNoZero))) return true;
+      // 2. Exact SKU or Code
+      if (pSku && (pSku === clean || (cleanNoZero && pSkuNoZero === cleanNoZero))) return true;
+      if (pCode && (pCode === clean || (cleanNoZero && pCodeNoZero === cleanNoZero))) return true;
+      // 3. QR Code
+      if (pQr && (pQr === clean || clean.includes(pQr) || pQr.includes(clean))) return true;
+      // 4. Product Number
+      if (pNum && (pNum === clean || (cleanNoZero && pNumNoZero === cleanNoZero))) return true;
+      // 5. Product ID
+      if (pId && (pId === clean || (clean.length >= 6 && pId.endsWith(clean)))) return true;
+      // 6. Substring barcode if long enough
+      if (pBarcode && pBarcode.length >= 4 && (pBarcode.includes(clean) || clean.includes(pBarcode))) return true;
+      // 7. Exact name
+      if (pName && pName === clean) return true;
+
+      return false;
     });
+
     if (!prod) {
-      toast.error(lang === "bn" ? `বারকোড/QR কোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for Barcode/QR: ${scannedCode}`);
+      playErrorSound();
+      toast.error(
+        lang === "bn"
+          ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
+          : `No product found for Barcode: ${scannedCode}`
+      );
       return;
     }
 
+    playScanSuccessSound();
+
+    let newQty = 1;
     setCart(prev => {
       const idx = prev.findIndex(item => item.productId === prod.id);
       if (idx !== -1) {
         const updated = [...prev];
         const existingQty = Number(updated[idx].qty) || 0;
-        updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
+        newQty = existingQty + 1;
+        updated[idx] = { ...updated[idx], qty: String(newQty) };
         return updated;
       } else {
+        newQty = 1;
         return [...prev, {
           productId: prod.id,
           qty: "1",
@@ -151,8 +180,15 @@ export function SaleDialog({
       }
     });
 
-    toast.success(lang === "bn" ? `কার্টে যুক্ত: ${prod.name}` : `Added to cart: ${prod.name}`);
-  };
+    toast.success(
+      lang === "bn"
+        ? `কার্টে যোগ হয়েছে: ${prod.name} (পরিমাণ: ${newQty})`
+        : `Added to cart: ${prod.name} (Qty: ${newQty})`
+    );
+
+    // If draft had this product or empty, clear draft
+    setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
+  }, [products, lang]);
 
   useEffect(() => {
     if (open) {
@@ -175,38 +211,87 @@ export function SaleDialog({
     }
   }, [open, presetType, presetProductId, presetCart, products]);
 
+  // Ultra-fast Hardware Barcode Scanner listener (USB / Bluetooth HID guns)
   useEffect(() => {
     if (!open) return;
 
     let scanBuffer = "";
-    let lastKeyTime = Date.now();
+    let lastKeyTime = 0;
+    let burstStartTime = 0;
+    let burstTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let burstInitialValue = "";
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+    const handleHardwareScannerKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+      const delta = now - lastKeyTime;
+      lastKeyTime = now;
+
+      // Hardware barcode scanners send keystrokes with ultra-low delay (typically 5ms - 45ms per character).
+      // If delay is greater than 60ms, user is typing manually by hand or paused.
+      if (delta > 60) {
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          scanBuffer = e.key;
+          burstStartTime = now;
+          if (isInput && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+            burstTarget = target;
+            burstInitialValue = target.value;
+          } else {
+            burstTarget = null;
+            burstInitialValue = "";
+          }
+        } else {
+          scanBuffer = "";
+          burstTarget = null;
+        }
         return;
       }
 
-      const currentTime = Date.now();
-      if (currentTime - lastKeyTime > 120) {
-        scanBuffer = "";
-      }
-      lastKeyTime = currentTime;
-
+      // If delta <= 60ms: Rapid sequence!
       if (e.key === "Enter") {
-        if (scanBuffer.length >= 3) {
+        const totalDuration = now - burstStartTime;
+        const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
+
+        // Verify that this was a scanner burst: at least 3 characters and average character interval <= 55ms
+        if (scanBuffer.length >= 3 && avgCharInterval <= 55) {
           e.preventDefault();
-          handleBarcodeScan(scanBuffer);
+          e.stopPropagation();
+
+          // If the barcode characters leaked into a focused input, clean it up!
+          if (burstTarget && document.body.contains(burstTarget)) {
+            const isSearchField = burstTarget.type === "search" ||
+              burstTarget.name?.includes("search") ||
+              burstTarget.id?.includes("search") ||
+              burstTarget.placeholder?.toLowerCase().includes("search") ||
+              burstTarget.placeholder?.includes("পণ্য") ||
+              burstTarget.placeholder?.includes("খুঁজুন");
+
+            if (isSearchField) {
+              burstTarget.value = "";
+              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+            } else {
+              burstTarget.value = burstInitialValue;
+              burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          }
+
+          const codeToScan = scanBuffer;
           scanBuffer = "";
+          burstTarget = null;
+          handleBarcodeScan(codeToScan);
+          return;
         }
-      } else if (e.key.length === 1) {
+        scanBuffer = "";
+        burstTarget = null;
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         scanBuffer += e.key;
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, products]);
+    window.addEventListener("keydown", handleHardwareScannerKeyDown, true);
+    return () => window.removeEventListener("keydown", handleHardwareScannerKeyDown, true);
+  }, [open, handleBarcodeScan]);
 
   function lineTotal(line: CartLine) {
     const p = products.find(x => x.id === line.productId);
@@ -770,17 +855,47 @@ export function SaleDialog({
                 </div>
 
                 <div className="border border-border/90 bg-card/60 rounded-xl p-3.5 space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                       <Scan className="size-3.5 text-primary" />
                       {t("select_product")}
                     </Label>
-                    <span className="text-[10px] text-muted-foreground font-mono">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-2xs rounded-lg"
+                        onClick={() => setCameraScannerOpen(true)}
+                        title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান করুন (ধারাবাহিক)" : "Scan Barcodes with Camera (Continuous)"}
+                      >
+                        <Camera className="size-3.5 text-primary animate-pulse" />
+                        <span>{lang === "bn" ? "ক্যামেরা বারকোড স্ক্যানার" : "Camera Scanner"}</span>
+                        <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.2 rounded font-mono uppercase font-bold">
+                          {lang === "bn" ? "লাইভ" : "Live"}
+                        </span>
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
+                    </div>
+                  </div>
+
+                  {/* Barcode scanner live status indicator */}
+                  <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <Zap className="size-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      {lang === "bn"
+                        ? "বারকোড রিডার সচল: প্রতিটি স্ক্যানে স্বয়ংক্রিয়ভাবে কার্টে যোগ হবে"
+                        : "Barcode Scanner Active: Each scan auto-adds product to cart"}
+                    </span>
+                    <span className="text-[10px] font-mono opacity-80 shrink-0 ml-1">
+                      {lang === "bn" ? "USB / ক্যামেরা" : "USB / Camera"}
+                    </span>
                   </div>
 
                   <ProductSearchSelect
                     products={products}
                     value={draft.productId}
+                    onScanDirect={handleBarcodeScan}
                     onChange={v => {
                       const p = products.find(x => x.id === v);
                       setDraft(d => ({
@@ -1421,6 +1536,14 @@ export function SaleDialog({
           </form>
         </DialogContent>
       </Dialog>
+
+      <BarcodeScannerDialog
+        open={cameraScannerOpen}
+        onOpenChange={setCameraScannerOpen}
+        onScan={handleBarcodeScan}
+        continuous={true}
+        title={lang === "bn" ? "বারকোড স্ক্যানার (স্বয়ংক্রিয় যোগ)" : "Barcode Scanner (Auto-Add to Cart)"}
+      />
     </>
   );
 }
