@@ -11,6 +11,10 @@ const https = require("https");
 const { spawn } = require("child_process");
 const { startBridgeServer } = require("./pos-bridge.cjs");
 
+// Enable native Chromium Kiosk Silent Printing - ZERO print confirm messages or dialog popups!
+app.commandLine.appendSwitch("kiosk-printing");
+app.commandLine.appendSwitch("disable-print-preview");
+
 let mainWindow = null;
 let serverProcess = null;
 

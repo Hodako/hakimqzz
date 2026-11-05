@@ -304,15 +304,56 @@ export default function SalesPage() {
     let scanBuffer = "";
     let lastKeyTime = 0;
     let burstStartTime = 0;
+    let scanTimeout: any = null;
+
+    const processScannedCode = (scannedCode: string) => {
+      const cleanCode = (scannedCode || "").trim().toLowerCase();
+      if (!cleanCode || cleanCode.length < 2) return;
+      const cleanNoZero = cleanCode.replace(/^0+/, "");
+      const prod = products.find((p: any) => {
+        const pb = (p.barcode || "").trim().toLowerCase();
+        const psku = ((p as any).sku || "").trim().toLowerCase();
+        const pcode = ((p as any).code || "").trim().toLowerCase();
+        const pnum = ((p as any).product_number || "").trim().toLowerCase();
+        const pid = String(p.id || "").trim().toLowerCase();
+        return (
+          (pb && (pb === cleanCode || (cleanNoZero && pb.replace(/^0+/, "") === cleanNoZero))) ||
+          (psku && (psku === cleanCode || (cleanNoZero && psku.replace(/^0+/, "") === cleanNoZero))) ||
+          (pcode && (pcode === cleanCode || (cleanNoZero && pcode.replace(/^0+/, "") === cleanNoZero))) ||
+          (pnum && (pnum === cleanCode || (cleanNoZero && pnum.replace(/^0+/, "") === cleanNoZero))) ||
+          (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode))))
+        );
+      });
+
+      if (prod) {
+        playScanSuccessSound();
+        setScannedPresetProductId(prod.id);
+        setOpen(true);
+        toast.success(
+          lang === "bn"
+            ? `বারকোড স্ক্যান হয়েছে: ${prod.name}`
+            : `Scanned product: ${prod.name}`
+        );
+      } else {
+        playErrorSound();
+        toast.error(
+          lang === "bn"
+            ? `বারকোড (${cleanCode}) দ্বারা পণ্য পাওয়া যায়নি`
+            : `No product found for Barcode: ${cleanCode}`
+        );
+      }
+    };
 
     const handleGlobalScanKeyDown = (e: KeyboardEvent) => {
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+
       const now = Date.now();
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      if (delta > 110) {
+      if (delta > 240) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -322,59 +363,43 @@ export default function SalesPage() {
         return;
       }
 
-      if (e.key === "Enter") {
+      if (e.key === "Enter" || e.key === "Tab") {
+        clearTimeout(scanTimeout);
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
+        const isBurst = (!isInput && scanBuffer.length >= 2) || (scanBuffer.length >= 2 && avgCharInterval <= 180);
 
-        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
+        if (isBurst) {
           e.preventDefault();
           e.stopPropagation();
-
-          const cleanCode = scanBuffer.trim().toLowerCase();
-          const cleanNoZero = cleanCode.replace(/^0+/, "");
-          const prod = products.find((p: any) => {
-            const pb = (p.barcode || "").trim().toLowerCase();
-            const psku = ((p as any).sku || "").trim().toLowerCase();
-            const pcode = ((p as any).code || "").trim().toLowerCase();
-            const pnum = ((p as any).product_number || "").trim().toLowerCase();
-            const pid = String(p.id || "").trim().toLowerCase();
-            return (
-              (pb && (pb === cleanCode || (cleanNoZero && pb.replace(/^0+/, "") === cleanNoZero))) ||
-              (psku && (psku === cleanCode || (cleanNoZero && psku.replace(/^0+/, "") === cleanNoZero))) ||
-              (pcode && (pcode === cleanCode || (cleanNoZero && pcode.replace(/^0+/, "") === cleanNoZero))) ||
-              (pnum && (pnum === cleanCode || (cleanNoZero && pnum.replace(/^0+/, "") === cleanNoZero))) ||
-              (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode))))
-            );
-          });
-
+          const code = scanBuffer;
           scanBuffer = "";
-
-          if (prod) {
-            playScanSuccessSound();
-            setScannedPresetProductId(prod.id);
-            setOpen(true);
-            toast.success(
-              lang === "bn"
-                ? `বারকোড স্ক্যান হয়েছে: ${prod.name}`
-                : `Scanned product: ${prod.name}`
-            );
-          } else {
-            playErrorSound();
-            toast.error(
-              lang === "bn"
-                ? `বারকোড (${cleanCode}) দ্বারা পণ্য পাওয়া যায়নি`
-                : `No product found for Barcode: ${cleanCode}`
-            );
-          }
+          processScannedCode(code);
+          return;
         }
         scanBuffer = "";
       } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         scanBuffer += e.key;
+
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+          if (scanBuffer.length >= 3) {
+            const avg = (Date.now() - burstStartTime) / scanBuffer.length;
+            if (!isInput || avg <= 180) {
+              const code = scanBuffer;
+              scanBuffer = "";
+              processScannedCode(code);
+            }
+          }
+        }, 220);
       }
     };
 
     window.addEventListener("keydown", handleGlobalScanKeyDown, true);
-    return () => window.removeEventListener("keydown", handleGlobalScanKeyDown, true);
+    return () => {
+      clearTimeout(scanTimeout);
+      window.removeEventListener("keydown", handleGlobalScanKeyDown, true);
+    };
   }, [open, products, lang]);
 
   const handleSyncGoogleSheets = async () => {

@@ -10,6 +10,7 @@ import { ProductSearchSelect } from "@/components/product-search";
 import { CustomerSearchSelect } from "@/components/customer-search";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
@@ -59,6 +60,7 @@ export function SaleDialog({
 }) {
   const { lang, t } = useT();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
 
   const [type, setType] = useState<SalePaymentType>(presetType ?? "cash");
@@ -191,6 +193,7 @@ export function SaleDialog({
   }, [products, lang]);
 
   const wasOpenRef = useRef(false);
+  const lastPresetIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -205,16 +208,69 @@ export function SaleDialog({
       if (presetCart && presetCart.length > 0) {
         setCart(presetCart.map(x => ({ ...x, discount: x.discount ?? "" })));
       } else if (presetProductId) {
+        lastPresetIdRef.current = presetProductId;
         const p = products.find(x => x.id === presetProductId);
         setCart([{ productId: presetProductId, qty: "1", sellPrice: p ? String(p.sell_price || "") : "", discount: "" }]);
       } else {
         setCart([]);
       }
       setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
+    } else if (open && presetProductId && presetProductId !== lastPresetIdRef.current) {
+      // When a new presetProductId arrives while the dialog is already open (e.g. repeated scans)
+      lastPresetIdRef.current = presetProductId;
+      const p = products.find(x => x.id === presetProductId);
+      if (p) {
+        setCart(prev => {
+          const idx = prev.findIndex(item => item.productId === presetProductId);
+          if (idx !== -1) {
+            const updated = [...prev];
+            const existingQty = Number(updated[idx].qty) || 0;
+            updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
+            return updated;
+          } else {
+            return [...prev, {
+              productId: presetProductId,
+              qty: "1",
+              sellPrice: String(p.sell_price || ""),
+              discount: ""
+            }];
+          }
+        });
+      }
     } else if (!open) {
       wasOpenRef.current = false;
+      lastPresetIdRef.current = undefined;
     }
   }, [open, presetType, presetProductId, presetCart, products]);
+
+  // Listen for global product add events (e.g. from dashboard scanner)
+  useEffect(() => {
+    if (!open) return;
+    const handleGlobalAdd = (e: any) => {
+      const pid = e?.detail?.productId;
+      const p = e?.detail?.product || products.find(x => x.id === pid);
+      if (p && pid) {
+        setCart(prev => {
+          const idx = prev.findIndex(item => item.productId === pid);
+          if (idx !== -1) {
+            const updated = [...prev];
+            const existingQty = Number(updated[idx].qty) || 0;
+            updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
+            return updated;
+          } else {
+            return [...prev, {
+              productId: pid,
+              qty: "1",
+              sellPrice: String(p.sell_price || ""),
+              discount: ""
+            }];
+          }
+        });
+      }
+    };
+    window.addEventListener("df-add-product-to-sale", handleGlobalAdd);
+    return () => window.removeEventListener("df-add-product-to-sale", handleGlobalAdd);
+  }, [open, products]);
 
   // Ultra-fast Hardware Barcode Scanner listener (USB / Bluetooth HID guns)
   useEffect(() => {
@@ -225,17 +281,22 @@ export function SaleDialog({
     let burstStartTime = 0;
     let burstTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
     let burstInitialValue = "";
+    let scanTimeout: any = null;
 
     const handleHardwareScannerKeyDown = (e: KeyboardEvent) => {
+      // Ignore modifier keys
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) {
+        return;
+      }
+
       const now = Date.now();
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      // Hardware barcode scanners send keystrokes with ultra-low delay (typically 5ms - 65ms per character).
-      // If delay is greater than 110ms, user is typing manually by hand or paused.
-      if (delta > 110) {
+      // Barcode scanners type rapid bursts (< 240ms). If delta > 240ms, start a new buffer
+      if (delta > 240) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -253,17 +314,20 @@ export function SaleDialog({
         return;
       }
 
-      // If delta <= 110ms: Rapid sequence!
-      if (e.key === "Enter") {
+      // If delta <= 240ms: Rapid sequence!
+      if (e.key === "Enter" || e.key === "Tab") {
+        clearTimeout(scanTimeout);
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        // Verify that this was a scanner burst: at least 2 characters and average character interval <= 90ms
-        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
+        // If not in input, ANY length >= 2 is valid. If in input, verify burst speed
+        const isScannerBurst = (!isInput && scanBuffer.length >= 2) || (scanBuffer.length >= 2 && avgCharInterval <= 180);
+
+        if (isScannerBurst) {
           e.preventDefault();
           e.stopPropagation();
 
-          // If the barcode characters leaked into a focused input, clean it up!
+          // If characters leaked into a focused input, clean it up!
           if (burstTarget && document.body.contains(burstTarget)) {
             const isSearchField = burstTarget.type === "search" ||
               burstTarget.name?.includes("search") ||
@@ -291,11 +355,32 @@ export function SaleDialog({
         burstTarget = null;
       } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         scanBuffer += e.key;
+
+        // Auto-flush timer for scanners configured without Enter/Tab suffix
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+          if (scanBuffer.length >= 3) {
+            const avg = (Date.now() - burstStartTime) / scanBuffer.length;
+            if (!isInput || avg <= 180) {
+              if (burstTarget && document.body.contains(burstTarget)) {
+                burstTarget.value = burstInitialValue;
+                burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+              }
+              const code = scanBuffer;
+              scanBuffer = "";
+              burstTarget = null;
+              handleBarcodeScan(code);
+            }
+          }
+        }, 220);
       }
     };
 
     window.addEventListener("keydown", handleHardwareScannerKeyDown, true);
-    return () => window.removeEventListener("keydown", handleHardwareScannerKeyDown, true);
+    return () => {
+      clearTimeout(scanTimeout);
+      window.removeEventListener("keydown", handleHardwareScannerKeyDown, true);
+    };
   }, [open, handleBarcodeScan]);
 
   function lineTotal(line: CartLine) {
@@ -866,20 +951,22 @@ export function SaleDialog({
                       {t("select_product")}
                     </Label>
                     <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-2xs rounded-lg"
-                        onClick={() => setCameraScannerOpen(true)}
-                        title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান করুন (ধারাবাহিক)" : "Scan Barcodes with Camera (Continuous)"}
-                      >
-                        <Camera className="size-3.5 text-primary animate-pulse" />
-                        <span>{lang === "bn" ? "ক্যামেরা বারকোড স্ক্যানার" : "Camera Scanner"}</span>
-                        <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.2 rounded font-mono uppercase font-bold">
-                          {lang === "bn" ? "লাইভ" : "Live"}
-                        </span>
-                      </Button>
+                      {isMobile && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2.5 text-[11px] font-semibold gap-1.5 text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-2xs rounded-lg"
+                          onClick={() => setCameraScannerOpen(true)}
+                          title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান করুন (ধারাবাহিক)" : "Scan Barcodes with Camera (Continuous)"}
+                        >
+                          <Camera className="size-3.5 text-primary animate-pulse" />
+                          <span>{lang === "bn" ? "ক্যামেরা স্ক্যানার" : "Camera Scanner"}</span>
+                          <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.2 rounded font-mono uppercase font-bold">
+                            {lang === "bn" ? "লাইভ" : "Live"}
+                          </span>
+                        </Button>
+                      )}
                       <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
                     </div>
                   </div>
@@ -893,7 +980,7 @@ export function SaleDialog({
                         : "Barcode Scanner Active: Each scan auto-adds product to cart"}
                     </span>
                     <span className="text-[10px] font-mono opacity-80 shrink-0 ml-1">
-                      {lang === "bn" ? "USB / ক্যামেরা" : "USB / Camera"}
+                      {isMobile ? (lang === "bn" ? "USB / ক্যামেরা" : "USB / Camera") : "USB / Barcode Gun"}
                     </span>
                   </div>
 

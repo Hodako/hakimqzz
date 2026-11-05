@@ -10,7 +10,7 @@ import {
   Trash2, Plus, Calendar, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, CheckSquare, Square,
   Palette, Sparkles, LayoutGrid, SlidersHorizontal, Layers, Eye, EyeOff,
   Truck, PackageCheck, CheckCircle2, XCircle, Clock, GripVertical, RotateCcw,
-  AlertTriangle, ArrowRight, ScanLine
+  AlertTriangle, ArrowRight, ScanLine, Zap
 } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { getExpenses, getSales, getWithdrawals, getProducts, getParties, getReminders, getAllPayments, getAllPartyReceivables, getAllPartyPayables, getAllPayableSettlements, getPurchases, getSomiti, getReturns, getOwnerWallet } from "@/lib/queries";
@@ -911,15 +911,42 @@ export default function Dashboard() {
     let burstStartTime = 0;
     let burstTarget: HTMLInputElement | HTMLTextAreaElement | null = null;
     let burstInitialValue = "";
+    let scanTimeout: any = null;
+
+    const processScannedCode = (scannedCode: string) => {
+      const clean = (scannedCode || "").trim();
+      if (!clean || clean.length < 2) return;
+      console.log("[Dashboard Barcode Scanner] Detected barcode:", clean);
+      const prod = findProductByBarcode(clean);
+      if (prod) {
+        playScanSuccessSound();
+        setScannedPresetProductId(prod.id);
+        setSalePresetType("cash");
+        setSaleOpen(true);
+        window.dispatchEvent(new CustomEvent("df-add-product-to-sale", { detail: { productId: prod.id, product: prod } }));
+        toast.success(
+          lang === "bn"
+            ? `বারকোড স্ক্যান হয়েছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
+            : `Scanned: ${prod.name} (Added to New Sale)`
+        );
+      } else {
+        playErrorSound();
+        toast.error(
+          lang === "bn"
+            ? `বারকোড (${clean}) দ্বারা পণ্য পাওয়া যায়নি`
+            : `No product found for Barcode: ${clean}`
+        );
+      }
+    };
 
     const handleDashboardScannerKeyDown = (e: KeyboardEvent) => {
-      // If sale dialog or another modal is already open, let that modal's own scanner handle it
-      if (saleOpen || showPopup || bentoCustomizerOpen || cameraScannerOpen) {
+      // If sale dialog is already open, let the sale dialog's own scanner handle it
+      if (saleOpen) {
         return;
       }
 
       // Ignore modifier keys
-      if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(e.key)) {
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) {
         return;
       }
 
@@ -929,9 +956,9 @@ export default function Dashboard() {
       const delta = now - lastKeyTime;
       lastKeyTime = now;
 
-      // Scanners type consecutive keys very fast (< 110ms).
-      // If delta > 110ms, start a new buffer
-      if (delta > 110) {
+      // When scanning with handheld guns (USB / Wireless), keys arrive with < 240ms interval.
+      // If gap > 240ms, start a new scan buffer
+      if (delta > 240) {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           scanBuffer = e.key;
           burstStartTime = now;
@@ -949,13 +976,16 @@ export default function Dashboard() {
         return;
       }
 
-      // If delta <= 110ms: Rapid sequence!
-      if (e.key === "Enter") {
+      // If delta <= 240ms: Rapid sequence!
+      if (e.key === "Enter" || e.key === "Tab") {
+        clearTimeout(scanTimeout);
         const totalDuration = now - burstStartTime;
         const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
 
-        // Verify scanner burst: at least 2 characters and average char interval <= 90ms
-        if (scanBuffer.length >= 2 && avgCharInterval <= 90) {
+        // If not in input, ANY length >= 2 is valid. If in input, verify burst speed
+        const isScannerBurst = (!isInput && scanBuffer.length >= 2) || (scanBuffer.length >= 2 && avgCharInterval <= 180);
+
+        if (isScannerBurst) {
           e.preventDefault();
           e.stopPropagation();
 
@@ -977,29 +1007,10 @@ export default function Dashboard() {
             }
           }
 
-          const scannedCode = scanBuffer.trim();
-          const prod = findProductByBarcode(scannedCode);
+          const scannedCode = scanBuffer;
           scanBuffer = "";
           burstTarget = null;
-
-          if (prod) {
-            playScanSuccessSound();
-            setScannedPresetProductId(prod.id);
-            setSalePresetType("cash");
-            setSaleOpen(true);
-            toast.success(
-              lang === "bn"
-                ? `বারকোড স্ক্যান হয়েছে: ${prod.name} (বিক্রি তালিকায় যোগ হয়েছে)`
-                : `Scanned: ${prod.name} (Added to New Sale)`
-            );
-          } else {
-            playErrorSound();
-            toast.error(
-              lang === "bn"
-                ? `বারকোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি`
-                : `No product found for Barcode: ${scannedCode}`
-            );
-          }
+          processScannedCode(scannedCode);
           return;
         }
 
@@ -1007,12 +1018,33 @@ export default function Dashboard() {
         burstTarget = null;
       } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         scanBuffer += e.key;
+
+        // Auto-flush timer for scanners configured without an Enter/Tab suffix
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+          if (scanBuffer.length >= 3) {
+            const avg = (Date.now() - burstStartTime) / scanBuffer.length;
+            if (!isInput || avg <= 180) {
+              if (burstTarget && document.body.contains(burstTarget)) {
+                burstTarget.value = burstInitialValue;
+                burstTarget.dispatchEvent(new Event("input", { bubbles: true }));
+              }
+              const code = scanBuffer;
+              scanBuffer = "";
+              burstTarget = null;
+              processScannedCode(code);
+            }
+          }
+        }, 220);
       }
     };
 
     window.addEventListener("keydown", handleDashboardScannerKeyDown, true);
-    return () => window.removeEventListener("keydown", handleDashboardScannerKeyDown, true);
-  }, [saleOpen, showPopup, bentoCustomizerOpen, cameraScannerOpen, findProductByBarcode, lang]);
+    return () => {
+      clearTimeout(scanTimeout);
+      window.removeEventListener("keydown", handleDashboardScannerKeyDown, true);
+    };
+  }, [saleOpen, findProductByBarcode, lang]);
 
 
   
@@ -3086,18 +3118,15 @@ const renderWidget = (widgetId: string) => {
           </Button>
         </div>
 
-        {/* Primary New Sale & Barcode Scan buttons */}
+        {/* Primary New Sale & Hardware Barcode Status */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { playTapSound(); setCameraScannerOpen(true); }}
-            className="h-8.5 px-3 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/10 font-bold shadow-xs cursor-pointer"
-            title={lang === "bn" ? "ক্যামেরা দিয়ে বারকোড স্ক্যান" : "Scan Barcode via Camera"}
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-3 h-8.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-semibold shadow-2xs select-none"
+            title={lang === "bn" ? "হোম পেজে যেকোনো সময় বারকোড গান দিয়ে স্ক্যান করুন" : "Scan any product with your barcode scanner directly on dashboard"}
           >
-            <ScanLine className="size-4 text-primary" />
-            <span className="hidden sm:inline">{lang === "bn" ? "বারকোড স্ক্যান" : "Scan Barcode"}</span>
-          </Button>
+            <Zap className="size-3.5 text-emerald-500 shrink-0" />
+            <span>{lang === "bn" ? "বারকোড স্ক্যানার সক্রিয়" : "Scanner Ready"}</span>
+          </div>
 
           <Button
             onClick={() => { playTapSound(); setSaleOpen(true); }}

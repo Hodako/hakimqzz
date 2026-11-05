@@ -287,6 +287,31 @@ export function printPwaInvoice(data: PrintInvoiceParams) {
       }).catch((e: any) => console.warn("[Invoice Printer] Silent print error:", e));
       return;
     }
+
+    // Direct silent printing via Local Windows POS Bridge on 127.0.0.1:9123
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 1000);
+      fetch("http://127.0.0.1:9123/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html }),
+        signal: controller.signal,
+      }).then((res) => {
+        clearTimeout(tid);
+        if (res.ok) {
+          console.log("[Invoice Printer] Printed silently via Local POS Bridge on 127.0.0.1:9123!");
+          if (
+            typeof data.paymentMode === "string" &&
+            (data.paymentMode.toLowerCase().includes("cash") ||
+              data.paymentMode.includes("নগদ") ||
+              (data.paidAmount || 0) > 0)
+          ) {
+            fetch("http://127.0.0.1:9123/open-drawer", { method: "POST" }).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    } catch (_) {}
   }
 
   const iframe = document.createElement("iframe");

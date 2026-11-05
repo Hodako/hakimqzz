@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { fmtMoney } from "@/lib/format";
 import type { Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ interface ProductSearchProps {
 /** Searchable product picker for buy/sell dialogs. Inline design avoids modal/keyboard conflicts. */
 export function ProductSearchSelect({ products, value, onChange, showPrice, placeholder, onScanDirect }: ProductSearchProps) {
   const { t, lang } = useT();
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -248,16 +250,18 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
               )}
             </div>
             
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 shrink-0 text-xs flex items-center gap-1 border-dashed cursor-pointer min-h-[44px]"
-              onClick={() => setScannerOpen(true)}
-              title="Scan Barcode"
-            >
-              <Scan className="size-4 text-primary" />
-            </Button>
+            {isMobile && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 px-3 shrink-0 text-xs flex items-center gap-1 border-dashed cursor-pointer min-h-[44px]"
+                onClick={() => setScannerOpen(true)}
+                title="Scan Barcode"
+              >
+                <Scan className="size-4 text-primary" />
+              </Button>
+            )}
           </div>
         )}
       </div>

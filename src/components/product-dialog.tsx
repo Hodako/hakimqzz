@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getProducts, type Product } from "@/lib/queries";
@@ -27,6 +28,7 @@ export function ProductDialog({
 }) {
   const { lang, t } = useT();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
   
@@ -295,17 +297,19 @@ export function ProductDialog({
                       </button>
                     )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 min-w-[44px] px-2.5 shrink-0 flex items-center justify-center cursor-pointer"
-                    onClick={() => setScannerOpen(true)}
-                    title={lang === "bn" ? "ক্যামেরা বারকোড স্ক্যানার" : "Camera Barcode Scanner"}
-                    aria-label={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
-                  >
-                    <Scan className="size-4 text-primary" />
-                  </Button>
+                  {isMobile && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 min-w-[44px] px-2.5 shrink-0 flex items-center justify-center cursor-pointer"
+                      onClick={() => setScannerOpen(true)}
+                      title={lang === "bn" ? "ক্যামেরা বারকোড স্ক্যানার" : "Camera Barcode Scanner"}
+                      aria-label={lang === "bn" ? "বারকোড / QR কোড স্ক্যানার" : "Barcode / QR Code Scanner"}
+                    >
+                      <Scan className="size-4 text-primary" />
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-0.5">
                   <Zap className="size-3 animate-pulse shrink-0" />
