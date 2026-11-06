@@ -326,8 +326,8 @@ async function performSilentPrint(html, printerName, options = {}) {
     const cssPageRule = isA4
       ? "size: A4 portrait !important;"
       : userHeightMm
-      ? `size: ${widthMm}mm ${userHeightMm}mm !important;`
-      : "";
+      ? `size: ${widthMm}mm ${userHeightMm}mm portrait !important;`
+      : `size: ${widthMm}mm portrait !important;`;
 
     // Prepare HTML: remove external font blocking that causes blank pages & enforce all-bold pure black thermal styling + margins
     let preparedHtml = String(html || "");
@@ -482,7 +482,10 @@ async function performSilentPrint(html, printerName, options = {}) {
         effectiveHeightMm = 60;
       }
 
-      const heightMicrons = Math.max(15000, Math.round(effectiveHeightMm * 1000));
+      // Windows thermal printer drivers rotate 90° if paper width > paper height.
+      // Ensuring the driver page bounds height is at least widthMm prevents driver auto-landscape.
+      const driverHeightMm = Math.max(widthMm, effectiveHeightMm);
+      const heightMicrons = Math.max(15000, Math.round(driverHeightMm * 1000));
 
       if (!isA4) {
         await printWin.webContents
@@ -494,7 +497,7 @@ async function performSilentPrint(html, printerName, options = {}) {
                 st.id = 'pos-exact-page-size';
                 document.head.appendChild(st);
               }
-              st.textContent = '@page { size: ' + ${widthMm} + 'mm ' + ${effectiveHeightMm} + 'mm !important; margin: 0 !important; }';
+              st.textContent = '@page { size: ' + ${widthMm} + 'mm ' + ${effectiveHeightMm} + 'mm portrait !important; margin: 0 !important; }';
             })()
           `)
           .catch(() => {});
@@ -505,6 +508,7 @@ async function performSilentPrint(html, printerName, options = {}) {
         printBackground: true,
         copies,
         scaleFactor,
+        landscape: false, // Strictly force vertical Portrait orientation (prevents horizontal print)
         margins: {
           marginType: "none",
         },

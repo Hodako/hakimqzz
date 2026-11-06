@@ -65,23 +65,23 @@ export interface InvoicePreviewDialogProps {
 }
 
 const PRESET_WIDTHS = [
-  { label: "80mm (Standard POS)", value: 80 },
-  { label: "76mm (Driver Default)", value: 76 },
-  { label: "70mm (Medium Roll)", value: 70 },
-  { label: "58mm (Mini Thermal)", value: 58 },
-  { label: "50mm (Label/Tape)", value: 50 },
-  { label: "20mm (Narrow Strip)", value: 20 },
+  { label: "80mm", labelBn: "৮০ মিমি", value: 80 },
+  { label: "76mm", labelBn: "৭৬ মিমি", value: 76 },
+  { label: "70mm", labelBn: "৭০ মিমি", value: 70 },
+  { label: "58mm", labelBn: "৫৮ মিমি", value: 58 },
+  { label: "50mm", labelBn: "৫০ মিমি", value: 50 },
+  { label: "20mm", labelBn: "২০ মিমি", value: 20 },
 ];
 
 const PRESET_HEIGHTS = [
-  { label: "স্বয়ংক্রিয় (Auto)", value: "auto" as const },
-  { label: "120mm", value: 120 },
-  { label: "100mm", value: 100 },
-  { label: "80mm", value: 80 },
-  { label: "60mm", value: 60 },
-  { label: "50mm", value: 50 },
-  { label: "40mm", value: 40 },
-  { label: "30mm", value: 30 },
+  { label: "Auto", labelBn: "স্বয়ংক্রিয়", value: "auto" as const },
+  { label: "120mm", labelBn: "১২০ মিমি", value: 120 },
+  { label: "100mm", labelBn: "১০০ মিমি", value: 100 },
+  { label: "80mm", labelBn: "৮০ মিমি", value: 80 },
+  { label: "60mm", labelBn: "৬০ মিমি", value: 60 },
+  { label: "50mm", labelBn: "৫০ মিমি", value: 50 },
+  { label: "40mm", labelBn: "৪০ মিমি", value: 40 },
+  { label: "30mm", labelBn: "৩০ মিমি", value: 30 },
 ];
 
 export function InvoicePreviewDialog({
@@ -127,13 +127,13 @@ export function InvoicePreviewDialog({
       shopPhoneNumbers: settings.customPhone || "01712-345678",
       invoiceNo: "INV-SAMPLE-01",
       invoiceDate: new Date().toLocaleDateString("en-GB") + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      cashierName: "ক্যাশিয়ার (Admin)",
-      customerName: "জনাব রহিম (Rahim)",
+      cashierName: "ক্যাশিয়ার",
+      customerName: "জনাব রহিম",
       customerPhone: "01898-765432",
-      paymentMode: "CASH (নগদ)",
+      paymentMode: "নগদ",
       items: [
-        { product: { name: "প্রিমিয়াম ফরমাল শার্ট (Shirt)" }, qty: 1, sellPrice: 1250 },
-        { product: { name: "ডেনিম জিন্স প্যান্ট (Jeans Pant)" }, qty: 1, sellPrice: 1450 },
+        { product: { name: "প্রিমিয়াম ফরমাল শার্ট" }, qty: 1, sellPrice: 1250 },
+        { product: { name: "ডেনিম জিন্স প্যান্ট" }, qty: 1, sellPrice: 1450 },
       ],
       subtotal: 2700,
       discountAmount: 200,
@@ -341,7 +341,7 @@ export function InvoicePreviewDialog({
                 {/* Paper Width Presets */}
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "থার্মাল পেপার প্রস্থ নির্বাচন করুন (Paper Width Presets)" : "Paper Width Presets"}
+                    {lang === "bn" ? "থার্মাল পেপার প্রস্থ নির্বাচন করুন" : "Paper Width Presets"}
                   </Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {PRESET_WIDTHS.map((preset) => {
@@ -360,7 +360,7 @@ export function InvoicePreviewDialog({
                             isSelected ? "ring-2 ring-primary ring-offset-1" : ""
                           }`}
                         >
-                          {preset.label}
+                          {lang === "bn" ? preset.labelBn : preset.label}
                         </Button>
                       );
                     })}
@@ -372,7 +372,7 @@ export function InvoicePreviewDialog({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <Label className="text-xs font-bold text-foreground">
-                        {lang === "bn" ? "কাস্টম সাইজ লিখে সেট করুন (Custom mm by Typing)" : "Custom Width in Millimeters"}
+                        {lang === "bn" ? "কাস্টম সাইজ লিখে সেট করুন" : "Custom Width in Millimeters"}
                       </Label>
                       <p className="text-[11px] text-muted-foreground">
                         {lang === "bn"
@@ -400,7 +400,7 @@ export function InvoicePreviewDialog({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <Label className="text-xs font-bold text-foreground">
-                        {lang === "bn" ? "কাগজের উচ্চতা নির্ধারণ (Paper Height)" : "Paper Height Selection"}
+                        {lang === "bn" ? "কাগজের উচ্চতা নির্ধারণ" : "Paper Height Selection"}
                       </Label>
                       <p className="text-[11px] text-muted-foreground">
                         {lang === "bn"
@@ -439,7 +439,7 @@ export function InvoicePreviewDialog({
                             isSelected ? "ring-2 ring-primary ring-offset-1" : ""
                           }`}
                         >
-                          {preset.label}
+                          {lang === "bn" ? preset.labelBn : preset.label}
                         </Button>
                       );
                     })}
@@ -451,7 +451,7 @@ export function InvoicePreviewDialog({
                   <div className="space-y-0.5">
                     <div className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
                       <Sparkles className="size-4 text-emerald-500" />
-                      <span>{lang === "bn" ? "কাগজে নিখুঁত ফিট (Fit to Width)" : "Fit Content to Paper Width"}</span>
+                      <span>{lang === "bn" ? "কাগজে নিখুঁত ফিট" : "Fit Content to Paper Width"}</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       {lang === "bn"
@@ -471,7 +471,7 @@ export function InvoicePreviewDialog({
                     <div>
                       <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                         <Maximize2 className="size-3.5 text-primary" />
-                        <span>{lang === "bn" ? "কাস্টম প্রিন্টিং স্কেল টাইপ করে দিন (Scale %)" : "Custom Print Scale (Type %)"}</span>
+                        <span>{lang === "bn" ? "কাস্টম প্রিন্টিং স্কেল টাইপ করে দিন" : "Custom Print Scale (Type %)"}</span>
                       </Label>
                       <p className="text-[11px] text-muted-foreground">
                         {lang === "bn"
@@ -532,7 +532,7 @@ export function InvoicePreviewDialog({
                   <div className="flex items-center justify-between border-b border-border/50 pb-2">
                     <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       <Type className="size-3.5 text-primary" />
-                      <span>{lang === "bn" ? "ফন্ট সাইজ বৃদ্ধি / হ্রাস করুন (Font Sizes)" : "Font Size Adjusters (pt)"}</span>
+                      <span>{lang === "bn" ? "ফন্ট সাইজ বৃদ্ধি / হ্রাস করুন" : "Font Size Adjusters (pt)"}</span>
                     </Label>
                     <Badge variant="outline" className="text-[10px] font-bold">
                       {lang === "bn" ? "সব লেখা স্বয়ংক্রিয় বোল্ড" : "Pure Thermal Bold"}
@@ -542,7 +542,7 @@ export function InvoicePreviewDialog({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold">{lang === "bn" ? "মূল ফন্ট (Base Font):" : "Base Font:"}</span>
+                        <span className="font-semibold">{lang === "bn" ? "মূল ফন্ট:" : "Base Font:"}</span>
                         <span className="font-mono font-bold text-primary">{settings.fontSizePt || 8.5} pt</span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -584,7 +584,7 @@ export function InvoicePreviewDialog({
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold">{lang === "bn" ? "দোকানের নাম ফন্ট (Title Font):" : "Shop Title Font:"}</span>
+                        <span className="font-semibold">{lang === "bn" ? "দোকানের নাম ফন্ট:" : "Shop Title Font:"}</span>
                         <span className="font-mono font-bold text-primary">{settings.titleFontSizePt || 12} pt</span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -631,7 +631,7 @@ export function InvoicePreviewDialog({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <Label className="text-xs font-bold text-foreground">
-                        {lang === "bn" ? "মার্জিন নির্বাচন করুন (চারপাশের ফাঁকা জায়গা mm)" : "Receipt Margins in Millimeters (mm)"}
+                        {lang === "bn" ? "মার্জিন নির্বাচন করুন" : "Receipt Margins in Millimeters (mm)"}
                       </Label>
                       <p className="text-[11px] text-muted-foreground">
                         {lang === "bn"
@@ -653,14 +653,14 @@ export function InvoicePreviewDialog({
                       }
                       className="h-7 px-2.5 text-[11px] gap-1 cursor-pointer"
                     >
-                      <span>০ মিমি (0mm) সেট</span>
+                      <span>{lang === "bn" ? "০ মিমি সেট" : "Set 0mm"}</span>
                     </Button>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground font-semibold">
-                        {lang === "bn" ? "উপরে (Top mm)" : "Top (mm)"}
+                        {lang === "bn" ? "উপরে" : "Top (mm)"}
                       </Label>
                       <Input
                         type="number"
@@ -675,7 +675,7 @@ export function InvoicePreviewDialog({
 
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground font-semibold">
-                        {lang === "bn" ? "নিচে (Bottom mm)" : "Bottom (mm)"}
+                        {lang === "bn" ? "নিচে" : "Bottom (mm)"}
                       </Label>
                       <Input
                         type="number"
@@ -690,7 +690,7 @@ export function InvoicePreviewDialog({
 
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground font-semibold">
-                        {lang === "bn" ? "বামে (Left mm)" : "Left (mm)"}
+                        {lang === "bn" ? "বামে" : "Left (mm)"}
                       </Label>
                       <Input
                         type="number"
@@ -705,7 +705,7 @@ export function InvoicePreviewDialog({
 
                     <div className="space-y-1">
                       <Label className="text-[11px] text-muted-foreground font-semibold">
-                        {lang === "bn" ? "ডানে (Right mm)" : "Right (mm)"}
+                        {lang === "bn" ? "ডানে" : "Right (mm)"}
                       </Label>
                       <Input
                         type="number"
@@ -731,7 +731,7 @@ export function InvoicePreviewDialog({
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "দোকান / ব্যবসার নাম (Shop Name)" : "Header / Business Title"}
+                    {lang === "bn" ? "দোকান / ব্যবসার নাম" : "Header / Business Title"}
                   </Label>
                   <Input
                     value={settings.customHeaderTitle ?? effectiveInvoiceData.businessName}
@@ -743,7 +743,7 @@ export function InvoicePreviewDialog({
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "ট্যাগলাইন বা স্লোগান (Tagline)" : "Tagline / Subtitle"}
+                    {lang === "bn" ? "ট্যাগলাইন বা স্লোগান" : "Tagline / Subtitle"}
                   </Label>
                   <Input
                     value={settings.customSubtitle ?? (effectiveInvoiceData.tagline || "")}
@@ -755,7 +755,7 @@ export function InvoicePreviewDialog({
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "দোকানের ঠিকানা (Address)" : "Shop Address"}
+                    {lang === "bn" ? "দোকানের ঠিকানা" : "Shop Address"}
                   </Label>
                   <Input
                     value={settings.customAddress ?? (effectiveInvoiceData.shopAddress || "")}
@@ -767,7 +767,7 @@ export function InvoicePreviewDialog({
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "মোবাইল নম্বর (Phone)" : "Shop Phone Number(s)"}
+                    {lang === "bn" ? "মোবাইল নম্বর" : "Shop Phone Number(s)"}
                   </Label>
                   <Input
                     value={settings.customPhone ?? (effectiveInvoiceData.shopPhoneNumbers || "")}
@@ -779,7 +779,7 @@ export function InvoicePreviewDialog({
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "ফুটার নোট বা শর্তাবলী (Footer Note / Terms)" : "Footer Note & Return Policy"}
+                    {lang === "bn" ? "ফুটার নোট বা শর্তাবলী" : "Footer Note & Return Policy"}
                   </Label>
                   <Input
                     value={settings.customFooterNote ?? (effectiveInvoiceData.terms || "")}
@@ -804,7 +804,7 @@ export function InvoicePreviewDialog({
                       <Input
                         value={newLineText}
                         onChange={(e) => setNewLineText(e.target.value)}
-                        placeholder={lang === "bn" ? "লাইনের টেক্সট লিখুন (যেমন: 'বিকাশ নম্বর: ০১৭১২...')" : "Enter line text"}
+                        placeholder={lang === "bn" ? "লাইনের টেক্সট লিখুন (যেমন: বিকাশ নম্বর: ০১৭১২...)" : "Enter line text"}
                         className="h-8 text-xs bg-background"
                       />
                     </div>
@@ -815,8 +815,8 @@ export function InvoicePreviewDialog({
                           <SelectValue placeholder="Position" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="header">{lang === "bn" ? "উপরে (Header)" : "Header"}</SelectItem>
-                          <SelectItem value="before_items">{lang === "bn" ? "আইটেমের আগে" : "Before Items"}</SelectItem>
+                          <SelectItem value="header">{lang === "bn" ? "হেডার (উপরে)" : "Header"}</SelectItem>
+                          <SelectItem value="before_items">{lang === "bn" ? "আইটেমের পূর্বে" : "Before Items"}</SelectItem>
                           <SelectItem value="after_items">{lang === "bn" ? "আইটেমের পরে" : "After Items"}</SelectItem>
                           <SelectItem value="footer">{lang === "bn" ? "ফুটার (নিচে)" : "Footer"}</SelectItem>
                         </SelectContent>
@@ -829,15 +829,15 @@ export function InvoicePreviewDialog({
                           <SelectValue placeholder="Align" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="center">{lang === "bn" ? "মাঝখানে (Center)" : "Center"}</SelectItem>
-                          <SelectItem value="left">{lang === "bn" ? "বামে (Left)" : "Left"}</SelectItem>
-                          <SelectItem value="right">{lang === "bn" ? "ডানে (Right)" : "Right"}</SelectItem>
+                          <SelectItem value="center">{lang === "bn" ? "মাঝখানে" : "Center"}</SelectItem>
+                          <SelectItem value="left">{lang === "bn" ? "বামে" : "Left"}</SelectItem>
+                          <SelectItem value="right">{lang === "bn" ? "ডানে" : "Right"}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="sm:col-span-4 flex items-center justify-between gap-1 bg-background px-2.5 rounded-md border border-input">
-                      <span className="text-xs font-bold">{lang === "bn" ? "বোল্ড (Bold)" : "Bold"}</span>
+                      <span className="text-xs font-bold">{lang === "bn" ? "বোল্ড" : "Bold"}</span>
                       <Switch checked={newLineBold} onCheckedChange={setNewLineBold} />
                     </div>
                   </div>
@@ -867,7 +867,13 @@ export function InvoicePreviewDialog({
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <Badge variant="outline" className="text-[10px] shrink-0 font-mono">
-                              {l.position}
+                              {l.position === "header"
+                                ? lang === "bn" ? "হেডার" : "Header"
+                                : l.position === "before_items"
+                                ? lang === "bn" ? "আইটেমের পূর্বে" : "Before Items"
+                                : l.position === "after_items"
+                                ? lang === "bn" ? "আইটেমের পরে" : "After Items"
+                                : lang === "bn" ? "ফুটার" : "Footer"}
                             </Badge>
                             <span className={`truncate ${l.bold ? "font-bold" : ""}`}>{l.text}</span>
                           </div>
@@ -877,6 +883,7 @@ export function InvoicePreviewDialog({
                             size="icon"
                             onClick={() => handleRemoveCustomLine(l.id)}
                             className="h-7 w-7 text-destructive hover:bg-destructive/10 cursor-pointer shrink-0"
+                            title={lang === "bn" ? "লাইন মুছে ফেলুন" : "Delete Line"}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -889,7 +896,7 @@ export function InvoicePreviewDialog({
                 {/* Standard Lines Visibility Toggles */}
                 <div className="p-3.5 rounded-xl bg-muted/30 border border-border/70 space-y-2.5">
                   <Label className="text-xs font-bold text-foreground">
-                    {lang === "bn" ? "বিদ্যমান লাইন অন / অফ করুন (Show/Hide Existing Lines)" : "Standard Line Visibility"}
+                    {lang === "bn" ? "বিদ্যমান লাইন অন / অফ করুন" : "Standard Line Visibility"}
                   </Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
@@ -942,7 +949,7 @@ export function InvoicePreviewDialog({
                       />
                     </label>
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
-                      <span>{lang === "bn" ? "কাস্টমার তথ্য" : "Customer Details"}</span>
+                      <span>{lang === "bn" ? "ক্রেতার তথ্য" : "Customer Details"}</span>
                       <Switch
                         checked={vis.showCustomerDetails !== false}
                         onCheckedChange={(c) => updateVisibility({ showCustomerDetails: c })}
@@ -956,21 +963,56 @@ export function InvoicePreviewDialog({
                       />
                     </label>
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
-                      <span>{lang === "bn" ? "ডিসকাউন্ট লাইন" : "Discount Line"}</span>
+                      <span>{lang === "bn" ? "মোট মূল্য" : "Subtotal"}</span>
+                      <Switch
+                        checked={vis.showSubtotal !== false}
+                        onCheckedChange={(c) => updateVisibility({ showSubtotal: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "ডিসকাউন্ট" : "Discount"}</span>
                       <Switch
                         checked={vis.showDiscount !== false}
                         onCheckedChange={(c) => updateVisibility({ showDiscount: c })}
                       />
                     </label>
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
-                      <span>{lang === "bn" ? "ফেরত টাকা (Change)" : "Change Return"}</span>
+                      <span>{lang === "bn" ? "সর্বমোট টাকা" : "Total"}</span>
+                      <Switch
+                        checked={vis.showTotal !== false}
+                        onCheckedChange={(c) => updateVisibility({ showTotal: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "পরিশোধ" : "Paid"}</span>
+                      <Switch
+                        checked={vis.showPaid !== false}
+                        onCheckedChange={(c) => updateVisibility({ showPaid: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "বকেয়া" : "Due"}</span>
+                      <Switch
+                        checked={vis.showDue !== false}
+                        onCheckedChange={(c) => updateVisibility({ showDue: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "ফেরত টাকা" : "Change Return"}</span>
                       <Switch
                         checked={vis.showChangeReturn !== false}
                         onCheckedChange={(c) => updateVisibility({ showChangeReturn: c })}
                       />
                     </label>
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
-                      <span>{lang === "bn" ? "শর্তাবলী / নোট" : "Terms & Policy"}</span>
+                      <span>{lang === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Mode"}</span>
+                      <Switch
+                        checked={vis.showPaymentMode !== false}
+                        onCheckedChange={(c) => updateVisibility({ showPaymentMode: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "শর্তাবলী ও ফুটার" : "Terms & Policy"}</span>
                       <Switch
                         checked={vis.showTerms !== false}
                         onCheckedChange={(c) => updateVisibility({ showTerms: c })}
