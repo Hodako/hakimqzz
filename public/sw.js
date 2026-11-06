@@ -1,10 +1,18 @@
-const CACHE_NAME = "pos-pwa-v36";
+const CACHE_NAME = "pos-pwa-v38";
 
 const PRECACHE_ASSETS = [
   "/manifest.json",
   "/logo.png",
   "/icon-512.png",
   "/apple-touch-icon.png",
+  "/icons/sales-kpi.svg",
+  "/icons/wallet.svg",
+  "/icons/sell_icon.png",
+  "/icons/profit_icon.png",
+  "/icons/cashbox_icon.png",
+  "/icons/samity_icon.png",
+  "/icons/online_sale_icon.png",
+  "/icons/purchases-icon.png",
 ];
 
 // ── Install: Pre-cache static assets & skip waiting ──────────────────────────
@@ -89,14 +97,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2. Next.js Static JS Chunks -> Fetch directly with network fallback
+  // 2. Next.js Static JS Chunks -> Network-First with cached fallback, always return a valid Response
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
-      fetch(event.request).catch(async () => {
-        const cached = await caches.match(event.request);
-        if (cached) return cached;
-        throw new Error("Chunk load failed from network");
-      })
+      fetch(event.request)
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const copy = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkRes;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          return new Response("/* Chunk unavailable offline */", {
+            status: 404,
+            statusText: "Not Found",
+            headers: { "Content-Type": "application/javascript" },
+          });
+        })
     );
     return;
   }
@@ -134,7 +154,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 4. Default: Network-First
+  // 4. Default: Network-First with guaranteed Response
   event.respondWith(
     fetch(event.request)
       .then((networkRes) => {
@@ -144,6 +164,14 @@ self.addEventListener("fetch", (event) => {
         }
         return networkRes;
       })
-      .catch(() => caches.match(event.request))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        return new Response("Offline", {
+          status: 503,
+          statusText: "Offline",
+          headers: { "Content-Type": "text/plain" },
+        });
+      })
   );
 });

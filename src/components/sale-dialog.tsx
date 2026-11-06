@@ -688,6 +688,12 @@ export function SaleDialog({
     } finally { setBusy(false); }
   }
 
+  const currentChangeAmount = (type === "split" && totalSplitPaid > sellTotal)
+    ? (totalSplitPaid - sellTotal)
+    : (type === "cash" && paidNum > sellTotal)
+    ? (paidNum - sellTotal)
+    : 0;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1687,13 +1693,13 @@ export function SaleDialog({
         onOpenChange={setInvoicePreviewOpen}
         lang={lang}
         invoiceData={{
-          businessName: user.business_name || user.full_name || "Dream Fashion POS",
-          userEmail: user.business_emails || user.email || "",
-          shopAddress: user.business_address || "",
-          shopPhoneNumbers: user.business_phone_numbers || "",
-          pageSize: user.invoice_page_size || "80mm",
-          pageWidth: user.invoice_page_width || "",
-          pageHeight: user.invoice_page_height || "",
+          businessName: user?.business_name || user?.full_name || "Dream Fashion POS",
+          userEmail: user?.business_emails || user?.email || "",
+          shopAddress: user?.business_address || "",
+          shopPhoneNumbers: user?.business_phone_numbers || "",
+          pageSize: user?.invoice_page_size || "80mm",
+          pageWidth: user?.invoice_page_width || "",
+          pageHeight: user?.invoice_page_height || "",
           invoiceNo: "INV-PREVIEW",
           invoiceDate: fmtDateTime(new Date()),
           customerName: customers.find((c: any) => c.id === partyId)?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Walk-in Customer"),
@@ -1712,8 +1718,8 @@ export function SaleDialog({
           total: sellTotal,
           paidAmount: type === "online" ? 0 : paidNum,
           due: type === "online" ? sellTotal : due,
-          changeAmount: changeAmount > 0 ? changeAmount : undefined,
-          terms: user.invoice_terms || "",
+          changeAmount: currentChangeAmount > 0 ? currentChangeAmount : undefined,
+          terms: user?.invoice_terms || "",
         }}
       />
 
