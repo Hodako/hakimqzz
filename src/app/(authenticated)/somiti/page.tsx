@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { createSomitiFn, updateSomitiFn, deleteSomitiFn, renameSomitiFn, deleteSomitiFnByName } from "@/lib/rpc";
 import { playTapSound } from "@/lib/audio";
@@ -545,11 +546,19 @@ function PayPartyDialog({ samityName, open, onOpenChange, entry }: { samityName:
   const qc = useQueryClient();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [withdrawMode, setWithdrawMode] = useState<"cashbox" | "personal">("cashbox");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
-      if (entry) { setAmount(String(entry.amount)); setNote(entry.actualNote || ""); }
-      else { setAmount(""); setNote(""); }
+      if (entry) {
+        setAmount(String(entry.amount));
+        setNote(entry.actualNote || "");
+        setWithdrawMode(entry.skipCashbox ? "personal" : "cashbox");
+      } else {
+        setAmount("");
+        setNote("");
+        setWithdrawMode("cashbox");
+      }
     }
   }, [open, entry]);
   async function submit(e: React.FormEvent) {
@@ -558,14 +567,19 @@ function PayPartyDialog({ samityName, open, onOpenChange, entry }: { samityName:
     if (amt <= 0) return;
     setBusy(true);
     playTapSound();
+    const isPersonal = withdrawMode === "personal";
     const finalNote = note.trim() ? `[${samityName}] ${note.trim()}` : `[${samityName}]`;
     try {
       if (entry) {
-        await updateSomitiFn({ data: { id: entry.id, kind: "withdraw", amount: amt, note: finalNote } });
+        await updateSomitiFn({ data: { id: entry.id, kind: "withdraw", amount: amt, note: finalNote, skipCashbox: isPersonal } });
         toast.success(t("save") || "Updated successfully");
       } else {
-        await createSomitiFn({ data: { kind: "withdraw", amount: amt, note: finalNote } });
-        toast.success(lang === "bn" ? "টাকা উত্তোলন ও ক্যাশে জমা সফল হয়েছে!" : "Withdrawal saved & added to cashbox!");
+        await createSomitiFn({ data: { kind: "withdraw", amount: amt, note: finalNote, skipCashbox: isPersonal } });
+        toast.success(
+          isPersonal
+            ? (lang === "bn" ? "টাকা ব্যক্তিগতভাবে উত্তোলন সফল হয়েছে (ক্যাশবক্সে যোগ হয়নি)!" : "Withdrawn personally (not added to cashbox)!")
+            : (lang === "bn" ? "টাকা উত্তোলন ও ক্যাশবক্সে জমা সফল হয়েছে!" : "Withdrawal saved & added to cashbox!")
+        );
       }
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ["somiti"] });
@@ -582,10 +596,53 @@ function PayPartyDialog({ samityName, open, onOpenChange, entry }: { samityName:
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">{t("amount")}</Label>
             <Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" autoFocus />
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-0.5">
-              {lang === "bn" ? "ℹ️ সমিতি থেকে উত্তোলিত টাকা দোকান ক্যাশ ড্রয়ারে জমা হবে।" : "ℹ️ Withdrawn money will be added into your cashbox."}
-            </p>
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-foreground">
+              {lang === "bn" ? "উত্তোলিত টাকা কোথায় যাবে?" : "Where will the withdrawn money go?"}
+            </Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label
+                onClick={() => setWithdrawMode("cashbox")}
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  withdrawMode === "cashbox"
+                    ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-2xs"
+                    : "bg-muted/30 border-border/70 text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                <Checkbox
+                  checked={withdrawMode === "cashbox"}
+                  onCheckedChange={() => setWithdrawMode("cashbox")}
+                  className="mt-0.5"
+                />
+                <div className="text-xs leading-tight space-y-0.5">
+                  <p className="font-bold">{lang === "bn" ? "ক্যাশবক্সে যোগ করুন" : "Add to Cashbox"}</p>
+                  <p className="text-[10px] opacity-80">{lang === "bn" ? "দোকানের ক্যাশ ড্রয়ারে জমা হবে" : "Deposits into store cashbox"}</p>
+                </div>
+              </label>
+
+              <label
+                onClick={() => setWithdrawMode("personal")}
+                className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  withdrawMode === "personal"
+                    ? "bg-amber-500/10 border-amber-500/50 text-amber-700 dark:text-amber-300 shadow-2xs"
+                    : "bg-muted/30 border-border/70 text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                <Checkbox
+                  checked={withdrawMode === "personal"}
+                  onCheckedChange={() => setWithdrawMode("personal")}
+                  className="mt-0.5"
+                />
+                <div className="text-xs leading-tight space-y-0.5">
+                  <p className="font-bold">{lang === "bn" ? "ব্যক্তিগতভাবে গ্রহণ" : "Get Personally"}</p>
+                  <p className="text-[10px] opacity-80">{lang === "bn" ? "ক্যাশবক্সে যোগ হবে না" : "Will not add to store cashbox"}</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} placeholder={lang === "bn" ? "যেমন: সঞ্চয় ভাঙানো / জরুরি উত্তোলন" : "e.g. Withdrawal reason"} /></div>
           <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button></DialogFooter>
         </form>

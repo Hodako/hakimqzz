@@ -134,6 +134,14 @@ export default function EmployeesPage() {
   const [salNote, setSalNote] = useState("");
   const [deductShoppings, setDeductShoppings] = useState(true);
 
+  // Dialog States: Give Bonus
+  const [addBonusOpen, setAddBonusOpen] = useState(false);
+  const [bonusEmpId, setBonusEmpId] = useState("");
+  const [bonusAmount, setBonusAmount] = useState("");
+  const [bonusMethod, setBonusMethod] = useState("cash");
+  const [bonusDate, setBonusDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bonusNote, setBonusNote] = useState("");
+
   // Dialog States: Expense
   const [addExpOpen, setAddExpOpen] = useState(false);
   const [expEmpId, setExpEmpId] = useState("");
@@ -241,44 +249,69 @@ export default function EmployeesPage() {
     return pendingShoppingsForSal.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
   }, [pendingShoppingsForSal]);
 
-  // Helper to calculate early money (advance) and remaining salary balance for an employee in a given month
+  // Helper to calculate early money (advance), daily spends, bonus and remaining salary balance for an employee in a given month
   const getEmployeeSalaryStats = (empId: string, monthStr: string, deductShop: boolean = true) => {
     const emp = employees.find(x => x.id === empId);
     const baseSal = Number(emp?.base_salary) || 0;
-    if (!emp || baseSal <= 0) {
-      return { baseSal: 0, earlyMoney: 0, shoppingDeductions: 0, remaining: 0, salariesPaid: 0, advancesPaid: 0 };
+    if (!emp) {
+      return { baseSal: 0, earlyMoney: 0, dailySpends: 0, bonusGiven: 0, shoppingDeductions: 0, remaining: 0, salariesPaid: 0, advancesPaid: 0 };
     }
+
+    const matchEmp = (recEmpId?: string | null, recEmpName?: string | null) =>
+      recEmpId === empId || (!recEmpId && Boolean(recEmpName && recEmpName.toLowerCase() === emp.name.toLowerCase()));
 
     // 1. Salaries already paid for this employee in this month
     const salariesInMonth = salaries.filter(s =>
-      (s.employee_id === empId || (!s.employee_id && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
-      s.month === monthStr
+      matchEmp(s.employee_id, s.employee_name) &&
+      s.month === monthStr &&
+      !(s as any).is_bonus
     );
     const salariesPaid = salariesInMonth.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
     // 2. Advance / early money expenses taken for this employee in this month
     const advancesInMonth = expenses.filter(e =>
-      (e.employee_id === empId || (!e.employee_id && e.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
-      (e.category === "advance" || e.category === "salary_advance" || (e.note || "").toLowerCase().includes("advance") || (e.note || "").toLowerCase().includes("অগ্রিম")) &&
+      matchEmp(e.employee_id, e.employee_name) &&
+      (e.category === "advance" || e.category === "salary_advance") &&
       (e.date || "").startsWith(monthStr)
     );
     const advancesPaid = advancesInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
+    // 3. Employee daily spends (food, travel, tea, other — excluding advance and bonus)
+    const spendsInMonth = expenses.filter(e =>
+      matchEmp(e.employee_id, e.employee_name) &&
+      e.category !== "advance" &&
+      e.category !== "salary_advance" &&
+      e.category !== "bonus" &&
+      (e.date || "").startsWith(monthStr)
+    );
+    const dailySpends = spendsInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // 4. Bonuses given by owner (not deducted from remaining salary)
+    const bonusesInMonth = expenses.filter(e =>
+      matchEmp(e.employee_id, e.employee_name) &&
+      e.category === "bonus" &&
+      (e.date || "").startsWith(monthStr)
+    );
+    const bonusGiven = bonusesInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
     const earlyMoney = salariesPaid + advancesPaid;
 
-    // 3. Pending shopping deductions
+    // 5. Pending shopping deductions
     const pendings = shoppings.filter(s =>
-      (s.employee_id === empId || (!s.employee_id && s.employee_name.toLowerCase() === emp.name.toLowerCase())) &&
+      matchEmp(s.employee_id, s.employee_name) &&
       s.payment_status === "deduct_from_salary" &&
-      !(s as any).settled
+      !(s as any).settled &&
+      !(s as any).is_settled
     );
     const shoppingDeductions = deductShop ? pendings.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0) : 0;
 
-    const remaining = Math.max(0, baseSal - earlyMoney - shoppingDeductions);
+    const remaining = Math.max(0, baseSal - earlyMoney - dailySpends - shoppingDeductions);
 
     return {
       baseSal,
       earlyMoney,
+      dailySpends,
+      bonusGiven,
       salariesPaid,
       advancesPaid,
       shoppingDeductions,
@@ -473,6 +506,42 @@ export default function EmployeesPage() {
       setSalNote("");
     } catch (err: any) {
       toast.error(err.message || "Failed to record salary");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Handle Give Bonus Submit
+  async function handleSaveBonus(e: React.FormEvent) {
+    e.preventDefault();
+    const val = parseFloat(bonusAmount);
+    if (!bonusEmpId || isNaN(val) || val <= 0) {
+      toast.error(lang === "bn" ? "কর্মচারী নির্বাচন করুন এবং সঠিক বোনাসের পরিমাণ লিখুন" : "Select employee and enter valid bonus amount");
+      return;
+    }
+    const emp = employees.find(x => x.id === bonusEmpId);
+    setBusy(true);
+    try {
+      await createEmployeeExpenseFn({
+        data: {
+          employee_id: bonusEmpId,
+          employee_name: emp?.name || "Employee",
+          category: "bonus",
+          amount: val,
+          payment_method: bonusMethod,
+          date: bonusDate,
+          note: bonusNote.trim() ? `🎁 বোনাস: ${bonusNote.trim()}` : "🎁 মালিক প্রদত্ত বোনাস (Owner Bonus)",
+        },
+      });
+      toast.success(lang === "bn" ? `${emp?.name || "কর্মচারী"}-কে বোনাস প্রদান করা হয়েছে!` : "Employee bonus recorded!");
+      qc.invalidateQueries({ queryKey: ["employee_expenses"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
+      setAddBonusOpen(false);
+      setBonusAmount("");
+      setBonusNote("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to give bonus");
     } finally {
       setBusy(false);
     }
@@ -803,13 +872,23 @@ export default function EmployeesPage() {
                                   <>
                                     {stats.earlyMoney > 0 && (
                                       <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 font-medium">
-                                        {lang === "bn" ? "অগ্রিম উত্তোলিত:" : "Early Taken:"} ৳{fmtMoney(stats.earlyMoney)}
+                                        {lang === "bn" ? "মালিক প্রদত্ত:" : "Given by Owner:"} ৳{fmtMoney(stats.earlyMoney)}
+                                      </Badge>
+                                    )}
+                                    {(stats.dailySpends + stats.shoppingDeductions) > 0 && (
+                                      <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30 font-medium">
+                                        {lang === "bn" ? "খরচ ও কেনা:" : "Spends:"} ৳{fmtMoney(stats.dailySpends + stats.shoppingDeductions)}
                                       </Badge>
                                     )}
                                     <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold">
                                       <Wallet className="size-2.5 mr-1 text-emerald-600 inline" />
                                       {lang === "bn" ? "অবশিষ্ট বেতন:" : "Remaining Salary:"} ৳{fmtMoney(stats.remaining)}
                                     </Badge>
+                                    {stats.bonusGiven > 0 && (
+                                      <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-bold">
+                                        🎁 {lang === "bn" ? "বোনাস:" : "Bonus:"} ৳{fmtMoney(stats.bonusGiven)}
+                                      </Badge>
+                                    )}
                                   </>
                                 );
                               })()}
@@ -876,7 +955,21 @@ export default function EmployeesPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs rounded-xl gap-1 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold cursor-pointer"
+                        onClick={() => {
+                          setBonusEmpId(e.id);
+                          setBonusAmount("");
+                          setBonusNote("");
+                          setAddBonusOpen(true);
+                        }}
+                      >
+                        <span>🎁</span>
+                        <span>{lang === "bn" ? "বোনাস দিন" : "Give Bonus"}</span>
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1735,6 +1828,100 @@ export default function EmployeesPage() {
               <Button type="submit" disabled={busy} size="sm" className="rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white">
                 {busy ? <RefreshCw className="size-3.5 animate-spin mr-1" /> : <Check className="size-3.5 mr-1" />}
                 <span>{lang === "bn" ? "খরচ সংরক্ষণ" : "Save Expense"}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ──────────────── Modal 3.5: Give Bonus (Owner Bonus to Employee) ──────────────── */}
+      <Dialog open={addBonusOpen} onOpenChange={setAddBonusOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-charukola flex items-center gap-2 text-amber-600">
+              <span>🎁</span>
+              {lang === "bn" ? "কর্মচারীকে বোনাস প্রদান করুন" : "Give Bonus to Employee"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveBonus} className="space-y-3 font-balooda">
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "কর্মচারী নির্বাচন *" : "Select Employee *"}</Label>
+              <Select value={bonusEmpId} onValueChange={setBonusEmpId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder={lang === "bn" ? "কর্মচারী বাছাই করুন" : "Select employee"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-300">
+              {lang === "bn"
+                ? "💡 বোনাস কর্মচারীর মূল বেতন বা অবশিষ্ট বেতন থেকে কাটা হবে না।"
+                : "💡 Bonus is an extra reward and will NOT reduce the employee's remaining salary."}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "তারিখ" : "Date"}</Label>
+                <Input
+                  type="date"
+                  value={bonusDate}
+                  onChange={e => setBonusDate(e.target.value)}
+                  className="h-8.5 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">{lang === "bn" ? "বোনাসের পরিমাণ (৳) *" : "Bonus Amount (৳) *"}</Label>
+                <Input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={bonusAmount}
+                  onChange={e => setBonusAmount(e.target.value)}
+                  className="h-8.5 text-xs font-bold font-charukola text-amber-600"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "পরিশোধের মাধ্যম" : "Payment Method"}</Label>
+              <Select value={bonusMethod} onValueChange={setBonusMethod}>
+                <SelectTrigger className="h-8.5 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">{lang === "bn" ? "💵 ক্যাশ / নগদ (ক্যাশবক্স থেকে)" : "💵 Cash (From Cashbox)"}</SelectItem>
+                  <SelectItem value="bkash">{lang === "bn" ? "📱 বিকাশ (bKash)" : "📱 bKash"}</SelectItem>
+                  <SelectItem value="bank">{lang === "bn" ? "🏦 ব্যাংক ট্রান্সফার" : "🏦 Bank Transfer"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">{lang === "bn" ? "বোনাসের উপলক্ষ / নোট" : "Bonus Reason / Note"}</Label>
+              <Input
+                placeholder={lang === "bn" ? "যেমন: ঈদ বোনাস, ভালো কাজের পুরস্কার..." : "e.g. Eid Bonus, Sales Target Bonus..."}
+                value={bonusNote}
+                onChange={e => setBonusNote(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddBonusOpen(false)} className="rounded-xl text-xs">
+                {t("cancel")}
+              </Button>
+              <Button type="submit" disabled={busy} size="sm" className="rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer">
+                {busy ? <RefreshCw className="size-3.5 animate-spin mr-1" /> : <Check className="size-3.5 mr-1" />}
+                <span>🎁 {lang === "bn" ? "বোনাস প্রদান করুন" : "Give Bonus"}</span>
               </Button>
             </DialogFooter>
           </form>

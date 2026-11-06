@@ -8,14 +8,20 @@ const path = require("path");
 
 const rootDir = __dirname;
 const electronDistDir = path.join(rootDir, "node_modules", "electron", "dist");
-const outputDir = path.join(rootDir, "dist-electron", "DreamFashion-POS-win-x64");
+const oldDistDir = path.join(rootDir, "dist-electron");
+const outputDir = path.join(rootDir, "software");
 const resourcesAppDir = path.join(outputDir, "resources", "app");
 
-console.log("[Electron Packager] Starting standalone Windows package creation...");
+console.log("[Electron Packager] Starting standalone Windows package creation in /software...");
 
 if (!fs.existsSync(electronDistDir)) {
   console.error("[Electron Packager] ERROR: node_modules/electron/dist not found!");
   process.exit(1);
+}
+
+// 0. Remove legacy dist-electron folder to save disk space
+if (fs.existsSync(oldDistDir)) {
+  fs.rmSync(oldDistDir, { recursive: true, force: true });
 }
 
 // 1. Create destination directory

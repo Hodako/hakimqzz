@@ -62,17 +62,22 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
 
   if (!user) {
     const db = await getDb();
-    user = await db.collection("users").findOne({ _id: payload.userId } as any);
-    if (!user && payload.email) {
-      user = await db.collection("users").findOne({ email: payload.email.toLowerCase().trim() } as any);
+    user = await db.collection("users").findOne({
+      $or: [{ _id: payload.userId as any }, { firebase_uid: payload.userId }],
+    } as any);
+    const cleanPayloadEmail = (payload.email || "").toLowerCase().trim();
+    const isGenericFallbackEmail = !cleanPayloadEmail || ["user@pos.local", "user@classicworld.pos", "user@classicworld.com"].includes(cleanPayloadEmail);
+    if (!user && !isGenericFallbackEmail) {
+      user = await db.collection("users").findOne({ email: cleanPayloadEmail } as any);
     }
     if (!user) {
       const isEmp = payload.role === "employee" || String(payload.userId).includes("emp");
       const newOwnerId = isEmp ? "classicworld_default_owner" : payload.userId;
       const now = new Date().toISOString();
+      const uniqueEmail = isGenericFallbackEmail ? `${payload.userId}@pos.local` : cleanPayloadEmail;
       user = {
         _id: payload.userId,
-        email: payload.email || "user@classicworld.pos",
+        email: uniqueEmail,
         full_name: isEmp ? "Employee" : "Shop Owner",
         role: isEmp ? "employee" : "owner",
         owner_id: newOwnerId,
@@ -134,6 +139,14 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
   const isOwner = role === "owner" && (!user.owner_id || user.owner_id === user._id);
   const ownerIdBase = isOwner ? (user._id as any as string) : (resolvedOwnerId || (user._id as any as string));
   const ownerId = activeProfile === "default" ? ownerIdBase : `${ownerIdBase}:${activeProfile}`;
+  let resolvedBusinessId = activeProfile === "default" ? businessId : null;
+  if (activeProfile !== "default") {
+    try {
+      const db = await getDb();
+      const profBiz = await db.collection("businesses").findOne({ owner_id: ownerId } as any);
+      if (profBiz) resolvedBusinessId = profBiz._id as any as string;
+    } catch (_) {}
+  }
   const permissions = (user.permissions as PermissionSet) || (role === "owner" ? OWNER_PERMISSIONS : {});
 
   return {
@@ -141,7 +154,7 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     ownerId,
     email: user.email as string,
     role,
-    businessId,
+    businessId: resolvedBusinessId,
     activated,
     permissions: role === "owner" ? OWNER_PERMISSIONS : permissions,
     profileId: activeProfile,

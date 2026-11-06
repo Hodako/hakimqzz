@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
 import { hashPassword, comparePassword, signToken, verifyToken } from "@/lib/auth-helpers";
-import { requireSession } from "@/lib/session";
+import { requireSession, clearSessionUserCache } from "@/lib/session";
 import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS } from "@/lib/permissions";
@@ -108,46 +108,78 @@ function saleCashboxAmount(data: {
     : lineTotal;
 }
 
-async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
-  const user = await db.collection("users").findOne({ _id: userId as any });
+async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string, overrideActiveProfile?: string) {
+  const user = await db.collection("users").findOne({
+    $or: [{ _id: userId as any }, { firebase_uid: userId }],
+  } as any);
   if (!user) return null;
-  let business = user.business_id
-    ? await db.collection("businesses").findOne({ _id: user.business_id as any })
-    : await db.collection("businesses").findOne({ owner_id: user.owner_id || user._id });
-
-  // If owner has no business record yet, initialize one automatically
-  if (!business && user.role === "owner") {
-    const newBizId = crypto.randomUUID();
-    business = {
-      _id: newBizId as any,
-      owner_id: user._id,
-      name: user.full_name || "My Fashion Store",
-      logo_url: "/logo.png",
-      business_type: "retail",
-      theme: "green",
-      status: "active",
-      sms_credits: 0,
-      max_products: 500,
-      max_invoices: 10000,
-      employee_limit: 5,
-      created_at: new Date().toISOString(),
-    };
-    await db.collection("businesses").insertOne(business as any);
-    await db.collection("users").updateOne({ _id: user._id as any }, { $set: { business_id: newBizId } });
-  }
 
   const cookieStore = await cookies();
   const store = requestStore.getStore();
-  const activeProfile = store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
-  
+  const activeProfile = overrideActiveProfile || store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
+
   const ownerId = user.role === "employee" ? (user.owner_id as string) : (user._id as any as string);
   const ownerUser = ownerId === (user._id as any as string) ? user : await db.collection("users").findOne({ _id: ownerId as any });
   const profiles = ownerUser?.profiles || [
     { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
   ];
+  const currentProfileObj = profiles.find((p: any) => p.id === activeProfile);
+  const profileOwnerId = activeProfile === "default" ? ownerId : `${ownerId}:${activeProfile}`;
+
+  let business: any = null;
+  if (activeProfile !== "default") {
+    business = await db.collection("businesses").findOne({ owner_id: profileOwnerId });
+    if (!business && user.role === "owner") {
+      const newBizId = crypto.randomUUID();
+      business = {
+        _id: newBizId as any,
+        owner_id: profileOwnerId,
+        name: currentProfileObj?.name || "New Business",
+        logo_url: "",
+        business_type: "retail",
+        theme: "green",
+        status: "active",
+        sms_credits: 0,
+        max_products: 500,
+        max_invoices: 10000,
+        employee_limit: 5,
+        created_at: new Date().toISOString(),
+      };
+      await db.collection("businesses").insertOne(business as any);
+    }
+  } else {
+    business = user.business_id
+      ? await db.collection("businesses").findOne({ _id: user.business_id as any })
+      : await db.collection("businesses").findOne({ owner_id: user.owner_id || user._id });
+
+    // If owner has no business record yet, initialize one automatically
+    if (!business && user.role === "owner") {
+      const newBizId = crypto.randomUUID();
+      business = {
+        _id: newBizId as any,
+        owner_id: user._id,
+        name: user.full_name || "My Fashion Store",
+        logo_url: "",
+        business_type: "retail",
+        theme: "green",
+        status: "active",
+        sms_credits: 0,
+        max_products: 500,
+        max_invoices: 10000,
+        employee_limit: 5,
+        created_at: new Date().toISOString(),
+      };
+      await db.collection("businesses").insertOne(business as any);
+      await db.collection("users").updateOne({ _id: user._id as any }, { $set: { business_id: newBizId } });
+    }
+  }
 
   const platform = await db.collection("platform_settings").findOne({ _id: "global" as any });
   const adminWhatsapp = (platform?.admin_whatsapp as string) || "8801700000000";
+  const resolvedBizName = (business?.name as string) || (activeProfile !== "default" && currentProfileObj?.name ? currentProfileObj.name : "Dream Fashion");
+  const isDefaultBrandName = /^(dream\s*fashion|classic\s*world)$/i.test(resolvedBizName.trim());
+  const rawBizLogo = (business?.logo_url as string) || "";
+  const resolvedLogoUrl = rawBizLogo && rawBizLogo !== "/logo.png" ? rawBizLogo : (isDefaultBrandName ? "/logo.png" : "");
 
   return {
     id: user._id as any as string,
@@ -156,14 +188,14 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string) {
     activated: true,
     role: (user.role as string) || "owner",
     business_id: (business?._id as any as string) || (user.business_id as string) || null,
-    business_name: (business?.name as string) || "Dream Fashion",
+    business_name: resolvedBizName,
     business_address: (business?.address as string) || "",
     business_phone_numbers: (business?.phone_numbers as string) || (business?.phone as string) || "",
     business_emails: (business?.emails as string) || (business?.email as string) || "",
     invoice_page_size: (business?.invoice_page_size as string) || "80mm",
     invoice_page_width: (business?.invoice_page_width as string) || "",
     invoice_page_height: (business?.invoice_page_height as string) || "",
-    logo_url: (business?.logo_url as string) || "/logo.png",
+    logo_url: resolvedLogoUrl,
     avatar_url: (user.avatar_url as string) || "",
     permissions: (user.role === "owner" ? OWNER_PERMISSIONS : (user.permissions as PermissionSet)) || DEFAULT_EMPLOYEE_PERMISSIONS,
     profiles,
@@ -615,7 +647,7 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     _id: businessId as any,
     owner_id: userId,
     name: shopName,
-    logo_url: "/logo.png",
+    logo_url: "",
     business_type: "retail",
     theme: "green",
     status: "active",
@@ -637,6 +669,7 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     role: data.role || "owner",
     business_id: businessId,
     owner_id: userId,
+    profiles: [{ id: "default", name: shopName, created_at: now }],
     activated: true,
     status: "active",
     created_at: now,
@@ -680,7 +713,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       _id: businessId as any,
       owner_id: userId,
       name: shopName,
-      logo_url: data.photoUrl || "/logo.png",
+      logo_url: data.photoUrl || "",
       business_type: "retail",
       theme: "green",
       status: "active",
@@ -699,6 +732,8 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       firebase_uid: data.firebaseUid || null,
       role: "owner",
       business_id: businessId,
+      owner_id: userId,
+      profiles: [{ id: "default", name: shopName, created_at: now }],
       status: "active",
       activated: true,
       created_at: now,
@@ -724,16 +759,7 @@ export async function logoutFn() {
 export async function getProductsFn() {
   const session = await requireSession();
   const db = await getDb();
-  let items = await db.collection("products").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
-  // Safe profile fallback: if a custom activeProfile was selected but has 0 products,
-  // check if root owner has products so the merchant never sees an empty screen accidentally
-  if (items.length === 0 && session.ownerId.includes(":")) {
-    const rootOwnerId = session.ownerId.split(":")[0];
-    const rootItems = await db.collection("products").find({ owner_id: rootOwnerId }).sort({ created_at: -1 }).toArray();
-    if (rootItems.length > 0) {
-      items = rootItems;
-    }
-  }
+  const items = await db.collection("products").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
   return items.map((p) => ({ ...p, id: p._id as any as string }));
 }
 
@@ -2229,7 +2255,7 @@ export async function createSomitiFn(input: { data: { kind: string; amount: numb
   return { ...doc, id };
 }
 
-export async function updateSomitiFn(input: { data: { id: string; kind: string; amount: number; note?: string | null } }) {
+export async function updateSomitiFn(input: { data: { id: string; kind: string; amount: number; note?: string | null; skipCashbox?: boolean } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
   const db = await getDb();
@@ -2241,15 +2267,30 @@ export async function updateSomitiFn(input: { data: { id: string; kind: string; 
   );
 
   const cashboxKind = data.kind === "withdraw" ? "deposit" : "withdraw";
-  await db.collection("cashbox_entries").updateOne(
-    { owner_id: session.ownerId, ref_id: id },
-    { $set: {
+  if (data.skipCashbox === true) {
+    await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: id });
+  } else {
+    const existingCb = await db.collection("cashbox_entries").findOne({ owner_id: session.ownerId, ref_id: id });
+    if (existingCb) {
+      await db.collection("cashbox_entries").updateOne(
+        { owner_id: session.ownerId, ref_id: id },
+        {
+          $set: {
+            kind: cashboxKind,
+            amount: safeAmount,
+            note: data.note ? `Samity (${data.kind}): ${data.note}` : `Samity ${data.kind}`,
+          },
+        }
+      );
+    } else if (data.skipCashbox === false && safeAmount > 0) {
+      await insertCashboxEntry(db, session.ownerId, {
         kind: cashboxKind,
         amount: safeAmount,
         note: data.note ? `Samity (${data.kind}): ${data.note}` : `Samity ${data.kind}`,
-      }
+        ref_id: id,
+      });
     }
-  );
+  }
 
   const updated = await db.collection("somiti_entries").findOne({ _id: id as any });
   return { ...updated, id };
@@ -2832,16 +2873,18 @@ export async function createProfileFn(input: { data: { name: string } }) {
   const db = await getDb();
   
   const profileId = crypto.randomUUID();
+  const profileName = data.name.trim() || "New Profile";
+  const now = new Date().toISOString();
   const newProfile = {
     id: profileId,
-    name: data.name.trim() || "New Profile",
-    created_at: new Date().toISOString()
+    name: profileName,
+    created_at: now
   };
 
   const ownerIdBase = session.ownerId.split(":")[0];
   const owner = await db.collection("users").findOne({ _id: ownerIdBase as any });
   let profiles = owner?.profiles || [
-    { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
+    { id: "default", name: "Default Profile", created_at: now }
   ];
   profiles.push(newProfile);
 
@@ -2850,10 +2893,29 @@ export async function createProfileFn(input: { data: { name: string } }) {
     { $set: { profiles } }
   );
 
+  // Create an isolated business record for this new profile
+  const profileOwnerId = `${ownerIdBase}:${profileId}`;
+  await db.collection("businesses").insertOne({
+    _id: crypto.randomUUID() as any,
+    owner_id: profileOwnerId,
+    name: profileName,
+    logo_url: "",
+    business_type: "retail",
+    theme: "green",
+    status: "active",
+    sms_credits: 0,
+    max_products: 500,
+    max_invoices: 10000,
+    employee_limit: 5,
+    created_at: now,
+    updated_at: now,
+  });
+
+  clearSessionUserCache(session.userId);
   const cookieStore = await cookies();
   cookieStore.set("active_profile", profileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
 
-  const mapped = await mapUser(db, session.userId);
+  const mapped = await mapUser(db, session.userId, profileId);
   return { user: mapped };
 }
 
@@ -2873,10 +2935,11 @@ export async function switchProfileFn(input: { data: { profileId: string } }) {
     throw new Error("Profile not found");
   }
 
+  clearSessionUserCache(session.userId);
   const cookieStore = await cookies();
   cookieStore.set("active_profile", data.profileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
 
-  const mapped = await mapUser(db, session.userId);
+  const mapped = await mapUser(db, session.userId, data.profileId);
   return { user: mapped };
 }
 

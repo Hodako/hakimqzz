@@ -181,9 +181,20 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
       if (result?.token && typeof window !== "undefined") {
         window.localStorage.setItem("auth_token", result.token);
       }
-      if (actionName === "switchProfileFn" && args?.data?.profileId) {
+      if (actionName === "createProfileFn" && result?.profileId && typeof window !== "undefined") {
+        window.localStorage.setItem("active_profile", result.profileId);
+        if (result.user) {
+          window.localStorage.setItem("user", JSON.stringify(result.user));
+          window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(result.user));
+        }
+      }
+      if (actionName === "switchProfileFn" && (args?.data?.profileId || result?.activeProfile)) {
         if (typeof window !== "undefined") {
-          window.localStorage.setItem("active_profile", args.data.profileId);
+          window.localStorage.setItem("active_profile", result?.activeProfile || args.data.profileId);
+          if (result?.user) {
+            window.localStorage.setItem("user", JSON.stringify(result.user));
+            window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(result.user));
+          }
         }
       }
       if (actionName === "logoutFn") {

@@ -63,8 +63,13 @@ async function ensureLocalServerRunning() {
     return;
   }
 
-  console.log(`[Windows POS] Starting local Next.js POS server on port ${LOCAL_PORT}...`);
   const rootDir = findProjectRootWithServer();
+  if (!fs.existsSync(path.join(rootDir, "server.js"))) {
+    console.log(`[Windows POS] No local server.js found, using Cloud (${CLOUD_URL})`);
+    return;
+  }
+
+  console.log(`[Windows POS] Starting local Next.js POS server on port ${LOCAL_PORT}...`);
 
   serverProcess = spawn("node", ["server.js"], {
     cwd: rootDir,

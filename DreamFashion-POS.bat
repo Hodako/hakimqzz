@@ -31,7 +31,9 @@ if %errorlevel% equ 0 (
 
 :: 3. Launch the Electron Windows POS Application
 echo [INFO] Launching Dream Fashion Desktop Application with 1-Click Silent Printing...
-if exist "dist-electron\DreamFashion-POS-win-x64\DreamFashion-POS.exe" (
+if exist "software\DreamFashion-POS.exe" (
+    start "" "software\DreamFashion-POS.exe"
+) else if exist "dist-electron\DreamFashion-POS-win-x64\DreamFashion-POS.exe" (
     start "" "dist-electron\DreamFashion-POS-win-x64\DreamFashion-POS.exe"
 ) else (
     npx electron ./electron/main.cjs
