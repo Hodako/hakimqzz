@@ -9,7 +9,11 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/*.apk",
+      "**/*.exe",
+      "**/*.msi",
+      "**/*.dmg"
     ],
     "headers": [
       {
