@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn, approveCourierPaymentFn, cancelCourierOrderFn, acceptDigitalPaymentFn, toggleGoogleSheetsSyncFn, bulkExportToGoogleSheetsFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
+import { executeDirectSilentPrint } from "@/lib/pos-print";
 import { playScanSuccessSound, playErrorSound } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
@@ -646,7 +647,7 @@ export default function SalesPage() {
   };
 
   // Print & PDF Report Generator
-  const handlePrintDetailedReport = () => {
+  const handlePrintDetailedReport = async () => {
     const isBn = lang === "bn";
     const title = isBn ? "বিক্রয় বিবরণী ও ইনভয়েস রিপোর্ট" : "Sales Detailed Report";
     const dateRangeStr =
@@ -655,12 +656,6 @@ export default function SalesPage() {
       dateRange === "week" ? (isBn ? "বিগত ৭ দিন" : "Last 7 Days") :
       dateRange === "month" ? (isBn ? "চলতি মাস" : "This Month") :
       dateRange === "custom" ? `${customFrom} - ${customTo}` : (isBn ? "সকল সময়ের" : "All Time");
-
-    const printWin = window.open("", "_blank");
-    if (!printWin) {
-      toast.error(isBn ? "পপআপ ব্লক করা আছে। রিপোর্ট প্রিন্ট করার জন্য পপআপ অনুমতি দিন।" : "Popup blocked. Please allow popups to print report.");
-      return;
-    }
 
     const rowsHtml = filteredSales.map((s, idx) => {
       const methodStr =
@@ -693,14 +688,15 @@ export default function SalesPage() {
     const totalPaidAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.paid_amount || 0)), 0);
     const totalDueAmount = filteredSales.reduce((sum, s) => sum + (s.returned ? 0 : Number(s.due_amount || 0)), 0);
 
-    printWin.document.write(`
+    const reportHtml = `
       <!DOCTYPE html>
       <html>
         <head>
           <title>${title} - ${dateRangeStr}</title>
           <meta charset="utf-8" />
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hind Siliguri', sans-serif; margin: 20px; color: #0f172a; }
+            @page { size: A4 portrait; margin: 10mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hind Siliguri', sans-serif; margin: 20px; color: #0f172a; background: #ffffff; }
             h1 { font-size: 20px; margin: 0 0 4px 0; }
             .meta { font-size: 12px; color: #64748b; margin-bottom: 16px; }
             .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
@@ -764,14 +760,25 @@ export default function SalesPage() {
               ${rowsHtml}
             </tbody>
           </table>
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
         </body>
       </html>
-    `);
+    `;
+
+    const handledNative = await executeDirectSilentPrint(reportHtml, "", {
+      pageSize: "a4",
+      paperWidthMm: 210,
+      silent: false,
+      scaleFactor: 100,
+      copies: 1,
+    });
+    if (handledNative) return;
+
+    const printWin = window.open("", "_blank");
+    if (!printWin) {
+      toast.error(isBn ? "পপআপ ব্লক করা আছে। রিপোর্ট প্রিন্ট করার জন্য পপআপ অনুমতি দিন।" : "Popup blocked. Please allow popups to print report.");
+      return;
+    }
+    printWin.document.write(reportHtml.replace("</body>", "<script>window.onload=function(){window.print();};</script></body>"));
     printWin.document.close();
   };
 
@@ -1364,7 +1371,7 @@ function SalesTab({
       "CASH (নগদ)";
 
     try {
-      printPwaInvoice({
+      await printPwaInvoice({
         businessName: user?.business_name || biz?.name || "Dream Fashion",
         userEmail: biz?.emails || user?.business_emails || user?.email || "",
         shopAddress: biz?.address || user?.business_address || "",
@@ -1373,6 +1380,7 @@ function SalesTab({
         terms: biz?.invoice_terms || "",
         invoiceNo: invNo,
         invoiceDate: fmtDateTime(s.created_at),
+        cashierName: user?.full_name || undefined,
         customerName: custName,
         paymentMode: paymentModeLabel,
         splitCash: s.split_cash,

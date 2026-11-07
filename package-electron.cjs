@@ -73,7 +73,7 @@ fs.mkdirSync(path.join(resourcesAppDir, "electron"), { recursive: true });
 // Minimal package.json for the embedded app
 const embeddedPackageJson = {
   name: "dreamfashion-pos",
-  version: "2.2.0",
+  version: "2.3.0",
   main: "electron/main.cjs",
   description: "Dream Fashion Ultimate Windows POS Terminal",
 };

@@ -7,7 +7,7 @@ import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { FAB } from "@/components/ui/fab";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2, ArrowLeftRight, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2, ArrowLeftRight, RefreshCw, Barcode } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -18,6 +18,7 @@ import { ProductDialog } from "@/components/product-dialog";
 import { SaleDialog } from "@/components/sale-dialog";
 import { PurchaseDialog } from "@/components/purchase-dialog";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
+import { LabelPrintDialog } from "@/components/label-print-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -72,6 +73,8 @@ export default function ProductsPage() {
   const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
   const [searchVisible, setSearchVisible] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [labelPrintOpen, setLabelPrintOpen] = useState(false);
+  const [labelTargetProducts, setLabelTargetProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -201,7 +204,7 @@ export default function ProductsPage() {
 
   // Hardware barcode scanner listener on products page (when dialogs are closed)
   useEffect(() => {
-    if (open || saleOpen || buyOpen || returnOpen || exchangeOpen || !!productToDelete) return;
+    if (open || saleOpen || buyOpen || returnOpen || exchangeOpen || labelPrintOpen || !!productToDelete) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -229,7 +232,10 @@ export default function ProductsPage() {
               setSearch(scannedCode);
               setSearchVisible(true);
               const found = allProducts.find(
-                p => p.barcode?.toLowerCase() === scannedCode.toLowerCase() || p.id === scannedCode
+                p =>
+                  p.barcode?.toLowerCase() === scannedCode.toLowerCase() ||
+                  p.id === scannedCode ||
+                  p.id.slice(-8).toUpperCase() === scannedCode.toUpperCase()
               );
               if (found) {
                 toast.success(lang === "bn" ? `পণ্য পাওয়া গেছে: ${found.name}` : `Product found: ${found.name}`);
@@ -285,7 +291,7 @@ export default function ProductsPage() {
       window.removeEventListener("keydown", handleKeyDown, true);
       pageScanBufferRef.current = [];
     };
-  }, [open, saleOpen, buyOpen, returnOpen, exchangeOpen, productToDelete, allProducts, lang]);
+  }, [open, saleOpen, buyOpen, returnOpen, exchangeOpen, labelPrintOpen, productToDelete, allProducts, lang]);
 
   // Filters (Name, Barcode, Unique Product Number, Code, SKU, QR, ID, Attributes, Category)
   const searchFiltered = allProducts.filter(p => {
@@ -480,6 +486,19 @@ export default function ProductsPage() {
           >
             <ArrowLeftRight className="size-3.5 text-emerald-600" />
             <span>{lang === "bn" ? "এক্সচেঞ্জ" : "Exchange"}</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-[10px] sm:text-xs text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10 gap-1 font-semibold"
+            title={lang === "bn" ? "বারকোড ও প্রাইস লেবেল প্রিন্ট" : "Print Barcode & Price Labels"}
+            onClick={() => {
+              setLabelTargetProducts([]);
+              setLabelPrintOpen(true);
+            }}
+          >
+            <Barcode className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>{isMobile ? "" : (lang === "bn" ? "লেবেল প্রিন্ট" : "Labels")}</span>
           </Button>
           <Button size="sm" variant="outline" className="h-8 text-[10px] sm:text-xs" onClick={() => setBuyOpen(true)}>{t("buy")}</Button>
         </div>
@@ -776,6 +795,10 @@ export default function ProductsPage() {
                 setBuyProduct(p.id);
                 setBuyOpen(true);
               }}
+              onPrintLabel={() => {
+                setLabelTargetProducts([p]);
+                setLabelPrintOpen(true);
+              }}
             />
           );
         })}
@@ -843,7 +866,12 @@ export default function ProductsPage() {
         onScan={(scannedCode) => {
           setSearch(scannedCode);
           setSearchVisible(true);
-          const found = allProducts.find(p => p.barcode?.toLowerCase() === scannedCode.toLowerCase() || p.id === scannedCode);
+          const found = allProducts.find(
+            p =>
+              p.barcode?.toLowerCase() === scannedCode.toLowerCase() ||
+              p.id === scannedCode ||
+              p.id.slice(-8).toUpperCase() === scannedCode.toUpperCase()
+          );
           if (found) {
             toast.success(lang === "bn" ? `পণ্য পাওয়া গেছে: ${found.name}` : `Product found: ${found.name}`);
             setSellCart(prev => {
@@ -878,6 +906,14 @@ export default function ProductsPage() {
         title={lang === "bn" ? "বারকোড স্ক্যান করুন" : "Scan Barcode"}
       />
 
+      <LabelPrintDialog
+        open={labelPrintOpen}
+        onOpenChange={setLabelPrintOpen}
+        products={allProducts}
+        initialProducts={labelTargetProducts}
+        lang={lang}
+      />
+
       <ConfirmDeleteDialog
         open={productToDelete !== null}
         onOpenChange={(v) => { if (!v) setProductToDelete(null); }}
@@ -906,6 +942,7 @@ function ProductCard({
   isPinned,
   onTogglePin,
   onBuy,
+  onPrintLabel,
 }: {
   p: Product;
   isLowStock: boolean;
@@ -918,11 +955,13 @@ function ProductCard({
   onLongPress: () => void;
   onExchange?: () => void;
   onBuy?: () => void;
+  onPrintLabel?: () => void;
   t: (k: any) => string;
   isMobile: boolean;
   isPinned: boolean;
   onTogglePin: () => void;
 }) {
+  const { lang } = useT();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [longPressProgress, setLongPressProgress] = useState(false);
@@ -975,6 +1014,11 @@ function ProductCard({
             <button onClick={() => { setContextMenuOpen(false); onExchange && onExchange(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 flex items-center gap-3 font-medium text-emerald-600 dark:text-emerald-400 transition-colors">
               🔄 Exchange Item / পণ্য পরিবর্তন
             </button>
+            {onPrintLabel && (
+              <button onClick={() => { setContextMenuOpen(false); onPrintLabel(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-indigo-500/10 flex items-center gap-3 font-medium text-indigo-600 dark:text-indigo-400 transition-colors">
+                🏷️ {lang === "bn" ? "বারকোড ও প্রাইস লেবেল প্রিন্ট" : "Print Barcode / Price Label"}
+              </button>
+            )}
             <button onClick={() => { setContextMenuOpen(false); onEdit(); }} className="w-full text-left text-sm px-3 py-2.5 rounded-xl hover:bg-muted flex items-center gap-3 font-medium transition-colors">
               ✏️ {t("edit")}
             </button>
@@ -1129,17 +1173,33 @@ function ProductCard({
 
         <div className="pt-0.5 flex gap-1" onClick={e => e.stopPropagation()}>
           {!p.archived ? (
-            <Button
-              size="sm"
-              className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg"
-              disabled={p.stock <= 0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSell();
-              }}
-            >
-              {t("sell")}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                className="h-6 text-[9px] flex-1 px-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg"
+                disabled={p.stock <= 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSell();
+                }}
+              >
+                {t("sell")}
+              </Button>
+              {onPrintLabel && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="size-6 p-0 shrink-0 rounded-lg border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 cursor-pointer"
+                  title={lang === "bn" ? "বারকোড লেবেল প্রিন্ট" : "Print Barcode Label"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPrintLabel();
+                  }}
+                >
+                  <Barcode className="size-3" />
+                </Button>
+              )}
+            </>
           ) : (
             <>
               <Button size="sm" variant="outline" className="h-6 text-[9px] flex-1 font-semibold rounded-lg" onClick={() => onRestore()}>{t("restore")}</Button>

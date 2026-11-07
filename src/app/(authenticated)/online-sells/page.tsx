@@ -236,12 +236,12 @@ export default function OnlineSellsPage() {
     }
   }
 
-  function handlePrint(item: any) {
+  async function handlePrint(item: any) {
     const custName = item.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Online Customer");
     const invNo = item.cart_id ? `INV-${item.cart_id.slice(-6).toUpperCase()}` : `INV-${item.id.slice(-6).toUpperCase()}`;
 
     try {
-      printPwaInvoice({
+      await printPwaInvoice({
         businessName: user?.business_name || "Dream Fashion",
         userEmail: user?.business_emails || user?.email || "",
         shopAddress: user?.business_address || "",
