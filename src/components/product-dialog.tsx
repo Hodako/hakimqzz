@@ -11,10 +11,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getProducts, type Product } from "@/lib/queries";
-import { ImagePlus, Plus, Trash2, Scan, Zap, X } from "lucide-react";
+import { ImagePlus, Plus, Trash2, Scan, Zap, X, Barcode, Wand2 } from "lucide-react";
 import { createProductFn, updateProductFn, uploadImageFn } from "@/lib/rpc";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
+import { LabelPrintDialog } from "@/components/label-print-dialog";
+import { generateUniqueBarcode } from "@/lib/label-printer";
 import { playScanSuccessSound } from "@/lib/audio";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 
@@ -40,6 +42,7 @@ export function ProductDialog({
   const [category, setCategory] = useState("");
   const [barcode, setBarcode] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [attrs, setAttrs] = useState<{ key: string; val: string }[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,7 +72,7 @@ export function ProductDialog({
 
   // Global hardware barcode reader listener when popup is active
   useEffect(() => {
-    if (!open) return;
+    if (!open || labelDialogOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore modifier keys
@@ -152,7 +155,7 @@ export function ProductDialog({
       window.removeEventListener("keydown", handleKeyDown, true);
       scanBufferRef.current = [];
     };
-  }, [open, lang, t]);
+  }, [open, labelDialogOpen, lang, t]);
 
   function addAttribute() {
     setAttrs(prev => [...prev, { key: "", val: "" }]);
@@ -297,6 +300,48 @@ export function ProductDialog({
                       </button>
                     )}
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 text-indigo-600 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer"
+                    title={lang === "bn" ? "নতুন বারকোড তৈরি করুন" : "Auto-Generate Barcode"}
+                    onClick={() => {
+                      const nextCode = generateUniqueBarcode(
+                        "CODE128",
+                        products.map((p) => p.barcode || ""),
+                        "DF"
+                      );
+                      setBarcode(nextCode);
+                      toast.success(
+                        lang === "bn"
+                          ? `নতুন বারকোড তৈরি হয়েছে: ${nextCode}`
+                          : `Generated barcode: ${nextCode}`
+                      );
+                    }}
+                  >
+                    <Wand2 className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 cursor-pointer"
+                    title={lang === "bn" ? "বারকোড স্টিকার প্রিন্ট করুন" : "Print Barcode Sticker"}
+                    onClick={() => {
+                      if (!barcode.trim()) {
+                        const nextCode = generateUniqueBarcode(
+                          "CODE128",
+                          products.map((p) => p.barcode || ""),
+                          "DF"
+                        );
+                        setBarcode(nextCode);
+                      }
+                      setLabelDialogOpen(true);
+                    }}
+                  >
+                    <Barcode className="size-4" />
+                  </Button>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-0.5">
                   <Zap className="size-3 animate-pulse shrink-0" />
@@ -381,6 +426,31 @@ export function ProductDialog({
           </form>
         </DialogContent>
       </Dialog>
+
+      <LabelPrintDialog
+        open={labelDialogOpen}
+        onOpenChange={setLabelDialogOpen}
+        products={products}
+        initialProducts={[
+          {
+            id: product?.id || "draft_product",
+            name: name.trim() || product?.name || (lang === "bn" ? "নতুন পণ্য" : "New Product"),
+            image_url: product?.image_url ?? null,
+            buy_price: Number(buy) || 0,
+            sell_price: Number(sellPrice) || 0,
+            stock: Math.max(1, Number(stock) || 1),
+            barcode: barcode.trim() || product?.barcode || "89400001",
+            category: category.trim(),
+            attributes: Object.fromEntries(
+              attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.val.trim()])
+            ),
+            created_at: product?.created_at || new Date().toISOString(),
+            initialCopies: Math.max(1, Math.min(200, Number(stock) || 1)),
+          },
+        ]}
+        shopName={user?.business_name || "DREAM FASHION"}
+        lang={lang}
+      />
     </>
   );
 }
