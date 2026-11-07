@@ -5620,11 +5620,15 @@ export async function createEmployeeExpenseFn(input: { data: any }) {
   const id = crypto.randomUUID();
   const amount = Number(data.amount) || 0;
   const empName = data.employee_name || "Employee";
-  const category = data.category || "food";
+  const category = data.category || "food"; // food, travel, tea, bonus, advance, salary_advance, debt_repayment, adjustment_add, adjustment_deduct, other
   const note = data.note || "";
   const paymentMethod = data.payment_method || "cash";
-  const catLabel = category === "food" ? "খাবার ভাতা" : category === "travel" ? "যাতায়াত" : category === "tea" ? "নাস্তা/চা" : category === "bonus" ? "বোনাস" : "অন্যান্য";
-  const title = `[কর্মচারী খরচ] ${empName} (${catLabel}): ${note}`;
+
+  const isDebtRepayment = category === "debt_repayment";
+  const isAdjustment = category === "adjustment_add" || category === "adjustment_deduct";
+
+  const catLabel = category === "food" ? "খাবার ভাতা" : category === "travel" ? "যাতায়াত" : category === "tea" ? "নাস্তা/চা" : category === "bonus" ? "বোনাস" : category === "advance" || category === "salary_advance" ? "অগ্রিম বেতন" : isDebtRepayment ? "দোকান পাওনা আদায়" : category === "adjustment_add" ? "বেতন বৃদ্ধি/সমন্বয়" : category === "adjustment_deduct" ? "বেতন কর্তন/সমন্বয়" : "অন্যান্য";
+  const title = `[কর্মচারী ${isDebtRepayment ? "পাওনা আদায়" : isAdjustment ? "সমন্বয়" : "খরচ"}] ${empName} (${catLabel}): ${note}`;
 
   const doc = {
     _id: id,
@@ -5635,6 +5639,7 @@ export async function createEmployeeExpenseFn(input: { data: any }) {
     amount,
     payment_method: paymentMethod,
     date: data.date || new Date().toISOString().slice(0, 10),
+    month: data.month || (data.date || new Date().toISOString().slice(0, 10)).slice(0, 7),
     note: note || null,
     created_at: new Date().toISOString(),
   };
@@ -5642,25 +5647,37 @@ export async function createEmployeeExpenseFn(input: { data: any }) {
   await db.collection("employee_expenses").insertOne(doc as any);
 
   if (amount > 0) {
-    const expId = crypto.randomUUID();
-    await db.collection("expenses").insertOne({
-      _id: expId,
-      owner_id: session.ownerId,
-      title,
-      amount,
-      category: "employee_expense",
-      note: `Employee Expense ID: ${id}`,
-      created_at: doc.created_at,
-    } as any);
-
-    if (paymentMethod === "cash") {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "withdraw",
+    if (isDebtRepayment) {
+      if (paymentMethod === "cash") {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "deposit",
+          amount,
+          note: title,
+          ref_id: id,
+          created_at: doc.created_at,
+        });
+      }
+    } else if (!isAdjustment) {
+      const expId = crypto.randomUUID();
+      await db.collection("expenses").insertOne({
+        _id: expId,
+        owner_id: session.ownerId,
+        title,
         amount,
-        note: title,
-        ref_id: id,
+        category: category === "advance" || category === "salary_advance" ? "salary_advance" : "employee_expense",
+        note: `Employee Expense ID: ${id}`,
         created_at: doc.created_at,
-      });
+      } as any);
+
+      if (paymentMethod === "cash") {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "withdraw",
+          amount,
+          note: title,
+          ref_id: id,
+          created_at: doc.created_at,
+        });
+      }
     }
   }
 

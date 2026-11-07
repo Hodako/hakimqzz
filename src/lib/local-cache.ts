@@ -1,3 +1,5 @@
+import { clearQueryCache } from "./query-cache";
+
 const LEGACY_AUTH_KEY = "auth_profile";
 /** Lightweight localStorage cache for instant UI hydration. */
 
@@ -71,7 +73,6 @@ export function clearAuthProfile() {
     localStorage.removeItem("app_pin_unlocked");
     sessionStorage.clear();
     try {
-      const { clearQueryCache } = require("./query-cache");
       clearQueryCache();
     } catch (_) {}
   }

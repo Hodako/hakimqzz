@@ -35,6 +35,9 @@ import {
   ChevronRight,
   Sparkles,
   Wallet,
+  PlusCircle,
+  ArrowDownLeft,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -169,6 +172,29 @@ export default function EmployeesPage() {
   const [shopNote, setShopNote] = useState("");
   const [printSlipItem, setPrintSlipItem] = useState<EmployeeShopping | null>(null);
 
+  // Dialog States: Cycle / Circle Management
+  const [activeCycle, setActiveCycle] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [newCycleOpen, setNewCycleOpen] = useState(false);
+  const [newCycleTargetMonth, setNewCycleTargetMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [newCycleEmpId, setNewCycleEmpId] = useState("all");
+  const [newCycleCarryDebt, setNewCycleCarryDebt] = useState(true);
+
+  // Dialog States: Collect Store Debt (কর্মচারীর দোকান পাওনা আদায়)
+  const [collectDebtOpen, setCollectDebtOpen] = useState(false);
+  const [debtEmpId, setDebtEmpId] = useState("");
+  const [debtAmount, setDebtAmount] = useState("");
+  const [debtMethod, setDebtMethod] = useState("cash");
+  const [debtDate, setDebtDate] = useState(new Date().toISOString().slice(0, 10));
+  const [debtNote, setDebtNote] = useState("");
+
+  // Dialog States: Manual Adjustment (সমন্বয়: ওভারটাইম / ইনসেন্টিভ / জরিমানা)
+  const [addAdjustmentOpen, setAddAdjustmentOpen] = useState(false);
+  const [adjEmpId, setAdjEmpId] = useState("");
+  const [adjType, setAdjType] = useState<"adjustment_add" | "adjustment_deduct">("adjustment_add");
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjDate, setAdjDate] = useState(new Date().toISOString().slice(0, 10));
+  const [adjNote, setAdjNote] = useState("");
+
   const [busy, setBusy] = useState(false);
 
   function updateItemUnitPrice(index: number, newPriceStr: string) {
@@ -249,18 +275,51 @@ export default function EmployeesPage() {
     return pendingShoppingsForSal.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
   }, [pendingShoppingsForSal]);
 
-  // Helper to calculate early money (advance), daily spends, bonus and remaining salary balance for an employee in a given month
+  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), []);
+
+  const availableCycles = useMemo(() => {
+    const months = new Set<string>();
+    const now = new Date();
+    const curMonth = now.toISOString().slice(0, 7);
+    months.add(curMonth);
+    const nextMonthObj = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    months.add(nextMonthObj.toISOString().slice(0, 7));
+    const prevMonthObj = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    months.add(prevMonthObj.toISOString().slice(0, 7));
+
+    salaries.forEach(s => { if (s.month) months.add(s.month.slice(0, 7)); });
+    expenses.forEach(e => { if (e.date) months.add(e.date.slice(0, 7)); });
+    shoppings.forEach(s => { if (s.created_at) months.add(s.created_at.slice(0, 7)); });
+
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  }, [salaries, expenses, shoppings]);
+
+  // Helper to calculate early money (advance), daily spends, bonus, store debt, and remaining salary balance for an employee in a given month/cycle
   const getEmployeeSalaryStats = (empId: string, monthStr: string, deductShop: boolean = true) => {
     const emp = employees.find(x => x.id === empId);
     const baseSal = Number(emp?.base_salary) || 0;
     if (!emp) {
-      return { baseSal: 0, earlyMoney: 0, dailySpends: 0, bonusGiven: 0, shoppingDeductions: 0, remaining: 0, salariesPaid: 0, advancesPaid: 0 };
+      return {
+        baseSal: 0,
+        earlyMoney: 0,
+        dailySpends: 0,
+        bonusGiven: 0,
+        shoppingDeductions: 0,
+        adjustmentsAdd: 0,
+        adjustmentsDeduct: 0,
+        debtRepaymentsInMonth: 0,
+        remaining: 0,
+        owesStore: 0,
+        netBalance: 0,
+        salariesPaid: 0,
+        advancesPaid: 0,
+      };
     }
 
     const matchEmp = (recEmpId?: string | null, recEmpName?: string | null) =>
       recEmpId === empId || (!recEmpId && Boolean(recEmpName && recEmpName.toLowerCase() === emp.name.toLowerCase()));
 
-    // 1. Salaries already paid for this employee in this month
+    // 1. Salaries already paid for this employee in this cycle
     const salariesInMonth = salaries.filter(s =>
       matchEmp(s.employee_id, s.employee_name) &&
       s.month === monthStr &&
@@ -268,7 +327,7 @@ export default function EmployeesPage() {
     );
     const salariesPaid = salariesInMonth.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
-    // 2. Advance / early money expenses taken for this employee in this month
+    // 2. Advance / early money expenses taken for this employee in this cycle
     const advancesInMonth = expenses.filter(e =>
       matchEmp(e.employee_id, e.employee_name) &&
       (e.category === "advance" || e.category === "salary_advance") &&
@@ -276,12 +335,15 @@ export default function EmployeesPage() {
     );
     const advancesPaid = advancesInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-    // 3. Employee daily spends (food, travel, tea, other — excluding advance and bonus)
+    // 3. Employee daily spends (food, travel, tea, other — excluding advance, bonus, adjustments, and debt repayment)
     const spendsInMonth = expenses.filter(e =>
       matchEmp(e.employee_id, e.employee_name) &&
       e.category !== "advance" &&
       e.category !== "salary_advance" &&
       e.category !== "bonus" &&
+      e.category !== "debt_repayment" &&
+      e.category !== "adjustment_add" &&
+      e.category !== "adjustment_deduct" &&
       (e.date || "").startsWith(monthStr)
     );
     const dailySpends = spendsInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -294,9 +356,36 @@ export default function EmployeesPage() {
     );
     const bonusGiven = bonusesInMonth.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
+    // 5. Manual Adjustments: Additions (+) like Overtime, Incentives
+    const adjustmentsAdd = expenses
+      .filter(e =>
+        matchEmp(e.employee_id, e.employee_name) &&
+        e.category === "adjustment_add" &&
+        (e.date || "").startsWith(monthStr)
+      )
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // 6. Manual Adjustments: Deductions (-) like Penalties, Late Fines
+    const adjustmentsDeduct = expenses
+      .filter(e =>
+        matchEmp(e.employee_id, e.employee_name) &&
+        e.category === "adjustment_deduct" &&
+        (e.date || "").startsWith(monthStr)
+      )
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    // 7. Debt repayments made by employee to store in this cycle
+    const debtRepaymentsInMonth = expenses
+      .filter(e =>
+        matchEmp(e.employee_id, e.employee_name) &&
+        e.category === "debt_repayment" &&
+        (e.date || "").startsWith(monthStr)
+      )
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
     const earlyMoney = salariesPaid + advancesPaid;
 
-    // 5. Pending shopping deductions
+    // 8. Pending shopping deductions
     const pendings = shoppings.filter(s =>
       matchEmp(s.employee_id, s.employee_name) &&
       s.payment_status === "deduct_from_salary" &&
@@ -305,17 +394,32 @@ export default function EmployeesPage() {
     );
     const shoppingDeductions = deductShop ? pendings.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0) : 0;
 
-    const remaining = Math.max(0, baseSal - earlyMoney - dailySpends - shoppingDeductions);
+    const totalPaidOut = earlyMoney + dailySpends + shoppingDeductions;
+    const effectiveEarnings = baseSal + adjustmentsAdd + debtRepaymentsInMonth;
+    const effectiveDeductions = totalPaidOut + adjustmentsDeduct;
+
+    const netBalance = effectiveEarnings - effectiveDeductions;
+    const remaining = netBalance > 0 ? netBalance : 0;
+    const owesStore = netBalance < 0 ? Math.abs(netBalance) : 0;
 
     return {
       baseSal,
       earlyMoney,
       dailySpends,
       bonusGiven,
+      totalBonus: bonusGiven,
+      givenByOwner: earlyMoney,
+      totalSpends: dailySpends + shoppingDeductions,
       salariesPaid,
       advancesPaid,
       shoppingDeductions,
+      shopDed: shoppingDeductions,
+      adjustmentsAdd,
+      adjustmentsDeduct,
+      debtRepaymentsInMonth,
       remaining,
+      owesStore,
+      netBalance,
     };
   };
 
@@ -583,6 +687,124 @@ export default function EmployeesPage() {
       setExpNote("");
     } catch (err: any) {
       toast.error(err.message || "Failed to record expense");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Handle Collect Store Debt Submit
+  async function handleCollectDebt(e: React.FormEvent) {
+    e.preventDefault();
+    const val = parseFloat(debtAmount);
+    if (!debtEmpId || isNaN(val) || val <= 0) {
+      toast.error(lang === "bn" ? "কর্মচারী নির্বাচন করুন এবং সঠিক টাকার পরিমাণ লিখুন" : "Select employee and enter valid amount");
+      return;
+    }
+    const emp = employees.find(x => x.id === debtEmpId);
+    setBusy(true);
+    try {
+      await createEmployeeExpenseFn({
+        data: {
+          employee_id: debtEmpId,
+          employee_name: emp?.name || "Employee",
+          category: "debt_repayment",
+          amount: val,
+          payment_method: debtMethod,
+          date: debtDate,
+          month: activeCycle,
+          note: debtNote.trim() ? `দোকান পাওনা আদায়: ${debtNote.trim()}` : "দোকানের পাওনা আদায় (Store Debt Repaid)",
+        },
+      });
+      toast.success(lang === "bn" ? `${emp?.name || "কর্মচারী"}-এর পাওনা ৳${fmtMoney(val)} গ্রহণ করা হয়েছে!` : "Store debt payment recorded successfully!");
+      qc.invalidateQueries({ queryKey: ["employee_expenses"] });
+      qc.invalidateQueries({ queryKey: ["cashbox"] });
+      setCollectDebtOpen(false);
+      setDebtAmount("");
+      setDebtNote("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to record debt collection");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Handle Manual Adjustment Submit (Overtime, Incentive, Late Fine, Penalty)
+  async function handleSaveAdjustment(e: React.FormEvent) {
+    e.preventDefault();
+    const val = parseFloat(adjAmount);
+    if (!adjEmpId || isNaN(val) || val <= 0) {
+      toast.error(lang === "bn" ? "কর্মচারী নির্বাচন করুন এবং সঠিক টাকার অঙ্ক লিখুন" : "Select employee and enter valid amount");
+      return;
+    }
+    const emp = employees.find(x => x.id === adjEmpId);
+    const isAdd = adjType === "adjustment_add";
+    setBusy(true);
+    try {
+      await createEmployeeExpenseFn({
+        data: {
+          employee_id: adjEmpId,
+          employee_name: emp?.name || "Employee",
+          category: adjType,
+          amount: val,
+          payment_method: "cash",
+          date: adjDate,
+          month: activeCycle,
+          note: adjNote.trim() || (isAdd ? "ওভারটাইম / বিশেষ ভাতা" : "জরিমানা / বিলম্বে উপস্থিতি কর্তন"),
+        },
+      });
+      toast.success(lang === "bn" ? `${emp?.name || "কর্মচারী"}-এর বেতন সমন্বয় সংরক্ষিত হয়েছে` : "Adjustment recorded successfully");
+      qc.invalidateQueries({ queryKey: ["employee_expenses"] });
+      setAddAdjustmentOpen(false);
+      setAdjAmount("");
+      setAdjNote("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to record adjustment");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Handle Start New Cycle Submit
+  async function handleStartNewCycle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newCycleTargetMonth) {
+      toast.error(lang === "bn" ? "সাইকেলের মাস নির্বাচন করুন" : "Select cycle month");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (newCycleCarryDebt) {
+        const debtEmps = employees.map(emp => ({
+          emp,
+          stats: getEmployeeSalaryStats(emp.id, activeCycle, true),
+        })).filter(x => x.stats.owesStore > 0);
+
+        for (const item of debtEmps) {
+          if (newCycleEmpId === "all" || newCycleEmpId === item.emp.id) {
+            await createEmployeeExpenseFn({
+              data: {
+                employee_id: item.emp.id,
+                employee_name: item.emp.name,
+                category: "adjustment_deduct",
+                amount: item.stats.owesStore,
+                payment_method: "cash",
+                date: `${newCycleTargetMonth}-01`,
+                month: newCycleTargetMonth,
+                note: `পূর্ববর্তী সাইকেল (${activeCycle}) থেকে স্থানান্তরিত দোকান পাওনা`,
+              },
+            });
+          }
+        }
+      }
+
+      setActiveCycle(newCycleTargetMonth);
+      setSalMonth(newCycleTargetMonth);
+      qc.invalidateQueries({ queryKey: ["employee_expenses"] });
+      qc.invalidateQueries({ queryKey: ["employee_salaries"] });
+      setNewCycleOpen(false);
+      toast.success(lang === "bn" ? `নতুন সাইকেল (${newCycleTargetMonth}) সফলভাবে চালু হয়েছে!` : `New cycle (${newCycleTargetMonth}) started!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start new cycle");
     } finally {
       setBusy(false);
     }
@@ -880,10 +1102,17 @@ export default function EmployeesPage() {
                                         {lang === "bn" ? "খরচ ও কেনা:" : "Spends:"} ৳{fmtMoney(stats.dailySpends + stats.shoppingDeductions)}
                                       </Badge>
                                     )}
-                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold">
-                                      <Wallet className="size-2.5 mr-1 text-emerald-600 inline" />
-                                      {lang === "bn" ? "অবশিষ্ট বেতন:" : "Remaining Salary:"} ৳{fmtMoney(stats.remaining)}
-                                    </Badge>
+                                    {stats.owesStore > 0 ? (
+                                      <Badge variant="outline" className="text-[10px] bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 font-bold flex items-center gap-1">
+                                        <AlertCircle className="size-2.5 text-rose-600 inline" />
+                                        {lang === "bn" ? "দোকান পায়:" : "Owes Store:"} ৳{fmtMoney(stats.owesStore)}
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold">
+                                        <Wallet className="size-2.5 mr-1 text-emerald-600 inline" />
+                                        {lang === "bn" ? "অবশিষ্ট বেতন:" : "Remaining Salary:"} ৳{fmtMoney(stats.remaining)}
+                                      </Badge>
+                                    )}
                                     {stats.bonusGiven > 0 && (
                                       <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 font-bold">
                                         🎁 {lang === "bn" ? "বোনাস:" : "Bonus:"} ৳{fmtMoney(stats.bonusGiven)}
@@ -956,6 +1185,28 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 flex-wrap">
+                      {(() => {
+                        const curStats = getEmployeeSalaryStats(e.id, activeCycle, true);
+                        if (curStats.owesStore > 0) {
+                          return (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs rounded-xl gap-1 border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold cursor-pointer"
+                              onClick={() => {
+                                setDebtEmpId(e.id);
+                                setDebtAmount(String(curStats.owesStore));
+                                setDebtNote(lang === "bn" ? "দোকান পাওনা আদায়" : "Store debt collection");
+                                setCollectDebtOpen(true);
+                              }}
+                            >
+                              <ArrowDownLeft className="size-3" />
+                              <span>{lang === "bn" ? "পাওনা আদায়" : "Collect Debt"}</span>
+                            </Button>
+                          );
+                        }
+                        return null;
+                      })()}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1025,6 +1276,199 @@ export default function EmployeesPage() {
 
         {/* ── TAB 2: SALARIES ── */}
         <TabsContent value="salaries" className="space-y-3">
+          {/* Active Cycle Control Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-muted/40 border border-border/80">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <RefreshCw className="size-3.5 text-primary" />
+                {lang === "bn" ? "চলতি বেতন সাইকেল:" : "Active Cycle:"}
+              </span>
+              <Select
+                value={activeCycle}
+                onValueChange={(val) => {
+                  setActiveCycle(val);
+                  setSalMonth(val);
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs font-bold w-[170px] bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCycles.map(c => (
+                    <SelectItem key={c} value={c}>
+                      {c} {c === currentMonthStr ? (lang === "bn" ? "(চলতি মাস)" : "(Current)") : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs font-bold rounded-xl border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
+                onClick={() => {
+                  const [y, m] = activeCycle.split("-").map(Number);
+                  const nextM = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+                  setNewCycleTargetMonth(nextM);
+                  setNewCycleOpen(true);
+                }}
+              >
+                <PlusCircle className="size-3.5 mr-1" />
+                {lang === "bn" ? "+ নতুন সাইকেল শুরু" : "+ Start New Cycle"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs font-bold rounded-xl border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                onClick={() => {
+                  if (employees.length > 0 && !adjEmpId) setAdjEmpId(employees[0].id);
+                  setAddAdjustmentOpen(true);
+                }}
+              >
+                <Scale className="size-3.5 mr-1" />
+                {lang === "bn" ? "হাতে সমন্বয় (ওভারটাইম/জরিমানা)" : "Manual Adjustment"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Employee Monthly Salary Status Cards (Spends, Given by Owner, Bonus, Store Debt & Remaining Salary) */}
+          {employees.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {employees.map(emp => {
+                const st = getEmployeeSalaryStats(emp.id, activeCycle, true);
+                const hasStoreDebt = st.owesStore > 0;
+                return (
+                  <Card key={emp.id} className="p-3 rounded-2xl border border-border/80 bg-card shadow-xs space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-xs sm:text-sm text-foreground">{emp.name}</p>
+                        <span className="text-[10px] text-muted-foreground">{emp.designation || "Staff"} • {activeCycle}</span>
+                      </div>
+                      {hasStoreDebt ? (
+                        <Badge variant="outline" className="text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 flex items-center gap-1">
+                          <AlertCircle className="size-3 text-rose-600" />
+                          {lang === "bn" ? "দোকান পায়:" : "Owes Store:"} ৳{fmtMoney(st.owesStore)}
+                        </Badge>
+                      ) : st.remaining > 0 ? (
+                        <Badge variant="outline" className="text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                          {lang === "bn" ? "অবশিষ্ট:" : "Rem:"} ৳{fmtMoney(st.remaining)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30">
+                          {lang === "bn" ? "পরিশোধিত" : "Settled"}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-muted/40 p-2 rounded-xl border border-border/60">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{lang === "bn" ? "মূল বেতন:" : "Base:"}</span>
+                        <span className="font-bold font-mono">{fmtMoney(st.baseSal)}</span>
+                      </div>
+                      <div className="flex justify-between text-orange-600">
+                        <span>{lang === "bn" ? "খরচ/কেনা:" : "Spends:"}</span>
+                        <span className="font-bold font-mono">-{fmtMoney(st.totalSpends)}</span>
+                      </div>
+                      <div className="flex justify-between text-blue-600">
+                        <span>{lang === "bn" ? "মালিক প্রদত্ত:" : "Given:"}</span>
+                        <span className="font-bold font-mono">-{fmtMoney(st.givenByOwner)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-600">
+                        <span>🎁 {lang === "bn" ? "বোনাস:" : "Bonus:"}</span>
+                        <span className="font-bold font-mono">{fmtMoney(st.totalBonus)}</span>
+                      </div>
+                      {st.adjustmentsAdd > 0 && (
+                        <div className="flex justify-between text-purple-600 col-span-2">
+                          <span>{lang === "bn" ? "ওভারটাইম/বৃদ্ধি:" : "Overtime:"}</span>
+                          <span className="font-bold font-mono">+{fmtMoney(st.adjustmentsAdd)}</span>
+                        </div>
+                      )}
+                      {st.adjustmentsDeduct > 0 && (
+                        <div className="flex justify-between text-rose-600 col-span-2">
+                          <span>{lang === "bn" ? "জরিমানা/কর্তন:" : "Penalty:"}</span>
+                          <span className="font-bold font-mono">-{fmtMoney(st.adjustmentsDeduct)}</span>
+                        </div>
+                      )}
+                      {st.debtRepaymentsInMonth > 0 && (
+                        <div className="flex justify-between text-emerald-600 col-span-2">
+                          <span>{lang === "bn" ? "পাওনা জমা:" : "Debt Repaid:"}</span>
+                          <span className="font-bold font-mono">৳{fmtMoney(st.debtRepaymentsInMonth)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {hasStoreDebt && (
+                      <div className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-700 dark:text-rose-300 font-semibold flex items-center justify-between">
+                        <span>⚠️ {lang === "bn" ? "কর্মচারী দোকানকে দেবে:" : "Employee owes store:"}</span>
+                        <span className="font-bold font-mono text-rose-600">৳{fmtMoney(st.owesStore)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                      {hasStoreDebt ? (
+                        <Button
+                          size="sm"
+                          className="h-7 flex-1 text-[11px] rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+                          onClick={() => {
+                            setDebtEmpId(emp.id);
+                            setDebtAmount(String(st.owesStore));
+                            setDebtNote(lang === "bn" ? "দোকান পাওনা আদায়" : "Store debt collection");
+                            setCollectDebtOpen(true);
+                          }}
+                        >
+                          <ArrowDownLeft className="size-3 mr-1" />
+                          {lang === "bn" ? "পাওনা আদায়" : "Collect Debt"}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="h-7 flex-1 text-[11px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                          onClick={() => {
+                            setSalEmpId(emp.id);
+                            setDeductShoppings(true);
+                            setSalAmount(String(st.remaining));
+                            setAddSalaryOpen(true);
+                          }}
+                        >
+                          <DollarSign className="size-3 mr-1" />
+                          {lang === "bn" ? "বেতন দিন" : "Pay Salary"}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] rounded-lg border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold cursor-pointer"
+                        title={lang === "bn" ? "হাতে সমন্বয় (ওভারটাইম / জরিমানা)" : "Add Adjustment"}
+                        onClick={() => {
+                          setAdjEmpId(emp.id);
+                          setAdjAmount("");
+                          setAdjNote("");
+                          setAddAdjustmentOpen(true);
+                        }}
+                      >
+                        <Scale className="size-3 mr-1" />
+                        {lang === "bn" ? "সমন্বয়" : "Adj"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] rounded-lg border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold cursor-pointer"
+                        onClick={() => {
+                          setBonusEmpId(emp.id);
+                          setBonusAmount("");
+                          setBonusNote("");
+                          setAddBonusOpen(true);
+                        }}
+                      >
+                        🎁 {lang === "bn" ? "বোনাস" : "Bonus"}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
           <Card className="rounded-2xl border border-border/80 overflow-hidden bg-card shadow-xs">
             {filteredSalaries.length === 0 ? (
               <div className="p-8 text-center space-y-2">
@@ -2358,6 +2802,264 @@ export default function EmployeesPage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Start New Salary Cycle (নতুন বেতন সাইকেল শুরু) ── */}
+      <Dialog open={newCycleOpen} onOpenChange={setNewCycleOpen}>
+        <DialogContent className="max-w-md font-balooda">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <RefreshCw className="size-4 text-primary" />
+              {lang === "bn" ? "নতুন বেতন সাইকেল শুরু করুন" : "Start New Salary Cycle"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleStartNewCycle} className="space-y-4 pt-2">
+            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs space-y-1">
+              <p className="font-bold text-primary">
+                {lang === "bn" ? "💡 সাইকেল রিনিউ ও রোল-ওভার নিয়ম:" : "💡 Cycle Rollover Policy:"}
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                {lang === "bn"
+                  ? "নতুন সাইকেল শুরু হলে কর্মচারীদের মূল বেতন স্বয়ংক্রিয়ভাবে প্রদেয় হিসেবে প্রস্তুত হবে। কর্মচারীদের পূর্বের কোনো দোকান পাওনা থাকলে তা নতুন সাইকেলে কর্তন হিসেবে স্থানান্তরিত হবে।"
+                  : "When a new cycle begins, base salaries reset as payable. Any unpaid store debt will be safely rolled over as deduction to the new cycle."}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "টার্গেট সাইকেল মাস *" : "Target Cycle Month *"}</Label>
+              <Input
+                type="month"
+                required
+                value={newCycleTargetMonth}
+                onChange={e => setNewCycleTargetMonth(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারী নির্বাচন" : "Select Employee"}</Label>
+              <Select value={newCycleEmpId} onValueChange={setNewCycleEmpId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{lang === "bn" ? "সকল কর্মচারী (All Employees)" : "All Employees"}</SelectItem>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-1 p-2 rounded-xl bg-muted/40 border border-border/60">
+              <Checkbox
+                id="carry_debt"
+                checked={newCycleCarryDebt}
+                onCheckedChange={checked => setNewCycleCarryDebt(Boolean(checked))}
+              />
+              <Label htmlFor="carry_debt" className="text-xs font-semibold cursor-pointer">
+                {lang === "bn" ? "পূর্ববর্তী সাইকেলের বকেয়া দোকান পাওনা নতুন সাইকেলে সমন্বয় করুন" : "Carry forward store debt into new cycle"}
+              </Label>
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setNewCycleOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={busy} className="bg-primary text-primary-foreground font-bold cursor-pointer">
+                {busy ? (lang === "bn" ? "চালু হচ্ছে..." : "Starting...") : (lang === "bn" ? "সাইকেল শুরু করুন" : "Start Cycle")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Collect Store Debt (কর্মচারীর দোকান পাওনা আদায়) ── */}
+      <Dialog open={collectDebtOpen} onOpenChange={setCollectDebtOpen}>
+        <DialogContent className="max-w-md font-balooda">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-600">
+              <ArrowDownLeft className="size-4" />
+              {lang === "bn" ? "কর্মচারীর দোকান পাওনা আদায়" : "Collect Employee Store Debt"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCollectDebt} className="space-y-3 pt-2">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-300">
+              {lang === "bn"
+                ? "কর্মচারী দোকান থেকে অতিরিক্ত অগ্রিম বা কাপড় কেনাকাটার কারণে যে পাওনা তৈরি হয়েছিল, তা নগদ জমা নিয়ে ক্যাশইন করুন।"
+                : "Record repayment from employee for excess advances or staff shopping into shop cashbox."}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারী নির্বাচন *" : "Employee *"}</Label>
+              <Select value={debtEmpId} onValueChange={(id) => {
+                setDebtEmpId(id);
+                const st = getEmployeeSalaryStats(id, activeCycle, true);
+                if (st.owesStore > 0) setDebtAmount(String(st.owesStore));
+              }}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder={lang === "bn" ? "কর্মচারী নির্বাচন করুন" : "Select employee"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => {
+                    const st = getEmployeeSalaryStats(e.id, activeCycle, true);
+                    return (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name} {st.owesStore > 0 ? `(পাওনা: ৳${fmtMoney(st.owesStore)})` : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "আদায়কৃত টাকার পরিমাণ (৳) *" : "Repaid Amount (৳) *"}</Label>
+                <Input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={debtAmount}
+                  onChange={e => setDebtAmount(e.target.value)}
+                  className="h-9 text-xs font-bold text-rose-600 font-charukola"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "পরিশোধ পদ্ধতি" : "Payment Method"}</Label>
+                <Select value={debtMethod} onValueChange={setDebtMethod}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">{lang === "bn" ? "নগদ (Cash In)" : "Cash"}</SelectItem>
+                    <SelectItem value="bkash">bKash</SelectItem>
+                    <SelectItem value="nagad">Nagad</SelectItem>
+                    <SelectItem value="bank">Bank</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "তারিখ" : "Date"}</Label>
+              <Input
+                type="date"
+                value={debtDate}
+                onChange={e => setDebtDate(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "বিবরণ / নোট" : "Note / Remarks"}</Label>
+              <Input
+                placeholder={lang === "bn" ? "উদা: দোকান পাওনা নগদ পরিশোধ" : "e.g. Paid debt in cash"}
+                value={debtNote}
+                onChange={e => setDebtNote(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setCollectDebtOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={busy} className="bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
+                {busy ? (lang === "bn" ? "সংরক্ষণ হচ্ছে..." : "Saving...") : (lang === "bn" ? "পাওনা জমা করুন" : "Collect Debt")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Manual Adjustment (হাতে সমন্বয়: ওভারটাইম / ইনসেন্টিভ / জরিমানা) ── */}
+      <Dialog open={addAdjustmentOpen} onOpenChange={setAddAdjustmentOpen}>
+        <DialogContent className="max-w-md font-balooda">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-purple-600">
+              <Scale className="size-4" />
+              {lang === "bn" ? "বেতন সমন্বয় (ওভারটাইম / ইনসেন্টিভ / জরিমানা)" : "Salary Adjustment (Overtime / Penalty)"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveAdjustment} className="space-y-3 pt-2">
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-700 dark:text-purple-300">
+              {lang === "bn"
+                ? "চলতি সাইকেলে কর্মচারীর বেতনের সাথে অতিরিক্ত টাকা যোগ করতে (ওভারটাইম/ইনসেন্টিভ) অথবা কর্তন করতে (বিলম্বে উপস্থিতি/জরিমানা) এই সমন্বয় ব্যবহার করুন।"
+                : "Add additions (overtime/incentive) or deductions (late fine/penalties) for this cycle."}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কর্মচারী নির্বাচন *" : "Employee *"}</Label>
+              <Select value={adjEmpId} onValueChange={setAdjEmpId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder={lang === "bn" ? "কর্মচারী নির্বাচন করুন" : "Select employee"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "সমন্বয়ের ধরন *" : "Adjustment Type *"}</Label>
+              <Select value={adjType} onValueChange={(val: any) => setAdjType(val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="adjustment_add">{lang === "bn" ? "➕ বেতন বৃদ্ধি / ওভারটাইম / ইনসেন্টিভ (+)" : "➕ Addition (Overtime / Incentive)"}</SelectItem>
+                  <SelectItem value="adjustment_deduct">{lang === "bn" ? "➖ বেতন কর্তন / জরিমানা / ক্ষতিপূরণ (-)" : "➖ Deduction (Fine / Penalty)"}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "টাকার পরিমাণ (৳) *" : "Amount (৳) *"}</Label>
+                <Input
+                  type="number"
+                  required
+                  placeholder="0.00"
+                  value={adjAmount}
+                  onChange={e => setAdjAmount(e.target.value)}
+                  className="h-9 text-xs font-bold font-charukola text-purple-600"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "তারিখ" : "Date"}</Label>
+                <Input
+                  type="date"
+                  value={adjDate}
+                  onChange={e => setAdjDate(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কারণ / বিবরণ *" : "Reason / Remarks *"}</Label>
+              <Input
+                required
+                placeholder={adjType === "adjustment_add" ? (lang === "bn" ? "উদা: ঈদের অতিরিক্ত কাজের ওভারটাইম" : "e.g. Overtime for festival") : (lang === "bn" ? "উদা: বিলম্বে উপস্থিতির জরিমানা" : "e.g. Late fine")}
+                value={adjNote}
+                onChange={e => setAdjNote(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddAdjustmentOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={busy} className="bg-purple-600 hover:bg-purple-700 text-white font-bold cursor-pointer">
+                {busy ? (lang === "bn" ? "সংরক্ষণ হচ্ছে..." : "Saving...") : (lang === "bn" ? "সমন্বয় সংরক্ষণ করুন" : "Save Adjustment")}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
