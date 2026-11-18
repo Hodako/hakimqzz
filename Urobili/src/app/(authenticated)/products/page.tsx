@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, EyeOff, AlertCirc
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/hooks/use-auth";
 import { fmtMoney } from "@/lib/format";
 import { ProductImage } from "@/components/product-image";
 import { preloadAssetsToLocalStorage } from "@/lib/asset-cache";
@@ -37,6 +38,7 @@ import {
 
 export default function ProductsPage() {
   const { lang, t } = useT();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const { data: productsData } = useCachedQuery(["products"], getProducts);

@@ -177,13 +177,13 @@ export default function MultiIndustryErpPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const tenantKey = user?.owner_id || "default";
+      const tenantKey = user?.business_id || user?.id || "default";
       const savedRx = localStorage.getItem(`urobili_pharmacy_rx_${tenantKey}`);
       if (savedRx) setRxOrders(JSON.parse(savedRx));
       const savedSup = localStorage.getItem(`urobili_pharmacy_sup_${tenantKey}`);
       if (savedSup) setPharmaSuppliers(JSON.parse(savedSup));
     } catch (_) {}
-  }, [user?.owner_id]);
+  }, [user?.business_id, user?.id]);
 
   function getExpiryDays(expiry?: string) {
     if (!expiry) return null;
@@ -196,7 +196,7 @@ export default function MultiIndustryErpPage() {
     setRxOrders(next);
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(`urobili_pharmacy_rx_${user?.owner_id || "default"}`, JSON.stringify(next));
+        localStorage.setItem(`urobili_pharmacy_rx_${user?.business_id || user?.id || "default"}`, JSON.stringify(next));
       } catch (_) {}
     }
   }
@@ -205,7 +205,7 @@ export default function MultiIndustryErpPage() {
     setPharmaSuppliers(next);
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(`urobili_pharmacy_sup_${user?.owner_id || "default"}`, JSON.stringify(next));
+        localStorage.setItem(`urobili_pharmacy_sup_${user?.business_id || user?.id || "default"}`, JSON.stringify(next));
       } catch (_) {}
     }
   }

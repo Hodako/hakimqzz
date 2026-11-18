@@ -112,7 +112,7 @@ interface TableState {
   name: string;
   floor: string;
   capacity: number;
-  status: "available" | "occupied" | "billed";
+  status: "available" | "occupied" | "billed" | "reserved";
   orderType: "dine_in" | "takeaway" | "delivery";
   guests: number;
   waiter: string;

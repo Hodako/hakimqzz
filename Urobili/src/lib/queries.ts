@@ -56,6 +56,7 @@ export type Product = {
   attributes?: Record<string, string>;
   archived?: boolean;
   min_stock?: number;
+  track_stock?: boolean;
   category?: string;
   label_template_id?: string | null;
   custom_label_layout?: any;
