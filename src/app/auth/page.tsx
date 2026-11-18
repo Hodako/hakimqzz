@@ -94,14 +94,12 @@ export default function AuthPage() {
   };
 
   const verifyQuickPinInput = async (pinToTest: string) => {
-    const ownerPin = (typeof window !== "undefined" ? localStorage.getItem("app_pin_code_val") : null) || "1234";
+    const pinEnabled = typeof window !== "undefined" && localStorage.getItem("app_pin_code_enabled") === "true";
+    const ownerPin = typeof window !== "undefined" ? localStorage.getItem("app_pin_code_val") : null;
 
-    if (pinToTest.trim() === ownerPin.trim()) {
+    if (pinEnabled && ownerPin && pinToTest.trim() === ownerPin.trim()) {
       sessionStorage.setItem("app_pin_unlocked", "true");
-      localStorage.removeItem("cw_active_employee_session");
-      localStorage.setItem("cw_active_session_role", "owner");
-      window.dispatchEvent(new Event("hz-employee-switched"));
-      toast.success(lang === "bn" ? "মালিক পিন সঠিক হয়েছে!" : "Owner PIN verified!");
+      toast.success(lang === "bn" ? "পিন সঠিক হয়েছে!" : "PIN verified!");
       router.replace("/dashboard");
       return;
     }
@@ -369,8 +367,10 @@ export default function AuthPage() {
         throw new Error("Unable to retrieve email from Google Account");
       }
 
+      const idToken = await fbUser.getIdToken();
       const data = await firebaseAuthSyncFn({
         data: {
+          idToken,
           email: fbUser.email,
           fullName: fbUser.displayName || undefined,
           photoUrl: fbUser.photoURL || undefined,
@@ -402,10 +402,15 @@ export default function AuthPage() {
 
         {/* Top brand */}
         <div className="flex items-center gap-3 relative z-10 shrink-0">
-          <AppLogo size="md" alt="Dream IT" />
-          <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">
-            Dream IT POS
-          </span>
+          <AppLogo size="md" alt="Dream Fashion" />
+          <div className="flex flex-col">
+            <span className="font-serif text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-indigo-300 bg-clip-text text-transparent">
+              Dream Fashion
+            </span>
+            <span className="text-[10px] text-emerald-400 font-medium tracking-wider uppercase">
+              Powered by Dream IT
+            </span>
+          </div>
         </div>
 
         {/* Middle description */}
@@ -415,11 +420,16 @@ export default function AuthPage() {
             <span>{lang === "bn" ? "যেকোনো ব্যবসার আস্থার প্রতীক" : "Smart POS & Business ERP"}</span>
           </div>
 
-          <h2 className="text-3xl lg:text-4xl font-bold font-serif leading-tight text-white">
-            {lang === "bn"
-              ? `"Dream IT" ইনভেন্টরি, সেলস ও একাউন্টিং বিলিং সফটওয়্যার`
-              : `"Dream IT" POS & Billing Software Solution`}
-          </h2>
+          <div className="space-y-1">
+            <h2 className="text-3xl lg:text-4xl font-bold font-serif leading-tight text-white">
+              {lang === "bn"
+                ? `"Dream Fashion" ইনভেন্টরি, সেলস ও একাউন্টিং বিলিং সফটওয়্যার`
+                : `"Dream Fashion" POS & Billing Software Solution`}
+            </h2>
+            <p className="text-xs text-emerald-400 font-semibold tracking-wide">
+              Powered by Dream IT
+            </p>
+          </div>
 
           <p className="text-sm text-zinc-300 leading-relaxed max-w-md">
             {lang === "bn"
@@ -431,7 +441,7 @@ export default function AuthPage() {
         {/* Single Official Attribution Footer (PC Left Panel Only) */}
         <div className="space-y-2 relative z-10 text-xs text-zinc-400 border-t border-white/10 pt-4 font-balooda shrink-0">
           <p className="text-[11px] text-zinc-400">
-            © 2026 Dream IT POS & Billing Software. All rights reserved.
+            © 2026 Dream Fashion. Powered by Dream IT. All rights reserved.
           </p>
           <div className="pt-0.5 flex items-center gap-2">
             <a
@@ -453,8 +463,11 @@ export default function AuthPage() {
         {/* Top Header Row */}
         <div className="flex items-center justify-between pb-3 shrink-0">
           <div className="flex items-center gap-2 md:hidden">
-            <AppLogo size="sm" alt="Dream IT" />
-            <span className="font-serif text-lg font-bold">Dream IT</span>
+            <AppLogo size="sm" alt="Dream Fashion" />
+            <div className="flex flex-col">
+              <span className="font-serif text-base font-bold leading-tight">Dream Fashion</span>
+              <span className="text-[9px] text-muted-foreground font-medium">Powered by Dream IT</span>
+            </div>
           </div>
 
           <div className="flex gap-1 rounded-full bg-white dark:bg-zinc-900 border border-border/80 p-0.5 text-xs ml-auto shadow-2xs">
@@ -981,7 +994,7 @@ export default function AuthPage() {
 
         {/* Clean, minimal copyright (Mobile view only) */}
         <div className="text-center text-[11px] text-muted-foreground py-2 md:hidden">
-          <span>© 2026 Dream IT POS. All rights reserved.</span>
+          <span>© 2026 Dream Fashion. Powered by Dream IT. All rights reserved.</span>
         </div>
       </div>
 

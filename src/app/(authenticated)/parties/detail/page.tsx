@@ -3,7 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowDownToLine, Trash2, Pencil, Plus, Download, Printer, Loader2, FileSpreadsheet, ChevronDown, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowDownToLine, Trash2, Pencil, Plus, Download, Printer, Loader2, FileSpreadsheet, ChevronDown, Sparkles, Banknote, CreditCard, Globe, Split } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   getPaymentsForParty, getSalesForParty, getParty,
@@ -731,34 +731,83 @@ function CollectDialog({ partyId, currentDue, open, onOpenChange }: { partyId: s
 }
 
 function PayPartyDialog({ partyId, open, onOpenChange }: { partyId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { t } = useT();
+  const { lang, t } = useT();
   const qc = useQueryClient();
+  const [payMethod, setPayMethod] = useState<"cash" | "credit" | "online" | "split">("cash");
+  const [onlineProvider, setOnlineProvider] = useState("bKash");
   const [amount, setAmount] = useState("");
+  const [splitCash, setSplitCash] = useState("");
+  const [splitOnline, setSplitOnline] = useState("");
+  const [splitCredit, setSplitCredit] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) { setAmount(""); setNote(""); }
+    if (!open) {
+      setAmount("");
+      setSplitCash("");
+      setSplitOnline("");
+      setSplitCredit("");
+      setNote("");
+      setPayMethod("cash");
+    }
   }, [open]);
+
+  const cashNum = Number(splitCash) || 0;
+  const onlineNum = Number(splitOnline) || 0;
+  const creditNum = Number(splitCredit) || 0;
+  const effectiveTotal = payMethod === "split" ? cashNum + onlineNum : (Number(amount) || 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const amt = Number(amount) || 0;
-    if (amt <= 0) return;
+    if (effectiveTotal <= 0 && creditNum <= 0) {
+      toast.error(lang === "bn" ? "সঠিক টাকার পরিমাণ দিন" : "Please enter a valid amount");
+      return;
+    }
+
     const tempId = `temp-${Date.now()}`;
-    const entry: PartyLedger = { id: tempId, party_id: partyId, amount: amt, note: note || null, created_at: new Date().toISOString() };
+    let finalNote = note.trim();
+    if (payMethod === "split") {
+      const splitDetail = `[স্প্লিট: নগদ ৳${cashNum} + ${onlineProvider} ৳${onlineNum}${creditNum > 0 ? ` + বাকী ৳${creditNum}` : ""}]`;
+      finalNote = finalNote ? `${finalNote} ${splitDetail}` : splitDetail;
+    } else if (payMethod === "credit") {
+      const creditDetail = `[বাকী / ক্রেডিট সমন্বয়: ৳${effectiveTotal}]`;
+      finalNote = finalNote ? `${finalNote} ${creditDetail}` : creditDetail;
+    } else if (payMethod === "online") {
+      const onlineDetail = `[অনলাইন / ${onlineProvider}: ৳${effectiveTotal}]`;
+      finalNote = finalNote ? `${finalNote} ${onlineDetail}` : onlineDetail;
+    }
+
+    const entry: PartyLedger = {
+      id: tempId,
+      party_id: partyId,
+      amount: effectiveTotal,
+      note: finalNote || null,
+      created_at: new Date().toISOString(),
+    };
 
     setCachedData<PartyLedger[]>(qc, ["party-settlements", partyId], old => [entry, ...(old ?? [])]);
     onOpenChange(false);
-    toast.success(t("save"));
+    toast.success(lang === "bn" ? "পেমেন্ট সফলভাবে সংরক্ষিত হয়েছে!" : t("save"));
 
     setBusy(true);
     try {
-      const saved = await createPayableSettlementFn({ data: { party_id: partyId, amount: amt, note: note || null } });
+      const saved = await createPayableSettlementFn({
+        data: {
+          party_id: partyId,
+          amount: effectiveTotal,
+          payment_type: payMethod,
+          split_cash: payMethod === "split" ? cashNum : undefined,
+          split_online: payMethod === "split" ? onlineNum : undefined,
+          split_credit: payMethod === "split" ? creditNum : undefined,
+          online_provider: payMethod !== "cash" ? onlineProvider : undefined,
+          note: finalNote || null,
+        },
+      });
       setCachedData<PartyLedger[]>(qc, ["party-settlements", partyId], old =>
         (old ?? []).map(s => (s.id === tempId ? { ...saved, id: saved.id } : s)),
       );
-      await refreshQueries(qc, ["party-settlements", partyId], ["cashbox"]);
+      await refreshQueries(qc, ["party-settlements", partyId], ["cashbox"], ["parties"]);
     } catch (err: unknown) {
       setCachedData<PartyLedger[]>(qc, ["party-settlements", partyId], old => (old ?? []).filter(s => s.id !== tempId));
       toast.error(err instanceof Error ? err.message : String(err));
@@ -769,14 +818,188 @@ function PayPartyDialog({ partyId, open, onOpenChange }: { partyId: string; open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t("pay_party")}</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("amount")}</Label><Input required type="number" step="any" inputMode="decimal" pattern="[0-9.]*" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-          <div className="space-y-1"><Label className="text-xs text-muted-foreground">{t("note")}</Label><Input value={note} onChange={e => setNote(e.target.value)} /></div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-            <Button type="submit" disabled={busy}>{busy ? "…" : t("save")}</Button>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-serif">
+            {lang === "bn" ? "পার্টনার / সাপ্লায়ারকে পেমেন্ট পরিশোধ" : t("pay_party")}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3.5">
+          {/* Payment Method Selector in ONE ROW like new sell widget */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-foreground">
+              {lang === "bn" ? "পরিশোধের মাধ্যম (Payment Method)" : "Payment Method"}
+            </Label>
+            <div className="grid grid-cols-4 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPayMethod("cash")}
+                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  payMethod === "cash"
+                    ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-xs ring-1 ring-emerald-500/30 font-bold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                <Banknote className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{lang === "bn" ? "নগদ" : "Cash"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPayMethod("credit")}
+                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  payMethod === "credit"
+                    ? "bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-xs ring-1 ring-amber-500/30 font-bold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                <CreditCard className="size-3.5 text-amber-600 dark:text-amber-400" />
+                <span>{lang === "bn" ? "বাকি" : "Credit"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPayMethod("online")}
+                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  payMethod === "online"
+                    ? "bg-blue-500/15 border-blue-500 text-blue-700 dark:text-blue-300 shadow-xs ring-1 ring-blue-500/30 font-bold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                <Globe className="size-3.5 text-blue-600 dark:text-blue-400" />
+                <span>{lang === "bn" ? "অনলাইন" : "Online"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPayMethod("split")}
+                className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  payMethod === "split"
+                    ? "bg-purple-500/15 border-purple-500 text-purple-700 dark:text-purple-300 shadow-xs ring-1 ring-purple-500/30 font-bold"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                }`}
+              >
+                <Split className="size-3.5 text-purple-600 dark:text-purple-400" />
+                <span>{lang === "bn" ? "স্প্লিট" : "Split"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Online Provider Selection */}
+          {payMethod !== "cash" && (
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-muted-foreground">
+                {lang === "bn" ? "অনলাইন / ব্যাংক মাধ্যম নির্বাচন করুন" : "Online Provider"}
+              </Label>
+              <div className="flex gap-2">
+                {["bKash", "Nagad", "Bank Transfer", "Card"].map((provider) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    onClick={() => setOnlineProvider(provider)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      onlineProvider === provider
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                        : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                    }`}
+                  >
+                    {provider}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Standard Single Payment Input */}
+          {payMethod !== "split" ? (
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-foreground">
+                {payMethod === "cash"
+                  ? (lang === "bn" ? "পরিশোধের নগদ পরিমাণ (৳)" : "Cash Amount (৳)")
+                  : payMethod === "credit"
+                  ? (lang === "bn" ? "বাকি / ক্রেডিট সমন্বয়ের পরিমাণ (৳)" : "Credit Adjustment (৳)")
+                  : (lang === "bn" ? `অনলাইন পরিশোধের পরিমাণ (${onlineProvider}) (৳)` : "Online Amount (৳)")}
+              </Label>
+              <Input
+                required
+                type="number"
+                step="any"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="h-9 text-xs rounded-xl font-bold font-mono"
+                autoFocus
+              />
+            </div>
+          ) : (
+            /* Split Payment Dual/Triple Inputs */
+            <div className="p-3 bg-muted/60 border border-border/80 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-primary">
+                <span>{lang === "bn" ? "⚡ স্প্লিট ব্রেকডাউন (নগদ + অনলাইন + বাকি)" : "Split Breakdown"}</span>
+                <span>{lang === "bn" ? "মোট পরিশোধ:" : "Total Paid:"} ৳{effectiveTotal.toLocaleString()}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    {lang === "bn" ? "💵 নগদ টাকা (৳)" : "Cash (৳)"}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    pattern="[0-9.]*"
+                    placeholder="0.00"
+                    value={splitCash}
+                    onChange={e => setSplitCash(e.target.value)}
+                    className="h-8.5 text-xs rounded-lg font-mono font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                    {lang === "bn" ? `🌐 অনলাইন (${onlineProvider}) (৳)` : `Online (${onlineProvider}) (৳)`}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    pattern="[0-9.]*"
+                    placeholder="0.00"
+                    value={splitOnline}
+                    onChange={e => setSplitOnline(e.target.value)}
+                    className="h-8.5 text-xs rounded-lg font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1 pt-1 border-t border-border/60">
+                <div className="flex justify-between items-center text-[11px]">
+                  <Label className="text-amber-600 dark:text-amber-400 font-semibold">
+                    {lang === "bn" ? "📋 বাকি / অবশিষ্ট বকেয়া হিসেবে সমন্বয় (৳)" : "Remaining as Credit Due (৳)"}
+                  </Label>
+                </div>
+                <Input
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  pattern="[0-9.]*"
+                  placeholder="0.00"
+                  value={splitCredit}
+                  onChange={e => setSplitCredit(e.target.value)}
+                  className="h-8.5 text-xs rounded-lg font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground font-semibold">{t("note")}</Label>
+            <Input value={note} onChange={e => setNote(e.target.value)} placeholder={lang === "bn" ? "পেমেন্ট বিবরণ বা রেফারেন্স..." : "Payment reference / note"} className="h-9 text-xs rounded-xl" />
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl">{t("cancel")}</Button>
+            <Button type="submit" disabled={busy} size="sm" className="rounded-xl font-bold bg-primary hover:bg-primary/90 text-primary-foreground">{busy ? "…" : (lang === "bn" ? "পেমেন্ট সম্পন্ন করুন" : t("save"))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

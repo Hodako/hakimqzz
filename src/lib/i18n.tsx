@@ -38,7 +38,7 @@ const dict = {
   welcome_back: { bn: "আবার স্বাগতম", en: "Welcome back" },
   create_account: { bn: "একাউন্ট তৈরি করুন", en: "Create your account" },
   owner_only: { bn: "শুধুমাত্র মালিকের জন্য", en: "Owner-only access" },
-  employees: { bn: "কর্মচারী ও বেতন", en: "Staff & Salaries" },
+  employees: { bn: "কর্মচারী হাব", en: "Employee Hub" },
   employee_shopping: { bn: "কর্মচারী কেনাকাটা", en: "Staff Shopping" },
   // dashboard
   today: { bn: "আজ", en: "Today" },

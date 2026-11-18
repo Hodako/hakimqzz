@@ -1,4 +1,4 @@
-import { readQueryCache, writeQueryCache } from "./query-cache";
+import { readQueryCache, writeQueryCache, getActiveTenantKey } from "./query-cache";
 import { toast } from "sonner";
 
 export interface QueuedAction {
@@ -9,12 +9,15 @@ export interface QueuedAction {
   retries?: number;
 }
 
-const QUEUE_KEY = "df-offline-sync-queue";
+function getQueueKey(): string {
+  const tenant = getActiveTenantKey();
+  return tenant ? `df-offline-sync-queue:${tenant}` : "df-offline-sync-queue";
+}
 
 export function getOfflineQueue(): QueuedAction[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    return JSON.parse(localStorage.getItem(getQueueKey()) ?? "[]");
   } catch {
     return [];
   }
@@ -23,7 +26,7 @@ export function getOfflineQueue(): QueuedAction[] {
 export function saveOfflineQueue(queue: QueuedAction[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    localStorage.setItem(getQueueKey(), JSON.stringify(queue));
     window.dispatchEvent(new CustomEvent("df-offline-queue-changed", { detail: { count: queue.length } }));
   } catch {
     // ignore

@@ -48,6 +48,7 @@ import { getProducts } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { ProductSearchSelect } from "@/components/product-search";
 import { PWAInstallButton } from "@/components/pwa-install-button";
+import { refreshQueries } from "@/lib/optimistic-cache";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,7 +72,7 @@ const financeLinks = [
   { to: "/product-analytics", labelKey: "product_analytics", desc: "Top sellers, sales growth, remaining & critical stock intelligence", icon: BarChart2, perm: "reports" as const },
   { to: "/bank",           labelKey: "bank_management", desc: "Bank accounts, loans & installment repayments", icon: Landmark, imageUrl: "https://img.icons8.com/color/48/bank-building.png", perm: "expenses" as const },
   { to: "/expenses",       labelKey: "expenses",        desc: "Record overhead expenses", icon: Receipt, imageUrl: "https://img.icons8.com/color/48/tax.png", perm: "expenses"   as const },
-  { to: "/owners-wallet",  labelKey: "owners_wallet",   desc: "Personal & family expense wallet (cuts cash & profit)", icon: Wallet, imageUrl: "https://img.icons8.com/color/48/wallet--v1.png", perm: "cashbox" as const },
+  { to: "/owners-wallet",  labelKey: "owners_wallet",   desc: "Personal & family expense wallet (cuts cash & profit)", icon: Wallet, imageUrl: "https://img.icons8.com/color/48/wallet--v1.png", perm: "owners_wallet" as const },
   { to: "/somiti",         labelKey: "somiti",          desc: "Manage Somiti accounts", icon: PiggyBank, imageUrl: "/icons/samity_icon.png",    perm: "expenses"   as const },
   { to: "/cash-management",labelKey: "cash_management", desc: "Cashbox ledger & cashflow", icon: Banknote, imageUrl: "/icons/cashbox_icon.png",     perm: "cashbox"   as const },
   { to: "/profits",        labelKey: "profit",          desc: "Sales margins & net profits", icon: TrendingUp, imageUrl: "/icons/profit_icon.png",  perm: "reports"    as const },
@@ -596,8 +597,9 @@ export default function MorePage() {
         const qtyVal = Number(saleQty) || 0;
         const buyVal = Number(saleBuyPrice) || 0;
         const sellVal = Number(saleSellPrice) || 0;
-        const paidVal = Number(salePaidAmt) || 0;
-        const dueVal = Number(saleDueAmt) || 0;
+        const lineTotal = sellVal * qtyVal;
+        const paidVal = salePaidAmt !== "" ? Number(salePaidAmt) : (saleType === "credit" ? 0 : lineTotal);
+        const dueVal = saleDueAmt !== "" ? Number(saleDueAmt) : (saleType === "credit" ? lineTotal : Math.max(0, lineTotal - paidVal));
         if (!saleProdName.trim() || qtyVal <= 0 || sellVal <= 0) {
           throw new Error("Please fill in all required sale fields.");
         }
@@ -681,6 +683,7 @@ export default function MorePage() {
         toast.success(lang === "bn" ? "ক্যাশবক্স জমা সফলভাবে যুক্ত হয়েছে!" : "Custom Cashbox Deposit added successfully!");
         setWithAmt(""); setWithNote("");
       }
+      await refreshQueries(qc, ["cashbox"], ["sales"], ["expenses"], ["purchases"]);
       qc.invalidateQueries();
     } catch (err: any) {
       toast.error(err.message || String(err));
@@ -2509,6 +2512,7 @@ export default function MorePage() {
       settings: false,
       reports: false,
       danger_zone: false,
+      owners_wallet: false,
     });
     setAddEmpModalOpen(true);
   };
@@ -3155,7 +3159,7 @@ export default function MorePage() {
             <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
               <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Store className="size-3.5 text-primary" />
-                <span>{user?.business_name || "Dream IT Shop"}</span>
+                <span>{user?.business_name || "Dream Fashion"}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {user?.role === "owner" && (

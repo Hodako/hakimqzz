@@ -1,117 +1,143 @@
-/**
- * Standalone Single-File Windows Installer & Portable Zip Packager
- * Packs entire Electron distribution into:
- * 1) ClassicWorld-POS-Setup.exe (Single-file self-extracting installer that auto-installs to %LOCALAPPDATA%\Programs, adds Desktop/Start Menu shortcuts & launches)
- * 2) ClassicWorld-POS-win-x64.zip (Single portable zip containing full runtime & all DLLs)
- */
-
-const fs = require("fs");
-const path = require("path");
 const { execSync } = require("child_process");
+const path = require("path");
+const fs = require("fs");
 
-function buildInstaller(projectDir, appName, exeName) {
-  const softwareDir = path.join(projectDir, "software");
-  const publicDir = path.join(projectDir, "public");
-  const sfxModule = "C:\\Users\\Windows\\scoop\\apps\\7zip\\26.00\\7z.sfx";
+const projectDir = path.resolve(__dirname);
+const appName = "Dream Fashion POS";
+const exeName = "DreamFashion-POS.exe";
+const softwareDir = path.join(projectDir, "software");
+const iconPath = path.join(projectDir, "public", "favicon.ico");
+const setupExeName = "DreamFashion-POS-Setup.exe";
 
-  if (!fs.existsSync(softwareDir)) {
-    console.error(`Software directory not found at: ${softwareDir}`);
-    return;
+function findIscc() {
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "Inno Setup 6", "ISCC.exe"),
+    "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe",
+    "C:\\Program Files\\Inno Setup 6\\ISCC.exe",
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
   }
-
-  console.log(`\n======================================================`);
-  console.log(`[Packager] Building Single-Pack Installer for: ${appName}`);
-  console.log(`======================================================`);
-
-  // 1. Create create-shortcuts.cmd inside softwareDir
-  const shortcutScript = `@echo off
-setlocal
-set APP_DIR=%~dp0
-set EXE_PATH=%APP_DIR%${exeName}
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ws = New-Object -ComObject WScript.Shell; " ^
-  "$desktop = [Environment]::GetFolderPath('Desktop'); " ^
-  "$s1 = $ws.CreateShortcut(\\"$desktop\\${appName}.lnk\\"); " ^
-  "$s1.TargetPath = \\"%EXE_PATH%\\"; " ^
-  "$s1.WorkingDirectory = \\"%APP_DIR%\\"; " ^
-  "$s1.IconLocation = \\"%EXE_PATH%,0\\"; " ^
-  "$s1.Save(); " ^
-  "$programs = [Environment]::GetFolderPath('Programs'); " ^
-  "$s2 = $ws.CreateShortcut(\\"$programs\\${appName}.lnk\\"); " ^
-  "$s2.TargetPath = \\"%EXE_PATH%\\"; " ^
-  "$s2.WorkingDirectory = \\"%APP_DIR%\\"; " ^
-  "$s2.IconLocation = \\"%EXE_PATH%,0\\"; " ^
-  "$s2.Save();"
-
-start "" "%EXE_PATH%"
-exit
-`;
-  fs.writeFileSync(path.join(softwareDir, "create-shortcuts.cmd"), shortcutScript, "utf8");
-
-  // 2. Create 7z SFX configuration file
-  const sfxConfig = `;!@Install@!UTF-8!
-Title="${appName} POS Setup"
-BeginPrompt="Install ${appName} POS on your computer?"
-Progress="yes"
-InstallPath="%%LOCALAPPDATA%%\\\\Programs\\\\${appName.replace(/\s+/g, "")}"
-RunProgram="create-shortcuts.cmd"
-;!@InstallEnd@!
-`;
-  const configPath = path.join(projectDir, "_sfx_config.txt");
-  fs.writeFileSync(configPath, sfxConfig, "utf8");
-
-  // 3. Compress entire software directory into a 7z archive (excluding previous setup or zips)
-  const archive7z = path.join(projectDir, "_package_temp.7z");
-  if (fs.existsSync(archive7z)) fs.unlinkSync(archive7z);
-
-  console.log(`[Packager] Compressing ${appName} software into 7z archive...`);
-  execSync(`7z a -t7z -mx=5 "${archive7z}" "${softwareDir}\\*" -x!*-Setup.exe -x!*.zip`, { stdio: "inherit" });
-
-  // 4. Combine 7z.sfx + config + archive -> Setup.exe natively via Node buffer concat!
-  const setupExeName = `${exeName.replace(/\.exe$/i, "")}-Setup.exe`;
-  const setupExePath = path.join(softwareDir, setupExeName);
-
-  console.log(`[Packager] Creating single-file installer binary: ${setupExeName}...`);
-  const sfxBuf = fs.readFileSync(sfxModule);
-  const cfgBuf = fs.readFileSync(configPath);
-  const archiveBuf = fs.readFileSync(archive7z);
-  fs.writeFileSync(setupExePath, Buffer.concat([sfxBuf, cfgBuf, archiveBuf]));
-
-  // Clean temp files
-  if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
-  if (fs.existsSync(archive7z)) fs.unlinkSync(archive7z);
-
-  // 5. Also build portable ZIP
-  const zipName = `${exeName.replace(/\.exe$/i, "")}-win-x64.zip`;
-  const zipPath = path.join(softwareDir, zipName);
-  if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-
-  console.log(`[Packager] Creating portable zip: ${zipName}...`);
-  execSync(`7z a -tzip -mx=5 "${zipPath}" "${softwareDir}\\*" -x!*.zip`, { stdio: "inherit" });
-
-  // 6. Copy to public directory for direct browser download
-  if (fs.existsSync(publicDir)) {
-    fs.copyFileSync(setupExePath, path.join(publicDir, setupExeName));
-    fs.copyFileSync(zipPath, path.join(publicDir, zipName));
-    console.log(`[Packager] Copied ${setupExeName} and ${zipName} to ${publicDir}`);
-  }
-
-  console.log(`[Packager] SUCCESS! Single-file installer ready at:`);
-  console.log(`  ${setupExePath}`);
-  console.log(`  Size: ${(fs.statSync(setupExePath).size / (1024 * 1024)).toFixed(2)} MB`);
+  return null;
 }
 
-// Build for Classic World
-buildInstaller(
-  "c:\\Users\\Windows\\Downloads\\dreamfashion\\Classic-World",
-  "Classic World",
-  "ClassicWorld-POS.exe"
-);
+const isccExe = findIscc();
+if (!isccExe) {
+  console.error("[Installer] ERROR: Inno Setup 6 (ISCC.exe) not found!");
+  process.exit(1);
+}
+console.log(`[Installer] Using Inno Setup Compiler at: ${isccExe}`);
 
-// Build for Dream Fashion
-buildInstaller(
-  "c:\\Users\\Windows\\Downloads\\dreamfashion",
-  "Dream Fashion",
-  "DreamFashion-POS.exe"
-);
+if (!fs.existsSync(softwareDir)) {
+  console.error(`[Installer] ERROR: Software directory not found at: ${softwareDir}`);
+  process.exit(1);
+}
+
+// 1. Prepare Inno Setup Script for Dream Fashion
+const issPath = path.join(projectDir, "DreamFashion.iss");
+const issContent = `; Inno Setup Script for Dream Fashion POS
+#define MyAppName "Dream Fashion POS"
+#define MyAppVersion "2.5.2"
+#define MyAppPublisher "Dream Fashion"
+#define MyAppURL "https://hakim.qzz.io"
+#define MyAppExeName "${exeName}"
+
+[Setup]
+AppId={{8E4C7B21-A93D-4F1E-9C52-3F4A8E7D1B99}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+DefaultDirName={localappdata}\\Programs\\DreamFashion
+DefaultGroupName=Dream Fashion
+DisableProgramGroupPage=yes
+OutputDir=${softwareDir.replace(/\\/g, "\\\\")}
+OutputBaseFilename=DreamFashion-POS-Setup
+SetupIconFile=${iconPath.replace(/\\/g, "\\\\")}
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=lowest
+UninstallDisplayIcon={app}\\favicon.ico
+UninstallDisplayName=Dream Fashion POS
+CloseApplications=force
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+[Files]
+Source: "${softwareDir.replace(/\\/g, "\\\\")}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*-Setup.exe,*.zip,*.iss"
+
+[Icons]
+Name: "{autoprograms}\\Dream Fashion POS"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\favicon.ico"
+Name: "{autodesktop}\\Dream Fashion"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\favicon.ico"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\\{#MyAppExeName}"; Description: "{cm:LaunchProgram,Dream Fashion POS}"; Flags: nowait postinstall skipifsilent
+`;
+
+fs.writeFileSync(issPath, issContent, "utf8");
+
+// Remove any existing setup exe
+const existingSetup = path.join(softwareDir, setupExeName);
+if (fs.existsSync(existingSetup)) {
+  try { fs.unlinkSync(existingSetup); } catch (_) {}
+}
+
+console.log("[Installer] Compiling standalone Windows Inno Setup installer for Dream Fashion...");
+try {
+  execSync(`"${isccExe}" "${issPath}"`, { stdio: "inherit" });
+  console.log("[Installer] Setup compilation successful!");
+} finally {
+  if (fs.existsSync(issPath)) {
+    try { fs.unlinkSync(issPath); } catch (_) {}
+  }
+}
+
+const setupExePath = path.join(softwareDir, setupExeName);
+if (!fs.existsSync(setupExePath)) {
+  console.error(`[Installer] ERROR: ${setupExePath} was not generated!`);
+  process.exit(1);
+}
+
+// Copy setup exe to root downloads directory
+const downloadsDir = path.resolve(__dirname, "downloads");
+if (fs.existsSync(downloadsDir)) {
+  fs.copyFileSync(setupExePath, path.join(downloadsDir, setupExeName));
+  fs.copyFileSync(setupExePath, path.join(downloadsDir, "DreamFashion-POS.exe"));
+  console.log(`[Installer] Copied installer to ${downloadsDir}`);
+}
+
+const rootPublicDir = path.resolve(__dirname, "public");
+if (fs.existsSync(rootPublicDir)) {
+  try {
+    fs.copyFileSync(setupExePath, path.join(rootPublicDir, setupExeName));
+    console.log(`[Installer] Copied installer to ${rootPublicDir}`);
+  } catch (_) {}
+}
+
+// 2. Generate portable ZIP directly into downloads
+const zipName = "DreamFashion-POS-win-x64.zip";
+const destZipPath = path.join(downloadsDir, zipName);
+if (fs.existsSync(destZipPath)) {
+  try { fs.unlinkSync(destZipPath); } catch (_) {}
+}
+
+try {
+  console.log(`[Installer] Creating portable zip directly in downloads: ${zipName}...`);
+  execSync(`7z a -tzip -mx=3 "${destZipPath}" "${softwareDir}\\*" -x!*-Setup.exe -x!*.zip`, { stdio: "inherit" });
+  console.log(`[Installer] Portable zip generated successfully at: ${destZipPath}`);
+} catch (zipErr) {
+  console.warn(`[Installer] Portable zip warning:`, zipErr.message);
+}
+
+console.log(`\n======================================================`);
+console.log(`SUCCESS! Proper Windows Dream Fashion POS installer created!`);
+console.log(`  Path: ${setupExePath}`);
+console.log(`  Size: ${(fs.statSync(setupExePath).size / (1024 * 1024)).toFixed(2)} MB`);
+console.log(`======================================================\n`);

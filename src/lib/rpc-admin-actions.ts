@@ -10,13 +10,17 @@ const DEFAULT_COMPANY = "HakimQzz";
 
 async function ensureSuperAdmin() {
   const db = await getDb();
-  const exists = await db.collection("super_admins").findOne({ username: "superadmin" });
-  if (!exists) {
+  const existing = await db.collection("super_admins").findOne({ username: "superadmin" });
+  if (!existing) {
+    const initialPass = process.env.SUPERADMIN_PASSWORD || "AdminSecure#2026!";
+    const newHash = await hashPassword(initialPass);
     await db.collection("super_admins").insertOne({
       _id: "superadmin" as any,
       username: "superadmin",
-      password: await hashPassword("superadmin123"),
+      password: newHash,
+      role: "superadmin",
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
   }
 }
@@ -26,7 +30,7 @@ async function requireSuperAdminSession() {
   const token = cookieStore.get("super_token")?.value;
   if (!token) throw new Error("Unauthorized");
   const payload = await verifyToken(token);
-  if (!payload || payload.userId !== "superadmin") throw new Error("Unauthorized");
+  if (!payload || payload.userId !== "superadmin" || payload.role !== "superadmin") throw new Error("Unauthorized");
   return payload;
 }
 
@@ -34,13 +38,15 @@ async function requireSuperAdminSession() {
 
 export async function superAdminLoginFn(input: { data: { username: string; password: string } }) {
   const { data = {} }: any = input ?? {};
+  if (!data.username || !data.password) throw new Error("Username and password are required");
   await ensureSuperAdmin();
   const db = await getDb();
-  const admin = await db.collection("super_admins").findOne({ username: data.username });
-  if (!admin || !(await comparePassword(data.password, admin.password as string, admin.plain_password as string))) {
+  const admin = await db.collection("super_admins").findOne({ username: String(data.username).trim() });
+  const isMatch = admin && (await comparePassword(data.password, admin.password as string, admin.plain_password as string));
+  if (!isMatch) {
     throw new Error("Invalid credentials");
   }
-  const token = await signToken({ userId: "superadmin", email: "superadmin@hakimqzz.local" });
+  const token = await signToken({ userId: "superadmin", email: "superadmin@hakimqzz.local", role: "superadmin" });
   const cookieStore = await cookies();
   cookieStore.set("super_token", token, { maxAge: 8 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   return { success: true };

@@ -21,28 +21,14 @@ export async function signToken(payload: { userId: string; email: string; role?:
 }
 
 export async function verifyToken(token: string) {
-  if (!token) return null;
+  if (!token || typeof token !== "string") return null;
 
-  // 1. Direct custom/offline token handling (from local storage / firestore-service)
-  if (token.startsWith("token_")) {
-    const cleanId = token.replace(/^token_(?:emp_)?/, "");
-    if (cleanId) {
-      return {
-        userId: cleanId,
-        email: "user@pos.local",
-        role: token.includes("emp_") ? "employee" : "owner",
-      };
-    }
-  }
-
-  // 2. Multi-secret JWT verification
+  // Strict cryptographic JWT verification only
   const { default: process } = await import("node:process");
-  const secrets = [
-    process.env.JWT_SECRET,
-    "classicworld_secure_secret_key_2026_pos",
-    "dreamfashion-fallback-secret-key-123456",
-    "classicworld-fallback-secret-key-123456",
-  ].filter(Boolean) as string[];
+  const primarySecret = process.env.JWT_SECRET;
+  const secrets = primarySecret
+    ? [primarySecret]
+    : ["dreamfashion-fallback-secret-key-123456"];
 
   const { jwtVerify } = await import("jose");
   for (const s of secrets) {
@@ -55,18 +41,36 @@ export async function verifyToken(token: string) {
     } catch (_) {}
   }
 
-  // 3. Fallback: unverified JWT payload decode for resilient offline/reconnect
-  try {
-    const parts = token.split(".");
-    if (parts.length === 3) {
-      const decoded = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-      if (decoded && decoded.userId) {
-        return decoded as { userId: string; email: string; role?: string };
-      }
-    }
-  } catch (_) {}
-
   return null;
+}
+
+let _firebaseJwks: ReturnType<typeof import("jose")["createRemoteJWKSet"]> | null = null;
+
+/** Cryptographically verify a Firebase Auth ID token against Google's securetoken JWKS. */
+export async function verifyFirebaseIdToken(idToken: string): Promise<{ uid: string; email?: string; emailVerified?: boolean } | null> {
+  if (!idToken || typeof idToken !== "string") return null;
+  try {
+    const { createRemoteJWKSet, jwtVerify } = await import("jose");
+    const projectId =
+      (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_FIREBASE_PROJECT_ID) || "hakimqzz";
+    if (!_firebaseJwks) {
+      _firebaseJwks = createRemoteJWKSet(
+        new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
+      );
+    }
+    const { payload } = await jwtVerify(idToken, _firebaseJwks, {
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
+    });
+    if (!payload.sub) return null;
+    return {
+      uid: String(payload.sub),
+      email: typeof payload.email === "string" ? payload.email : undefined,
+      emailVerified: Boolean(payload.email_verified),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -78,7 +82,6 @@ export async function comparePassword(password: string, hashed: string, plain?: 
   if (!password) return false;
   const raw = String(password);
   const trimmed = raw.trim();
-  const lower = trimmed.toLowerCase();
 
   // 1. Try bcrypt match with raw password
   try {
@@ -89,23 +92,19 @@ export async function comparePassword(password: string, hashed: string, plain?: 
   // 2. Try bcrypt match with trimmed password
   try {
     const { compareSync } = await import("bcrypt-ts");
-    if (hashed && compareSync(trimmed, hashed)) return true;
+    if (hashed && trimmed !== raw && compareSync(trimmed, hashed)) return true;
   } catch (_) {}
 
-  // 3. Fallback: match against optional plain_password field (raw, trimmed, or lowercase)
+  // 3. Fallback: exact match against optional legacy plain_password field
   if (plain) {
     const pRaw = String(plain);
-    const pTrim = pRaw.trim();
-    const pLower = pTrim.toLowerCase();
-    if (pRaw === raw || pTrim === trimmed || pLower === lower) return true;
+    if (pRaw === raw) return true;
   }
 
-  // 4. Fallback: direct string equality if hashed in DB was stored as unhashed plain text
-  if (hashed) {
+  // 4. Fallback: exact equality if hashed in DB was stored as legacy unhashed text
+  if (hashed && !String(hashed).startsWith("$2")) {
     const hRaw = String(hashed);
-    const hTrim = hRaw.trim();
-    const hLower = hTrim.toLowerCase();
-    if (hRaw === raw || hTrim === trimmed || hLower === lower) return true;
+    if (hRaw === raw) return true;
   }
 
   return false;

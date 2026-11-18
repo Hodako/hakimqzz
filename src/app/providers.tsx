@@ -10,6 +10,7 @@ import { SpeedLoader } from "@/components/speed-loader";
 import { CustomThemeManager } from "@/components/custom-theme-manager";
 import { AutoCameraTrigger } from "@/components/auto-camera-trigger";
 import { CameraPermissionChecker } from "@/components/camera-permission-checker";
+import { RealtimeSyncManager } from "@/components/realtime-sync-manager";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -175,6 +176,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <I18nProvider>
           <AuthProvider>
+            <RealtimeSyncManager />
             <CustomThemeManager />
             {children}
             <Toaster richColors position="top-center" />

@@ -9,6 +9,8 @@ export type PermissionSet = {
   settings: boolean;
   reports: boolean;
   danger_zone: boolean;
+  owners_wallet: boolean;
+  owners_wallet_edit?: boolean;
 };
 
 export const OWNER_PERMISSIONS: PermissionSet = {
@@ -22,6 +24,8 @@ export const OWNER_PERMISSIONS: PermissionSet = {
   settings: true,
   reports: true,
   danger_zone: true,
+  owners_wallet: true,
+  owners_wallet_edit: true,
 };
 
 export const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionSet = {
@@ -35,12 +39,16 @@ export const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionSet = {
   settings: false,
   reports: false,
   danger_zone: false,
+  owners_wallet: false,
+  owners_wallet_edit: false,
 };
 
 /** Resolve effective permissions for the current user. */
-export function resolvePermissions(role: string, permissions?: PermissionSet): PermissionSet {
+export function resolvePermissions(role: string, permissions?: any): PermissionSet {
   if (role === "owner" || role === "admin" || role === "superadmin") return OWNER_PERMISSIONS;
-  return permissions ?? DEFAULT_EMPLOYEE_PERMISSIONS;
+  const base = { ...DEFAULT_EMPLOYEE_PERMISSIONS };
+  if (!permissions || typeof permissions !== "object") return base;
+  return { ...base, ...permissions, owners_wallet: Boolean(permissions.owners_wallet || permissions.can_owners_wallet || false) };
 }
 
 /** Check if user permissions allow a module. */
@@ -50,6 +58,8 @@ export function canAccess(permissions: PermissionSet | undefined, module: keyof 
 
 /** Route prefix → required permission (employees without access are redirected). */
 export const ROUTE_PERMISSIONS: { prefix: string; perm: keyof PermissionSet }[] = [
+  { prefix: "/owners-wallet", perm: "owners_wallet" },
+  { prefix: "/owner-expense", perm: "owners_wallet" },
   { prefix: "/parties", perm: "parties" },
   { prefix: "/customers", perm: "parties" },
   { prefix: "/dues", perm: "parties" },

@@ -66,10 +66,12 @@ export function AppLogo({ className, size = "md", src, alt }: AppLogoProps) {
   };
 
   const rawName = (alt ?? user?.business_name ?? "").trim();
-  const isDefaultBrand = !rawName || /^(dream\s*fashion|classic\s*world)$/i.test(rawName);
-  const logoAlt = rawName || "Dream Fashion";
+  const isUzviOrClassicName = /uzvi|classic/i.test(rawName);
+  const isDefaultBrand = !rawName || isUzviOrClassicName || /^(dream\s*fashion|classic\s*world)$/i.test(rawName);
+  const logoAlt = (rawName && !isUzviOrClassicName) ? rawName : "Dream Fashion";
   const rawLogo = (src ?? user?.logo_url ?? "").trim();
-  const logoSrc = rawLogo && rawLogo !== "/logo.png" ? rawLogo : (isDefaultBrand ? "/logo.png" : "");
+  const isUzviOrClassicLogo = /uzvi|classic/i.test(rawLogo);
+  const logoSrc = (rawLogo && !isUzviOrClassicLogo && rawLogo !== "/logo.png") ? rawLogo : (isDefaultBrand || isUzviOrClassicLogo ? "/logo.png" : "/logo.png");
 
   if (!logoSrc || imgError) {
     return (

@@ -4,7 +4,7 @@
  * 1-Click Silent Thermal Printing, Windows Printer Preferences & Native POS Hardware Integration
  */
 
-const { app, BrowserWindow, ipcMain, session } = require("electron");
+const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -37,7 +37,7 @@ let serverProcess = null;
 
 const CLOUD_URL = process.env.POS_CLOUD_URL || "https://hakim.qzz.io";
 const LOCAL_PORT = process.env.PORT || 3141;
-const LOCAL_URL = `http://127.0.0.1:${LOCAL_PORT}`;
+const LOCAL_URL = `http://localhost:${LOCAL_PORT}`;
 
 // Check if an HTTP/HTTPS endpoint is responding
 function checkUrlReady(targetUrl, timeoutMs = 1500) {
@@ -113,13 +113,17 @@ async function createWindow() {
     console.warn("[Windows POS] Cache clear warning:", err);
   }
 
+  const icoPath = path.join(__dirname, "../public/favicon.ico");
+  const pngPath = path.join(__dirname, "../public/logo.png");
+  const appIcon = fs.existsSync(icoPath) ? icoPath : (fs.existsSync(pngPath) ? pngPath : undefined);
+
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 860,
     minWidth: 1024,
     minHeight: 680,
     title: "Dream Fashion — Ultimate POS System",
-    icon: path.join(__dirname, "../public/logo.png"),
+    icon: appIcon,
     backgroundColor: "#ffffff",
     show: true,
     webPreferences: {
@@ -253,11 +257,18 @@ async function createWindow() {
       .catch(() => {});
   });
 
-  // Connect to production cloud URL (https://hakim.qzz.io) by default
+  // Connect to production cloud URL (https://hakim.qzz.io) by default, local when offline
   const preferLocal = process.env.POS_PREFER_LOCAL === "1";
   let targetUrl = CLOUD_URL;
 
+  const isCloudOnline = await checkUrlReady(CLOUD_URL, 1800);
   if (preferLocal) {
+    const isLocalReady = await checkUrlReady(LOCAL_URL, 1000);
+    if (isLocalReady) {
+      targetUrl = LOCAL_URL;
+    }
+  } else if (!isCloudOnline) {
+    console.log(`[Windows POS] Cloud (${CLOUD_URL}) offline, checking local server...`);
     const isLocalReady = await checkUrlReady(LOCAL_URL, 1000);
     if (isLocalReady) {
       targetUrl = LOCAL_URL;
@@ -508,6 +519,7 @@ async function performSilentPrint(html, printerName, options = {}) {
       const isInteractive = !useSilent;
       printWin = new BrowserWindow({
         show: isInteractive,
+        skipTaskbar: !isInteractive,
         x: isInteractive ? undefined : -20000,
         y: isInteractive ? undefined : -20000,
         width: 520,
@@ -810,14 +822,77 @@ ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
   return await openWindowsCashDrawer(printerName);
 });
 
-app.whenReady().then(() => {
+if (process.platform === "win32") {
+  try {
+    app.setAppUserModelId("com.dreamfashion.pos");
+  } catch (_) {}
+}
+
+let isCreatingWindow = false;
+async function ensureSingleMainWindow() {
+  const existing = (mainWindow && !mainWindow.isDestroyed())
+    ? mainWindow
+    : BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.getTitle() !== "POS Receipt Print" && w.getTitle() !== "POS Label Print");
+
+  if (existing) {
+    if (existing.isMinimized()) existing.restore();
+    if (!existing.isVisible()) existing.show();
+    existing.focus();
+    return;
+  }
+  if (isCreatingWindow) return;
+  isCreatingWindow = true;
+  try {
+    await createWindow();
+  } finally {
+    isCreatingWindow = false;
+  }
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on("second-instance", () => {
+  void ensureSingleMainWindow();
+});
+
+app.on("web-contents-created", (_event, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    const u = String(url || "");
+    if (
+      u.startsWith("blob:") ||
+      u === "" ||
+      u === "about:blank" ||
+      /accounts\.google\.com|appleid\.apple\.com|firebaseapp\.com\/__\/auth/i.test(u)
+    ) {
+      return { action: "allow" };
+    }
+    if (
+      u.startsWith(LOCAL_URL) ||
+      u.startsWith(CLOUD_URL) ||
+      /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)
+    ) {
+      return { action: "deny" };
+    }
+    if (/^https?:\/\//i.test(u)) {
+      shell.openExternal(u).catch(() => {});
+    }
+    return { action: "deny" };
+  });
+});
+
+app.whenReady().then(async () => {
   // Start local bridge on port 9123 so even external browsers (Chrome/Edge) get 1-click silent print & Windows printer preferences!
   startBridgeServer((html, printerName, options) => performSilentPrint(html, printerName, options));
-  createWindow();
+  await ensureLocalServerRunning();
+  await ensureSingleMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      void ensureSingleMainWindow();
     }
   });
 });

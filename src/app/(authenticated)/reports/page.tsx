@@ -88,7 +88,7 @@ export default function ReportsGeneratorPage() {
   const cashboxQuery = useCashboxQuery();
   const partiesQuery = useCachedQuery(["parties"], getParties);
 
-  const bizName = bizSettings?.business?.name || "Classic World";
+  const bizName = bizSettings?.business?.name || "Dream Fashion";
   const bizPhone = bizSettings?.business?.phone || "";
   const bizAddress = bizSettings?.business?.address || "";
 

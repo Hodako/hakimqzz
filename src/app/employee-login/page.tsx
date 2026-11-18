@@ -155,8 +155,10 @@ function EmployeeLoginForm() {
         throw new Error("Unable to retrieve email from Google Account");
       }
 
+      const idToken = await fbUser.getIdToken();
       const data = await firebaseAuthSyncFn({
         data: {
+          idToken,
           email: fbUser.email,
           fullName: fbUser.displayName || undefined,
           photoUrl: fbUser.photoURL || undefined,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getProducts, type Product } from "@/lib/queries";
-import { ImagePlus, Plus, Trash2, Scan, Zap, X, Barcode, Wand2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2, Scan, Zap, X, Barcode, Wand2, AlertCircle } from "lucide-react";
 import { createProductFn, updateProductFn, uploadImageFn } from "@/lib/rpc";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
@@ -51,6 +51,21 @@ export function ProductDialog({
   const scanBufferRef = useRef<{ char: string; time: number }[]>([]);
 
   const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[];
+
+  // Barcode duplicate validation: verify if another product already possesses this barcode
+  const duplicateProduct = useMemo(() => {
+    const trimmed = barcode.trim().toLowerCase();
+    if (!trimmed) return null;
+    const stripped = trimmed.replace(/^0+/, "");
+    return (
+      products.find((p) => {
+        if (product && p.id === product.id) return false;
+        const pCode = (p.barcode || "").trim().toLowerCase();
+        const pStripped = pCode.replace(/^0+/, "");
+        return (pCode && pCode === trimmed) || (stripped && pStripped && pStripped === stripped);
+      }) || null
+    );
+  }, [barcode, products, product]);
 
   useEffect(() => {
     if (open) {
@@ -173,6 +188,16 @@ export function ProductDialog({
     e.preventDefault();
     if (!user) {
       toast.error(lang === "bn" ? "অনুগ্রহ করে পুনরায় লগইন করুন" : "Please log in first");
+      return;
+    }
+
+    if (duplicateProduct) {
+      toast.error(
+        lang === "bn"
+          ? `আপনি এটি করতে পারবেন না! বারকোডটি ইতিমধ্যে "${duplicateProduct.name}" পণ্যে ব্যবহৃত হয়েছে।`
+          : `You can't do this! Barcode is already used by "${duplicateProduct.name}".`,
+        { duration: 4500 }
+      );
       return;
     }
     setBusy(true);
@@ -347,6 +372,16 @@ export function ProductDialog({
                   <Zap className="size-3 animate-pulse shrink-0" />
                   <span>{lang === "bn" ? "বারকোড রিডার সক্রিয়: স্ক্যান করলে স্বয়ংক্রিয়ভাবে বসবে" : "Barcode Scanner Ready: Scan to auto-fill"}</span>
                 </div>
+                {duplicateProduct && (
+                  <div className="flex items-center gap-1.5 p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold mt-1 animate-in fade-in">
+                    <AlertCircle className="size-4 shrink-0 text-rose-600" />
+                    <span>
+                      {lang === "bn"
+                        ? `আপনি এটি করতে পারবেন না! বারকোডটি ইতিমধ্যে "${duplicateProduct.name}" পণ্যে ব্যবহৃত হয়েছে।`
+                        : `You can't do this! Barcode is already used by "${duplicateProduct.name}".`}
+                    </span>
+                  </div>
+                )}
               </div>
             </Field>
 

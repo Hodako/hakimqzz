@@ -7,7 +7,7 @@ import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { FAB } from "@/components/ui/fab";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2, ArrowLeftRight, RefreshCw, Barcode } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Archive, Download, Eye, EyeOff, AlertCircle, MoreVertical, ShoppingCart, Minus, X, Scan, BarChart2, ArrowLeftRight, RefreshCw, Barcode } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, getSales, getCustomers, type Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -68,7 +68,8 @@ export default function ProductsPage() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [exchangeProduct, setExchangeProduct] = useState<Product | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
-  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [statsExpanded, setStatsExpanded] = useState(true);
+  const [showStockStats, setShowStockStats] = useState(true);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [productBoxSize, setProductBoxSize] = useState<"small" | "standard" | "large" | string>("standard");
   const [searchVisible, setSearchVisible] = useState(false);
@@ -180,6 +181,7 @@ export default function ProductsPage() {
   // Valuations & Total Raw Profit from sold products (Selling Price - Buying Cost)
   const totalCostValuation = allProducts.filter(p => !p.archived).reduce((sum, p) => sum + (p.buy_price * p.stock), 0);
   const totalSaleValuation = allProducts.filter(p => !p.archived).reduce((sum, p) => sum + (p.sell_price * p.stock), 0);
+  const totalStockUnits = allProducts.filter(p => !p.archived).reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
   const totalRawProfit = useMemo(() => {
     return salesData
       .filter(s => !s.returned)
@@ -389,9 +391,19 @@ export default function ProductsPage() {
     <div className="space-y-3">
       {/* Valuation & Top Header - Collapsible */}
       <div className="flex items-center justify-between bg-secondary/20 px-3 py-1.5 rounded-lg border border-border/40 no-print">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          {lang === "bn" ? "স্টক এবং মূল্যায়ন পরিসংখ্যান" : "Stock & Valuation Statistics"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            {lang === "bn" ? "স্টক এবং মূল্যায়ন পরিসংখ্যান" : "Stock & Valuation Statistics"}
+          </span>
+          <button
+            type="button"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+            onClick={() => setShowStockStats(prev => !prev)}
+            title={showStockStats ? (lang === "bn" ? "স্টক পরিসংখ্যান লুকান" : "Hide Stock Stats") : (lang === "bn" ? "স্টক পরিসংখ্যান দেখুন" : "Show Stock Stats")}
+          >
+            {showStockStats ? <EyeOff className="size-3.5 text-primary" /> : <Eye className="size-3.5" />}
+          </button>
+        </div>
         <Button
           variant="ghost"
           size="sm"
@@ -405,18 +417,58 @@ export default function ProductsPage() {
       </div>
 
       {statsExpanded && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 transition-all duration-300">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 transition-all duration-300">
+          <Card className="p-2 sm:p-3 bg-gradient-to-br from-blue-50/50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200/30">
+            <div className="flex items-center justify-between">
+              <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{lang === "bn" ? "মোট স্টক (মজুদ)" : "Total Stock"}</div>
+              <button
+                type="button"
+                className="p-0.5 text-muted-foreground/70 hover:text-blue-600 transition-colors cursor-pointer"
+                onClick={() => setShowStockStats(prev => !prev)}
+                title={showStockStats ? (lang === "bn" ? "স্টক লুকান" : "Hide Stock") : (lang === "bn" ? "স্টক দেখুন" : "Show Stock")}
+              >
+                {showStockStats ? <EyeOff className="size-3 text-blue-600" /> : <Eye className="size-3" />}
+              </button>
+            </div>
+            <div className="text-xs sm:text-base font-bold font-serif text-blue-700 dark:text-blue-400 mt-0.5">
+              {showStockStats ? `${totalStockUnits.toLocaleString()} ${lang === "bn" ? "টি" : "units"}` : "••••••"}
+            </div>
+          </Card>
           <Card className="p-2 sm:p-3 bg-gradient-to-br from-indigo-50/50 to-indigo-100/50 dark:from-indigo-950/20 dark:to-indigo-900/10 border-indigo-200/30">
-            <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{t("stock_value")} ({t("buy")})</div>
-            <div className="text-xs sm:text-base font-bold font-serif text-indigo-700 dark:text-indigo-400 mt-0.5">{fmtMoney(totalCostValuation)}</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{t("stock_value")} ({t("buy")})</div>
+              <button
+                type="button"
+                className="p-0.5 text-muted-foreground/70 hover:text-indigo-600 transition-colors cursor-pointer"
+                onClick={() => setShowStockStats(prev => !prev)}
+              >
+                {showStockStats ? <EyeOff className="size-3 text-indigo-600" /> : <Eye className="size-3" />}
+              </button>
+            </div>
+            <div className="text-xs sm:text-base font-bold font-serif text-indigo-700 dark:text-indigo-400 mt-0.5">
+              {showStockStats ? fmtMoney(totalCostValuation) : "••••••"}
+            </div>
           </Card>
           <Card className="p-2 sm:p-3 bg-gradient-to-br from-emerald-50/50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-900/10 border-emerald-200/30">
-            <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{t("stock_value")} ({t("sell")})</div>
-            <div className="text-xs sm:text-base font-bold font-serif text-emerald-700 dark:text-emerald-400 mt-0.5">{fmtMoney(totalSaleValuation)}</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{t("stock_value")} ({t("sell")})</div>
+              <button
+                type="button"
+                className="p-0.5 text-muted-foreground/70 hover:text-emerald-600 transition-colors cursor-pointer"
+                onClick={() => setShowStockStats(prev => !prev)}
+              >
+                {showStockStats ? <EyeOff className="size-3 text-emerald-600" /> : <Eye className="size-3" />}
+              </button>
+            </div>
+            <div className="text-xs sm:text-base font-bold font-serif text-emerald-700 dark:text-emerald-400 mt-0.5">
+              {showStockStats ? fmtMoney(totalSaleValuation) : "••••••"}
+            </div>
           </Card>
           <Card className="p-2 sm:p-3 bg-gradient-to-br from-amber-50/50 to-amber-100/50 dark:from-amber-950/20 dark:to-amber-900/10 border-amber-200/30">
             <div className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{lang === "bn" ? "মোট বিক্রয় লাভ (র' প্রফিট)" : "Raw Sales Profit"}</div>
-            <div className="text-xs sm:text-base font-bold font-serif text-amber-700 dark:text-amber-400 mt-0.5">{fmtMoney(totalRawProfit)}</div>
+            <div className="text-xs sm:text-base font-bold font-serif text-amber-700 dark:text-amber-400 mt-0.5">
+              {showStockStats ? fmtMoney(totalRawProfit) : "••••••"}
+            </div>
           </Card>
         </div>
       )}
@@ -424,6 +476,15 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg sm:text-xl font-bold">{t("products")}</h1>
         <div className="flex gap-1.5 items-center">
+          <Button
+            size="sm"
+            onClick={() => { setEditing(null); setInitialBarcode(null); setOpen(true); }}
+            className="h-8 text-[11px] sm:text-xs font-bold gap-1 bg-primary text-primary-foreground shadow-sm hover:opacity-90 px-2.5 sm:px-3 cursor-pointer"
+            title={lang === "bn" ? "নতুন পণ্য যোগ করুন" : "Add New Product"}
+          >
+            <Plus className="size-3.5 sm:size-4 stroke-[2.5]" />
+            <span>{lang === "bn" ? "নতুন পণ্য" : "Add Product"}</span>
+          </Button>
           <Button
             size="sm"
             variant={searchVisible ? "default" : "outline"}

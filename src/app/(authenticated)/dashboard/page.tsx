@@ -1,5 +1,6 @@
 "use client";
 
+import { parseSaleDate, getSaleCashAmount, toLocalDateStr } from "@/lib/sales-calc";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -776,7 +777,14 @@ export default function Dashboard() {
       const saved = localStorage.getItem('dashboardDateFilter');
       if (saved) {
         const parsed = JSON.parse(saved);
-        setDateFilter(parsed);
+        const todayStr = toLocalDateStr(new Date());
+        // Auto-expire past-date filters so dashboard is always in live today mode on a new day
+        if (parsed.from && parsed.from !== todayStr && parsed.to && parsed.to !== todayStr) {
+          localStorage.removeItem('dashboardDateFilter');
+          setDateFilter({ from: '', to: '' });
+        } else {
+          setDateFilter(parsed);
+        }
       }
     } catch {}
   }, []);
@@ -938,41 +946,22 @@ export default function Dashboard() {
 
 
   
-  const today = todayStart();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
   // Robust date boundary matcher supporting ISO strings, Firestore Timestamps, and Date objects
   const isDateInRange = (dateInput: any) => {
-    if (!dateInput) return false;
-    let d: Date;
-    if (typeof dateInput?.toDate === "function") {
-      d = dateInput.toDate();
-    } else if (dateInput?.seconds !== undefined) {
-      d = new Date(dateInput.seconds * 1000);
-    } else if (typeof dateInput === "string" || typeof dateInput === "number") {
-      d = new Date(dateInput);
-    } else if (dateInput instanceof Date) {
-      d = dateInput;
-    } else {
-      d = new Date(dateInput);
-    }
-    if (isNaN(d.getTime())) return false;
+    const d = parseSaleDate(dateInput);
+    if (!d) return false;
 
-    // Default to today if no custom filter set
+    const dStr = toLocalDateStr(d);
+    if (!dStr) return false;
+
+    // Default to live today if no custom filter set
     if (!dateFilter.from && !dateFilter.to) {
-      return d >= today && d < tomorrow;
+      const todayStr = toLocalDateStr(new Date());
+      return dStr === todayStr;
     }
 
-    if (dateFilter.from) {
-      const fromBoundary = new Date(`${dateFilter.from}T00:00:00`);
-      if (d < fromBoundary) return false;
-    }
-
-    if (dateFilter.to) {
-      const toBoundary = new Date(`${dateFilter.to}T23:59:59.999`);
-      if (d > toBoundary) return false;
-    }
+    if (dateFilter.from && dStr < dateFilter.from) return false;
+    if (dateFilter.to && dStr > dateFilter.to) return false;
 
     return true;
   };
@@ -994,28 +983,7 @@ export default function Dashboard() {
     return Math.max(0, sp * q - disc);
   };
 
-  const getSaleCash = (s: any) => {
-    const tot = getSaleTotal(s);
-    const p = Number(s.paid_amount);
-    if (s.type === "split") {
-      return Number(s.split_cash) || 0;
-    }
-    if (s.type === "cash" || s.type === "pos" || s.type === "nagad" || s.type === "card" || !s.type) {
-      return (!isNaN(p) && p >= 0 ? p : tot);
-    }
-    if (s.type === "credit") {
-      return (!isNaN(p) && p > 0 ? p : 0);
-    }
-    if (s.type === "bkash" || (s.type as string) === "bank") {
-      if ((s as any).payment_status === "accepted" || (s as any).payment_accepted) return (!isNaN(p) && p > 0 ? p : tot);
-      return 0;
-    }
-    if (s.type === "online") {
-      if ((s as any).courier_status === "collected") return (!isNaN(p) && p > 0 ? p : tot);
-      return 0;
-    }
-    return (!isNaN(p) && p >= 0 ? p : tot);
-  };
+  const getSaleCash = (s: any) => getSaleCashAmount(s);
 
   const totalSalesToday = filteredSales.reduce((a, s) => {
     if (s.returned) return a;
@@ -1116,7 +1084,7 @@ export default function Dashboard() {
       if (dateFilter.from && rDate < dateFilter.from) return false;
       if (dateFilter.to && rDate > dateFilter.to) return false;
       if (!dateFilter.from && !dateFilter.to) {
-        return rDate === new Date().toISOString().slice(0, 10);
+        return rDate === toLocalDateStr(new Date());
       }
       return true;
     })
@@ -1318,7 +1286,7 @@ export default function Dashboard() {
   const isReminderActive = (r: Reminder) => {
     if (r.completed) return false;
     if (!r.logic_type || r.logic_type === "none") {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = toLocalDateStr(new Date());
       return r.due_date <= todayStr;
     }
     if (r.logic_type === "product_stock") {
@@ -1349,7 +1317,7 @@ export default function Dashboard() {
       if (r.completed) return;
       
       if (!r.logic_type || r.logic_type === "none") {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = toLocalDateStr(new Date());
         if (r.due_date <= todayStr) {
           list.push({ id: r.id, title: r.title, type: lang === "bn" ? "সাধারণ সতর্কতা" : "General Alert", isLogic: false });
         }
@@ -1434,7 +1402,7 @@ export default function Dashboard() {
       await createReminderFn({
         data: {
           title: newReminderTitle.trim(),
-          due_date: newReminderDate || new Date().toISOString().slice(0, 10),
+          due_date: newReminderDate || toLocalDateStr(new Date()),
           logic_type: logicType,
           logic_config: {
             product_id: selectedProductId || null,
@@ -1803,11 +1771,11 @@ export default function Dashboard() {
         ) : <div key="due" className="hidden" />;
       case "cashbox":
         const todayCashboxNet = filteredCashbox.reduce((sum, c) => sum + cashboxDelta(c.kind, c.amount), 0);
-        const displayedCashbox = (!dateFilter.from && !dateFilter.to) ? todayCashboxNet : cashboxTotal;
+        const displayedCashbox = cashboxTotal;
         const cashboxSubText = isHidden && !isRevealed
           ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal")
           : (!dateFilter.from && !dateFilter.to)
-          ? (lang === "bn" ? `আজকের নিট ক্যাশ (মোট: ${fmtMoney(cashboxTotal)})` : `Today's Net Cash (Total: ${fmtMoney(cashboxTotal)})`)
+          ? (lang === "bn" ? `আজকের পরিবর্তন: ${fmtMoney(todayCashboxNet)}` : `Today's net: ${fmtMoney(todayCashboxNet)}`)
           : dateRangeLabel;
 
         return canAccess(perms, "cashbox") ? (
@@ -2068,11 +2036,11 @@ const renderWidget = (widgetId: string) => {
               );
             case "cashbox":
               const gridCashboxNet = filteredCashbox.reduce((sum, c) => sum + cashboxDelta(c.kind, c.amount), 0);
-              const gridCashboxVal = (!dateFilter.from && !dateFilter.to) ? gridCashboxNet : cashboxTotal;
+              const gridCashboxVal = cashboxTotal;
               const gridCashboxSub = isHidden && !isRevealed
                 ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal")
                 : (!dateFilter.from && !dateFilter.to)
-                ? (lang === "bn" ? `আজকের নিট ক্যাশ (মোট: ${fmtMoney(cashboxTotal)})` : `Today's Net Cash (Total: ${fmtMoney(cashboxTotal)})`)
+                ? (lang === "bn" ? `আজকের পরিবর্তন: ${fmtMoney(gridCashboxNet)}` : `Today's net: ${fmtMoney(gridCashboxNet)}`)
                 : dateRangeLabel;
 
               return (

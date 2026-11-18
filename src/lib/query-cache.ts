@@ -11,21 +11,44 @@ interface CacheMeta {
   keys: string[];
 }
 
-function getLoggedInUserId(): string {
+export function getActiveTenantKey(): string {
   if (typeof window === "undefined") return "";
   try {
-    const raw = localStorage.getItem("classicworld_auth_profile") || localStorage.getItem("user") || localStorage.getItem("auth_profile");
+    // 1. Check active employee session
+    const empRaw = localStorage.getItem("df_active_employee_session") || localStorage.getItem("cw_active_employee_session");
+    if (empRaw) {
+      const emp = JSON.parse(empRaw);
+      const ownerId = emp?.owner_id || emp?.ownerId;
+      if (ownerId && !["classicworld_default_owner", "classic-world-default"].includes(ownerId)) {
+        return `tenant_${ownerId}`;
+      }
+      if (emp?.id) return `tenant_emp_${emp.id}`;
+    }
+
+    // 2. Check profile across all profile keys
+    const raw =
+      localStorage.getItem("hz-auth-profile") ||
+      localStorage.getItem("classicworld_auth_profile") ||
+      localStorage.getItem("cw-auth-profile") ||
+      localStorage.getItem("auth_profile") ||
+      localStorage.getItem("user");
+
     if (raw) {
       const u = JSON.parse(raw);
-      return u?.id || u?.email || "";
+      const tenantId = u?.owner_id || u?.business_id || u?.id || u?.email;
+      if (tenantId && !["classicworld_default_owner", "classic-world-default", "owner"].includes(tenantId)) {
+        const activeProf = u?.activeProfile || localStorage.getItem("active_profile") || localStorage.getItem("classicworld_active_profile") || "default";
+        return `tenant_${tenantId}_${activeProf}`;
+      }
     }
   } catch {}
   return "";
 }
 
 function storageKey(queryKey: readonly unknown[]) {
-  const uid = getLoggedInUserId();
-  return CACHE_PREFIX + (uid ? `${uid}:` : "") + JSON.stringify(queryKey);
+  const tenantKey = getActiveTenantKey();
+  if (!tenantKey) return "";
+  return `${CACHE_PREFIX}${tenantKey}:${JSON.stringify(queryKey)}`;
 }
 
 function isCashboxKey(queryKey: readonly unknown[]) {
@@ -36,8 +59,10 @@ function isCashboxKey(queryKey: readonly unknown[]) {
 export function readQueryCache<T>(queryKey: readonly unknown[]): T | undefined {
   if (typeof window === "undefined") return undefined;
   if (isCashboxKey(queryKey)) return undefined;
+  const key = storageKey(queryKey);
+  if (!key) return undefined;
   try {
-    const raw = localStorage.getItem(storageKey(queryKey));
+    const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     const entry = JSON.parse(raw) as CacheEntry;
     if (Date.now() - entry.updatedAt > MAX_AGE_MS) return undefined;
@@ -56,6 +81,7 @@ export function writeQueryCache(queryKey: readonly unknown[], data: unknown) {
   if (isCashboxKey(queryKey)) return;
 
   const key = storageKey(queryKey);
+  if (!key) return;
   if (writeTimeouts.has(key)) {
     clearTimeout(writeTimeouts.get(key));
   }
@@ -96,7 +122,7 @@ export function clearQueryCache() {
     const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith(CACHE_PREFIX) || key === CACHE_META_KEY)) {
+      if (key && (key.startsWith(CACHE_PREFIX) || key.startsWith("df-cache") || key.startsWith("cw-cache") || key === CACHE_META_KEY)) {
         toRemove.push(key);
       }
     }

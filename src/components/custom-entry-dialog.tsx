@@ -45,6 +45,7 @@ import {
   createCashboxFn,
   createPaymentFn,
 } from "@/lib/rpc";
+import { refreshQueries } from "@/lib/optimistic-cache";
 import { playSaleSuccessSound, playTapSound, playErrorSound } from "@/lib/audio";
 
 export type CustomEntryType = "sale" | "expense" | "purchase" | "deposit" | "withdraw" | "due_collection";
@@ -297,14 +298,15 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
 
       playSaleSuccessSound();
 
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["sales"] }),
-        qc.invalidateQueries({ queryKey: ["expenses"] }),
-        qc.invalidateQueries({ queryKey: ["purchases"] }),
-        qc.invalidateQueries({ queryKey: ["cashbox"] }),
-        qc.invalidateQueries({ queryKey: ["parties"] }),
-        qc.invalidateQueries({ queryKey: ["payments"] }),
-      ]);
+      await refreshQueries(
+        qc,
+        ["cashbox"],
+        ["sales"],
+        ["expenses"],
+        ["purchases"],
+        ["parties"],
+        ["payments"]
+      );
 
       resetFormFields();
 

@@ -8,6 +8,7 @@ import { Lock, Crown, User, Check, ArrowRight, KeyRound } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { playTapSound, playErrorSound, playSaleSuccessSound } from "@/lib/audio";
+import { clearQueryCache } from "@/lib/query-cache";
 
 interface ModeSwitcherDialogProps {
   open: boolean;
@@ -90,11 +91,24 @@ export function ModeSwitcherDialog({ open, onOpenChange }: ModeSwitcherDialogPro
       playSaleSuccessSound();
       sessionStorage.setItem("app_pin_unlocked", "true");
       const empData = targetEmployee;
-      localStorage.setItem("cw_active_employee_session", JSON.stringify(empData));
+      const empSession = {
+        ...empData,
+        id: empData.id,
+        _id: empData.id,
+        role: "employee",
+        employee_id: empData.id,
+        name: empData.name || empData.full_name || "Employee",
+        full_name: empData.name || empData.full_name || "Employee",
+      };
+      localStorage.setItem("cw_active_employee_session", JSON.stringify(empSession));
       localStorage.setItem("cw_active_session_role", "employee");
-      localStorage.setItem("user", JSON.stringify({ ...empData, role: "employee" }));
-      localStorage.setItem("classicworld_auth_profile", JSON.stringify({ ...empData, role: "employee" }));
+      localStorage.setItem("user", JSON.stringify(empSession));
+      localStorage.setItem("dreamfashion_auth_profile", JSON.stringify(empSession));
+      localStorage.setItem("classicworld_auth_profile", JSON.stringify(empSession));
       localStorage.setItem("auth_token", `token_emp_${empData.id}`);
+      try {
+        clearQueryCache();
+      } catch (_) {}
       window.dispatchEvent(new Event("hz-employee-switched"));
       window.dispatchEvent(new Event("storage"));
       onOpenChange(false);

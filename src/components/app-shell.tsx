@@ -51,6 +51,8 @@ import { cashboxBalance } from "@/lib/cashbox-utils";
 import { CustomHomeIcon } from "@/components/custom-home-icon";
 import { AdminPopupDialog } from "@/components/admin-popup-dialog";
 import { OfflineSyncBadge } from "@/components/offline-sync-badge";
+import { PcEmeraldBackdrop } from "@/components/pc-emerald-backdrop";
+import { PcEmeraldQuickButton } from "@/components/pc-emerald-quick-button";
 
 type NavItem = {
   to: string;
@@ -83,7 +85,7 @@ const desktopNavGroups: NavGroup[] = [
       { to: "/purchases", labelKey: "new_purchase", icon: ShoppingCart, perm: "purchases" },
       { to: "/bank", labelKey: "bank_management", icon: Landmark, perm: "expenses" },
       { to: "/expenses", labelKey: "expenses", icon: Receipt, perm: "expenses" },
-      { to: "/owners-wallet", labelKey: "owner_expense", icon: Wallet, perm: "expenses" },
+      { to: "/owners-wallet", labelKey: "owner_expense", icon: Wallet, perm: "owners_wallet" },
       { to: "/somiti", labelKey: "somiti", icon: PiggyBank, perm: "expenses" },
       { to: "/online-sells", labelKey: "online_sell", icon: DollarSign, perm: "sales" },
       { to: "/cash-management", labelKey: "cash_management", icon: Banknote, perm: "expenses" },
@@ -280,8 +282,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return true;
   });
 
-  const brandName = user.business_name || "Classic World";
-  const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "CW";
+  const brandName = user.business_name || "Dream Fashion";
+  const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "DF";
 
   // Profile / ID Switcher State
   const [modeSwitcherOpen, setModeSwitcherOpen] = useState(false);
@@ -356,7 +358,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen min-h-dvh bg-transparent flex w-full app-shell">
+    <div className="min-h-screen min-h-dvh bg-transparent flex w-full app-shell relative">
+      <PcEmeraldBackdrop />
       <Sidebar collapsible="icon" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <SidebarHeader className="border-b border-sidebar-border px-3 py-3 space-y-2">
           <div className="flex items-center overflow-hidden group-data-[collapsible=icon]:justify-center">
@@ -574,6 +577,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <PcEmeraldQuickButton />
               <PWAInstallButton variant="outline" className="hidden sm:inline-flex h-8 px-2.5 text-xs" />
               <UniversalSearch role={user.role} permissions={user.permissions} />
               <Link href="/more" title={lang === "bn" ? "হেল্প ও সাপোর্ট" : "Help & Support"} className="hidden md:inline-flex">
@@ -621,7 +625,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-xl rounded-2xl border-border/80">
                   <div className="px-2 py-1.5 border-b border-border/60">
-                    <div className="text-xs font-bold truncate text-foreground">{user.business_name || "Classic World"}</div>
+                    <div className="text-xs font-bold truncate text-foreground">{user.business_name || "Dream Fashion"}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{user.email || (user as any).username || ""}</div>
                     <div className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-md bg-primary/10 text-primary border border-primary/20">
                       {user.role || "Admin / Owner"}

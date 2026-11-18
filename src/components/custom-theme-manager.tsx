@@ -1,36 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  isEmeraldModeEnabled,
+  normalizeEmeraldGlass,
+  readCustomThemeConfig,
+  THEME_UPDATED_EVENT,
+  type ThemeConfig,
+} from "@/lib/emerald-theme";
+import { useResolvedMediaUrl } from "@/lib/local-media-db";
 
-export type ThemeConfig = {
-  primaryColor?: string;
-  backgroundColor?: string;
-  bgImage?: string;
-  bgImageOpacity?: number;
-  fontFamily?: string;
-  fontSize?: string;
-  textColor?: string;
-  density?: "compact" | "standard" | "cozy";
-  widgetOrder?: string[];
-  isMaterialUI?: boolean;
-  uiStyle?: "default" | "brutalism" | "new-brutalism" | "morphism" | "glassmorphism" | "flowerism" | "cyberpunk" | "minimalist" | "forest" | "luxury" | "feather";
-  bevelStrength?: "none" | "light" | "medium" | "heavy";
-  glowEnabled?: boolean;
-  glowIntensity?: number;
-  borderRadius?: "none" | "small" | "medium" | "large" | "full";
-  borderWidth?: "none" | "thin" | "medium" | "thick" | "heavy";
-  shadowStyle?: "none" | "soft" | "medium" | "deep" | "brutal";
-  cardOpacity?: number;
-  cardBlur?: number;
-  animationSpeed?: "none" | "fast" | "normal" | "slow";
-  cardDarkness?: number;
-  kpiStyle?: "default" | "glass" | "neon" | "borderless";
-  customFontUrl?: string;
-  customFontName?: string;
-};
+export type { ThemeConfig };
 
 export function CustomThemeManager() {
   const [config, setConfig] = useState<ThemeConfig>({});
+  const resolvedBgImage = useResolvedMediaUrl(config.bgImage || "", "");
 
   const loadTheme = () => {
     if (typeof window === "undefined") return;
@@ -969,13 +953,14 @@ export function CustomThemeManager() {
       }
     `;
 
-    // Border Radius / Edges overrides (Default: Sharp 0px)
-    let radiusVal = "0px";
+    // Border Radius / Edges overrides (Default: Sharp 0px, or Rounded 16px in Emerald Glass mode)
+    const isEmerald = isEmeraldModeEnabled(config);
+    let radiusVal = isEmerald ? "16px" : "0px";
     if (config.borderRadius === "small") radiusVal = "4px";
     else if (config.borderRadius === "medium") radiusVal = "8px";
     else if (config.borderRadius === "large") radiusVal = "16px";
     else if (config.borderRadius === "full") radiusVal = "9999px";
-    else if (config.borderRadius === "none" || !config.borderRadius) radiusVal = "0px";
+    else if (config.borderRadius === "none") radiusVal = isEmerald ? "12px" : "0px";
 
     css += `
       :root, .dark {
@@ -1243,7 +1228,7 @@ export function CustomThemeManager() {
     }
 
     // 7. Background Image Overlay
-    if (config.bgImage) {
+    if (resolvedBgImage) {
       const opacity = config.bgImageOpacity !== undefined ? config.bgImageOpacity : 0.1;
       css += `
         html {
@@ -1253,7 +1238,7 @@ export function CustomThemeManager() {
           background-image: linear-gradient(
             color-mix(in srgb, hsl(var(--background)) ${(1 - opacity) * 100}%, transparent),
             color-mix(in srgb, hsl(var(--background)) ${(1 - opacity) * 100}%, transparent)
-          ), url('${config.bgImage}') !important;
+          ), url('${resolvedBgImage}') !important;
           background-size: cover !important;
           background-position: center !important;
           background-repeat: no-repeat !important;
@@ -1467,8 +1452,199 @@ export function CustomThemeManager() {
       }
     }
 
+    // 18. PC Emerald Glass Mode (Desktop >= 768px — adjustable frosted backdrop + emerald card & div colors)
+    if (isEmeraldModeEnabled(config)) {
+      const eg = normalizeEmeraldGlass(config.emeraldGlass);
+      const blurPx = Math.round(eg.blur);
+      const innerBlurPx = Math.max(8, Math.round(blurPx * 0.72));
+      const satVal = eg.saturation.toFixed(2);
+      const outerOpacityPct = Math.round(
+        Math.min(82, Math.max(14, eg.opacity * 74)),
+      );
+      const panelOpacityPct = Math.round(
+        Math.min(92, 26 + eg.opacity * 54),
+      );
+      const popoverOpacityPct = Math.round(
+        Math.min(96, 70 + eg.opacity * 26),
+      );
+      const topEdgePct = Math.round(eg.edge * 88);
+      const borderEdgePct = Math.round(eg.edge * 34);
+
+      css += `
+        @media (min-width: 768px) {
+          :root {
+            --radius: 16px !important;
+            --gw-blur: ${blurPx}px;
+            --gw-opacity: ${eg.opacity};
+            --gw-saturation: ${satVal};
+            --gw-tint: ${eg.tint};
+            --gw-edge: ${eg.edge};
+            --gw-highlight: #ffffff;
+            --gw-shadow: rgba(12, 36, 23, 0.28);
+
+            --background: #d7e6dc !important;
+            --foreground: #172b21 !important;
+            --card: #f2f9f5 !important;
+            --card-foreground: #172b21 !important;
+            --popover: #f5fbf7 !important;
+            --popover-foreground: #172b21 !important;
+            --primary: #296249 !important;
+            --primary-foreground: #ffffff !important;
+            --secondary: #d4e8dc !important;
+            --secondary-foreground: #1a4734 !important;
+            --muted: #dfece4 !important;
+            --muted-foreground: #3a5748 !important;
+            --accent: #cbe3d5 !important;
+            --accent-foreground: #1a4734 !important;
+            --border: rgba(41, 98, 73, 0.22) !important;
+            --input: rgba(255, 255, 255, 0.72) !important;
+            --ring: #296249 !important;
+            --loader-color: #296249 !important;
+            --sidebar: #eef7f1 !important;
+            --sidebar-foreground: #172b21 !important;
+            --sidebar-primary: #296249 !important;
+            --sidebar-primary-foreground: #ffffff !important;
+            --sidebar-accent: rgba(41, 98, 73, 0.14) !important;
+            --sidebar-accent-foreground: #1a4734 !important;
+            --sidebar-border: rgba(41, 98, 73, 0.18) !important;
+          }
+
+          .dark {
+            --radius: 16px !important;
+            --gw-highlight: rgba(167, 243, 208, 0.75);
+            --gw-shadow: rgba(0, 0, 0, 0.56);
+
+            --background: #091710 !important;
+            --foreground: #edf6f0 !important;
+            --card: #12271d !important;
+            --card-foreground: #edf6f0 !important;
+            --popover: #10241a !important;
+            --popover-foreground: #edf6f0 !important;
+            --primary: #6ee7b7 !important;
+            --primary-foreground: #071b11 !important;
+            --secondary: #183526 !important;
+            --secondary-foreground: #a7f3d0 !important;
+            --muted: #152d21 !important;
+            --muted-foreground: #a4c4b3 !important;
+            --accent: #1b3c2c !important;
+            --accent-foreground: #a7f3d0 !important;
+            --border: rgba(145, 213, 176, 0.20) !important;
+            --input: rgba(16, 36, 26, 0.78) !important;
+            --ring: #6ee7b7 !important;
+            --loader-color: #34d399 !important;
+            --sidebar: #0d1f16 !important;
+            --sidebar-foreground: #edf6f0 !important;
+            --sidebar-primary: #6ee7b7 !important;
+            --sidebar-primary-foreground: #071b11 !important;
+            --sidebar-accent: rgba(145, 213, 176, 0.16) !important;
+            --sidebar-accent-foreground: #a7f3d0 !important;
+            --sidebar-border: rgba(145, 213, 176, 0.16) !important;
+          }
+
+          body, .site-bg {
+            background-color: var(--background) !important;
+            color: var(--foreground) !important;
+          }
+
+          /* PC Sidebar & Header Frosted Emerald Glass Chrome */
+          .app-shell [data-slot="sidebar-inner"],
+          .app-shell [data-sidebar="sidebar"] {
+            background: color-mix(in srgb, color-mix(in srgb, var(--sidebar) 84%, ${eg.tint}) ${outerOpacityPct}%, transparent) !important;
+            backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            -webkit-backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            border-right: 1px solid color-mix(in srgb, var(--gw-highlight) ${borderEdgePct}%, var(--sidebar-border)) !important;
+            box-shadow:
+              inset 0 1px 0 color-mix(in srgb, var(--gw-highlight) ${Math.round(topEdgePct * 0.7)}%, transparent),
+              0 18px 40px -24px var(--gw-shadow) !important;
+          }
+
+          .app-shell > div > header {
+            margin: 12px 24px 0 24px !important;
+            border-radius: 20px !important;
+            background: color-mix(in srgb, color-mix(in srgb, var(--card) 82%, ${eg.tint}) ${outerOpacityPct}%, transparent) !important;
+            backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            -webkit-backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            border: 1px solid color-mix(in srgb, var(--gw-highlight) ${borderEdgePct}%, var(--border)) !important;
+            box-shadow:
+              inset 0 1px 0 color-mix(in srgb, var(--gw-highlight) ${topEdgePct}%, transparent),
+              0 16px 38px -22px var(--gw-shadow) !important;
+          }
+
+          /* Outer PC Workspace Frosted Stage */
+          .app-shell main > div.max-w-screen-2xl {
+            background: color-mix(in srgb, color-mix(in srgb, var(--card) 78%, ${eg.tint}) ${outerOpacityPct}%, transparent) !important;
+            backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            -webkit-backdrop-filter: blur(${blurPx}px) saturate(${satVal}) !important;
+            border-radius: 26px !important;
+            padding: 22px !important;
+            border: 1px solid color-mix(in srgb, var(--gw-highlight) ${borderEdgePct}%, var(--border)) !important;
+            box-shadow:
+              inset 0 1px 0 color-mix(in srgb, var(--gw-highlight) ${topEdgePct}%, transparent),
+              0 24px 56px -26px var(--gw-shadow) !important;
+          }
+
+          /* Cards, Panels & Inner Surface Divs inside PC Workspace */
+          .app-shell main .beveled-card:not(.gw-root):not(.gw-root *),
+          .app-shell main .glass-card:not(.gw-root):not(.gw-root *),
+          .app-shell main .bkash-card:not(.gw-root):not(.gw-root *),
+          .app-shell main .fintech-card:not(.gw-root):not(.gw-root *),
+          .app-shell main .card:not(.gw-root):not(.gw-root *),
+          .app-shell main [data-slot="card"]:not(.gw-root):not(.gw-root *),
+          .app-shell main div.bg-card:not(.gw-root):not(.gw-root *),
+          .app-shell main div.bg-white:not(.invoice-print-container):not(.invoice-print-container *):not(.pos-paper-preview):not(.pos-paper-preview *):not(.gw-root):not(.gw-root *),
+          .app-shell main div.bg-zinc-50:not(.invoice-print-container):not(.invoice-print-container *):not(.gw-root):not(.gw-root *),
+          .app-shell main div.bg-slate-50:not(.invoice-print-container):not(.invoice-print-container *):not(.gw-root):not(.gw-root *),
+          .app-shell main div.bg-gray-50:not(.invoice-print-container):not(.invoice-print-container *):not(.gw-root):not(.gw-root *) {
+            background-image: none !important;
+            background: color-mix(in srgb, color-mix(in srgb, var(--card) 84%, ${eg.tint}) ${panelOpacityPct}%, transparent) !important;
+            backdrop-filter: blur(${innerBlurPx}px) saturate(${satVal}) !important;
+            -webkit-backdrop-filter: blur(${innerBlurPx}px) saturate(${satVal}) !important;
+            border: 1px solid color-mix(in srgb, var(--primary) 22%, color-mix(in srgb, var(--gw-highlight) ${borderEdgePct}%, transparent)) !important;
+            border-radius: 18px !important;
+            box-shadow:
+              inset 0 1px 0 color-mix(in srgb, var(--gw-highlight) ${Math.round(topEdgePct * 0.8)}%, transparent),
+              0 10px 26px -18px var(--gw-shadow) !important;
+          }
+
+          .app-shell main .beveled-card:not(.gw-root):hover,
+          .app-shell main .card:not(.gw-root):hover,
+          .app-shell main [data-slot="card"]:not(.gw-root):hover {
+            border-color: color-mix(in srgb, var(--primary) 48%, transparent) !important;
+          }
+
+          /* Secondary / Muted surface divs & Tabs in Emerald Mode */
+          .app-shell main div[class*="bg-muted/"]:not(.gw-root *),
+          .app-shell main [role="tablist"]:not(.gw-root *) {
+            background-color: color-mix(in srgb, var(--secondary) 52%, transparent) !important;
+            border-color: color-mix(in srgb, var(--primary) 20%, transparent) !important;
+            border-radius: 12px !important;
+          }
+
+          /* Dialogs, Dropdowns & Popovers maintain high-legibility emerald frost */
+          [role="dialog"]:not(:has(.gw-root)),
+          [data-radix-popper-content-wrapper] > div {
+            background: color-mix(in srgb, var(--popover) ${popoverOpacityPct}%, ${eg.tint}) !important;
+            backdrop-filter: blur(${Math.max(16, blurPx)}px) saturate(${satVal}) !important;
+            -webkit-backdrop-filter: blur(${Math.max(16, blurPx)}px) saturate(${satVal}) !important;
+            border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border)) !important;
+          }
+
+          /* Keep paper receipts crisp white with black ink */
+          .invoice-print-container,
+          .invoice-print-container *,
+          .pos-paper-preview,
+          .pos-paper-preview * {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+          }
+        }
+      `;
+    }
+
     styleEl.innerHTML = css;
-  }, [config]);
+  }, [config, resolvedBgImage]);
 
   return null;
 }

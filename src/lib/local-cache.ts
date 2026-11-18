@@ -67,6 +67,7 @@ export function clearAuthProfile() {
     localStorage.removeItem(LEGACY_AUTH_KEY);
     localStorage.removeItem("user");
     localStorage.removeItem("auth_profile");
+    localStorage.removeItem("dreamfashion_auth_profile");
     localStorage.removeItem("classicworld_auth_profile");
     localStorage.removeItem("auth_token");
     localStorage.removeItem("active_profile");

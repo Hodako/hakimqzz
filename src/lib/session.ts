@@ -72,23 +72,41 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     }
     if (!user) {
       const isEmp = payload.role === "employee" || String(payload.userId).includes("emp");
-      const newOwnerId = isEmp ? "classicworld_default_owner" : payload.userId;
-      const now = new Date().toISOString();
-      const uniqueEmail = isGenericFallbackEmail ? `${payload.userId}@pos.local` : cleanPayloadEmail;
-      user = {
-        _id: payload.userId,
-        email: uniqueEmail,
-        full_name: isEmp ? "Employee" : "Shop Owner",
-        role: isEmp ? "employee" : "owner",
-        owner_id: newOwnerId,
-        activated: true,
-        status: "active",
-        created_at: now,
-        updated_at: now,
-      };
-      try {
-        await db.collection("users").insertOne(user as any);
-      } catch (_) {}
+      if (isEmp) {
+        const cleanEmpId = String(payload.userId).replace(/^emp_/, "");
+        const emp = await db.collection("employees").findOne({
+          $or: [
+            { _id: payload.userId as any },
+            { _id: cleanEmpId as any },
+            ...(payload.email && !isGenericFallbackEmail ? [{ email: payload.email }] : []),
+            ...(cleanPayloadEmail && !isGenericFallbackEmail ? [{ email: cleanPayloadEmail }] : []),
+          ],
+        } as any);
+
+        if (!emp || !emp.owner_id || ["classicworld_default_owner", "classic-world-default"].includes(emp.owner_id)) {
+          throw new Error("Unauthorized: Employee has no linked store owner.");
+        }
+
+        const now = new Date().toISOString();
+        user = {
+          _id: payload.userId,
+          employee_id: emp._id,
+          email: emp.email || (isGenericFallbackEmail ? `${payload.userId}@pos.local` : cleanPayloadEmail),
+          full_name: emp.name || "Employee",
+          role: "employee",
+          owner_id: emp.owner_id,
+          permissions: emp.permissions || {},
+          activated: true,
+          status: emp.status || "active",
+          created_at: now,
+          updated_at: now,
+        };
+        try {
+          await db.collection("users").insertOne(user as any);
+        } catch (_) {}
+      } else {
+        throw new Error("Unauthorized: Account not found.");
+      }
     }
     if (user) {
       sessionUserCache.set(payload.userId, { user, cachedAt: nowTime });
@@ -109,38 +127,66 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
 
   const activeProfile = store?.activeProfile || cookieStore.get("active_profile")?.value || "default";
 
+  // Strict Authoritarian Owner Resolution: Never allow shared fallback owner IDs
   let resolvedOwnerId = user.owner_id;
-  // If employee's owner_id is missing, self-referencing, or fallback, auto-resolve to real shop owner
-  if (role === "employee" && (!resolvedOwnerId || resolvedOwnerId === user._id || resolvedOwnerId === "classicworld_default_owner")) {
-    const db = await getDb();
-    const emp = await db.collection("employees").findOne({
-      $or: [
-        { _id: user._id as any },
-        { _id: (user as any).employee_id as any },
-        ...(user.phone ? [{ phone: user.phone }] : []),
-        ...(user.email ? [{ email: user.email }] : []),
-        ...(user.username ? [{ username: user.username }] : []),
-        ...((user as any).login_code ? [{ login_code: (user as any).login_code }] : []),
-      ]
-    });
-    if (emp && emp.owner_id && emp.owner_id !== user._id) {
-      resolvedOwnerId = emp.owner_id;
-      try {
-        await db.collection("users").updateOne(
+  if (role === "employee") {
+    if (!resolvedOwnerId || resolvedOwnerId === user._id || ["classicworld_default_owner", "classic-world-default"].includes(resolvedOwnerId)) {
+      const db = await getDb();
+      const emp = await db.collection("employees").findOne({
+        $or: [
           { _id: user._id as any },
-          { $set: { owner_id: emp.owner_id } }
-        );
-        user.owner_id = emp.owner_id;
+          { _id: (user as any).employee_id as any },
+          ...(user.phone ? [{ phone: user.phone }] : []),
+          ...(user.email ? [{ email: user.email }] : []),
+          ...(user.username ? [{ username: user.username }] : []),
+          ...((user as any).login_code ? [{ login_code: (user as any).login_code }] : []),
+        ]
+      });
+      if (emp && emp.owner_id && !["classicworld_default_owner", "classic-world-default", user._id].includes(emp.owner_id)) {
+        resolvedOwnerId = emp.owner_id;
+        try {
+          await db.collection("users").updateOne(
+            { _id: user._id as any },
+            { $set: { owner_id: emp.owner_id } }
+          );
+          user.owner_id = emp.owner_id;
+          sessionUserCache.delete(payload.userId);
+        } catch (_) {}
+      } else {
+        throw new Error("Unauthorized: Employee has no linked store owner.");
+      }
+    }
+  } else if (role === "owner") {
+    // If owner record previously inherited a corrupt or fallback owner_id, strictly re-anchor to their own unique user._id
+    if (!user.owner_id || ["classicworld_default_owner", "classic-world-default", "owner"].includes(user.owner_id)) {
+      user.owner_id = user._id;
+      resolvedOwnerId = user._id;
+      try {
+        const db = await getDb();
+        await db.collection("users").updateOne({ _id: user._id as any }, { $set: { owner_id: user._id } });
         sessionUserCache.delete(payload.userId);
       } catch (_) {}
     }
   }
 
-  const isOwner = role === "owner" && (!user.owner_id || user.owner_id === user._id);
-  const ownerIdBase = isOwner ? (user._id as any as string) : (resolvedOwnerId || (user._id as any as string));
-  const ownerId = activeProfile === "default" ? ownerIdBase : `${ownerIdBase}:${activeProfile}`;
-  let resolvedBusinessId = activeProfile === "default" ? businessId : null;
-  if (activeProfile !== "default") {
+  const ownerIdBase = role === "employee" ? (resolvedOwnerId as string) : (user._id as any as string);
+  if (!ownerIdBase || ["classicworld_default_owner", "classic-world-default"].includes(ownerIdBase)) {
+    throw new Error("Unauthorized: Invalid tenant identity.");
+  }
+
+  // Validate activeProfile against owner's declared profiles; employees stay on default
+  let validatedProfile = "default";
+  if (activeProfile !== "default" && role !== "employee") {
+    const userProfiles = Array.isArray(user.profiles) ? user.profiles : [];
+    const hasProfile = userProfiles.some((p: any) => p?.id === activeProfile);
+    if (hasProfile) {
+      validatedProfile = activeProfile;
+    }
+  }
+
+  const ownerId = validatedProfile === "default" ? ownerIdBase : `${ownerIdBase}:${validatedProfile}`;
+  let resolvedBusinessId = validatedProfile === "default" ? businessId : null;
+  if (validatedProfile !== "default") {
     try {
       const db = await getDb();
       const profBiz = await db.collection("businesses").findOne({ owner_id: ownerId } as any);
@@ -157,7 +203,7 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
     businessId: resolvedBusinessId,
     activated,
     permissions: role === "owner" ? OWNER_PERMISSIONS : permissions,
-    profileId: activeProfile,
+    profileId: validatedProfile,
   };
 }
 

@@ -20,8 +20,11 @@ import {
   User,
   MoreHorizontal,
   Info,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
+import { resolvePermissions } from "@/lib/permissions";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { getOwnerWallet, type OwnerWalletEntry } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
@@ -55,8 +58,16 @@ function getCategoryInfo(catId?: string | null, lang = "bn") {
 
 export default function OwnersWalletPage() {
   const { lang, t } = useT();
+  const { user } = useAuth();
+  const perms = resolvePermissions(user?.role ?? "employee", user?.permissions);
+  const isOwner = user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin";
+  const canView = isOwner || Boolean(perms.owners_wallet);
+  const canEdit = isOwner || Boolean(perms.owners_wallet_edit);
+
   const qc = useQueryClient();
-  const { data: entries = [], isLoading } = useCachedQuery(["owner_wallet"], getOwnerWallet);
+  const { data: entries = [], isLoading } = useCachedQuery(["owner_wallet"], getOwnerWallet, {
+    enabled: canView,
+  });
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -277,6 +288,32 @@ export default function OwnersWalletPage() {
     }
   }
 
+  if (!isLoading && !canView) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto p-6 text-center space-y-4 font-hind">
+        <div className="size-16 rounded-3xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 grid place-items-center shadow-lg">
+          <ShieldAlert className="size-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-xl font-bold font-charukola text-foreground">
+            {lang === "bn" ? "অ্যাক্সেস অনুমোদিত নয়" : "Access Denied"}
+          </h2>
+          <p className="text-xs text-muted-foreground font-balooda leading-relaxed">
+            {lang === "bn"
+              ? "মালিকের ব্যক্তিগত ওয়ালেট ও খরচের হিসাব দেখার অনুমতি আপনার নেই। এই মডিউলটি শুধুমাত্র দোকান মালিকের জন্য সংরক্ষিত।"
+              : "You do not have permission to access the Owner's Wallet. This module is restricted to store owners."}
+          </p>
+        </div>
+        <Link href="/dashboard">
+          <Button variant="outline" size="sm" className="font-balooda font-bold rounded-xl gap-2">
+            <ArrowLeft className="size-4" />
+            {lang === "bn" ? "ড্যাশবোর্ডে ফিরে যান" : "Back to Dashboard"}
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-12 max-w-7xl mx-auto font-hind">
       {/* ──────────────── Top Navigation Bar ──────────────── */}
@@ -305,19 +342,26 @@ export default function OwnersWalletPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            onClick={() => {
-              setAmount("");
-              setNote("");
-              setCategory("family");
-              setEntryDate(new Date().toISOString().slice(0, 10));
-              setAddOpen(true);
-            }}
-            className="h-8.5 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs flex items-center gap-1.5 font-balooda w-full sm:w-auto justify-center"
-          >
-            <Plus className="size-4" />
-            {lang === "bn" ? "খরচ যোগ করুন" : "Add Expense"}
-          </Button>
+          {canEdit ? (
+            <Button
+              onClick={() => {
+                setAmount("");
+                setNote("");
+                setCategory("family");
+                setEntryDate(new Date().toISOString().slice(0, 10));
+                setAddOpen(true);
+              }}
+              className="h-8.5 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs flex items-center gap-1.5 font-balooda w-full sm:w-auto justify-center"
+            >
+              <Plus className="size-4" />
+              {lang === "bn" ? "খরচ যোগ করুন" : "Add Expense"}
+            </Button>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-balooda font-bold">
+              <Info className="size-3.5" />
+              <span>{lang === "bn" ? "শুধুমাত্র দেখার অনুমতি (ভিউ-অনলি)" : "View Only Access"}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -509,14 +553,16 @@ export default function OwnersWalletPage() {
             <p className="text-sm font-semibold font-balooda text-muted-foreground">
               {lang === "bn" ? "কোনো খরচ পাওয়া যায়নি" : "No expense records found"}
             </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setAddOpen(true)}
-              className="text-xs font-balooda"
-            >
-              {lang === "bn" ? "প্রথম ব্যক্তিগত খরচ যোগ করুন" : "Add first personal expense"}
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAddOpen(true)}
+                className="text-xs font-balooda"
+              >
+                {lang === "bn" ? "প্রথম ব্যক্তিগত খরচ যোগ করুন" : "Add first personal expense"}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-border/60">
@@ -558,29 +604,31 @@ export default function OwnersWalletPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setEditingEntry(e);
-                          setAmount(String(e.amount));
-                          setCategory(e.category || "personal");
-                          setNote(e.note || "");
-                        }}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-rose-600"
-                        onClick={() => setEntryToDelete(e)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setEditingEntry(e);
+                            setAmount(String(e.amount));
+                            setCategory(e.category || "personal");
+                            setNote(e.note || "");
+                          }}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground hover:text-rose-600"
+                          onClick={() => setEntryToDelete(e)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

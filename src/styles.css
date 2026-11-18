@@ -58,44 +58,44 @@
 
 :root {
   --loader-color: #059669;
-  --background: #B7F7A8;
-  --foreground: #18181b;
+  --background: #F8FAFC;
+  --foreground: #0F172A;
   --card: #FFFFFF;
-  --card-foreground: #18181b;
+  --card-foreground: #0F172A;
   --popover: #FFFFFF;
-  --popover-foreground: #18181b;
+  --popover-foreground: #0F172A;
   --primary: #059669;
   --primary-foreground: #FFFFFF;
-  --secondary: #E6F4EA;
+  --secondary: #ECFDF5;
   --secondary-foreground: #047857;
-  --muted: #E0EFF8;
-  --muted-foreground: #475569;
-  --accent: #E6F4EA;
-  --accent-foreground: #059669;
-  --destructive: #7A2635;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #ECFDF5;
+  --accent-foreground: #047857;
+  --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
   --success: #10B981;
   --warning: #F59E0B;
-  --border: #bfdbfe;
+  --border: #E2E8F0;
   --input: #FFFFFF;
   --ring: #059669;
   --chart-1: #059669;
-  --chart-2: #7A2635;
+  --chart-2: #047857;
   --chart-3: #4B4B4E;
   --chart-4: #8C8C90;
   --chart-5: #34D399;
   --sidebar: #ffffff;
-  --sidebar-foreground: #18181b;
+  --sidebar-foreground: #0F172A;
   --sidebar-primary: #059669;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E6F4EA;
+  --sidebar-accent: #ECFDF5;
   --sidebar-accent-foreground: #059669;
-  --sidebar-border: #bfdbfe;
+  --sidebar-border: #E2E8F0;
   --sidebar-ring: #059669;
   --font-sans: 'Hind Siliguri', 'Baloo Da 2', 'Poppins', sans-serif;
   --font-serif: 'Poppins', 'Montserrat', 'Roboto', sans-serif;
   --font-mono: 'Fira Code', 'Roboto Mono', 'Poppins', monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
   /* bKash Fintech Design System Tokens */
   --bkash-primary: #059669;
@@ -585,7 +585,7 @@
   }
 
   /* GPU Hardware acceleration for lightweight mobile scrolling */
-  body, main, .glass-card, header {
+  body, .glass-card, header {
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
     backface-visibility: hidden;

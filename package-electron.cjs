@@ -33,14 +33,23 @@ if (fs.existsSync(outputDir)) {
 fs.mkdirSync(outputDir, { recursive: true });
 
 // 2. Copy all electron dist files fresh
-function copyDir(src, dest) {
+function copyDir(src, dest, skipInstallers = false) {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (
+      skipInstallers &&
+      (entry.name.endsWith(".exe") ||
+        entry.name.endsWith(".zip") ||
+        entry.name.endsWith(".7z") ||
+        entry.name.endsWith(".apk"))
+    ) {
+      continue;
+    }
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
+      copyDir(srcPath, destPath, skipInstallers);
     } else {
       try {
         fs.copyFileSync(srcPath, destPath);
@@ -52,7 +61,7 @@ function copyDir(src, dest) {
 }
 
 console.log("[Electron Packager] Copying fresh Electron Windows binaries...");
-copyDir(electronDistDir, outputDir);
+copyDir(electronDistDir, outputDir, false);
 
 // 3. Rename electron.exe to DreamFashion-POS.exe
 const defaultExe = path.join(outputDir, "electron.exe");
@@ -73,7 +82,7 @@ fs.mkdirSync(path.join(resourcesAppDir, "electron"), { recursive: true });
 // Minimal package.json for the embedded app
 const embeddedPackageJson = {
   name: "dreamfashion-pos",
-  version: "2.5.1",
+  version: "2.5.2",
   main: "electron/main.cjs",
   description: "Dream Fashion Ultimate Windows POS Terminal",
 };
@@ -92,13 +101,12 @@ for (const file of electronFiles) {
   }
 }
 
-// Copy public logo if available
-if (fs.existsSync(path.join(rootDir, "public", "logo.png"))) {
-  fs.mkdirSync(path.join(resourcesAppDir, "public"), { recursive: true });
-  fs.copyFileSync(
-    path.join(rootDir, "public", "logo.png"),
-    path.join(resourcesAppDir, "public", "logo.png")
-  );
+// Copy public assets if available (skipping any installer binaries)
+if (fs.existsSync(path.join(rootDir, "public"))) {
+  copyDir(path.join(rootDir, "public"), path.join(resourcesAppDir, "public"), true);
+}
+if (fs.existsSync(path.join(rootDir, "public", "favicon.ico"))) {
+  fs.copyFileSync(path.join(rootDir, "public", "favicon.ico"), path.join(outputDir, "favicon.ico"));
 }
 
 console.log("[Electron Packager] SUCCESS: Brand new Standalone Windows POS app packaged at:");

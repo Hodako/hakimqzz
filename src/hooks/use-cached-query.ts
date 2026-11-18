@@ -3,7 +3,7 @@ import { readQueryCache, writeQueryCache } from "@/lib/query-cache";
 
 /**
  * useQuery wrapper that hydrates from localStorage and persists on success.
- * Improves perceived load speed on repeat visits without hammering CPU or battery.
+ * Improves perceived load speed on repeat visits and provides real-time polling.
  */
 export function useCachedQuery<T>(
   queryKey: QueryKey,
@@ -17,6 +17,20 @@ export function useCachedQuery<T>(
     queryFn: async () => {
       try {
         const data = await queryFn();
+        // Accounting data integrity safeguard:
+        // Never overwrite a valid cached list with an empty array if the device is offline
+        if (
+          typeof window !== "undefined" &&
+          !navigator.onLine &&
+          Array.isArray(data) &&
+          data.length === 0
+        ) {
+          const cachedData = readQueryCache<T>(queryKey as readonly unknown[]);
+          if (Array.isArray(cachedData) && cachedData.length > 0) {
+            console.warn("Device is offline, preserving existing non-empty cache for:", queryKey);
+            return cachedData;
+          }
+        }
         writeQueryCache(queryKey as readonly unknown[], data);
         return data;
       } catch (err) {
@@ -29,14 +43,14 @@ export function useCachedQuery<T>(
       }
     },
     initialData: cached,
-    initialDataUpdatedAt: cached ? Date.now() - 5000 : undefined,
+    initialDataUpdatedAt: cached ? Date.now() - 1000 : undefined,
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000, // 30s freshness window - prevents repetitive refetching on minor clicks
+    staleTime: 0,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: true,
-    refetchOnMount: false,
-    refetchInterval: 45000, // 45-second background sync heartbeat
-    refetchIntervalInBackground: false,
+    refetchOnMount: "always",
+    refetchInterval: 3000, // 3-second heartbeat for real-time syncing without overwhelming network
+    refetchIntervalInBackground: true,
     ...options,
   });
 }

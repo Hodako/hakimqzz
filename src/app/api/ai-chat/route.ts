@@ -27,7 +27,15 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    let ownerId = "default";
+    // Strict session authentication — never query database without a valid tenant session
+    const session = await requireSession(false).catch(() => null);
+    if (!session || !session.ownerId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: corsHeaders }
+      );
+    }
+    const ownerId = session.ownerId;
     let products: any[] = [];
     let sales: any[] = [];
     let expenses: any[] = [];
@@ -35,20 +43,15 @@ export async function POST(req: NextRequest) {
     let parties: any[] = [];
     let cashboxEntries: any[] = [];
 
-    // Safe session and database context retrieval
     try {
-      const session = await requireSession(false).catch(() => null);
-      if (session) {
-        ownerId = session.ownerId;
-      }
       const db = await getDb();
       [products, sales, purchases, expenses, parties, cashboxEntries] = await Promise.all([
-        db.collection("products").find(ownerId !== "default" ? { owner_id: ownerId } : {}).toArray().catch(() => []),
-        db.collection("sales").find(ownerId !== "default" ? { owner_id: ownerId } : {}).sort({ created_at: -1 }).limit(200).toArray().catch(() => []),
-        db.collection("purchases").find(ownerId !== "default" ? { owner_id: ownerId } : {}).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
-        db.collection("expenses").find(ownerId !== "default" ? { owner_id: ownerId } : {}).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
-        db.collection("parties").find(ownerId !== "default" ? { owner_id: ownerId } : {}).toArray().catch(() => []),
-        db.collection("cashbox_entries").find(ownerId !== "default" ? { owner_id: ownerId } : {}).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
+        db.collection("products").find({ owner_id: ownerId }).toArray().catch(() => []),
+        db.collection("sales").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(200).toArray().catch(() => []),
+        db.collection("purchases").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
+        db.collection("expenses").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
+        db.collection("parties").find({ owner_id: ownerId }).toArray().catch(() => []),
+        db.collection("cashbox_entries").find({ owner_id: ownerId }).sort({ created_at: -1 }).limit(100).toArray().catch(() => []),
       ]);
     } catch (_) {}
 

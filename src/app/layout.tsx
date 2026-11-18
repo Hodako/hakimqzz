@@ -6,8 +6,8 @@ import "../styles.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://hakim.qzz.io"),
-  title: "Dream It pos and billing software",
-  description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
+  title: "Dream Fashion — Powered by Dream IT",
+  description: "Dream Fashion — Smart POS, Inventory & Store Management System. Powered by Dream IT.",
   authors: [{ name: "Dream IT" }],
   icons: {
     icon: "/logo.png",
@@ -15,27 +15,27 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   openGraph: {
-    title: "Dream It pos and billing software",
-    description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
+    title: "Dream Fashion — Powered by Dream IT",
+    description: "Dream Fashion — Smart POS, Inventory & Store Management System. Powered by Dream IT.",
     images: [
       {
         url: "/og-banner.svg",
         width: 1200,
         height: 630,
-        alt: "Dream It pos and billing software",
+        alt: "Dream Fashion — Powered by Dream IT",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dream It pos and billing software",
-    description: "Dream It pos and billing software — Automated inventory, sales, accounting, and store management system for any shop.",
+    title: "Dream Fashion — Powered by Dream IT",
+    description: "Dream Fashion — Smart POS, Inventory & Store Management System. Powered by Dream IT.",
     images: ["/og-banner.svg"],
   },
   appleWebApp: {
     capable: true,
-    title: "Dream IT",
+    title: "Dream Fashion",
     statusBarStyle: "black-translucent",
   },
 };

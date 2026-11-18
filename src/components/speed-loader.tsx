@@ -471,19 +471,24 @@ export function SpeedLoader({ fullScreen = true }: { fullScreen?: boolean }) {
 
       {/* Branding & Counter */}
       <div className="mark">
-        <div className="brand" aria-label="Dream IT">
+        <div className="brand" aria-label="Dream Fashion">
           <span>D</span>
           <span>r</span>
           <span>e</span>
           <span>a</span>
           <span>m</span>
           <span style={{ width: "0.28em" }}>&nbsp;</span>
-          <span>I</span>
-          <span>T</span>
+          <span>F</span>
+          <span>a</span>
+          <span>s</span>
+          <span>h</span>
+          <span>i</span>
+          <span>o</span>
+          <span>n</span>
         </div>
         <div className="divider"></div>
         <div className="tagline">
-          <span className="accent">Smart POS</span> & Billing Software
+          Powered by <span className="accent font-bold">Dream IT</span>
         </div>
         <div className="counter">
           <span className="digits" ref={digitsRef}>

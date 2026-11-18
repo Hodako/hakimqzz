@@ -22,27 +22,13 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
   const url = `${API_BASE}/api/rpc`;
   let token = typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
 
-  // Auto-sync token with Firebase Auth or cached profile if token is missing
+  // Auto-sync token ONLY from an active Firebase Auth user with a cryptographic ID token
   if (!token && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn" && actionName !== "registerFn") {
     try {
       const { auth } = await import("@/lib/firebase");
-      let syncEmail = auth.currentUser?.email;
-      let syncName = auth.currentUser?.displayName;
-      let syncPhoto = auth.currentUser?.photoURL;
-      let syncUid = auth.currentUser?.uid;
-
-      if (!syncEmail) {
-        const profileRaw = window.localStorage.getItem("classicworld_auth_profile") || window.localStorage.getItem("user");
-        if (profileRaw) {
-          const cachedUser = JSON.parse(profileRaw);
-          syncEmail = cachedUser.email;
-          syncName = cachedUser.full_name;
-          syncPhoto = cachedUser.avatar_url || cachedUser.logo_url;
-          syncUid = cachedUser.firebase_uid || cachedUser.id;
-        }
-      }
-
-      if (syncEmail) {
+      const fbUser = auth.currentUser;
+      if (fbUser && fbUser.email) {
+        const idToken = await fbUser.getIdToken();
         const syncRes = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -50,10 +36,11 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
             actionName: "firebaseAuthSyncFn",
             args: {
               data: {
-                email: syncEmail,
-                fullName: syncName || undefined,
-                photoUrl: syncPhoto || undefined,
-                firebaseUid: syncUid,
+                idToken,
+                email: fbUser.email,
+                fullName: fbUser.displayName || undefined,
+                photoUrl: fbUser.photoURL || undefined,
+                firebaseUid: fbUser.uid,
               },
             },
           }),
@@ -67,26 +54,6 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
         }
       }
     } catch (_) {}
-
-    // Fallback token synthesis if still no token
-    if (!token && typeof window !== "undefined") {
-      const profileRaw = window.localStorage.getItem("classicworld_auth_profile") || window.localStorage.getItem("user");
-      const activeEmp = window.localStorage.getItem("cw_active_employee_session");
-      if (activeEmp) {
-        try {
-          const emp = JSON.parse(activeEmp);
-          token = `token_emp_${emp.id || "emp"}`;
-        } catch (_) {}
-      } else if (profileRaw) {
-        try {
-          const u = JSON.parse(profileRaw);
-          token = `token_${u.id || "owner"}`;
-        } catch (_) {}
-      }
-      if (token) {
-        window.localStorage.setItem("auth_token", token);
-      }
-    }
   }
 
   const activeProfile = typeof window !== "undefined" ? window.localStorage.getItem("active_profile") : null;
@@ -111,27 +78,13 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
     });
     clearTimeout(timeoutId);
 
-    // Auto-refresh token and retry on 401 Unauthorized or 403 Forbidden (re-sync session)
-    if ((res.status === 401 || res.status === 403) && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn") {
+    // Auto-refresh token and retry on 401 Unauthorized ONLY if an active Firebase user exists
+    if (res.status === 401 && typeof window !== "undefined" && actionName !== "firebaseAuthSyncFn" && actionName !== "loginFn") {
       try {
         const { auth } = await import("@/lib/firebase");
-        let syncEmail = auth.currentUser?.email;
-        let syncName = auth.currentUser?.displayName;
-        let syncPhoto = auth.currentUser?.photoURL;
-        let syncUid = auth.currentUser?.uid;
-
-        if (!syncEmail) {
-          const profileRaw = window.localStorage.getItem("classicworld_auth_profile") || window.localStorage.getItem("user");
-          if (profileRaw) {
-            const cachedUser = JSON.parse(profileRaw);
-            syncEmail = cachedUser?.email;
-            syncName = cachedUser?.full_name;
-            syncPhoto = cachedUser?.avatar_url || cachedUser?.logo_url;
-            syncUid = cachedUser?.firebase_uid || cachedUser?.id;
-          }
-        }
-
-        if (syncEmail) {
+        const fbUser = auth.currentUser;
+        if (fbUser && fbUser.email) {
+          const idToken = await fbUser.getIdToken(true);
           const retrySync = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -139,10 +92,11 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
               actionName: "firebaseAuthSyncFn",
               args: {
                 data: {
-                  email: syncEmail,
-                  fullName: syncName || undefined,
-                  photoUrl: syncPhoto || undefined,
-                  firebaseUid: syncUid,
+                  idToken,
+                  email: fbUser.email,
+                  fullName: fbUser.displayName || undefined,
+                  photoUrl: fbUser.photoURL || undefined,
+                  firebaseUid: fbUser.uid,
                 },
               },
             }),
@@ -153,7 +107,6 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
               token = syncJson.token;
               window.localStorage.setItem("auth_token", syncJson.token);
               headers["Authorization"] = `Bearer ${token}`;
-              // Retry the original RPC with the refreshed token
               res = await fetch(url, {
                 method: "POST",
                 headers,
@@ -185,7 +138,7 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
         window.localStorage.setItem("active_profile", result.profileId);
         if (result.user) {
           window.localStorage.setItem("user", JSON.stringify(result.user));
-          window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(result.user));
+          window.localStorage.setItem("dreamfashion_auth_profile", JSON.stringify(result.user));
         }
       }
       if (actionName === "switchProfileFn" && (args?.data?.profileId || result?.activeProfile)) {
@@ -193,7 +146,7 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
           window.localStorage.setItem("active_profile", result?.activeProfile || args.data.profileId);
           if (result?.user) {
             window.localStorage.setItem("user", JSON.stringify(result.user));
-            window.localStorage.setItem("classicworld_auth_profile", JSON.stringify(result.user));
+            window.localStorage.setItem("dreamfashion_auth_profile", JSON.stringify(result.user));
           }
         }
       }
@@ -201,6 +154,8 @@ async function callRemoteRpc(actionName: string, args: any = {}): Promise<any> {
         if (typeof window !== "undefined") {
           window.localStorage.removeItem("auth_token");
           window.localStorage.removeItem("active_profile");
+          window.localStorage.removeItem("dreamfashion_auth_profile");
+          window.localStorage.removeItem("classicworld_auth_profile");
         }
       }
       return result;

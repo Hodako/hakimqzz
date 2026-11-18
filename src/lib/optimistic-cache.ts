@@ -19,7 +19,7 @@ export async function refreshQueries(qc: QueryClient, ...keys: QueryKey[]) {
   await Promise.all(
     keys.map(key =>
       qc.invalidateQueries({ queryKey: key }).then(() =>
-        qc.refetchQueries({ queryKey: key, type: "active" }),
+        qc.refetchQueries({ queryKey: key }).catch(() => {}),
       ),
     ),
   );

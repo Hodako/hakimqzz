@@ -2,11 +2,11 @@
 
 import { cookies, headers } from "next/headers";
 import { getDb } from "@/lib/db";
-import { hashPassword, comparePassword, signToken, verifyToken } from "@/lib/auth-helpers";
-import { requireSession, clearSessionUserCache } from "@/lib/session";
+import { hashPassword, comparePassword, signToken, verifyToken, verifyFirebaseIdToken } from "@/lib/auth-helpers";
+import { requireSession, clearSessionUserCache, type AppSession } from "@/lib/session";
 import { requestStore } from "@/lib/request-store";
 import type { PermissionSet } from "@/lib/permissions";
-import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS } from "@/lib/permissions";
+import { DEFAULT_EMPLOYEE_PERMISSIONS, OWNER_PERMISSIONS, resolvePermissions } from "@/lib/permissions";
 import { appendRowToGoogleSheet, bulkExportToGoogleSheets } from "@/lib/google-sheets";
 import {
   sendSingleSms,
@@ -34,6 +34,24 @@ import {
 
 type CashboxKind = "deposit" | "withdraw" | "sale" | "expense";
 
+function requirePermission(session: AppSession, perm: keyof PermissionSet) {
+  if (session.role === "owner" || session.role === "superadmin") return;
+  const resolved = resolvePermissions(session.role, session.permissions);
+  if (!resolved[perm]) {
+    const err = new Error(`Access denied: missing "${String(perm)}" permission`);
+    (err as any).statusCode = 403;
+    throw err;
+  }
+}
+
+function requireOwner(session: AppSession, message = "Only business owners can perform this action.") {
+  if (session.role !== "owner" && session.role !== "superadmin") {
+    const err = new Error(message);
+    (err as any).statusCode = 403;
+    throw err;
+  }
+}
+
 async function checkCashboxBalanceEffect(
   db: any,
   ownerId: string,
@@ -57,6 +75,10 @@ async function insertCashboxEntry(
   }
 
   const id = crypto.randomUUID();
+  const validCreatedAt = entry.created_at && !isNaN(new Date(entry.created_at).getTime())
+    ? new Date(entry.created_at).toISOString()
+    : new Date().toISOString();
+
   const doc = {
     _id: id,
     owner_id: ownerId,
@@ -64,7 +86,7 @@ async function insertCashboxEntry(
     amount: safeAmount,
     note: entry.note ?? null,
     ref_id: entry.ref_id ?? null,
-    created_at: entry.created_at || new Date().toISOString(),
+    created_at: validCreatedAt,
   };
   await db.collection("cashbox_entries").insertOne(doc as any);
 
@@ -666,7 +688,7 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     password: await hashPassword(data.password),
     plain_password: data.password,
     full_name: sanitizeInput(data.fullName || ""),
-    role: data.role || "owner",
+    role: "owner",
     business_id: businessId,
     owner_id: userId,
     profiles: [{ id: "default", name: shopName, created_at: now }],
@@ -676,18 +698,35 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     updated_at: now,
   });
 
-  const token = await signToken({ userId, email: cleanEmail, role: data.role || "owner" });
+  const token = await signToken({ userId, email: cleanEmail, role: "owner" });
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, userId);
   return { user: mapped, token };
 }
 
-export async function firebaseAuthSyncFn(input: { data: { email: string; fullName?: string; firebaseUid?: string; photoUrl?: string } }) {
+export async function firebaseAuthSyncFn(input: { data: { idToken?: string; email: string; fullName?: string; firebaseUid?: string; photoUrl?: string } }) {
   const { data = {} }: any = input ?? {};
-  if (!data.email) throw new Error("Email is required for authentication");
-  validateEmail(data.email);
-  const cleanEmail = data.email.toLowerCase().trim();
+  if (!data.idToken) {
+    const err = new Error("Unauthorized: Firebase ID token is required");
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  const verified = await verifyFirebaseIdToken(data.idToken);
+  if (!verified || !verified.email) {
+    const err = new Error("Unauthorized: Invalid or expired Firebase ID token");
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  const cleanEmail = verified.email.toLowerCase().trim();
+  if (data.email && data.email.toLowerCase().trim() !== cleanEmail) {
+    const err = new Error("Unauthorized: Token email mismatch");
+    (err as any).statusCode = 401;
+    throw err;
+  }
+  const verifiedUid = verified.uid;
   const db = await getDb();
 
   let user = await db.collection("users").findOne({ email: cleanEmail });
@@ -698,7 +737,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
     const updates: Record<string, any> = {};
     if (data.photoUrl && !user.avatar_url) updates.avatar_url = data.photoUrl;
     if (data.fullName && !user.full_name) updates.full_name = data.fullName;
-    if (data.firebaseUid && !user.firebase_uid) updates.firebase_uid = data.firebaseUid;
+    if (verifiedUid && !user.firebase_uid) updates.firebase_uid = verifiedUid;
     if (Object.keys(updates).length > 0) {
       await db.collection("users").updateOne({ _id: user._id }, { $set: updates });
     }
@@ -729,7 +768,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       email: cleanEmail,
       full_name: sanitizeInput(data.fullName || cleanEmail.split("@")[0]),
       avatar_url: data.photoUrl || null,
-      firebase_uid: data.firebaseUid || null,
+      firebase_uid: verifiedUid,
       role: "owner",
       business_id: businessId,
       owner_id: userId,
@@ -741,7 +780,7 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
     } as any);
   }
 
-  const token = await signToken({ userId, email: cleanEmail });
+  const token = await signToken({ userId, email: cleanEmail, role: (user?.role as string) || "owner" });
   const cookieStore = await cookies();
   cookieStore.set("token", token, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
   const mapped = await mapUser(db, userId);
@@ -883,7 +922,7 @@ export async function updatePartyFn(input: { data: { id: string; name?: string; 
   const { id, ...updates } = data;
   const db = await getDb();
   await db.collection("parties").updateOne({ _id: id as any, owner_id: session.ownerId }, { $set: updates });
-  const updated = await db.collection("parties").findOne({ _id: id as any });
+  const updated = await db.collection("parties").findOne({ _id: id as any, owner_id: session.ownerId });
   return { ...updated, id };
 }
 
@@ -990,6 +1029,7 @@ export async function deletePartyPayableFn(input: { data: { id: string } }) {
 export async function createPayableSettlementFn(input: { data: { party_id: string; amount: number; note?: string | null } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "parties");
   const db = await getDb();
   const id = crypto.randomUUID();
   const doc = { _id: id, owner_id: session.ownerId, party_id: data.party_id, amount: data.amount, note: data.note || null, created_at: new Date().toISOString() };
@@ -1024,8 +1064,8 @@ export async function getSalesFn() {
   const items = await db.collection("sales").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
 
   const partyIds = items.map(s => s.party_id).filter(Boolean);
-  const customers = await db.collection("customers").find({ _id: { $in: partyIds } }).toArray();
-  const parties = await db.collection("parties").find({ _id: { $in: partyIds } }).toArray();
+  const customers = await db.collection("customers").find({ owner_id: session.ownerId, _id: { $in: partyIds } }).toArray();
+  const parties = await db.collection("parties").find({ owner_id: session.ownerId, _id: { $in: partyIds } }).toArray();
 
   const custMap = new Map();
   parties.forEach(p => custMap.set(p._id.toString(), p));
@@ -1111,8 +1151,8 @@ export async function createSaleFn(input: {
   };
   await db.collection("sales").insertOne(doc as any);
   if (data.product_id) {
-    const product = await db.collection("products").findOne({ _id: data.product_id as any });
-    if (product) await db.collection("products").updateOne({ _id: data.product_id as any }, { $set: { stock: Math.max(((product.stock as number) ?? 0) - safeQty, 0) } });
+    const product = await db.collection("products").findOne({ _id: data.product_id as any, owner_id: session.ownerId });
+    if (product) await db.collection("products").updateOne({ _id: data.product_id as any, owner_id: session.ownerId }, { $set: { stock: Math.max(((product.stock as number) ?? 0) - safeQty, 0) } });
   }
   const cashAmt = isOnline ? (doc.courier_status === "collected" ? Number(doc.paid_amount) : 0) : saleCashboxAmount(data);
   if (cashAmt > 0) {
@@ -1495,10 +1535,10 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
   };
   await db.collection("returns").insertOne(doc as any);
  
-  const product = await db.collection("products").findOne({ _id: sale.product_id as any });
+  const product = await db.collection("products").findOne({ _id: sale.product_id as any, owner_id: session.ownerId });
   if (product) {
     await db.collection("products").updateOne(
-      { _id: sale.product_id as any },
+      { _id: sale.product_id as any, owner_id: session.ownerId },
       { $set: { stock: ((product.stock as number) ?? 0) + returnQty } },
     );
   }
@@ -1507,7 +1547,7 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
   const ratio = returnQty / originalQty;
 
   if (returnQty >= originalQty) {
-    await db.collection("sales").updateOne({ _id: data.sale_id as any }, { $set: { returned: true, return_qty: returnQty } });
+    await db.collection("sales").updateOne({ _id: data.sale_id as any, owner_id: session.ownerId }, { $set: { returned: true, return_qty: returnQty } });
   } else {
     const remaining = originalQty - returnQty;
     const remainingPaid = Math.max(0, Math.round((Number(sale.paid_amount) || 0) * (1 - ratio)));
@@ -1517,7 +1557,7 @@ export async function createReturnFn(input: { data: { sale_id: string; qty: numb
     const remainingSplitBank = sale.split_bank !== undefined ? Math.max(0, Math.round((Number(sale.split_bank) || 0) * (1 - ratio))) : undefined;
 
     await db.collection("sales").updateOne(
-      { _id: data.sale_id as any },
+      { _id: data.sale_id as any, owner_id: session.ownerId },
       {
         $set: {
           qty: remaining,
@@ -1713,10 +1753,10 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
     if (!ret) throw new Error("Return record not found");
 
     if (ret.product_id) {
-      const product = await db.collection("products").findOne({ _id: ret.product_id });
+      const product = await db.collection("products").findOne({ _id: ret.product_id, owner_id: session.ownerId });
       if (product) {
         await db.collection("products").updateOne(
-          { _id: ret.product_id },
+          { _id: ret.product_id, owner_id: session.ownerId },
           { $set: { stock: Math.max(((product.stock as number) ?? 0) - (ret.qty as number), 0) } }
         );
       }
@@ -1731,7 +1771,7 @@ export async function deleteReturnFn(input: { data: { id: string } }) {
         const updatedProfit = (sellPrice - buyPrice) * originalQty;
 
         await db.collection("sales").updateOne(
-          { _id: ret.sale_id as any },
+          { _id: ret.sale_id as any, owner_id: session.ownerId },
           {
             $set: {
               returned: false,
@@ -1896,12 +1936,13 @@ export async function getPurchasesFn() {
 export async function createPurchaseFn(input: { data: { product_id?: string | null; product_name: string; qty: number; unit_cost: number; sell_price?: number; total: number; note?: string | null; created_at?: string; party_id?: string | null; payment_type?: "cash" | "credit" | null } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "purchases");
   const db = await getDb();
   const id = crypto.randomUUID();
   const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: data.created_at || new Date().toISOString() };
   await db.collection("purchases").insertOne(doc as any);
   if (data.product_id) {
-    const product = await db.collection("products").findOne({ _id: data.product_id as any });
+    const product = await db.collection("products").findOne({ _id: data.product_id as any, owner_id: session.ownerId });
     if (product) {
       const updates: Record<string, number> = {
         stock: ((product.stock as number) ?? 0) + data.qty,
@@ -1910,7 +1951,7 @@ export async function createPurchaseFn(input: { data: { product_id?: string | nu
       if (data.sell_price != null && data.sell_price > 0) {
         updates.sell_price = data.sell_price;
       }
-      await db.collection("products").updateOne({ _id: data.product_id as any }, { $set: updates });
+      await db.collection("products").updateOne({ _id: data.product_id as any, owner_id: session.ownerId }, { $set: updates });
     }
   }
 
@@ -2035,11 +2076,11 @@ export async function editPurchaseFn(input: {
   // 1. Adjust product stock if linked to a product
   const productId = data.product_id || oldPurchase.product_id;
   if (productId) {
-    const product = await db.collection("products").findOne({ _id: productId as any });
+    const product = await db.collection("products").findOne({ _id: productId as any, owner_id: session.ownerId });
     if (product) {
       const newStock = Math.max(((product.stock as number) ?? 0) + qtyDiff, 0);
       await db.collection("products").updateOne(
-        { _id: productId as any },
+        { _id: productId as any, owner_id: session.ownerId },
         { $set: { stock: newStock, buy_price: data.unit_cost } }
       );
     }
@@ -2062,20 +2103,43 @@ export async function editPurchaseFn(input: {
     }
   );
 
-  // 3. Update related cashbox & expense entry if payment_type is cash
-  if (data.payment_type !== "credit") {
-    // Update or insert cashbox entry
+  // 3. Update related cashbox & expense entry cleanly across payment_type transitions
+  const isCashPurchase = data.payment_type !== "credit" && (data.payment_type as string) !== "bank";
+  if (isCashPurchase) {
     const existingCashbox = await db.collection("cashbox_entries").findOne({ owner_id: session.ownerId, ref_id: data.id });
     if (existingCashbox) {
       await db.collection("cashbox_entries").updateOne(
         { _id: existingCashbox._id },
-        { $set: { amount: data.total, note: `Product Purchase: ${data.product_name}` } }
+        { $set: { amount: Math.abs(Number(data.total) || 0), note: `Product Purchase: ${data.product_name}` } }
       );
+    } else {
+      await insertCashboxEntry(db, session.ownerId, {
+        kind: "expense",
+        amount: Math.abs(Number(data.total) || 0),
+        note: `Product Purchase: ${data.product_name}`,
+        ref_id: data.id,
+        created_at: oldPurchase.created_at || new Date().toISOString(),
+      });
     }
-    await db.collection("expenses").updateMany(
+
+    const expRes = await db.collection("expenses").updateMany(
       { owner_id: session.ownerId, note: { $regex: data.id } },
-      { $set: { amount: data.total, title: `Product Purchase: ${data.product_name}` } }
+      { $set: { amount: Math.abs(Number(data.total) || 0), title: `Product Purchase: ${data.product_name}` } }
     );
+    if (expRes.matchedCount === 0) {
+      await db.collection("expenses").insertOne({
+        _id: crypto.randomUUID(),
+        owner_id: session.ownerId,
+        title: `Product Purchase: ${data.product_name}`,
+        amount: Math.abs(Number(data.total) || 0),
+        note: `Purchased ${data.qty} units of ${data.product_name} at unit cost ${data.unit_cost}. Purchase ID: ${data.id}`,
+        created_at: oldPurchase.created_at || new Date().toISOString(),
+      } as any);
+    }
+  } else {
+    // Switched to credit/bank: remove any previous cashbox deduction and purchase expense record
+    await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+    await db.collection("expenses").deleteMany({ owner_id: session.ownerId, note: { $regex: data.id } });
   }
 
   return { success: true };
@@ -2085,6 +2149,7 @@ export async function editPurchaseFn(input: {
 
 export async function getExpensesFn() {
   const session = await requireSession();
+  requirePermission(session, "expenses");
   const db = await getDb();
   const items = await db.collection("expenses").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(10000).toArray();
   return items.map((e) => ({ ...e, id: e._id as any as string }));
@@ -2093,6 +2158,7 @@ export async function getExpensesFn() {
 export async function createExpenseFn(input: { data: { title: string; amount: number; category?: string | null; note?: string | null; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "expenses");
   const db = await getDb();
   const id = crypto.randomUUID();
   const doc = {
@@ -2125,6 +2191,7 @@ export async function createExpenseFn(input: { data: { title: string; amount: nu
 export async function deleteExpenseFn(input: { data: { id: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "expenses");
   const db = await getDb();
   await db.collection("cashbox_entries").deleteOne({ owner_id: session.ownerId, ref_id: data.id, kind: "expense" });
   const expDoc = await db.collection("expenses").findOne({ _id: data.id as any, owner_id: session.ownerId });
@@ -2204,6 +2271,7 @@ export async function createPaymentFn(input: {
 export async function deletePaymentFn(input: { data: { id: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "parties");
   const db = await getDb();
   
   const relatedEntries = await db.collection("cashbox_entries").find({ owner_id: session.ownerId, ref_id: data.id } as any).toArray();
@@ -2392,6 +2460,7 @@ export async function createWithdrawalFn(input: { data: { amount: number; note?:
 
 export async function getOwnerWalletFn() {
   const session = await requireSession();
+  requirePermission(session, "owners_wallet");
   const db = await getDb();
   const items = await db.collection("owner_wallet").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
   return items.map((e) => ({
@@ -2412,6 +2481,7 @@ export async function createOwnerWalletEntryFn(input: {
 }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "owners_wallet");
   const db = await getDb();
   const id = crypto.randomUUID();
   const category = data.category || "personal";
@@ -2470,6 +2540,7 @@ export async function updateOwnerWalletEntryFn(input: {
 }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "owners_wallet");
   const db = await getDb();
   const { id, ...updates } = data;
   const category = data.category || "personal";
@@ -2499,6 +2570,7 @@ export async function updateOwnerWalletEntryFn(input: {
 export async function deleteOwnerWalletEntryFn(input: { data: { id: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "owners_wallet");
   const db = await getDb();
 
   await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
@@ -2512,6 +2584,7 @@ export async function deleteOwnerWalletEntryFn(input: { data: { id: string } }) 
 
 export async function getCashboxFn() {
   const session = await requireSession();
+  requirePermission(session, "cashbox");
   const db = await getDb();
   const items = await db.collection("cashbox_entries").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(5000).toArray();
   // Explicitly cast amount to Number — MongoDB BSON types (Long, Decimal128) can break JS arithmetic
@@ -2528,6 +2601,7 @@ export async function getCashboxFn() {
 export async function createCashboxFn(input: { data: { kind: "deposit" | "withdraw"; amount: number; note?: string | null; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
+  requirePermission(session, "cashbox");
   const db = await getDb();
   const saved = await insertCashboxEntry(db, session.ownerId, {
     kind: data.kind,
@@ -2562,13 +2636,17 @@ export async function updateCashboxFn(input: { data: { id: string; kind: string;
     await checkCashboxBalanceEffect(db, session.ownerId, deltaEffect, data.id);
   }
 
+  const validUpdateDate = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : undefined;
+
   const result = await db.collection("cashbox_entries").findOneAndUpdate(
     { _id: data.id as any, owner_id: session.ownerId },
     { $set: {
         kind: data.kind,
         amount: safeNewAmount,
         note: data.note ?? null,
-        ...(data.created_at ? { created_at: data.created_at } : {}),
+        ...(validUpdateDate ? { created_at: validUpdateDate } : {}),
       }
     },
     { returnDocument: "after" }
@@ -2919,8 +2997,9 @@ export async function createProfileFn(input: { data: { name: string } }) {
   return { user: mapped };
 }
 
-export async function switchProfileFn(input: { data: { profileId: string } }) {
+export async function switchProfileFn(input: { data: { profileId: string } } | any) {
   const { data = {} }: any = input ?? {};
+  const targetProfileId = typeof data === "string" ? data : (data.profileId || data.id || input?.profileId || "default");
   const session = await requireSession();
   const db = await getDb();
 
@@ -2930,17 +3009,17 @@ export async function switchProfileFn(input: { data: { profileId: string } }) {
     { id: "default", name: "Default Profile", created_at: new Date().toISOString() }
   ];
 
-  const exists = profiles.some((p: any) => p.id === data.profileId);
-  if (!exists && data.profileId !== "default") {
+  const exists = profiles.some((p: any) => p.id === targetProfileId);
+  if (!exists && targetProfileId !== "default") {
     throw new Error("Profile not found");
   }
 
   clearSessionUserCache(session.userId);
   const cookieStore = await cookies();
-  cookieStore.set("active_profile", data.profileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
+  cookieStore.set("active_profile", targetProfileId, { maxAge: 365 * 24 * 60 * 60, path: "/" });
 
-  const mapped = await mapUser(db, session.userId, data.profileId);
-  return { user: mapped };
+  const mapped = await mapUser(db, session.userId, targetProfileId);
+  return { user: mapped, profileId: targetProfileId };
 }
 
 export async function importProfileModuleFn(input: { data: { fromProfileId: string; module: "products" | "somiti" | "party" | "customer" | "sales" | "purchases" | "expenses" | "cashbox" } }) {
@@ -3279,10 +3358,16 @@ export async function repairCashboxDbFn() {
     expenses,
     purchases,
     payments,
+    payableSettlements,
     withdrawals,
     ownerWallet,
     somiti,
     employeeShoppings,
+    employeeSalaries,
+    employeeExpenses,
+    bankTransactions,
+    bankLoans,
+    bankLoanPayments,
     existingCashbox,
   ] = await Promise.all([
     db.collection("sales").find({ owner_id: ownerId }).toArray(),
@@ -3290,17 +3375,23 @@ export async function repairCashboxDbFn() {
     db.collection("expenses").find({ owner_id: ownerId }).toArray(),
     db.collection("purchases").find({ owner_id: ownerId }).toArray(),
     db.collection("payments").find({ owner_id: ownerId }).toArray(),
-    db.collection("withdrawals").find({ owner_id: ownerId }).toArray(),
+    db.collection("party_payable_settlements").find({ owner_id: ownerId }).toArray(),
+    db.collection("owner_withdrawals").find({ owner_id: ownerId }).toArray(),
     db.collection("owner_wallet").find({ owner_id: ownerId }).toArray(),
     db.collection("somiti_entries").find({ owner_id: ownerId }).toArray(),
     db.collection("employee_shoppings").find({ owner_id: ownerId }).toArray(),
+    db.collection("employee_salaries").find({ owner_id: ownerId }).toArray(),
+    db.collection("employee_expenses").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_transactions").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_loans").find({ owner_id: ownerId }).toArray(),
+    db.collection("bank_loan_payments").find({ owner_id: ownerId }).toArray(),
     db.collection("cashbox_entries").find({ owner_id: ownerId }).toArray(),
   ]);
 
   // 1. Preserve true manual cashbox entries (entries created manually by user directly in cashbox)
   const manualEntries = existingCashbox.filter((e) => !e.ref_id);
   const newCashboxEntries: any[] = [...manualEntries];
-  const seenRefIds = new Set<string>(manualEntries.map((e) => e.ref_id).filter(Boolean));
+  const seenRefIds = new Set<string>();
 
   // 2. Sales Cash Inflows
   for (const s of sales) {
@@ -3314,23 +3405,22 @@ export async function repairCashboxDbFn() {
     const lineTotal = (!isNaN(p) && !isNaN(d) && (p + d > 0)) ? (p + d) : Math.max(0, sellPrice * qty - discount);
 
     const type = String(s.type || "cash").toLowerCase().trim();
+    const isAcceptedDigital = (s as any).payment_status === "accepted" || (s as any).payment_accepted === true;
     let cashAmount = 0;
     if (type === "cash" || type === "pos" || type === "nagad" || type === "card" || type === "hand_cash" || !s.type) {
       cashAmount = !isNaN(p) && p >= 0 ? p : lineTotal;
     } else if (type === "credit") {
       cashAmount = !isNaN(p) && p > 0 ? p : 0;
     } else if (type === "split") {
-      cashAmount = (s as any).split_cash !== undefined ? (Number((s as any).split_cash) || 0) : (!isNaN(p) && p > 0 ? p : 0);
+      const cashPart = (s as any).split_cash !== undefined ? (Number((s as any).split_cash) || 0) : 0;
+      const digitalPart = isAcceptedDigital ? ((Number((s as any).split_bkash) || 0) + (Number((s as any).split_bank) || 0)) : 0;
+      cashAmount = cashPart + digitalPart;
     } else if (type === "bkash" || type === "bank" || type === "rocket") {
-      if ((s as any).payment_status === "rejected" || (s as any).payment_status === "cancelled") {
-        cashAmount = 0;
-      } else {
-        cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
-      }
+      cashAmount = isAcceptedDigital ? (!isNaN(p) && p > 0 ? p : lineTotal) : 0;
     } else if (type === "online") {
       const cStatus = String((s as any).courier_status || "").toLowerCase().trim();
-      const isCollected = cStatus === "collected" || cStatus === "delivered" || cStatus === "completed" || (s as any).payment_status === "accepted" || (s as any).payment_status === "paid";
-      if (isCollected || (!isNaN(p) && p > 0)) {
+      const isCollected = cStatus === "collected" || cStatus === "delivered" || cStatus === "completed";
+      if (isCollected) {
         cashAmount = !isNaN(p) && p > 0 ? p : lineTotal;
       }
     } else {
@@ -3406,12 +3496,14 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 5. Store Operating Expenses (excluding duplicate purchase mirror records and owner wallet records)
+  // 5. Store Operating Expenses (excluding mirror records reconstructed from purchases, owner wallet, and employee records)
   for (const e of expenses) {
     const eId = e._id.toString();
     if (purchaseExpenseIds.has(eId)) continue;
     if (e.category === "purchase" || e.title?.startsWith("Product Purchase:")) continue;
     if (e.category === "owner_personal" || e.note?.includes("Owner Wallet ID:")) continue;
+    if (e.category === "salary" || e.note?.includes("Employee Salary ID:")) continue;
+    if (e.category === "employee_expense" || e.category === "salary_advance" || e.note?.includes("Employee Expense ID:")) continue;
     const amt = Number(e.amount) || 0;
     if (amt > 100000000) continue;
 
@@ -3486,17 +3578,25 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 9. Customer Bokeya Payments (Dues collected into cashbox)
+  // 9. Customer & Party Bokeya Payments (respect payment_method)
   for (const pay of payments) {
     const pId = pay._id.toString();
-    const amt = Number(pay.amount) || 0;
-    if (amt > 0 && !seenRefIds.has(pId)) {
+    const pm = String((pay as any).payment_method || "cash").toLowerCase().trim();
+    let cashAmt = 0;
+    if (pm === "split") {
+      cashAmt = Number((pay as any).split_cash) || 0;
+    } else if (pm === "bkash" || pm === "bank") {
+      cashAmt = 0;
+    } else {
+      cashAmt = Number(pay.amount) || 0;
+    }
+    if (cashAmt > 0 && !seenRefIds.has(pId)) {
       seenRefIds.add(pId);
       newCashboxEntries.push({
         _id: crypto.randomUUID() as any,
         owner_id: ownerId,
         kind: "deposit",
-        amount: amt,
+        amount: cashAmt,
         note: pay.note ? `Customer Payment: ${pay.note}` : "Customer Payment",
         ref_id: pId,
         created_at: pay.created_at || new Date().toISOString(),
@@ -3504,7 +3604,25 @@ export async function repairCashboxDbFn() {
     }
   }
 
-  // 10. Employee Shoppings (Cash collections)
+  // 10. Party Payable Settlements (cash paid out to suppliers)
+  for (const st of payableSettlements) {
+    const stId = st._id.toString();
+    const amt = Number(st.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(stId)) {
+      seenRefIds.add(stId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: st.note || "Payable Settlement",
+        ref_id: stId,
+        created_at: st.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 11. Employee Shoppings (Cash collections)
   for (const es of employeeShoppings) {
     const esId = es._id.toString();
     const amt = Number(es.total_amount) || 0;
@@ -3518,6 +3636,92 @@ export async function repairCashboxDbFn() {
         note: `[কর্মচারী কেনাকাটা নগদ আদায়] ${es.employee_name || "Employee"}: ${es.note || "পোশাক বিক্রয়"}`,
         ref_id: esId,
         created_at: es.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 12. Employee Salaries (Cash only)
+  for (const sal of employeeSalaries) {
+    const salId = sal._id.toString();
+    const amt = Number(sal.amount) || 0;
+    if ((sal.payment_method || "cash") === "cash" && amt > 0 && !seenRefIds.has(salId)) {
+      seenRefIds.add(salId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "expense",
+        amount: amt,
+        note: `[বেতন প্রদান] ${sal.employee_name || "Employee"} - ${sal.month || ""}`,
+        ref_id: salId,
+        created_at: sal.created_at || new Date().toISOString(),
+      });
+    }
+  }
+
+  // 13. Employee Expenses & Debt Repayments (Cash only)
+  for (const ee of employeeExpenses) {
+    const eeId = ee._id.toString();
+    const amt = Number(ee.amount) || 0;
+    if ((ee.payment_method || "cash") !== "cash" || amt <= 0 || seenRefIds.has(eeId)) continue;
+    if (ee.category === "adjustment_add" || ee.category === "adjustment_deduct") continue;
+    seenRefIds.add(eeId);
+    newCashboxEntries.push({
+      _id: crypto.randomUUID() as any,
+      owner_id: ownerId,
+      kind: ee.category === "debt_repayment" ? "deposit" : "withdraw",
+      amount: amt,
+      note: `[কর্মচারী] ${ee.employee_name || "Employee"}: ${ee.note || ee.category || ""}`,
+      ref_id: eeId,
+      created_at: ee.created_at || new Date().toISOString(),
+    });
+  }
+
+  // 14. Bank Transactions, Loans, and Loan Installments
+  for (const tx of bankTransactions) {
+    const txId = tx._id.toString();
+    const amt = Number(tx.amount) || 0;
+    if (tx.sync_cashbox !== false && amt > 0 && !seenRefIds.has(txId)) {
+      seenRefIds.add(txId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: tx.type === "deposit" ? "withdraw" : "deposit",
+        amount: amt,
+        note: tx.type === "deposit" ? `Bank Deposit: ${tx.note || "Transfer to bank"}` : `Bank Withdrawal: ${tx.note || "Cash from bank"}`,
+        ref_id: txId,
+        created_at: tx.created_at || new Date().toISOString(),
+      });
+    }
+  }
+  for (const loan of bankLoans) {
+    const lId = loan._id.toString();
+    const amt = Number(loan.principal_amount) || 0;
+    if (loan.receive_to_cashbox === true && amt > 0 && !seenRefIds.has(lId)) {
+      seenRefIds.add(lId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "deposit",
+        amount: amt,
+        note: `Bank Loan Disbursement: ${loan.bank_name || "Bank"} (${loan.loan_title || ""})`,
+        ref_id: lId,
+        created_at: loan.created_at || new Date().toISOString(),
+      });
+    }
+  }
+  for (const lp of bankLoanPayments) {
+    const lpId = lp._id.toString();
+    const amt = Number(lp.amount) || 0;
+    if (amt > 0 && !seenRefIds.has(lpId)) {
+      seenRefIds.add(lpId);
+      newCashboxEntries.push({
+        _id: crypto.randomUUID() as any,
+        owner_id: ownerId,
+        kind: "withdraw",
+        amount: amt,
+        note: `Bank Loan Installment: ${lp.note || "Loan Payment"}`,
+        ref_id: lpId,
+        created_at: lp.created_at || new Date().toISOString(),
       });
     }
   }
@@ -3601,6 +3805,7 @@ export async function createBankTransactionFn(input: { data: { account_id: strin
     account_id: data.account_id,
     type: data.type,
     amount,
+    sync_cashbox: data.sync_cashbox !== false,
     note: data.note || null,
     created_at: new Date().toISOString(),
   };
@@ -3646,6 +3851,7 @@ export async function createBankLoanFn(input: { data: { bank_name: string; loan_
     installment_amount: Number(data.installment_amount) || 0,
     paid_amount: 0,
     paid_installments: 0,
+    receive_to_cashbox: Boolean(data.receive_to_cashbox),
     status: "active",
     note: data.note || null,
     created_at: new Date().toISOString(),
@@ -5173,20 +5379,20 @@ export async function restoreRecycleItemFn(input: { data: { id: string } }) {
 
   if (entity_type === "product") {
     const { _id, ...doc } = entityData;
-    await db.collection("products").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("products").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
   } else if (entity_type === "sale") {
     const salesArr = Array.isArray(entityData) ? entityData : [entityData];
     for (const s of salesArr) {
       const { _id, ...doc } = s;
-      await db.collection("sales").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+      await db.collection("sales").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
       // Re-deduct product stock
       if (s.product_id) {
-        await db.collection("products").updateOne({ _id: s.product_id as any }, { $inc: { stock: -Number(s.qty || 1) } });
+        await db.collection("products").updateOne({ _id: s.product_id as any, owner_id: session.ownerId }, { $inc: { stock: -Number(s.qty || 1) } });
       }
-      // Re-insert cashbox entry
-      const paid = Number(s.paid_amount);
-      const total = Number(s.sell_price || 0) * Number(s.qty || 1);
-      const cashAmt = !isNaN(paid) && paid > 0 ? paid : (s.type === "cash" || s.type === "pos" ? total : 0);
+      // Re-insert cashbox entry accurately (respect pending digital/courier states)
+      const isOnlinePending = s.type === "online" && s.courier_status !== "collected";
+      const isDigitalPending = (s.type === "bkash" || s.type === "bank") && s.payment_status !== "accepted" && !s.payment_accepted;
+      const cashAmt = (isOnlinePending || isDigitalPending) ? 0 : saleCashboxAmount(s);
       if (cashAmt > 0) {
         await insertCashboxEntry(db, session.ownerId, {
           kind: "sale",
@@ -5198,7 +5404,7 @@ export async function restoreRecycleItemFn(input: { data: { id: string } }) {
     }
   } else if (entity_type === "expense") {
     const { _id, ...doc } = entityData;
-    await db.collection("expenses").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("expenses").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
     await insertCashboxEntry(db, session.ownerId, {
       kind: "expense",
       amount: Number(entityData.amount || 0),
@@ -5207,9 +5413,9 @@ export async function restoreRecycleItemFn(input: { data: { id: string } }) {
     });
   } else if (entity_type === "purchase") {
     const { _id, ...doc } = entityData;
-    await db.collection("purchases").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("purchases").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
     if (entityData.product_id) {
-      await db.collection("products").updateOne({ _id: entityData.product_id as any }, { $inc: { stock: Number(entityData.qty || 1) } });
+      await db.collection("products").updateOne({ _id: entityData.product_id as any, owner_id: session.ownerId }, { $inc: { stock: Number(entityData.qty || 1) } });
     }
     if (entityData.payment_type !== "credit") {
       await insertCashboxEntry(db, session.ownerId, {
@@ -5221,13 +5427,13 @@ export async function restoreRecycleItemFn(input: { data: { id: string } }) {
     }
   } else if (entity_type === "return") {
     const { _id, ...doc } = entityData;
-    await db.collection("returns").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("returns").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
   } else if (entity_type === "party") {
     const { _id, ...doc } = entityData;
-    await db.collection("parties").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("parties").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
   } else if (entity_type === "cashbox") {
     const { _id, ...doc } = entityData;
-    await db.collection("cashbox_entries").updateOne({ _id: _id as any }, { $set: doc }, { upsert: true });
+    await db.collection("cashbox_entries").updateOne({ _id: _id as any, owner_id: session.ownerId }, { $set: { ...doc, owner_id: session.ownerId } }, { upsert: true });
   }
 
   await db.collection("recycle_bin").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
@@ -5505,15 +5711,16 @@ export async function regenerateEmployeeLoginCodeFn(input: { data: { id: string 
   return { success: true, id: empId, login_code: newCode };
 }
 
-export async function deleteEmployeeFn(input: { data: { id: string } }) {
+export async function deleteEmployeeFn(input: { data: { id: string } } | any) {
   const { data = {} }: any = input ?? {};
+  const id = typeof input === "string" ? input : (data.id || input?.id);
   const session = await requireSession();
   const db = await getDb();
-  await db.collection("employees").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
+  await db.collection("employees").deleteOne({ _id: id as any, owner_id: session.ownerId });
   try {
-    await db.collection("users").deleteOne({ $or: [{ _id: data.id as any }, { employee_id: data.id }] });
+    await db.collection("users").deleteOne({ $or: [{ _id: id as any }, { employee_id: id }] });
   } catch (_) {}
-  return { success: true, id: data.id };
+  return { success: true, id };
 }
 
 // ─── Employee Salaries ────────────────────────────────────────────────────────
@@ -5595,6 +5802,7 @@ export async function deleteEmployeeSalaryFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("expenses").deleteMany({ owner_id: session.ownerId, note: { $regex: `Employee Salary ID: ${data.id}` } });
   // Un-settle any shoppings linked to this salary
   await db.collection("employee_shoppings").updateMany(
     { salary_id: data.id as any, owner_id: session.ownerId },
@@ -5689,6 +5897,7 @@ export async function deleteEmployeeExpenseFn(input: { data: { id: string } }) {
   const session = await requireSession();
   const db = await getDb();
   await db.collection("cashbox_entries").deleteMany({ owner_id: session.ownerId, ref_id: data.id });
+  await db.collection("expenses").deleteMany({ owner_id: session.ownerId, note: { $regex: `Employee Expense ID: ${data.id}` } });
   await db.collection("employee_expenses").deleteOne({ _id: data.id as any, owner_id: session.ownerId });
   return { success: true, id: data.id };
 }

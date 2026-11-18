@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getMeFn, logoutFn, updateUserAvatarFn } from "@/lib/rpc";
 import type { PermissionSet } from "@/lib/permissions";
 import { clearAuthProfile, readAuthProfile, writeAuthProfile, writeBrand } from "@/lib/local-cache";
@@ -107,6 +108,7 @@ function getInitialUser(): AuthUser | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   const [loading, setLoading] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -128,12 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(next);
         cacheUser(next);
         writeBrand({ name: next.business_name, logo_url: next.logo_url });
-      } else if (!window.localStorage.getItem("auth_token")) {
+      } else {
         setUser(null);
         clearAuthProfile();
       }
     } catch (err: any) {
-      console.warn("Background auth check info:", err?.message || err);
+      const msg = String(err?.message || "");
+      if (msg.includes("Unauthorized") || msg.includes("401")) {
+        setUser(null);
+        clearAuthProfile();
+      } else {
+        console.warn("Background auth check info:", msg || err);
+      }
     } finally {
       setLoading(false);
     }
@@ -158,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try { qc.clear(); } catch (_) {}
     try {
       const { signOut } = await import("firebase/auth");
       const { auth } = await import("@/lib/firebase");
@@ -166,6 +175,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { await logoutFn(); } catch { /* ignore */ }
     setUser(null);
     clearAuthProfile();
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("df_active_employee_session");
+      localStorage.removeItem("cw_active_employee_session");
+      localStorage.removeItem("cw_active_session_role");
+      localStorage.removeItem("hz-brand");
+    }
     setLoading(false);
   };
 

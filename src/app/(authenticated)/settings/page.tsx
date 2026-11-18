@@ -31,6 +31,7 @@ import {
   deleteTransferKeyFn,
 } from "@/lib/rpc";
 import Link from "next/link";
+import { EmeraldUiSettings } from "@/components/emerald-ui-settings";
 import {
   Trash2,
   RotateCcw,
@@ -2566,6 +2567,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </Card>
+
+              {/* Emerald Glass UI & Advanced Theme Studio */}
+              <div className="lg:col-span-6">
+                <EmeraldUiSettings />
+              </div>
 
               {/* KPI Configuration & Drag-and-Drop Card Position Manager */}
               <Card className="lg:col-span-12 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-6">

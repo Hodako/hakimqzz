@@ -81,6 +81,7 @@ export function SaleDialog({
   const [scanInput, setScanInput] = useState("");
   const [scannerSuffix, setScannerSuffix] = useState<"Enter" | "Tab" | "None">("Enter");
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const lastAddToCartTimeRef = useRef(0);
 
   useEffect(() => {
     setScannerSuffix(getPosHardwareSettings().scannerSuffix);
@@ -327,7 +328,16 @@ export function SaleDialog({
 
   const due = Math.max(sellTotal - paidNum, 0);
 
+  function handleFooterPaymentSwitch(nextType: SalePaymentType) {
+    setType(nextType);
+  }
+
   function addToCart() {
+    const now = Date.now();
+    if (now - lastAddToCartTimeRef.current < 450) {
+      return;
+    }
+
     if (!draft.productId) {
       playErrorSound();
       return toast.error(t("select_product"));
@@ -348,7 +358,8 @@ export function SaleDialog({
       playErrorSound();
       return toast.error(lang === "bn" ? "ডিসকাউন্ট নেতিবাচক হতে পারে না" : "Discount cannot be negative");
     }
-    
+
+    lastAddToCartTimeRef.current = now;
     playScanSuccessSound();
     setCart(prev => {
       const idx = prev.findIndex(item => item.productId === draft.productId);
@@ -1654,7 +1665,55 @@ export function SaleDialog({
               <span className="text-muted-foreground">{t("total")}: </span>
               <span className="font-bold text-base font-serif text-foreground">৳{sellTotal}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {/* Last-second payment method quick switcher right before confirming */}
+              <div
+                className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-0.5"
+                role="group"
+                aria-label={lang === "bn" ? "পেমেন্ট পরিবর্তন করুন" : "Change payment method"}
+              >
+                {(
+                  [
+                    {
+                      key: "cash" as SalePaymentType,
+                      label: lang === "bn" ? "নগদ" : "Cash",
+                      activeCls: "bg-emerald-600 text-white border-emerald-600 shadow-2xs",
+                    },
+                    {
+                      key: "split" as SalePaymentType,
+                      label: lang === "bn" ? "স্প্লিট" : "Split",
+                      activeCls: "bg-purple-600 text-white border-purple-600 shadow-2xs",
+                    },
+                    {
+                      key: "credit" as SalePaymentType,
+                      label: lang === "bn" ? "বাকী" : "Credit",
+                      activeCls: "bg-amber-600 text-white border-amber-600 shadow-2xs",
+                    },
+                    {
+                      key: "bkash" as SalePaymentType,
+                      label: lang === "bn" ? "বিকাশ" : "bKash",
+                      activeCls: "bg-[#E2136E] text-white border-[#E2136E] shadow-2xs",
+                    },
+                  ] as const
+                ).map((opt) => {
+                  const active = type === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => handleFooterPaymentSwitch(opt.key)}
+                      className={`h-7 px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer border ${
+                        active
+                          ? opt.activeCls
+                          : "border-transparent text-muted-foreground hover:text-foreground hover:bg-background"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <Button
                 type="button"
                 variant="outline"
