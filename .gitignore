@@ -53,6 +53,7 @@ ios/
 Classic-World/
 dist-electron/
 software/
+downloads/
 
 *.exe
 *.zip
