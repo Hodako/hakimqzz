@@ -1,0 +1,201 @@
+/* Hallmark v2.0.0 · theme: dose (3/3) · genre: modern-minimal · ground: dose: white · draw: e26934 */
+/* critique: Built for Urobili Android PWA download landing page with warm paper, moulded green plastic controls, and real product workflows. */
+
+:root {
+  --hl-paper: oklch(97.6% 0.011 88);
+  --hl-paper-2: oklch(96.5% 0.02 160);
+  --hl-paper-3: oklch(93% 0.036 160);
+  --hl-ink: oklch(21% 0.025 170);
+  --hl-ink-2: oklch(31% 0.02 170);
+  --hl-muted: oklch(49% 0.024 165);
+  --hl-rule: oklch(86.5% 0.022 140);
+  --hl-accent: oklch(50% 0.13 160);
+  --hl-accent-deep: oklch(42% 0.11 162);
+  --hl-accent-soft: oklch(88% 0.08 160);
+  --hl-accent-ink: oklch(99% 0.006 160);
+  --hl-focus: oklch(45% 0.14 160);
+  --hl-p-mon: oklch(85% 0.052 22);
+  --hl-p-tue: oklch(87.5% 0.058 64);
+  --hl-p-wed: oklch(91.5% 0.064 98);
+  --hl-p-thu: oklch(86.5% 0.075 160);
+  --hl-p-fri: oklch(87% 0.048 210);
+  --hl-light: oklch(99.4% 0.016 84);
+  --hl-glint: oklch(100% 0 0);
+  --hl-bevel: oklch(100% 0 0 / 0.25);
+  --hl-font-display: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --hl-font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --hl-font-mono: "DM Mono", ui-monospace, monospace;
+  --hl-radius-card: 14px;
+  --hl-radius-input: 10px;
+  --hl-radius-pill: 999px;
+  --hl-shadow-card: 0 1px 2px oklch(30% 0.03 165 / 0.08), 0 24px 48px -24px oklch(40% 0.08 165 / 0.35);
+  --hl-shadow-lift: 0 1px 1px oklch(30% 0.03 165 / 0.1), 8px 18px 28px -14px oklch(36% 0.06 165 / 0.32), 18px 40px 60px -30px oklch(40% 0.08 165 / 0.3);
+  --hl-tracking-display: -0.03em;
+  --hl-dur-micro: 140ms;
+  --hl-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hl-dose {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: clip;
+  background-color: var(--hl-paper);
+  color: var(--hl-ink);
+  font-family: var(--hl-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.hl-dose h1,
+.hl-dose h2,
+.hl-dose h3 {
+  font-family: var(--hl-font-display);
+  font-weight: 700;
+  letter-spacing: var(--hl-tracking-display);
+  line-height: 1.04;
+  color: var(--hl-ink);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  min-width: 0;
+}
+
+.hl-dose .hl-mono {
+  font-family: var(--hl-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hl-dose .hl-container {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+
+.hl-dose .hl-window-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.hl-dose .hl-window-pane {
+  position: absolute;
+  width: 48%;
+  height: 75%;
+  background: radial-gradient(ellipse at center, var(--hl-light) 0%, transparent 72%);
+  opacity: 0.65;
+  transform: skewX(-14deg);
+  animation: hlLightDrift 90s ease-in-out infinite alternate;
+}
+
+.hl-dose .hl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--hl-radius-input);
+  font-family: var(--hl-font-body);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--hl-paper);
+  color: var(--hl-ink);
+  box-shadow: inset 0 1px 0 var(--hl-glint), 0 0 0 1px var(--hl-rule), 0 3px 0 var(--hl-rule);
+  transition: transform var(--hl-dur-micro) var(--hl-ease-out), opacity var(--hl-dur-micro) var(--hl-ease-out);
+}
+
+.hl-dose .hl-btn--primary {
+  background: linear-gradient(var(--hl-accent), var(--hl-accent-deep));
+  color: var(--hl-accent-ink);
+  box-shadow: inset 0 1px 0 var(--hl-bevel), 0 0 0 1px var(--hl-accent-deep), 0 3px 0 var(--hl-accent-deep);
+}
+
+.hl-dose .hl-btn:active {
+  transform: translateY(3px);
+}
+
+.hl-dose .hl-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.hl-dose .hl-btn-sm {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.hl-dose a:focus-visible,
+.hl-dose button:focus-visible {
+  outline: 2px solid var(--hl-focus);
+  outline-offset: 2px;
+}
+
+.hl-dose .hl-pill-nav {
+  background: color-mix(in oklab, var(--hl-paper) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-radius: var(--hl-radius-pill);
+  box-shadow: var(--hl-shadow-card);
+}
+
+.hl-dose .hl-plastic {
+  --t: var(--hl-p-thu);
+  position: relative;
+  border-radius: var(--hl-radius-card);
+  background: linear-gradient(color-mix(in oklab, var(--hl-glint) 34%, transparent), transparent 20%),
+    color-mix(in oklab, var(--t) 52%, var(--hl-paper));
+  box-shadow: inset 0 1.5px 0 var(--hl-glint), var(--hl-shadow-card);
+}
+
+.hl-dose .hl-surface {
+  background: var(--hl-glint);
+  border: 1px solid var(--hl-rule);
+  border-radius: var(--hl-radius-card);
+  box-shadow: var(--hl-shadow-lift);
+}
+
+.hl-dose .hl-band-ink {
+  background: var(--hl-ink);
+  color: var(--hl-paper);
+}
+
+.hl-dose .hl-band-ink h2,
+.hl-dose .hl-band-ink h3 {
+  color: var(--hl-paper);
+}
+
+.hl-dose .hl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: var(--hl-radius-pill);
+  background: var(--hl-accent-soft);
+  color: var(--hl-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@keyframes hlLightDrift {
+  0% {
+    transform: skewX(-14deg) translate3d(-4%, -2%, 0);
+  }
+  100% {
+    transform: skewX(-14deg) translate3d(6%, 4%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-dose .hl-window-pane {
+    animation: none;
+  }
+  .hl-dose .hl-btn {
+    transition: none;
+  }
+}

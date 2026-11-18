@@ -1,12 +1,14 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useDeferredValue, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getSales, type Sale } from "@/lib/queries";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useT } from "@/lib/i18n";
@@ -28,11 +30,24 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  RefreshCw,
+  ShieldCheck,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
-import { approveCourierPaymentFn, cancelCourierOrderFn } from "@/lib/rpc";
+import {
+  approveCourierPaymentFn,
+  cancelCourierOrderFn,
+  steadfastCheckBalanceFn,
+  steadfastFraudCheckFn,
+  steadfastCreateOrderFn,
+  steadfastCheckStatusFn,
+} from "@/lib/rpc";
+import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { printPwaInvoice } from "@/lib/invoice-printer";
 import { useAuth } from "@/hooks/use-auth";
+import { buildOrderWhatsAppMessage, sendDesktopWhatsAppMessage } from "@/lib/desktop-whatsapp";
+import { MessageCircle } from "lucide-react";
 
 export default function OnlineSellsPage() {
   const { lang, t } = useT();
@@ -45,6 +60,21 @@ export default function OnlineSellsPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+
+  const bizSettings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
+  const steadfastEnabled = Boolean((bizSettings.data?.business as any)?.steadfast_enabled);
+  const [sfBalance, setSfBalance] = useState<number | null>(null);
+  const [sfSyncingAll, setSfSyncingAll] = useState(false);
+
+  // SteadFast Dispatch Modal State
+  const [sfModalOrder, setSfModalOrder] = useState<any | null>(null);
+  const [sfName, setSfName] = useState("");
+  const [sfPhone, setSfPhone] = useState("");
+  const [sfAddress, setSfAddress] = useState("");
+  const [sfCod, setSfCod] = useState("");
+  const [sfNote, setSfNote] = useState("");
+  const [sfBusy, setSfBusy] = useState(false);
+  const [sfFraudResult, setSfFraudResult] = useState<any | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -97,6 +127,11 @@ export default function OnlineSellsPage() {
         courier_status: (s as any).courier_status || "pending",
         courier_name: (s as any).courier_name || "Courier Delivery",
         tracking_code: (s as any).tracking_code || (s as any).tracking_id || (s as any).consignment_id || null,
+        consignment_id: (s as any).consignment_id || null,
+        steadfast_status: (s as any).steadfast_status || null,
+        recipient_name: (s as any).recipient_name || s.parties?.name || "",
+        recipient_phone: (s as any).recipient_phone || (s.parties as any)?.phone || "",
+        recipient_address: (s as any).recipient_address || (s.parties as any)?.address || "",
         note: s.note,
         returned: (s as any).returned || false,
         created_at: s.created_at,
@@ -130,6 +165,11 @@ export default function OnlineSellsPage() {
           courier_status: (first as any).courier_status || items.find((x) => (x as any).courier_status)?.courier_status || "pending",
           courier_name: (first as any).courier_name || items.find((x) => (x as any).courier_name)?.courier_name || "Courier Delivery",
           tracking_code: foundTracking,
+          consignment_id: (first as any).consignment_id || (items.find((x) => (x as any).consignment_id) as any)?.consignment_id || null,
+          steadfast_status: (first as any).steadfast_status || (items.find((x) => (x as any).steadfast_status) as any)?.steadfast_status || null,
+          recipient_name: (first as any).recipient_name || first.parties?.name || "",
+          recipient_phone: (first as any).recipient_phone || (first.parties as any)?.phone || "",
+          recipient_address: (first as any).recipient_address || (first.parties as any)?.address || "",
           note: first.note,
           returned: (first as any).returned || false,
           created_at: first.created_at,
@@ -236,6 +276,128 @@ export default function OnlineSellsPage() {
     }
   }
 
+  function openSteadfastModal(item: any) {
+    setSfModalOrder(item);
+    setSfName(item.recipient_name || item.parties?.name || "");
+    setSfPhone(item.recipient_phone || item.parties?.phone || "");
+    setSfAddress(item.recipient_address || item.parties?.address || "");
+    setSfCod(String(Math.round(Number(item.sell_price) || 0)));
+    setSfNote(item.note || "");
+    setSfFraudResult(null);
+  }
+
+  async function handleSteadfastFraudCheck(phoneToCheck?: string) {
+    const p = (phoneToCheck ?? sfPhone).trim();
+    if (!p) return toast.error(lang === "bn" ? "ফোন নম্বর দিন" : "Enter phone number");
+    setSfBusy(true);
+    try {
+      const res = await steadfastFraudCheckFn({ data: { phone: p } });
+      setSfFraudResult(res);
+    } catch (err: any) {
+      toast.error(err?.message || "Fraud check failed");
+    } finally {
+      setSfBusy(false);
+    }
+  }
+
+  async function handleDispatchSteadfast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sfModalOrder) return;
+    setSfBusy(true);
+    try {
+      const res = await steadfastCreateOrderFn({
+        data: {
+          saleId: sfModalOrder.items[0]?.id || sfModalOrder.id,
+          recipient_name: sfName.trim() || "Customer",
+          recipient_phone: sfPhone.trim(),
+          recipient_address: sfAddress.trim(),
+          cod_amount: Number(sfCod) || 0,
+          note: sfNote.trim() || undefined,
+        },
+      });
+      toast.success(
+        lang === "bn"
+          ? `SteadFast অর্ডার তৈরি হয়েছে! Tracking: ${res?.consignment?.tracking_code}`
+          : `SteadFast parcel booked! Tracking: ${res?.consignment?.tracking_code}`
+      );
+      setSfModalOrder(null);
+      qc.invalidateQueries({ queryKey: ["sales"] });
+    } catch (err: any) {
+      toast.error(err?.message || "SteadFast dispatch failed");
+    } finally {
+      setSfBusy(false);
+    }
+  }
+
+  async function handleTrackSteadfast(item: any) {
+    const saleId = item.items[0]?.id || item.id;
+    setActionBusyId(saleId);
+    try {
+      const res = await steadfastCheckStatusFn({
+        data: {
+          saleId,
+          trackingCode: item.tracking_code || undefined,
+          consignmentId: item.consignment_id || undefined,
+        },
+      });
+      if (res?.autoCompleted) {
+        toast.success(lang === "bn" ? `ডেলিভার্ড! Cashbox-এ টাকা জমা হয়েছে (${res.delivery_status})` : `Delivered! Auto-completed and deposited to Cashbox.`);
+        qc.invalidateQueries({ queryKey: ["cashbox"] });
+      } else {
+        toast.info(lang === "bn" ? `SteadFast স্ট্যাটাস: ${res?.delivery_status}` : `SteadFast status: ${res?.delivery_status}`);
+      }
+      qc.invalidateQueries({ queryKey: ["sales"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Tracking check failed");
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
+  async function handleSyncAllSteadfast() {
+    const toTrack = groupedOnlineSales.filter(
+      (s: any) => s.courier_status !== "collected" && s.courier_status !== "cancelled" && !s.returned && (s.tracking_code || s.consignment_id)
+    );
+    if (toTrack.length === 0) {
+      return toast.info(lang === "bn" ? "সিঙ্ক করার মতো কোনো SteadFast অর্ডার নেই" : "No dispatched SteadFast orders to sync");
+    }
+    setSfSyncingAll(true);
+    let completed = 0;
+    try {
+      for (const item of toTrack) {
+        try {
+          const res = await steadfastCheckStatusFn({
+            data: {
+              saleId: item.items[0]?.id || item.id,
+              trackingCode: item.tracking_code || undefined,
+              consignmentId: (item as any).consignment_id || undefined,
+            },
+          });
+          if (res?.autoCompleted) completed++;
+        } catch {}
+      }
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      if (completed > 0) qc.invalidateQueries({ queryKey: ["cashbox"] });
+      toast.success(
+        lang === "bn"
+          ? `${toTrack.length}টি অর্ডার সিঙ্ক হয়েছে (${completed}টি ডেলিভার্ড ও ক্যাশবক্সে জমা)`
+          : `Synced ${toTrack.length} orders (${completed} delivered & settled to Cashbox)`
+      );
+    } finally {
+      setSfSyncingAll(false);
+    }
+  }
+
+  async function handleCheckSteadfastBalance() {
+    try {
+      const res = await steadfastCheckBalanceFn({});
+      setSfBalance(Number(res?.current_balance ?? 0));
+      toast.success(`SteadFast Balance: ৳${res?.current_balance ?? 0}`);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not fetch SteadFast balance");
+    }
+  }
+
   async function handlePrint(item: any) {
     const custName = item.parties?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Online Customer");
     const invNo = item.cart_id ? `INV-${item.cart_id.slice(-6).toUpperCase()}` : `INV-${item.id.slice(-6).toUpperCase()}`;
@@ -308,6 +470,31 @@ export default function OnlineSellsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap font-hind">
+          {steadfastEnabled && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCheckSteadfastBalance}
+                className="h-8 px-2.5 text-xs font-bold rounded-xl border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 gap-1 cursor-pointer"
+              >
+                <Truck className="size-3.5" />
+                <span>{sfBalance !== null ? `SteadFast: ৳${sfBalance}` : "SteadFast Balance"}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={sfSyncingAll}
+                onClick={handleSyncAllSteadfast}
+                className="h-8 px-2.5 text-xs font-bold rounded-xl border-purple-500/40 text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 gap-1 cursor-pointer"
+              >
+                <RefreshCw className={`size-3.5 ${sfSyncingAll ? "animate-spin" : ""}`} />
+                <span>{lang === "bn" ? "সব ট্র্যাক সিঙ্ক" : "Sync Tracking"}</span>
+              </Button>
+            </>
+          )}
           <div className="relative flex-1 sm:w-60">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground pointer-events-none" />
             <Input
@@ -517,6 +704,11 @@ export default function OnlineSellsPage() {
                               ID: {item.tracking_code}
                             </span>
                           )}
+                          {(item as any).steadfast_status && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              {(item as any).steadfast_status}
+                            </span>
+                          )}
                         </div>
 
                         {item.note && (
@@ -605,18 +797,78 @@ export default function OnlineSellsPage() {
 
                       {/* Actions Toolbar */}
                       <div className="flex items-center justify-between gap-2 pt-0.5 font-hind">
-                        <Button
-                          onClick={(e) => { e.stopPropagation(); handlePrint(item); }}
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs font-bold rounded-lg gap-1 cursor-pointer bg-background hover:bg-muted border-[0.5px] border-black/50 dark:border-white/30"
-                        >
-                          <Printer className="size-3 text-primary" />
-                          <span>{lang === "bn" ? "রসিদ প্রিন্ট" : "Print Invoice"}</span>
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            onClick={(e) => { e.stopPropagation(); handlePrint(item); }}
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs font-bold rounded-lg gap-1 cursor-pointer bg-background hover:bg-muted border-[0.5px] border-black/50 dark:border-white/30"
+                          >
+                            <Printer className="size-3 text-primary" />
+                            <span>{lang === "bn" ? "রসিদ প্রিন্ট" : "Print Invoice"}</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const phone = (item as any).recipient_phone || (item.parties as any)?.phone || "";
+                              if (!phone) {
+                                return toast.error(lang === "bn" ? "কাস্টমারের ফোন নম্বর নেই" : "No customer phone number");
+                              }
+                              const msg = buildOrderWhatsAppMessage({
+                                shopName: user?.business_name,
+                                customerName: (item as any).recipient_name || item.parties?.name || "Customer",
+                                itemsSummary: item.product_name,
+                                amount: Math.round(item.sell_price),
+                                trackingCode: item.tracking_code,
+                                status: (item as any).steadfast_status || item.courier_status,
+                                type: "tracking",
+                              });
+                              const res = await sendDesktopWhatsAppMessage(phone, msg);
+                              if (res.sent) {
+                                toast.success("WhatsApp message sent from Desktop!");
+                              } else {
+                                const clean = phone.replace(/[^0-9]/g, "");
+                                const bd = clean.startsWith("0") ? `88${clean}` : clean;
+                                window.open(`https://wa.me/${bd}?text=${encodeURIComponent(msg)}`, "_blank");
+                              }
+                            }}
+                            className="h-7 px-2 text-xs font-bold rounded-lg gap-1 cursor-pointer border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20"
+                          >
+                            <MessageCircle className="size-3" />
+                            <span>WhatsApp</span>
+                          </Button>
+                        </div>
 
                         {isPending && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {steadfastEnabled && !item.tracking_code && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => { e.stopPropagation(); openSteadfastModal(item); }}
+                                className="h-7 px-2 text-xs font-bold rounded-lg gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer"
+                              >
+                                <Send className="size-3" />
+                                <span>{lang === "bn" ? "SteadFast পাঠান" : "Send SteadFast"}</span>
+                              </Button>
+                            )}
+                            {steadfastEnabled && item.tracking_code && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => { e.stopPropagation(); handleTrackSteadfast(item); }}
+                                disabled={actionBusyId === item.id || (item.items[0] && actionBusyId === item.items[0].id)}
+                                className="h-7 px-2 text-xs font-bold rounded-lg gap-1 border-purple-500/40 text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 cursor-pointer"
+                              >
+                                <RefreshCw className="size-3" />
+                                <span>{lang === "bn" ? "ট্র্যাক" : "Track"}</span>
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               style={{ backgroundColor: "#ADFF2F" }}
@@ -660,6 +912,95 @@ export default function OnlineSellsPage() {
         }}
         initialSelectedItemId={infoItemId}
       />
+
+      {/* SteadFast Parcel Dispatch & Fraud Check Dialog */}
+      <Dialog open={!!sfModalOrder} onOpenChange={(v) => { if (!v) setSfModalOrder(null); }}>
+        <DialogContent className="max-w-md rounded-2xl p-5">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Truck className="size-5 text-emerald-600" />
+              <span>{lang === "bn" ? "SteadFast কুরিয়ারে অর্ডার পাঠান" : "Dispatch Order to SteadFast"}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleDispatchSteadfast} className="space-y-3 pt-1">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "কাস্টমারের নাম" : "Recipient Name"} *</Label>
+              <Input value={sfName} onChange={(e) => setSfName(e.target.value)} required className="h-9 rounded-xl text-xs" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "১১ ডিজিটের মোবাইল নম্বর" : "Recipient Phone (11 digits)"} *</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={sfPhone}
+                  onChange={(e) => setSfPhone(e.target.value)}
+                  placeholder="017XXXXXXXX"
+                  required
+                  className="h-9 rounded-xl text-xs font-mono flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={sfBusy}
+                  onClick={() => handleSteadfastFraudCheck()}
+                  className="h-9 px-3 rounded-xl text-xs font-bold gap-1 shrink-0"
+                >
+                  <ShieldCheck className="size-3.5 text-amber-600" />
+                  <span>{lang === "bn" ? "ফ্রড চেক" : "Fraud Check"}</span>
+                </Button>
+              </div>
+              {sfFraudResult && (
+                <div className="p-2.5 rounded-xl bg-muted/60 border border-border text-[11px] flex items-center justify-between gap-2">
+                  <span>Total: <strong>{sfFraudResult.total_parcels}</strong></span>
+                  <span className="text-emerald-600">Delivered: <strong>{sfFraudResult.total_delivered}</strong></span>
+                  <span className="text-rose-600">Cancelled: <strong>{sfFraudResult.total_cancelled}</strong></span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">{lang === "bn" ? "ডেলিভারি ঠিকানা" : "Delivery Address"} *</Label>
+              <Input
+                value={sfAddress}
+                onChange={(e) => setSfAddress(e.target.value)}
+                placeholder="House, Road, Area, District"
+                required
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">COD Amount (৳) *</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={sfCod}
+                  onChange={(e) => setSfCod(e.target.value)}
+                  required
+                  className="h-9 rounded-xl text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">{lang === "bn" ? "নোট (ঐচ্ছিক)" : "Delivery Note"}</Label>
+                <Input
+                  value={sfNote}
+                  onChange={(e) => setSfNote(e.target.value)}
+                  placeholder="Optional note"
+                  className="h-9 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+            <DialogFooter className="pt-2 gap-2">
+              <Button type="button" variant="outline" onClick={() => setSfModalOrder(null)} className="h-9 rounded-xl text-xs">
+                {lang === "bn" ? "বাতিল" : "Cancel"}
+              </Button>
+              <Button type="submit" disabled={sfBusy} className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5">
+                <Send className="size-3.5" />
+                <span>{sfBusy ? "..." : (lang === "bn" ? "SteadFast-এ পাঠান" : "Send Parcel")}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

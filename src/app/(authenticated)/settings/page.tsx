@@ -82,7 +82,21 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Calendar,
+  Truck,
+  MessageCircle,
+  QrCode,
 } from "lucide-react";
+import {
+  isDesktopWhatsAppAvailable,
+  getDesktopWhatsAppBridge,
+  getWhatsAppMode,
+  setWhatsAppMode,
+  getWhatsAppAutoRules,
+  setWhatsAppAutoRules,
+  type WhatsAppMode,
+  type WhatsAppAutoRules,
+  type DesktopWhatsAppStatus,
+} from "@/lib/desktop-whatsapp";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
 import { PosHardwareSettings } from "@/components/pos-hardware-settings";
 import { LabelPrintingStudio } from "@/components/label-print-dialog";
@@ -106,6 +120,7 @@ import {
   sendEmployeeInvitationFn,
   listEmployeeInvitationsFn,
   cancelEmployeeInvitationFn,
+  steadfastCheckBalanceFn,
 } from "@/lib/rpc";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
@@ -124,7 +139,7 @@ import {
 
 const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
-type SettingsTab = "profile" | "transfer" | "printing" | "sheets" | "staff" | "appearance" | "security" | "history";
+type SettingsTab = "profile" | "transfer" | "printing" | "sheets" | "steadfast" | "whatsapp" | "staff" | "appearance" | "security" | "history";
 
 export default function SettingsPage() {
   const { lang, t } = useT();
@@ -587,6 +602,45 @@ export default function SettingsPage() {
   const [fontScale, setFontScale] = useState("100%");
   const [lineSpacing, setLineSpacing] = useState("6px");
 
+  // SteadFast Courier Integration State
+  const [steadfastEnabled, setSteadfastEnabled] = useState(false);
+  const [steadfastApiKey, setSteadfastApiKey] = useState("");
+  const [steadfastSecretKey, setSteadfastSecretKey] = useState("");
+  const [steadfastBalance, setSteadfastBalance] = useState<number | null>(null);
+  const [steadfastBusy, setSteadfastBusy] = useState(false);
+
+  // Desktop Client-Compute WhatsApp State
+  const [waAvailable, setWaAvailable] = useState(false);
+  const [waStatus, setWaStatus] = useState<DesktopWhatsAppStatus>({
+    status: "disconnected",
+    qrCodeDataUrl: null,
+    phone: null,
+    name: null,
+    isDesktop: false,
+  });
+  const [waMode, setWaModeState] = useState<WhatsAppMode>("manual");
+  const [waRules, setWaRulesState] = useState<WhatsAppAutoRules>({ onSale: true, onOnlineOrder: true, onTracking: true });
+  const [waTestPhone, setWaTestPhone] = useState("");
+  const [waTestMsg, setWaTestMsg] = useState("Hello from Dream Fashion Desktop POS!");
+  const [waBusy, setWaBusy] = useState(false);
+
+  useEffect(() => {
+    setWaAvailable(isDesktopWhatsAppAvailable());
+    setWaModeState(getWhatsAppMode());
+    setWaRulesState(getWhatsAppAutoRules());
+    const bridge = getDesktopWhatsAppBridge();
+    if (!bridge) return;
+    bridge.getStatus().then((st: DesktopWhatsAppStatus) => {
+      if (st) setWaStatus(st);
+    }).catch(() => {});
+    const unsub = bridge.onStatusUpdate((st: DesktopWhatsAppStatus) => {
+      if (st) setWaStatus(st);
+    });
+    return () => {
+      try { unsub(); } catch {}
+    };
+  }, []);
+
   useEffect(() => {
     if (biz?.logo_url) {
       setLogoUrl(biz.logo_url);
@@ -600,7 +654,56 @@ export default function SettingsPage() {
     if (biz?.invoice_line_spacing) {
       setLineSpacing(biz.invoice_line_spacing);
     }
-  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing]);
+    if (biz) {
+      setSteadfastEnabled(Boolean((biz as any).steadfast_enabled));
+      setSteadfastApiKey(String((biz as any).steadfast_api_key || ""));
+      setSteadfastSecretKey(String((biz as any).steadfast_secret_key || ""));
+    }
+  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing, (biz as any)?.steadfast_enabled, (biz as any)?.steadfast_api_key, (biz as any)?.steadfast_secret_key]);
+
+  async function handleTestSteadfast() {
+    if (!steadfastApiKey.trim() || !steadfastSecretKey.trim()) {
+      toast.error(lang === "bn" ? "Api-Key এবং Secret-Key দিন" : "Enter both Api-Key and Secret-Key");
+      return;
+    }
+    setSteadfastBusy(true);
+    try {
+      const res = await steadfastCheckBalanceFn({
+        data: { apiKey: steadfastApiKey.trim(), secretKey: steadfastSecretKey.trim() },
+      });
+      setSteadfastBalance(Number(res?.current_balance ?? 0));
+      toast.success(
+        lang === "bn"
+          ? `SteadFast সংযুক্ত! বর্তমান ব্যালেন্স: ৳${res?.current_balance ?? 0}`
+          : `SteadFast connected! Balance: ৳${res?.current_balance ?? 0}`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "SteadFast connection failed");
+    } finally {
+      setSteadfastBusy(false);
+    }
+  }
+
+  async function handleSaveSteadfast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isOwner) return;
+    setSteadfastBusy(true);
+    try {
+      await updateBusinessSettingsFn({
+        data: {
+          steadfast_enabled: steadfastEnabled,
+          steadfast_api_key: steadfastApiKey.trim(),
+          steadfast_secret_key: steadfastSecretKey.trim(),
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+      toast.success(lang === "bn" ? "SteadFast কুরিয়ার সেটিংস সংরক্ষিত হয়েছে!" : "SteadFast Courier settings saved!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save SteadFast settings");
+    } finally {
+      setSteadfastBusy(false);
+    }
+  }
 
   // Cropper states
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -1121,6 +1224,8 @@ export default function SettingsPage() {
     { id: "transfer", label: lang === "bn" ? "অ্যাসেট ট্রান্সফার ও কি" : "Transfer Assets & Keys", icon: ArrowRightLeft, count: (myTransferKeys.data || []).length },
     { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Printing", icon: Printer },
     { id: "sheets", label: lang === "bn" ? "গুগল শিট ও ক্লাউড" : "Google Sheets & Cloud", icon: FileSpreadsheet },
+    { id: "steadfast", label: lang === "bn" ? "SteadFast কুরিয়ার" : "SteadFast Courier", icon: Truck },
+    { id: "whatsapp", label: lang === "bn" ? "হোয়াটসঅ্যাপ (QR)" : "WhatsApp (Desktop QR)", icon: MessageCircle },
     { id: "staff", label: lang === "bn" ? "কর্মচারী ও আমন্ত্রণ" : "Staff & Invitations", icon: Users, count: activeEmployees.length + pendingInvites.length },
     { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & Themes", icon: Sparkles },
     { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
@@ -2272,6 +2377,339 @@ export default function SettingsPage() {
                   </div>
                 </Card>
               </div>
+            </div>
+          )}
+
+          {/* ── TAB: STEADFAST COURIER INTEGRATION ──────────────────────── */}
+          {settingsTab === "steadfast" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <Truck className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-foreground">
+                        {lang === "bn" ? "SteadFast কুরিয়ার API ইন্টিগ্রেশন" : "SteadFast Courier API Integration"}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {lang === "bn"
+                          ? "ড্যাশবোর্ড ও অনলাইন সেল থেকে সরাসরি পার্সেল বুকিং, ট্র্যাকিং ও ফ্রড চেক করুন।"
+                          : "Book parcels, check customer fraud scores, and auto-sync delivery completion from Online Sales & Dashboard."}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={steadfastEnabled ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" : "bg-muted text-muted-foreground"}>
+                    {steadfastEnabled ? (lang === "bn" ? "সক্রিয়" : "Enabled") : (lang === "bn" ? "নিষ্ক্রিয়" : "Disabled")}
+                  </Badge>
+                </div>
+
+                <form onSubmit={handleSaveSteadfast} className="space-y-4">
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 border border-border/70 cursor-pointer">
+                    <div>
+                      <div className="text-sm font-bold text-foreground">
+                        {lang === "bn" ? "SteadFast কুরিয়ার চালু করুন" : "Enable SteadFast Courier"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {lang === "bn"
+                          ? "নতুন অনলাইন সেল করার সাথে সাথেই SteadFast-এ পাঠানোর অপশন চালু হবে।"
+                          : "Enables 1-click parcel dispatch, tracking sync, and fraud check across Online Sales & Dashboard."}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={steadfastEnabled}
+                      onChange={(e) => setSteadfastEnabled(e.target.checked)}
+                      className="size-5 accent-emerald-600 cursor-pointer"
+                    />
+                  </label>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">SteadFast Api-Key</Label>
+                    <Input
+                      value={steadfastApiKey}
+                      onChange={(e) => setSteadfastApiKey(e.target.value)}
+                      placeholder="Enter your SteadFast Api-Key"
+                      className="h-10 rounded-xl font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">SteadFast Secret-Key</Label>
+                    <Input
+                      type="password"
+                      value={steadfastSecretKey}
+                      onChange={(e) => setSteadfastSecretKey(e.target.value)}
+                      placeholder="Enter your SteadFast Secret-Key"
+                      className="h-10 rounded-xl font-mono text-xs"
+                    />
+                  </div>
+
+                  {steadfastBalance !== null && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                        {lang === "bn" ? "বর্তমান SteadFast ব্যালেন্স:" : "Current SteadFast Balance:"}
+                      </span>
+                      <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                        ৳ {steadfastBalance.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2.5 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={steadfastBusy}
+                      onClick={handleTestSteadfast}
+                      className="h-10 rounded-xl text-xs font-bold gap-2"
+                    >
+                      <RefreshCw className={`size-3.5 ${steadfastBusy ? "animate-spin" : ""}`} />
+                      <span>{lang === "bn" ? "ব্যালেন্স ও কানেকশন টেস্ট" : "Test & Check Balance"}</span>
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={steadfastBusy || !isOwner}
+                      className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2 flex-1"
+                    >
+                      <CheckCircle className="size-3.5" />
+                      <span>{lang === "bn" ? "SteadFast সেটিংস সেভ করুন" : "Save SteadFast Settings"}</span>
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+
+              <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
+                <h3 className="text-sm font-bold text-foreground">
+                  {lang === "bn" ? "কিভাবে কাজ করে?" : "Supported SteadFast Features"}
+                </h3>
+                <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
+                  <li>{lang === "bn" ? "নতুন অনলাইন সেলের সময় সাথে সাথে SteadFast অর্ডার তৈরি ও ট্র্যাকিং কোড সেভ।" : "Create SteadFast consignment immediately after an Online Sale and save tracking code."}</li>
+                  <li>{lang === "bn" ? "কাস্টমারের ১১-ডিজিটের নাম্বারে ফ্রড চেক (মোট পার্সেল, ডেলিভার্ড, ক্যানসেল্ড)।" : "Run Fraud Check on 11-digit phone numbers (Total parcels, Delivered, Cancelled)."}</li>
+                  <li>{lang === "bn" ? "ট্র্যাকিং স্ট্যাটাস সিঙ্ক: ডেলিভার্ড হলে অটোমেটিক ক্যাশবক্সে COD টাকা জমা হবে।" : "Live status tracking: when SteadFast marks 'delivered', order auto-completes and deposits COD to Cashbox."}</li>
+                  <li>{lang === "bn" ? "বাল্ক অর্ডার ডিসপ্যাচ এবং ড্যাশবোর্ড কুইক ট্র্যাকিং।" : "Single & bulk dispatch directly from Online Sales and Dashboard."}</li>
+                </ul>
+              </Card>
+            </div>
+          )}
+
+          {/* ── TAB: DESKTOP WHATSAPP (CLIENT COMPUTE QR + AUTO/MANUAL) ────── */}
+          {settingsTab === "whatsapp" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <QrCode className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-foreground">
+                        {lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ QR (লোকাল কম্পিউট)" : "Desktop WhatsApp QR (Client Compute)"}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {lang === "bn"
+                          ? "সম্পূর্ণ আপনার নিজের কম্পিউটারে চলে — কোনো ক্লাউড সার্ভারে সেশন যায় না।"
+                          : "Runs 100% locally inside your Desktop App using your own computer."}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={waStatus.status === "connected" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" : "bg-muted text-muted-foreground"}>
+                    {waStatus.status === "connected" ? "Connected" : waStatus.status === "qr_ready" ? "Scan QR" : waStatus.status === "connecting" ? "Connecting..." : "Disconnected"}
+                  </Badge>
+                </div>
+
+                {!waAvailable ? (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-200 space-y-1.5">
+                    <div className="font-bold">{lang === "bn" ? "ডেস্কটপ অ্যাপ প্রয়োজন" : "Desktop App Required for Local Compute"}</div>
+                    <p>
+                      {lang === "bn"
+                        ? "ক্লায়েন্ট কম্পিউটে WhatsApp QR এবং অটো মেসেজ চালাতে Dream Fashion Windows Desktop অ্যাপটি ব্যবহার করুন।"
+                        : "Open Dream Fashion Windows Desktop App to link your WhatsApp via QR code and send automated messages from your own PC."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {waStatus.status === "qr_ready" && waStatus.qrCodeDataUrl && (
+                      <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white border border-border">
+                        <img src={waStatus.qrCodeDataUrl} alt="WhatsApp QR Code" className="w-56 h-56 rounded-xl" />
+                        <p className="text-xs font-semibold text-slate-700 text-center">
+                          {lang === "bn" ? "ফোনের WhatsApp > Linked Devices থেকে এই QR স্ক্যান করুন" : "Open WhatsApp > Linked Devices on your phone and scan this QR"}
+                        </p>
+                      </div>
+                    )}
+
+                    {waStatus.status === "connected" && (
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                            {waStatus.name || "WhatsApp Linked"}
+                          </div>
+                          {waStatus.phone && (
+                            <div className="text-xs font-mono text-muted-foreground">+{waStatus.phone}</div>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={waBusy}
+                          onClick={async () => {
+                            setWaBusy(true);
+                            try {
+                              const bridge = getDesktopWhatsAppBridge();
+                              if (bridge) setWaStatus(await bridge.disconnect());
+                              toast.success("WhatsApp disconnected");
+                            } finally {
+                              setWaBusy(false);
+                            }
+                          }}
+                          className="h-9 rounded-xl text-xs font-bold"
+                        >
+                          Disconnect
+                        </Button>
+                      </div>
+                    )}
+
+                    {waStatus.status !== "connected" && (
+                      <Button
+                        type="button"
+                        disabled={waBusy}
+                        onClick={async () => {
+                          setWaBusy(true);
+                          try {
+                            const bridge = getDesktopWhatsAppBridge();
+                            if (bridge) setWaStatus(await bridge.start());
+                          } catch (err: any) {
+                            toast.error(err?.message || "Failed to start WhatsApp");
+                          } finally {
+                            setWaBusy(false);
+                          }
+                        }}
+                        className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2"
+                      >
+                        <QrCode className="size-4" />
+                        <span>{waStatus.status === "qr_ready" ? "Refresh QR Code" : (lang === "bn" ? "QR কোড জেনারেট করুন" : "Connect & Show QR Code")}</span>
+                      </Button>
+                    )}
+
+                    {waStatus.lastError && (
+                      <p className="text-xs text-rose-500">{waStatus.lastError}</p>
+                    )}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="border-b border-border/60 pb-3">
+                  <h3 className="text-base font-bold text-foreground">
+                    {lang === "bn" ? "মেসেজ মোড (Auto / Manual)" : "Automation Mode (Auto / Manual)"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {lang === "bn"
+                      ? "অটো মোডে সেল বা অনলাইন অর্ডার হলেই কাস্টমারকে অটোমেটিক মেসেজ যাবে।"
+                      : "Switch between Auto Mode (instant customer notifications) and Manual Mode (send on click)."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaModeState("auto");
+                      setWhatsAppMode("auto");
+                      toast.success("WhatsApp Mode set to AUTO");
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      waMode === "auto"
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="text-sm font-bold">Auto Mode</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">Send automatically on new orders & tracking updates</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaModeState("manual");
+                      setWhatsAppMode("manual");
+                      toast.success("WhatsApp Mode set to MANUAL");
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      waMode === "manual"
+                        ? "bg-primary/15 border-primary text-primary ring-1 ring-primary/30"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="text-sm font-bold">Manual Mode</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">Send only when you click the WhatsApp button</div>
+                  </button>
+                </div>
+
+                {waMode === "auto" && (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/60">
+                    <div className="text-xs font-bold text-foreground mb-1">Auto-Send Triggers</div>
+                    {[
+                      { key: "onSale" as const, label: "POS / Store Sales (with customer phone)" },
+                      { key: "onOnlineOrder" as const, label: "New Online / Courier Orders" },
+                      { key: "onTracking" as const, label: "SteadFast Tracking & Delivery Updates" },
+                    ].map((r) => (
+                      <label key={r.key} className="flex items-center justify-between text-xs cursor-pointer py-1">
+                        <span>{r.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={waRules[r.key]}
+                          onChange={(e) => {
+                            const next = { ...waRules, [r.key]: e.target.checked };
+                            setWaRulesState(next);
+                            setWhatsAppAutoRules(next);
+                          }}
+                          className="size-4 accent-emerald-600"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-border/60 space-y-2.5">
+                  <div className="text-xs font-bold text-foreground">Manual / Test Message</div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={waTestPhone}
+                      onChange={(e) => setWaTestPhone(e.target.value)}
+                      placeholder="017XXXXXXXX"
+                      className="h-9 rounded-xl text-xs font-mono"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!waAvailable || waStatus.status !== "connected" || waBusy}
+                      onClick={async () => {
+                        setWaBusy(true);
+                        try {
+                          const bridge = getDesktopWhatsAppBridge();
+                          await bridge.sendMessage({ phone: waTestPhone, message: waTestMsg });
+                          toast.success("WhatsApp message sent from your computer!");
+                        } catch (err: any) {
+                          toast.error(err?.message || "Failed to send");
+                        } finally {
+                          setWaBusy(false);
+                        }
+                      }}
+                      className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5 shrink-0"
+                    >
+                      <Send className="size-3.5" />
+                      <span>Send</span>
+                    </Button>
+                  </div>
+                  <Input
+                    value={waTestMsg}
+                    onChange={(e) => setWaTestMsg(e.target.value)}
+                    placeholder="Message text..."
+                    className="h-9 rounded-xl text-xs"
+                  />
+                </div>
+              </Card>
             </div>
           )}
 

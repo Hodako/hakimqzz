@@ -1,0 +1,131 @@
+import type { Metadata, Viewport } from "next";
+import { Providers } from "./providers";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { PwaAutoUpdater } from "@/components/pwa-auto-updater";
+import "../styles.css";
+
+export const metadata: Metadata = {
+  metadataBase: new URL("https://urobili-pos.web.app"),
+  title: "Urobili — Smart POS & Business Management Software",
+  description: "Urobili POS — Cloud-powered point of sale, inventory tracking, invoice generator, somiti management, and accounting system for modern businesses.",
+  applicationName: "Urobili POS",
+  authors: [{ name: "Urobili" }],
+  generator: "Next.js",
+  keywords: [
+    "Urobili",
+    "Urobili POS",
+    "POS software",
+    "Point of Sale",
+    "Inventory Management",
+    "Invoice Generator",
+    "Store Accounting",
+    "Billing Software"
+  ],
+  icons: {
+    icon: [
+      { url: "/logo.png" },
+      { url: "/favicon.ico" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "Urobili — Smart POS & Business Management Software",
+    description: "Cloud-powered point of sale, live inventory management, automated invoices, somiti accounts, and multi-profile store billing.",
+    url: "https://urobili-pos.web.app",
+    siteName: "Urobili",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Urobili POS & Billing Software",
+      },
+      {
+        url: "/logo.png",
+        width: 512,
+        height: 512,
+        alt: "Urobili Logo",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Urobili — Smart POS & Business Management Software",
+    description: "Cloud-powered point of sale, live inventory management, automated invoices, somiti accounts, and multi-profile store billing.",
+    images: ["/og-image.jpg", "/logo.png"],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Urobili POS",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Hind+Siliguri:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <script
+          id="theme-initializer"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var mode = localStorage.getItem('hz-theme') || 'light';
+                  var accent = localStorage.getItem('hz-accent') || 'mechanix';
+                  var accents = {
+                    mechanix: { light: '#228B22', dark: '#228B22' },
+                    emerald: { light: 'oklch(0.38 0.12 155)', dark: 'oklch(0.65 0.14 155)' },
+                    indigo: { light: 'oklch(0.5 0.2 264)', dark: 'oklch(0.68 0.18 264)' },
+                    violet: { light: 'oklch(0.55 0.22 290)', dark: 'oklch(0.7 0.2 290)' },
+                    blue: { light: 'oklch(0.5 0.18 245)', dark: 'oklch(0.68 0.16 245)' },
+                    rose: { light: 'oklch(0.55 0.22 15)', dark: 'oklch(0.7 0.18 15)' }
+                  };
+                  var isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  var cfg = accents[accent] || accents.mechanix;
+                  var val = isDark ? cfg.dark : cfg.light;
+                  var root = document.documentElement;
+                  root.style.setProperty('--primary', val);
+                  root.style.setProperty('--ring', val);
+                  root.style.setProperty('--loader-color', val);
+                  root.style.setProperty('--sidebar-primary', val);
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className="antialiased site-bg text-foreground min-h-screen relative overflow-x-hidden" suppressHydrationWarning>
+        <div className="content relative z-10 w-full min-h-screen" suppressHydrationWarning>
+          <Providers>
+            {children}
+            <PwaInstallPrompt />
+            <PwaAutoUpdater />
+          </Providers>
+        </div>
+      </body>
+    </html>
+  );
+}

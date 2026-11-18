@@ -491,6 +491,9 @@ export async function getBusinessSettingsFn() {
       google_sheets_connected_email: (business.google_sheets_connected_email as string) || "",
       google_sheets_sync_enabled: Boolean(business.google_sheets_sync_enabled),
       has_google_auth: Boolean(business.google_sheets_access_token),
+      steadfast_enabled: Boolean(business.steadfast_enabled),
+      steadfast_api_key: (business.steadfast_api_key as string) || "",
+      steadfast_secret_key: (business.steadfast_secret_key as string) || "",
     } : null,
     role: session.role,
     permissions: session.permissions,
@@ -536,6 +539,9 @@ export async function updateBusinessSettingsFn(input: {
     google_sheets_credentials_json?: string;
     google_sheets_connected_email?: string;
     google_sheets_sync_enabled?: boolean;
+    steadfast_enabled?: boolean;
+    steadfast_api_key?: string;
+    steadfast_secret_key?: string;
     [key: string]: any;
   }
 }) {

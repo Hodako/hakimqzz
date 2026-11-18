@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,16 @@ import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
-import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap, Eye } from "lucide-react";
+import { createSaleFn, createCustomerFn, steadfastCreateOrderFn, steadfastFraudCheckFn } from "@/lib/rpc";
+import { getBusinessSettingsFn } from "@/lib/rpc-admin";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap, Eye, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog";
 import { playTapSound, playScanSuccessSound, playSaleSuccessSound, playErrorSound } from "@/lib/audio";
 import { getWhatsAppInvoiceUrl } from "@/lib/whatsapp-helper";
+import { sendDesktopWhatsAppIfAuto } from "@/lib/desktop-whatsapp";
 import { createHidScanBuffer, findProductsByScannedCode, getPosHardwareSettings } from "@/lib/pos-hardware";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
@@ -76,6 +78,12 @@ export function SaleDialog({
   const [courierName, setCourierName] = useState("Steadfast Courier");
   const [trackingCode, setTrackingCode] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [autoSendSteadfast, setAutoSendSteadfast] = useState(true);
+  const [sfFraudResult, setSfFraudResult] = useState<any | null>(null);
+  const [sfFraudBusy, setSfFraudBusy] = useState(false);
+
+  const bizSettings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
+  const steadfastEnabled = Boolean((bizSettings.data?.business as any)?.steadfast_enabled);
   const [finalDiscount, setFinalDiscount] = useState("");
   const [busy, setBusy] = useState(false);
   const [scanInput, setScanInput] = useState("");
@@ -479,6 +487,7 @@ export function SaleDialog({
       let remainingDue = (type === "credit" || type === "split") ? due : (type === "online" ? sellTotal : 0);
       let remainingFinalDisc = finalDiscountNum;
 
+      let firstCreatedSaleId: string | null = null;
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];
         const product = products.find(p => p.id === line.productId);
@@ -560,7 +569,7 @@ export function SaleDialog({
           else if (type === "bank") lineBank = lineSell;
         }
 
-        await createSaleFn({
+        const createdSale = await createSaleFn({
           data: {
             product_id: product.id,
             product_name: product.name,
@@ -582,6 +591,58 @@ export function SaleDialog({
             courier_status: type === "online" ? "pending" : undefined,
             note: customerAddress ? `Address: ${customerAddress}` : undefined,
           },
+        });
+        if (!firstCreatedSaleId && createdSale?.id) {
+          firstCreatedSaleId = createdSale.id;
+        }
+      }
+
+      if (type === "online" && steadfastEnabled && autoSendSteadfast && firstCreatedSaleId && courierName.toLowerCase().includes("steadfast")) {
+        const cust = customers.find((c: any) => c.id === partyId);
+        const recPhone = String((cust as any)?.phone || "").trim();
+        const recAddr = String(customerAddress || (cust as any)?.address || "").trim();
+        if (recPhone && recAddr) {
+          try {
+            const sfRes = await steadfastCreateOrderFn({
+              data: {
+                saleId: firstCreatedSaleId,
+                recipient_name: cust?.name || "Customer",
+                recipient_phone: recPhone,
+                recipient_address: recAddr,
+                cod_amount: Math.max(0, Math.round(sellTotal)),
+              },
+            });
+            if (sfRes?.consignment?.tracking_code) {
+              setTrackingCode(sfRes.consignment.tracking_code);
+              toast.success(
+                lang === "bn"
+                  ? `SteadFast পার্সেল বুক হয়েছে! Tracking: ${sfRes.consignment.tracking_code}`
+                  : `SteadFast booked! Tracking: ${sfRes.consignment.tracking_code}`
+              );
+            }
+          } catch (sfErr: any) {
+            toast.warning(`Sale saved, SteadFast dispatch skipped: ${sfErr?.message || "Check phone/address"}`);
+          }
+        }
+      }
+
+      // Desktop Client-Compute WhatsApp Auto-Send (if Auto Mode is active)
+      const waCust = customers.find((c: any) => c.id === partyId);
+      const waPhone = String((waCust as any)?.phone || "").trim();
+      if (waPhone) {
+        const itemsSummary = cart
+          .map((l) => {
+            const p = products.find((x) => x.id === l.productId);
+            return `${p?.name || "Item"} ×${l.qty}`;
+          })
+          .join(", ");
+        void sendDesktopWhatsAppIfAuto(type === "online" ? "online" : "sale", {
+          phone: waPhone,
+          shopName: user?.business_name,
+          customerName: waCust?.name || "Customer",
+          itemsSummary,
+          amount: Math.round(sellTotal),
+          trackingCode: trackingCode || null,
         });
       }
 
@@ -849,6 +910,56 @@ export function SaleDialog({
                         </Input>
                       </div>
                     </div>
+                    {steadfastEnabled && (
+                      <div className="pt-1.5 border-t border-purple-500/20 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <label className="flex items-center gap-2 text-[11px] font-semibold text-purple-800 dark:text-purple-200 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={autoSendSteadfast}
+                              onChange={(e) => setAutoSendSteadfast(e.target.checked)}
+                              className="size-3.5 accent-emerald-600"
+                            />
+                            <span>{lang === "bn" ? "সেল করার সাথে সাথেই SteadFast-এ পাঠান" : "Auto-send to SteadFast on save"}</span>
+                          </label>
+                          {(() => {
+                            const cust = customers.find((c: any) => c.id === partyId);
+                            const p = String((cust as any)?.phone || "").trim();
+                            if (!p) return null;
+                            return (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={sfFraudBusy}
+                                onClick={async () => {
+                                  setSfFraudBusy(true);
+                                  try {
+                                    const r = await steadfastFraudCheckFn({ data: { phone: p } });
+                                    setSfFraudResult(r);
+                                  } catch (e: any) {
+                                    toast.error(e?.message || "Fraud check failed");
+                                  } finally {
+                                    setSfFraudBusy(false);
+                                  }
+                                }}
+                                className="h-6.5 px-2 text-[10px] font-bold rounded-lg gap-1"
+                              >
+                                <ShieldCheck className="size-3 text-amber-600" />
+                                <span>{sfFraudBusy ? "..." : (lang === "bn" ? "ফ্রড চেক" : "Fraud Check")}</span>
+                              </Button>
+                            );
+                          })()}
+                        </div>
+                        {sfFraudResult && (
+                          <div className="p-2 rounded-lg bg-background/80 border border-border text-[10.5px] flex items-center justify-between">
+                            <span>Parcels: <b>{sfFraudResult.total_parcels}</b></span>
+                            <span className="text-emerald-600">Delivered: <b>{sfFraudResult.total_delivered}</b></span>
+                            <span className="text-rose-600">Cancelled: <b>{sfFraudResult.total_cancelled}</b></span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1.5">

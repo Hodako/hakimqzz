@@ -14,19 +14,25 @@ const resourcesAppDir = path.join(outputDir, "resources", "app");
 
 console.log("[Electron Packager] Starting fresh standalone Windows package creation in /software...");
 
-if (!fs.existsSync(electronDistDir)) {
-  console.error("[Electron Packager] ERROR: node_modules/electron/dist not found!");
+const hasElectronDist = fs.existsSync(electronDistDir);
+const hasExistingSoftware = fs.existsSync(path.join(outputDir, "DreamFashion-POS.exe"));
+
+if (!hasElectronDist && !hasExistingSoftware) {
+  console.error("[Electron Packager] ERROR: node_modules/electron/dist not found and no existing /software binaries!");
   process.exit(1);
 }
 
-// 0. Completely remove old dist-electron and software folders for a clean build
+// 0. Completely remove old dist-electron; only wipe software if we have fresh electronDistDir
 if (fs.existsSync(oldDistDir)) {
   console.log("[Electron Packager] Removing legacy dist-electron...");
   fs.rmSync(oldDistDir, { recursive: true, force: true });
 }
-if (fs.existsSync(outputDir)) {
+if (hasElectronDist && fs.existsSync(outputDir)) {
   console.log("[Electron Packager] Removing old software directory for clean rebuild...");
   fs.rmSync(outputDir, { recursive: true, force: true });
+} else if (!hasElectronDist && fs.existsSync(resourcesAppDir)) {
+  console.log("[Electron Packager] Preserving existing Electron runtime in /software, refreshing resources/app...");
+  fs.rmSync(resourcesAppDir, { recursive: true, force: true });
 }
 
 // 1. Create fresh output directory
@@ -60,20 +66,23 @@ function copyDir(src, dest, skipInstallers = false) {
   }
 }
 
-console.log("[Electron Packager] Copying fresh Electron Windows binaries...");
-copyDir(electronDistDir, outputDir, false);
+if (hasElectronDist) {
+  console.log("[Electron Packager] Copying fresh Electron Windows binaries...");
+  copyDir(electronDistDir, outputDir, false);
 
-// 3. Rename electron.exe to DreamFashion-POS.exe
-const defaultExe = path.join(outputDir, "electron.exe");
-const targetExe = path.join(outputDir, "DreamFashion-POS.exe");
-if (fs.existsSync(defaultExe)) {
-  try {
-    fs.renameSync(defaultExe, targetExe);
-    console.log("[Electron Packager] Renamed electron.exe -> DreamFashion-POS.exe");
-  } catch (err) {
-    console.error("[Electron Packager] Failed to rename executable:", err);
+  // 3. Rename electron.exe to DreamFashion-POS.exe
+  const defaultExe = path.join(outputDir, "electron.exe");
+  const targetExe = path.join(outputDir, "DreamFashion-POS.exe");
+  if (fs.existsSync(defaultExe)) {
+    try {
+      fs.renameSync(defaultExe, targetExe);
+      console.log("[Electron Packager] Renamed electron.exe -> DreamFashion-POS.exe");
+    } catch (err) {
+      console.error("[Electron Packager] Failed to rename executable:", err);
+    }
   }
 }
+const targetExe = path.join(outputDir, "DreamFashion-POS.exe");
 
 // 4. Create fresh resources/app
 fs.mkdirSync(resourcesAppDir, { recursive: true });
@@ -93,7 +102,7 @@ fs.writeFileSync(
 );
 
 // Copy updated electron scripts
-const electronFiles = ["main.cjs", "preload.cjs", "pos-bridge.cjs", "error.html"];
+const electronFiles = ["main.cjs", "preload.cjs", "pos-bridge.cjs", "whatsapp-client.cjs", "error.html"];
 for (const file of electronFiles) {
   const src = path.join(rootDir, "electron", file);
   if (fs.existsSync(src)) {

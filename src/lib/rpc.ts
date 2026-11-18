@@ -413,6 +413,13 @@ export const deleteBankAccountFn = makeWriteAction("deleteBankAccountFn");
 export const createBankTransactionFn = makeWriteAction("createBankTransactionFn");
 export const getBankLoansFn = makeReadAction("getBankLoansFn");
 export const createBankLoanFn = makeWriteAction("createBankLoanFn");
+
+// ── SteadFast Courier ────────────────────────────────────────────────────────
+export const steadfastCheckBalanceFn = makeReadAction("steadfastCheckBalanceFn");
+export const steadfastFraudCheckFn = makeReadAction("steadfastFraudCheckFn");
+export const steadfastCreateOrderFn = makeWriteAction("steadfastCreateOrderFn");
+export const steadfastBulkCreateOrderFn = makeWriteAction("steadfastBulkCreateOrderFn");
+export const steadfastCheckStatusFn = makeWriteAction("steadfastCheckStatusFn");
 export const payBankLoanInstallmentFn = makeWriteAction("payBankLoanInstallmentFn");
 export const deleteBankLoanFn = makeWriteAction("deleteBankLoanFn");
 

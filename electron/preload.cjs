@@ -18,4 +18,17 @@ contextBridge.exposeInMainWorld("electronPOS", {
   openWindowsPrinterSettings: () => ipcRenderer.invoke("pos:open-windows-printers-settings"),
   // Trigger cash drawer kick via ESC/POS
   openCashDrawer: (printerName) => ipcRenderer.invoke("pos:open-cash-drawer", { printerName }),
+  // Client-Compute Desktop WhatsApp Integration (runs locally in Electron main process)
+  whatsapp: {
+    getStatus: () => ipcRenderer.invoke("wa:get-status"),
+    start: () => ipcRenderer.invoke("wa:start"),
+    disconnect: () => ipcRenderer.invoke("wa:disconnect"),
+    sendMessage: (payload) => ipcRenderer.invoke("wa:send-message", payload),
+    sendBroadcast: (payload) => ipcRenderer.invoke("wa:send-broadcast", payload),
+    onStatusUpdate: (callback) => {
+      const listener = (_event, snapshot) => callback(snapshot);
+      ipcRenderer.on("wa:status-update", listener);
+      return () => ipcRenderer.removeListener("wa:status-update", listener);
+    },
+  },
 });

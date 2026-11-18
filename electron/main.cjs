@@ -19,6 +19,7 @@ const {
   openWindowsPrinterProperties,
   openWindowsCashDrawer,
 } = require("./pos-bridge.cjs");
+const desktopWhatsApp = require("./whatsapp-client.cjs");
 
 // Find project root containing server.js whether running from electron/ or software/resources/app/electron/
 function findProjectRootWithServer() {
@@ -885,6 +886,26 @@ app.on("web-contents-created", (_event, contents) => {
 });
 
 app.whenReady().then(async () => {
+  // Register Desktop Client-Compute WhatsApp IPC handlers
+  const emitWaStatus = (snapshot) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("wa:status-update", snapshot);
+    }
+  };
+  ipcMain.handle("wa:get-status", () => desktopWhatsApp.getStatusSnapshot());
+  ipcMain.handle("wa:start", async () => {
+    return await desktopWhatsApp.startWhatsApp(app.getPath("userData"), emitWaStatus);
+  });
+  ipcMain.handle("wa:disconnect", async () => {
+    return await desktopWhatsApp.disconnectWhatsApp(app.getPath("userData"));
+  });
+  ipcMain.handle("wa:send-message", async (_event, payload) => {
+    return await desktopWhatsApp.sendMessage(payload?.phone, payload?.message);
+  });
+  ipcMain.handle("wa:send-broadcast", async (_event, payload) => {
+    return await desktopWhatsApp.sendBroadcast(payload?.recipients, payload?.message);
+  });
+
   // Start local bridge on port 9123 so even external browsers (Chrome/Edge) get 1-click silent print & Windows printer preferences!
   startBridgeServer((html, printerName, options) => performSilentPrint(html, printerName, options));
   await ensureLocalServerRunning();

@@ -6434,3 +6434,278 @@ export async function deleteTransferKeyAction(input: { data: { key: string } }) 
   await db.collection("transfer_keys").deleteOne({ key: data.key, owner_id: session.ownerId });
   return { success: true, key: data.key };
 }
+
+// ─── SteadFast Courier Integration (https://portal.packzy.com/api/v1) ─────────
+
+const STEADFAST_BASE_URL = "https://portal.packzy.com/api/v1";
+
+function normalizeBdPhone11(raw?: string | null): string {
+  const digits = String(raw || "").replace(/[^0-9]/g, "");
+  if (digits.startsWith("880") && digits.length === 13) return digits.slice(2);
+  if (digits.startsWith("88") && digits.length === 13) return digits.slice(2);
+  if (digits.length === 10 && digits.startsWith("1")) return `0${digits}`;
+  return digits;
+}
+
+async function getSteadFastConfig(db: any, session: AppSession, requireEnabled = true) {
+  let biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+  if (!biz && session.businessId) {
+    biz = await db.collection("businesses").findOne({ _id: session.businessId as any });
+  }
+  if (!biz) {
+    const ownerBase = session.ownerId.split(":")[0];
+    biz = await db.collection("businesses").findOne({ owner_id: ownerBase });
+  }
+  const enabled = Boolean(biz?.steadfast_enabled);
+  const apiKey = String(biz?.steadfast_api_key || "").trim();
+  const secretKey = String(biz?.steadfast_secret_key || "").trim();
+
+  if (requireEnabled && !enabled) {
+    throw new Error("SteadFast Courier is disabled. Enable it in Settings.");
+  }
+  if (!apiKey || !secretKey) {
+    throw new Error("SteadFast Api-Key and Secret-Key are required. Configure them in Settings.");
+  }
+  return { apiKey, secretKey, enabled };
+}
+
+async function callSteadFastApi(path: string, creds: { apiKey: string; secretKey: string }, method: "GET" | "POST" = "GET", body?: any) {
+  const res = await fetch(`${STEADFAST_BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Api-Key": creds.apiKey,
+      "Secret-Key": creds.secretKey,
+      "Content-Type": "application/json",
+    },
+    ...(method === "POST" && body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`SteadFast API error (${res.status}): ${text.slice(0, 200)}`);
+  }
+  if (!res.ok) {
+    throw new Error(json?.message || json?.error || `SteadFast API failed (${res.status})`);
+  }
+  return json;
+}
+
+export async function steadfastCheckBalanceFn(input?: { data?: { apiKey?: string; secretKey?: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const creds = (data.apiKey && data.secretKey)
+    ? { apiKey: String(data.apiKey).trim(), secretKey: String(data.secretKey).trim() }
+    : await getSteadFastConfig(db, session, false);
+  const res = await callSteadFastApi("/get_balance", creds, "GET");
+  return {
+    success: true,
+    status: res?.status ?? 200,
+    current_balance: Number(res?.current_balance) || 0,
+  };
+}
+
+export async function steadfastFraudCheckFn(input: { data: { phone: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const creds = await getSteadFastConfig(db, session, true);
+  const phone = normalizeBdPhone11(data.phone);
+  if (phone.length < 11) {
+    throw new Error("Valid 11-digit phone number is required for SteadFast fraud check.");
+  }
+  const res = await callSteadFastApi(`/fraud_check/${encodeURIComponent(phone)}`, creds, "GET");
+  return {
+    success: true,
+    phone,
+    total_parcels: Number(res?.Total_parcels ?? res?.total_parcels ?? 0),
+    total_delivered: Number(res?.total_delivered ?? 0),
+    total_cancelled: Number(res?.total_cancelled ?? 0),
+    total_fraud_reports: Array.isArray(res?.total_fraud_reports) ? res.total_fraud_reports : [],
+  };
+}
+
+export async function steadfastCreateOrderFn(input: {
+  data: {
+    saleId: string;
+    invoice?: string;
+    recipient_name: string;
+    recipient_phone: string;
+    recipient_address: string;
+    cod_amount: number;
+    note?: string;
+  };
+}) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const creds = await getSteadFastConfig(db, session, true);
+
+  const sale = await db.collection("sales").findOne({ _id: data.saleId as any, owner_id: session.ownerId });
+  if (!sale) throw new Error("Online sale not found");
+
+  const phone = normalizeBdPhone11(data.recipient_phone);
+  if (phone.length !== 11) {
+    throw new Error("Recipient phone must be an 11-digit BD number (e.g. 017XXXXXXXX).");
+  }
+  const recipientName = String(data.recipient_name || "Customer").trim().slice(0, 100);
+  const recipientAddress = String(data.recipient_address || "").trim().slice(0, 250);
+  if (!recipientAddress) {
+    throw new Error("Recipient address is required for SteadFast order.");
+  }
+  const codAmount = Math.max(0, Math.round(Number(data.cod_amount) || 0));
+  const rawInv = String(data.invoice || `DF-${String(sale.cart_id || sale._id).replace(/[^a-zA-Z0-9_-]/g, "").slice(-12)}`);
+
+  const payload = {
+    invoice: rawInv,
+    recipient_name: recipientName,
+    recipient_phone: phone,
+    recipient_address: recipientAddress,
+    cod_amount: codAmount,
+    ...(data.note ? { note: String(data.note).slice(0, 480) } : {}),
+  };
+
+  const res = await callSteadFastApi("/create_order", creds, "POST", payload);
+  const consignment = res?.consignment;
+  if (!consignment || !consignment.tracking_code) {
+    throw new Error(res?.message || "SteadFast did not return a consignment tracking code.");
+  }
+
+  const nowStr = new Date().toISOString();
+  const filter = sale.cart_id
+    ? { cart_id: sale.cart_id, owner_id: session.ownerId }
+    : { _id: sale._id as any, owner_id: session.ownerId };
+
+  await db.collection("sales").updateMany(filter, {
+    $set: {
+      courier_name: "SteadFast",
+      consignment_id: consignment.consignment_id,
+      tracking_code: consignment.tracking_code,
+      steadfast_invoice: consignment.invoice || rawInv,
+      steadfast_status: consignment.status || "in_review",
+      recipient_name: recipientName,
+      recipient_phone: phone,
+      recipient_address: recipientAddress,
+      updated_at: nowStr,
+    },
+  });
+
+  return {
+    success: true,
+    message: res?.message || "Consignment has been created successfully.",
+    consignment,
+  };
+}
+
+export async function steadfastBulkCreateOrderFn(input: {
+  data: {
+    orders: Array<{
+      saleId: string;
+      invoice?: string;
+      recipient_name: string;
+      recipient_phone: string;
+      recipient_address: string;
+      cod_amount: number;
+      note?: string;
+    }>;
+  };
+}) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const creds = await getSteadFastConfig(db, session, true);
+  const orders = Array.isArray(data.orders) ? data.orders.slice(0, 500) : [];
+  if (orders.length === 0) throw new Error("No orders provided for bulk SteadFast dispatch.");
+
+  const items = orders.map((o: any) => ({
+    invoice: String(o.invoice || `DF-${String(o.saleId).replace(/[^a-zA-Z0-9_-]/g, "").slice(-12)}`),
+    recipient_name: String(o.recipient_name || "Customer").trim().slice(0, 100),
+    recipient_phone: normalizeBdPhone11(o.recipient_phone),
+    recipient_address: String(o.recipient_address || "N/A").trim().slice(0, 250),
+    cod_amount: Math.max(0, Math.round(Number(o.cod_amount) || 0)),
+    ...(o.note ? { note: String(o.note).slice(0, 480) } : {}),
+  }));
+
+  const res = await callSteadFastApi("/create_order/bulk-order", creds, "POST", {
+    data: JSON.stringify(items),
+  });
+
+  const results = Array.isArray(res?.data) ? res.data : [];
+  const nowStr = new Date().toISOString();
+  for (let i = 0; i < results.length; i++) {
+    const itemRes = results[i];
+    const orig = orders[i];
+    if (itemRes?.status === "success" && itemRes?.tracking_code && orig?.saleId) {
+      const sale = await db.collection("sales").findOne({ _id: orig.saleId as any, owner_id: session.ownerId });
+      if (sale) {
+        const filter = sale.cart_id
+          ? { cart_id: sale.cart_id, owner_id: session.ownerId }
+          : { _id: sale._id as any, owner_id: session.ownerId };
+        await db.collection("sales").updateMany(filter, {
+          $set: {
+            courier_name: "SteadFast",
+            consignment_id: itemRes.consignment_id,
+            tracking_code: itemRes.tracking_code,
+            steadfast_invoice: itemRes.invoice,
+            steadfast_status: "in_review",
+            updated_at: nowStr,
+          },
+        });
+      }
+    }
+  }
+
+  return { success: true, results };
+}
+
+export async function steadfastCheckStatusFn(input: {
+  data: { saleId: string; trackingCode?: string; consignmentId?: string | number; invoice?: string };
+}) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  const db = await getDb();
+  const creds = await getSteadFastConfig(db, session, true);
+
+  const sale = await db.collection("sales").findOne({ _id: data.saleId as any, owner_id: session.ownerId });
+  if (!sale) throw new Error("Sale not found");
+
+  const tc = data.trackingCode || (sale as any).tracking_code;
+  const cid = data.consignmentId || (sale as any).consignment_id;
+  const inv = data.invoice || (sale as any).steadfast_invoice;
+
+  let path = "";
+  if (tc) path = `/status_by_trackingcode/${encodeURIComponent(String(tc))}`;
+  else if (cid) path = `/status_by_cid/${encodeURIComponent(String(cid))}`;
+  else if (inv) path = `/status_by_invoice/${encodeURIComponent(String(inv))}`;
+  else throw new Error("No tracking code, consignment ID, or invoice found for this order.");
+
+  const res = await callSteadFastApi(path, creds, "GET");
+  const deliveryStatus = String(res?.delivery_status || "unknown");
+
+  const nowStr = new Date().toISOString();
+  const filter = sale.cart_id
+    ? { cart_id: sale.cart_id, owner_id: session.ownerId }
+    : { _id: sale._id as any, owner_id: session.ownerId };
+
+  await db.collection("sales").updateMany(filter, {
+    $set: {
+      steadfast_status: deliveryStatus,
+      updated_at: nowStr,
+    },
+  });
+
+  // Auto-complete & deposit COD into Cashbox when SteadFast confirms delivery
+  let autoCompleted = false;
+  if ((deliveryStatus === "delivered" || deliveryStatus === "partial_delivered") && sale.courier_status !== "collected") {
+    await approveCourierPaymentFn({ data: { id: String(sale._id) } });
+    autoCompleted = true;
+  }
+
+  return {
+    success: true,
+    delivery_status: deliveryStatus,
+    autoCompleted,
+  };
+}
