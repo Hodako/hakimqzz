@@ -18,6 +18,7 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import {
   RotateCcw,
   Search,
@@ -248,7 +249,7 @@ function groupSales(sales: Sale[]): GroupedSale[] {
 export default function SalesPage() {
   const { lang, t } = useT();
   const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
   const isEmployee = isEmployeeRole;
   const isMobile = useIsMobile();
   const qc = useQueryClient();
@@ -1183,7 +1184,7 @@ function SalesTab({
   const { lang, t } = useT();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
   const isEmployee = isEmployeeRole;
   const { items: paged, totalPages, safePage } = paginate(items, page, pageSize);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -1765,7 +1766,7 @@ function ReturnDialog({
   const { lang, t } = useT();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
   const isEmployee = isEmployeeRole;
   const [returnQty, setReturnQty] = useState("1");
   const [busy, setBusy] = useState(false);

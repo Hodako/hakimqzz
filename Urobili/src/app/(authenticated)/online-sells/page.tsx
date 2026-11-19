@@ -31,12 +31,13 @@ import { toast } from "sonner";
 import { approveCourierPaymentFn, cancelCourierOrderFn } from "@/lib/rpc";
 import { printPwaInvoice } from "@/lib/invoice-printer";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 
 export default function OnlineSellsPage() {
   const { lang, t } = useT();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
   const isEmployee = isEmployeeRole;
   const { data = [] } = useCachedQuery(["sales"], getSales);
 

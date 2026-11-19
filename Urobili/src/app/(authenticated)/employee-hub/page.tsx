@@ -62,6 +62,7 @@ import {
 } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { fmtMoney, fmtDateTime, fmtDate } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,16 +94,11 @@ export default function EmployeeHubPage() {
   const qc = useQueryClient();
 
   const activeEmpSession = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return JSON.parse(localStorage.getItem("cw_active_employee_session") || "null");
-    } catch {
-      return null;
-    }
+    return getActiveEmployeeSession();
   }, []);
 
-  const isEmployeeRole = user?.role === "employee" || Boolean(activeEmpSession);
-  const isOwner = (user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin") && !activeEmpSession;
+  const isOwner = user?.role === "owner" || user?.role === "admin" || user?.role === "superadmin";
+  const isEmployeeRole = !isOwner && (user?.role === "employee" || Boolean(activeEmpSession));
   const currentEmpId = (user as any)?.employee_id || user?.id;
 
   // Active Main Tab State

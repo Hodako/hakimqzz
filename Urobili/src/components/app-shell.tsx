@@ -46,6 +46,7 @@ import { PermissionGuard } from "@/components/permission-guard";
 import { FloatingAiChat } from "@/components/floating-ai-chat";
 import { PWAInstallButton } from "@/components/pwa-install-button";
 import { ModeSwitcherDialog } from "@/components/mode-switcher-dialog";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { CustomEntryDialog, type CustomEntryType } from "@/components/custom-entry-dialog";
 import { useCashboxQuery } from "@/hooks/use-cashbox-query";
 import { fmtMoney } from "@/lib/format";
@@ -323,12 +324,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null"));
+      setActiveEmpSession(getActiveEmployeeSession());
     } catch {}
 
     const handleEmpSwitch = () => {
       try {
-        setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null"));
+        setActiveEmpSession(getActiveEmployeeSession());
       } catch {}
     };
     window.addEventListener("hz-employee-switched", handleEmpSwitch);
@@ -368,7 +369,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   const perms = resolvePermissions(user.role, user.permissions);
-  const isEmployee = Boolean(activeEmpSession || user.role === "employee" || (user as any).employee_id);
+  const isOwner = user.role === "owner" || user.role === "superadmin";
+  const isEmployee = !isOwner && (user.role === "employee" || Boolean(activeEmpSession));
   const allowedPages = activeEmpSession?.allowedPages || (user as any).allowedPages;
 
   // Pages hidden from employees by default
@@ -842,7 +844,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="text-xs font-bold truncate text-foreground">{user.business_name || "Urobili"}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{user.email || (user as any).username || ""}</div>
                     <div className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-md bg-primary/10 text-primary border border-primary/20">
-                      {user.role || "Admin / Owner"}
+                      {isOwner ? (lang === "bn" ? "মালিক (Owner)" : "Shop Owner") : (user.role === "employee" ? (lang === "bn" ? "কর্মচারী (Employee)" : "Staff") : (user.role || "Admin / Owner"))}
                     </div>
                   </div>
 

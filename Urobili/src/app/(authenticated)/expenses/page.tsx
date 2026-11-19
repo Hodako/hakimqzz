@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { createExpenseFn, deleteExpenseFn } from "@/lib/rpc";
 import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
@@ -75,8 +76,8 @@ function formatExpenseNote(note: string | null | undefined, lang: "bn" | "en") {
 
 export default function ExpensesPage() {
   const { user } = useAuth();
-  const activeEmpSession = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cw_active_employee_session") || "null") : null;
-  const isEmployee = user?.role === "employee" || Boolean(activeEmpSession);
+  const activeEmpSession = getActiveEmployeeSession();
+  const isEmployee = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(activeEmpSession));
   const { lang, t } = useT();
   const isMobile = useIsMobile();
   const qc = useQueryClient();

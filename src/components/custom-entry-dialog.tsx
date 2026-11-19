@@ -54,9 +54,10 @@ interface CustomEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialType?: CustomEntryType;
+  onSaved?: (date: Date) => void;
 }
 
-export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: CustomEntryDialogProps) {
+export function CustomEntryDialog({ open, onOpenChange, initialType = "sale", onSaved }: CustomEntryDialogProps) {
   const { lang, t } = useT();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -307,6 +308,15 @@ export function CustomEntryDialog({ open, onOpenChange, initialType = "sale" }: 
         ["parties"],
         ["payments"]
       );
+
+      try {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("df-entry-saved", { detail: { date: isoDate } }));
+          window.dispatchEvent(new CustomEvent("cw-entry-saved", { detail: { date: isoDate } }));
+        }
+      } catch (_) {}
+
+      onSaved?.(parsedDate);
 
       resetFormFields();
 

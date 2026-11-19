@@ -16,13 +16,15 @@ export function getActiveTenantKey(): string {
   try {
     // 1. Check active employee session
     const empRaw = localStorage.getItem("cw_active_employee_session");
-    if (empRaw) {
+    if (empRaw && empRaw !== "null" && empRaw !== "undefined" && empRaw !== "{}") {
       const emp = JSON.parse(empRaw);
-      const ownerId = emp?.owner_id || emp?.ownerId;
-      if (ownerId && !["urobili_default_owner", "urobili-default"].includes(ownerId)) {
-        return `tenant_${ownerId}`;
+      if (emp && typeof emp === "object") {
+        const ownerId = emp?.owner_id || emp?.ownerId;
+        if (ownerId && !["urobili_default_owner", "urobili-default"].includes(ownerId)) {
+          return `tenant_${ownerId}`;
+        }
+        if (emp?.id) return `tenant_emp_${emp.id}`;
       }
-      if (emp?.id) return `tenant_emp_${emp.id}`;
     }
 
     // 2. Check profile across all profile keys

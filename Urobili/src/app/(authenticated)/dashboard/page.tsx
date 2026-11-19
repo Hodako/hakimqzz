@@ -26,6 +26,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
 import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { readModuleConfig, getIndustryProfile, type ModuleConfig } from "@/lib/module-config";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { PcThemeQuickStudio } from "@/components/pc-theme-quick-studio";
 import { RestaurantDashboardView } from "@/components/restaurant-dashboard-view";
 import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
@@ -440,6 +441,9 @@ const DEFAULT_KPI_ORDER = [
   "owner_wallet",
   "somiti",
   "employee_hub",
+  "stock_qty",
+  "stock_valuation_cost",
+  "stock_valuation_sale",
 ];
 
 const DEFAULT_HIDDEN_KPIS = [
@@ -489,7 +493,7 @@ export default function Dashboard() {
   const employeesQuery = useCachedQuery(["employees"], getEmployees);
   const allEmployees: Employee[] = employeesQuery.data || [];
 
-  const isEmployeeRole = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
   const currentEmpId = (user as any)?.employee_id || user?.id;
 
   const currentEmployeeProfile = useMemo(() => {
@@ -812,6 +816,9 @@ export default function Dashboard() {
     due: { nameEn: "Customer Due", nameBn: "ক্রেতার বাকি", badge: "Due", bg: "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400" },
     cashbox: { nameEn: "Cashbox Balance", nameBn: "ক্যাশবক্স ব্যালেন্স", badge: "Cashbox", bg: "bg-teal-500/10 border-teal-500/30 text-teal-600 dark:text-teal-400" },
     somiti: { nameEn: "Samity Savings", nameBn: "সমিতি ও সঞ্চয়", badge: "Samity", bg: "bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400" },
+    stock_qty: { nameEn: "Stock Quantity", nameBn: "মোট স্টক (সংখ্যা)", badge: "Stock", bg: "bg-teal-500/10 border-teal-500/30 text-teal-600 dark:text-teal-400" },
+    stock_valuation_cost: { nameEn: "Stock Value (Cost)", nameBn: "স্টক মূল্য (কেনা)", badge: "Cost", bg: "bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400" },
+    stock_valuation_sale: { nameEn: "Stock Value (Sale)", nameBn: "স্টক মূল্য (বিক্রি)", badge: "Sale", bg: "bg-pink-500/10 border-pink-500/30 text-pink-600 dark:text-pink-400" },
   };
 
   const parseDate = (val: any): Date | null => {
@@ -2059,6 +2066,58 @@ export default function Dashboard() {
             size={kpiConfig.size as any}
             {...privacyProps}
             onClick={(e) => handlePrivacyKpiClick(e, "employee_hub", "/employee-hub")}
+          />
+        );
+      case "stock_qty":
+        const totalStockUnitsPhone = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + Math.max(0, Number(p.stock) || 0), 0);
+        return (
+          <KPICard
+            key="stock_qty"
+            label={lang === "bn" ? "মোট স্টক সংখ্যা" : "Total Stock Units"}
+            value={`${totalStockUnitsPhone.toLocaleString()} ${lang === "bn" ? "টি" : "items"}`}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? `${(products.data ?? []).filter(p => !p.archived).length} প্রকার পণ্য` : `${(products.data ?? []).filter(p => !p.archived).length} types in catalog`)}
+            icon={Package}
+            color="bg-teal-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_qty", "/products")}
+          />
+        );
+      case "stock_valuation_cost":
+        return (
+          <KPICard
+            key="stock_valuation_cost"
+            label={lang === "bn" ? "স্টক কেনা মূল্য" : "Stock Cost Worth"}
+            value={fmtMoney(totalStockCostValuation)}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock")}
+            icon={Package}
+            color="bg-cyan-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
+          />
+        );
+      case "stock_valuation_sale":
+        return (
+          <KPICard
+            key="stock_valuation_sale"
+            label={lang === "bn" ? "স্টক সম্ভাব্য বিক্রি" : "Stock Sale Worth"}
+            value={fmtMoney(totalStockSaleValuation)}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "সম্ভাব্য বিক্রি মূল্য" : "Selling Worth of Stock")}
+            icon={ShoppingBag}
+            color="bg-pink-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
           />
         );
       default:

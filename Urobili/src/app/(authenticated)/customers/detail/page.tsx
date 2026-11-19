@@ -27,6 +27,7 @@ import { setCachedData, refreshQueries } from "@/lib/optimistic-cache";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PartyReturnDialog } from "@/components/party-return-dialog";
 import { PaginationBar, paginate } from "@/components/ui/pagination-bar";
@@ -41,7 +42,7 @@ export default function CustomerDetail() {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const isEmployee = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployee = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
 
   const partyQuery = useCachedQuery(["customer", id], () => getCustomer(id));
   const sales = useCachedQuery(["party-detail", "sales", id], () => getSalesForParty(id));

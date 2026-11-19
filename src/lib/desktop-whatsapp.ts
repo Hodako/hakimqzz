@@ -151,6 +151,43 @@ export async function sendDesktopWhatsAppMessage(phone: string, message: string)
   return { sent: false, via: "skipped", error: "Desktop WhatsApp bridge not available" };
 }
 
+export async function getDesktopWhatsAppStatus(): Promise<DesktopWhatsAppStatus | null> {
+  const bridge = getDesktopWhatsAppBridge();
+  if (!bridge) return null;
+  try {
+    return await bridge.getStatus();
+  } catch {
+    return null;
+  }
+}
+
+export async function sendDesktopWhatsAppBroadcast(
+  recipients: string[],
+  message: string,
+  onProgress?: (sent: number, total: number) => void
+): Promise<{ sent: number; failed: number }> {
+  const bridge = getDesktopWhatsAppBridge();
+  if (!bridge) return { sent: 0, failed: recipients.length };
+
+  let sent = 0;
+  let failed = 0;
+  for (let i = 0; i < recipients.length; i++) {
+    const phone = recipients[i];
+    try {
+      const res = await sendDesktopWhatsAppMessage(phone, message);
+      if (res.sent) sent++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+    onProgress?.(i + 1, recipients.length);
+    if (i < recipients.length - 1) {
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  return { sent, failed };
+}
+
 export async function sendDesktopWhatsAppIfAuto(
   eventType: "sale" | "online" | "tracking",
   params: {

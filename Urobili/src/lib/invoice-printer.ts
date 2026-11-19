@@ -358,6 +358,7 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
   const sectionBlocks: Record<InvoiceSectionId, string> = {
     header: headerInner ? `<div style="text-align: center; margin: 0 0 2px 0; padding-top: 0;">${headerInner}</div>` : "",
     meta: metaInner ? `<div style="font-size: ${smallFontPt}pt; line-height: 1.25; font-weight: 600; color: #000000;">${metaInner}</div>` : "",
+    customer: "",
     before_items: renderCustomLines("before_items"),
     items: itemsHtml,
     after_items: renderCustomLines("after_items"),

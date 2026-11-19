@@ -105,7 +105,7 @@ export async function listBusinessesFn(): Promise<any[]> {
   const owners = await db.collection("users").find({ _id: { $in: ownerIds } }).toArray();
   const ownerMap = new Map(owners.map(u => [u._id, u.email]));
 
-  const results = [];
+  const results: any[] = [];
   for (const b of items) {
     const ownerId = b.owner_id;
     const productCount = await db.collection("products").countDocuments({ owner_id: ownerId });
@@ -594,7 +594,7 @@ export async function updateBusinessSettingsFn(input: {
   // Allow setting industry during onboarding or initial setup
   const updatePayload = { ...data };
   const isInitialSetup = !business?.industry || business?.business_type === "unconfigured" || business?.onboarding_completed === false;
-  if (!isInitialSetup && session.role !== "superadmin") {
+  if (!isInitialSetup && (session.role as string) !== "superadmin") {
     delete updatePayload.business_type;
     delete updatePayload.industry;
   } else if (data.industry || data.business_type) {

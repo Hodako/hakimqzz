@@ -10,6 +10,7 @@ import { ProductSearchSelect } from "@/components/product-search";
 import { CustomerSearchSelect } from "@/components/customer-search";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
@@ -445,9 +446,10 @@ export function SaleDialog({
 
       let remainingFinalDisc = finalDiscountAmount;
       const salePayloads: any[] = [];
-      const activeEmpSession = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cw_active_employee_session") || "null") : null;
-      const employeeId = activeEmpSession?.id || (user?.role === "employee" ? ((user as any)?.employee_id || user.id) : null);
-      const employeeName = activeEmpSession?.name || (user?.role === "employee" ? (user.full_name || (user as any).name) : null);
+      const activeEmpSession = getActiveEmployeeSession();
+      const isEmp = user?.role === "employee" || Boolean(activeEmpSession);
+      const employeeId = isEmp ? (activeEmpSession?.id || (user as any)?.employee_id || user?.id) : null;
+      const employeeName = isEmp ? (activeEmpSession?.name || user?.full_name || (user as any)?.name) : null;
 
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];

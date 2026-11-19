@@ -44,7 +44,12 @@ export async function requireSession(requireActivated = true): Promise<AppSessio
   const cleanPayloadEmail = (payload.email || "").toLowerCase().trim();
   const isGenericFallbackEmail = !cleanPayloadEmail || ["user@pos.local", "user@urobili.pos", "user@urobili.com"].includes(cleanPayloadEmail);
   if (!user && !isGenericFallbackEmail) {
-    user = await db.collection("users").findOne({ email: cleanPayloadEmail } as any);
+    if (payload.role === "owner" || payload.role === "superadmin") {
+      user = await db.collection("users").findOne({ email: cleanPayloadEmail, role: payload.role } as any);
+    }
+    if (!user) {
+      user = await db.collection("users").findOne({ email: cleanPayloadEmail } as any);
+    }
   }
   if (!user) {
     const isEmp = payload.role === "employee" || String(payload.userId).includes("emp");

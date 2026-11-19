@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 
 type Range = "today" | "yesterday" | "week" | "month" | "all" | "custom";
 type FilterKind = "all" | CashboxEntry["kind"];
@@ -72,7 +73,7 @@ export default function CashboxDetailsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
-  const isEmployee = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+  const isEmployee = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
 
   const entries = cashbox.data ?? [];
   const balance = cashbox.isLoading ? null : cashboxBalance(entries);
@@ -146,8 +147,26 @@ export default function CashboxDetailsPage() {
     }
   }
 
+  useEffect(() => {
+    const handleEntryEvent = (e: any) => {
+      const dStr = e.detail?.date;
+      if (dStr) {
+        const d = new Date(dStr);
+        if (!isNaN(d.getTime())) {
+          handleEntrySaved(d);
+        }
+      }
+    };
+    window.addEventListener("df-entry-saved", handleEntryEvent);
+    window.addEventListener("cw-entry-saved", handleEntryEvent);
+    return () => {
+      window.removeEventListener("df-entry-saved", handleEntryEvent);
+      window.removeEventListener("cw-entry-saved", handleEntryEvent);
+    };
+  }, [from, to, lang]);
+
   async function handleDelete(entry: CashboxEntry) {
-    const isEmployee = user?.role === "employee" || (typeof window !== "undefined" && Boolean(localStorage.getItem("cw_active_employee_session")));
+    const isEmployee = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
     if (isEmployee) {
       toast.error(lang === "bn" ? "কর্মচারীরা কোনো রেকর্ড মুছতে পারবেন না।" : "Employees cannot delete records.");
       return;

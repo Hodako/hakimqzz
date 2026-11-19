@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import {
   EMERALD_GLASS_PRESETS,
   THEME_UPDATED_EVENT,
@@ -37,11 +38,7 @@ export function PcEmeraldQuickButton() {
 
   const isOwner =
     !user ||
-    (user.role !== "employee" &&
-      !(
-        typeof window !== "undefined" &&
-        Boolean(window.localStorage.getItem("cw_active_employee_session"))
-      ));
+    (user.role !== "employee" && !getActiveEmployeeSession());
 
   useEffect(() => {
     const sync = () => setConfig(readCustomThemeConfig());

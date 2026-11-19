@@ -966,7 +966,7 @@ export function CustomThemeManager() {
       :root, .dark {
         --radius: ${radiusVal};
       }
-      ${config.borderRadius && config.borderRadius !== "default" ? `
+      ${config.borderRadius ? `
       .card, .beveled-card, .glass-card, [class*="glass-card"], [class*="beveled-card"], .kpi-card {
         border-radius: ${radiusVal} !important;
       }` : ""}

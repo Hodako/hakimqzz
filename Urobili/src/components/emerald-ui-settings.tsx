@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { RiSparklingLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import {
   DEFAULT_EMERALD_GLASS,
   EMERALD_BACKDROP_PRESETS,
@@ -82,11 +83,7 @@ export function EmeraldUiSettings() {
 
   const isOwner =
     !user ||
-    (user.role !== "employee" &&
-      !(
-        typeof window !== "undefined" &&
-        Boolean(window.localStorage.getItem("cw_active_employee_session"))
-      ));
+    (user.role !== "employee" && !getActiveEmployeeSession());
 
   const emeraldActive = isEmeraldModeEnabled(config);
   const glass = normalizeEmeraldGlass(config.emeraldGlass);

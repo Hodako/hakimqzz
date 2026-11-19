@@ -178,9 +178,17 @@ export default function RestaurantPosPage() {
   // Order Details
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
   const [selectedTable, setSelectedTable] = useState<string>("Table 1");
-  const [waiterName, setWaiterName] = useState("Staff");
+  const [waiterName, setWaiterName] = useState(() => user?.full_name || (user?.role === "owner" ? "Owner" : "Staff"));
   const [guestCount, setGuestCount] = useState(2);
   const [customerPhone, setCustomerPhone] = useState("");
+
+  useEffect(() => {
+    if (user?.full_name) {
+      setWaiterName(user.full_name);
+    } else if (user?.role === "owner") {
+      setWaiterName("Owner");
+    }
+  }, [user?.full_name, user?.role]);
 
   // Table Floor Plan (Multi-Floor with Capacity)
   const [tables, setTables] = useState<Record<string, TableState>>(() => {
@@ -1744,11 +1752,15 @@ export default function RestaurantPosPage() {
             <Card className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="size-12 rounded-2xl bg-[#FF9100]/15 text-[#FF9100] flex items-center justify-center font-bold text-lg">
-                  {(user?.full_name || "W")[0].toUpperCase()}
+                  {(user?.full_name || (user?.role === "owner" ? "O" : "W"))[0].toUpperCase()}
                 </div>
                 <div>
-                  <div className="font-bold text-base text-slate-900 dark:text-zinc-100">{user?.full_name || "Waiter / Staff"}</div>
-                  <div className="text-xs text-slate-500">{user?.business_name || "Urobili Restaurant"} • {user?.role?.toUpperCase()}</div>
+                  <div className="font-bold text-base text-slate-900 dark:text-zinc-100">
+                    {user?.full_name || (user?.role === "owner" ? (lang === "bn" ? "রেস্তোরাঁ স্বত্বাধিকারী" : "Restaurant Owner") : (lang === "bn" ? "ওয়েটার / স্টাফ" : "Waiter / Staff"))}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {user?.business_name || "Urobili Restaurant"} • {user?.role === "owner" ? (lang === "bn" ? "মালিক (OWNER)" : "OWNER") : (user?.role?.toUpperCase() || "STAFF")}
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800 text-xs">

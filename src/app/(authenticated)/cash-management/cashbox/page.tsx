@@ -150,6 +150,24 @@ export default function CashboxDetailsPage() {
     }
   }
 
+  useEffect(() => {
+    const handleEntryEvent = (e: any) => {
+      const dStr = e.detail?.date;
+      if (dStr) {
+        const d = new Date(dStr);
+        if (!isNaN(d.getTime())) {
+          handleEntrySaved(d);
+        }
+      }
+    };
+    window.addEventListener("df-entry-saved", handleEntryEvent);
+    window.addEventListener("cw-entry-saved", handleEntryEvent);
+    return () => {
+      window.removeEventListener("df-entry-saved", handleEntryEvent);
+      window.removeEventListener("cw-entry-saved", handleEntryEvent);
+    };
+  }, [from, to, lang]);
+
   async function handleDelete(entry: CashboxEntry) {
     setDeleteTarget(entry);
     setDeleteConfirmOpen(true);

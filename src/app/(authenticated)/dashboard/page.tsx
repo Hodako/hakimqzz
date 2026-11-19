@@ -537,6 +537,9 @@ export default function Dashboard() {
     "due",
     "cashbox",
     "somiti",
+    "stock_qty",
+    "stock_valuation_cost",
+    "stock_valuation_sale",
   ];
 
   const KPI_METADATA: Record<
@@ -556,6 +559,9 @@ export default function Dashboard() {
     due: { nameEn: "Customer Due", nameBn: "ক্রেতার বাকি", badge: "Due", bg: "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400" },
     cashbox: { nameEn: "Cashbox Balance", nameBn: "ক্যাশবক্স ব্যালেন্স", badge: "Cashbox", bg: "bg-teal-500/10 border-teal-500/30 text-teal-600 dark:text-teal-400" },
     somiti: { nameEn: "Samity Savings", nameBn: "সমিতি ও সঞ্চয়", badge: "Samity", bg: "bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400" },
+    stock_qty: { nameEn: "Stock Quantity", nameBn: "মোট স্টক (সংখ্যা)", badge: "Stock", bg: "bg-teal-500/10 border-teal-500/30 text-teal-600 dark:text-teal-400" },
+    stock_valuation_cost: { nameEn: "Stock Value (Cost)", nameBn: "স্টক মূল্য (কেনা)", badge: "Cost", bg: "bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400" },
+    stock_valuation_sale: { nameEn: "Stock Value (Sale)", nameBn: "স্টক মূল্য (বিক্রি)", badge: "Sale", bg: "bg-pink-500/10 border-pink-500/30 text-pink-600 dark:text-pink-400" },
   };
 
   const parseDate = (val: any): Date | null => {
@@ -1817,6 +1823,58 @@ export default function Dashboard() {
             onClick={(e) => handlePrivacyKpiClick(e, "somiti", "/somiti")}
           />
         ) : <div key="somiti" className="hidden" />;
+      case "stock_qty":
+        const totalStockUnitsPhone = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + Math.max(0, Number(p.stock) || 0), 0);
+        return (
+          <KPICard
+            key="stock_qty"
+            label={lang === "bn" ? "মোট স্টক সংখ্যা" : "Total Stock Units"}
+            value={`${totalStockUnitsPhone.toLocaleString()} ${lang === "bn" ? "টি" : "items"}`}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? `${(products.data ?? []).filter(p => !p.archived).length} প্রকার পণ্য` : `${(products.data ?? []).filter(p => !p.archived).length} types in catalog`)}
+            icon={Package}
+            color="bg-teal-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_qty", "/products")}
+          />
+        );
+      case "stock_valuation_cost":
+        return (
+          <KPICard
+            key="stock_valuation_cost"
+            label={lang === "bn" ? "স্টক কেনা মূল্য" : "Stock Cost Worth"}
+            value={fmtMoney(totalStockCostValuation)}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock")}
+            icon={Package}
+            color="bg-cyan-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
+          />
+        );
+      case "stock_valuation_sale":
+        return (
+          <KPICard
+            key="stock_valuation_sale"
+            label={lang === "bn" ? "স্টক সম্ভাব্য বিক্রি" : "Stock Sale Worth"}
+            value={fmtMoney(totalStockSaleValuation)}
+            sub={isHidden && !isRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "সম্ভাব্য বিক্রি মূল্য" : "Selling Worth of Stock")}
+            icon={ShoppingBag}
+            color="bg-pink-600"
+            isDesktop={true}
+            className="h-full cursor-pointer"
+            align={kpiConfig.align as any}
+            size={kpiConfig.size as any}
+            {...privacyProps}
+            onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
+          />
+        );
       default:
         return null;
     }
@@ -2084,6 +2142,61 @@ const renderWidget = (widgetId: string) => {
                   onClick={() => handlePrivacyKpiClick(null as any, "somiti", "/somiti")}
                 />
               );
+            case "stock_qty":
+              const totalStockUnitsDesktop = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + Math.max(0, Number(p.stock) || 0), 0);
+              return (
+                <KPICard
+                  key="stock_qty"
+                  label={lang === "bn" ? "মোট স্টক সংখ্যা" : "Total Stock Units"}
+                  value={`${totalStockUnitsDesktop.toLocaleString()} ${lang === "bn" ? "টি" : "items"}`}
+                  sub={lang === "bn" ? `${(products.data ?? []).filter(p => !p.archived).length} প্রকার পণ্য` : `${(products.data ?? []).filter(p => !p.archived).length} items in catalog`}
+                  icon={Package}
+                  color="bg-teal-600"
+                  isDesktop={true}
+                  className="h-full cursor-pointer"
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_qty")}
+                  isRevealed={revealedKpis["stock_qty"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_qty")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_qty", "/products")}
+                />
+              );
+            case "stock_valuation_cost":
+              return (
+                <KPICard
+                  key="stock_valuation_cost"
+                  label={lang === "bn" ? "স্টক কেনা মূল্য" : "Stock Cost Worth"}
+                  value={fmtMoney(totalStockCostValuation)}
+                  sub={lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock"}
+                  icon={Package}
+                  color="bg-cyan-600"
+                  isDesktop={true}
+                  className="h-full cursor-pointer"
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
+                />
+              );
+            case "stock_valuation_sale":
+              return (
+                <KPICard
+                  key="stock_valuation_sale"
+                  label={lang === "bn" ? "স্টক সম্ভাব্য বিক্রি" : "Stock Sale Worth"}
+                  value={fmtMoney(totalStockSaleValuation)}
+                  sub={lang === "bn" ? "সম্ভাব্য বিক্রি মূল্য" : "Selling Worth of Stock"}
+                  icon={ShoppingBag}
+                  color="bg-pink-600"
+                  isDesktop={true}
+                  className="h-full cursor-pointer"
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
+                />
+              );
             default:
               return null;
           }
@@ -2091,34 +2204,44 @@ const renderWidget = (widgetId: string) => {
 
         const gridClass = kpiConfig.columns === 1 ? "grid-cols-1" : kpiConfig.columns === 3 ? "grid-cols-3" : kpiConfig.columns === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
 
+        const hasCustomStockGrid = kpiConfig.order.includes("stock_valuation_cost") || kpiConfig.order.includes("stock_valuation_sale");
+
         return (
           <div key="kpis" className="space-y-6 col-span-3">
             <div className={`grid gap-4 ${gridClass}`}>
               {kpiConfig.order.map((key, idx) => renderDesktopCard(key, idx))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <KPICard
-                label={t("inventory_val_cost")}
-                value={fmtMoney(totalStockCostValuation)}
-                sub={lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock"}
-                icon={Package}
-                color="bg-teal-500"
-                isDesktop={true}
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-              <KPICard
-                label={t("inventory_val_sale")}
-                value={fmtMoney(totalStockSaleValuation)}
-                sub={lang === "bn" ? "বিক্রি মূল্যের হিসাব" : "Selling Worth of Stock"}
-                icon={ShoppingBag}
-                color="bg-pink-500"
-                isDesktop={true}
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </div>
+            {!hasCustomStockGrid && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <KPICard
+                  label={t("inventory_val_cost")}
+                  value={fmtMoney(totalStockCostValuation)}
+                  sub={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost") && !revealedKpis["stock_valuation_cost"] ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock")}
+                  icon={Package}
+                  color="bg-teal-500"
+                  isDesktop={true}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
+                />
+                <KPICard
+                  label={t("inventory_val_sale")}
+                  value={fmtMoney(totalStockSaleValuation)}
+                  sub={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale") && !revealedKpis["stock_valuation_sale"] ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "বিক্রি মূল্যের হিসাব" : "Selling Worth of Stock")}
+                  icon={ShoppingBag}
+                  color="bg-pink-500"
+                  isDesktop={true}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
+                />
+              </div>
+            )}
 
             {lowStockProducts.length > 0 && (
               <Card className="p-4 border border-amber-500/30 space-y-3 bg-gradient-to-br from-amber-50/40 via-white to-amber-100/20 dark:from-amber-950/20 dark:via-zinc-900/90 dark:to-zinc-950/90 backdrop-blur-sm rounded-2xl shadow-sm">
@@ -2439,28 +2562,36 @@ const renderWidget = (widgetId: string) => {
               {normalizeKpiOrder(kpiConfig.order).map((key, idx) => renderKpiCard(key, idx))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <KPICard
-                label={t("inventory_val_cost")}
-                value={fmtMoney(totalStockCostValuation)}
-                sub={lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock"}
-                icon={Package}
-                color="bg-teal-500"
-                isDesktop={true}
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-              <KPICard
-                label={t("inventory_val_sale")}
-                value={fmtMoney(totalStockSaleValuation)}
-                sub={lang === "bn" ? "বিক্রি মূল্যের আনুমানিক হিসাব" : "Estimated Sell Value"}
-                icon={TrendingUp}
-                color="bg-emerald-500"
-                isDesktop={true}
-                align={kpiConfig.align as any}
-                size={kpiConfig.size as any}
-              />
-            </div>
+            {(!kpiConfig.order.includes("stock_valuation_cost") && !kpiConfig.order.includes("stock_valuation_sale")) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <KPICard
+                  label={t("inventory_val_cost")}
+                  value={fmtMoney(totalStockCostValuation)}
+                  sub={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost") && !revealedKpis["stock_valuation_cost"] ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock")}
+                  icon={Package}
+                  color="bg-teal-500"
+                  isDesktop={true}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
+                />
+                <KPICard
+                  label={t("inventory_val_sale")}
+                  value={fmtMoney(totalStockSaleValuation)}
+                  sub={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale") && !revealedKpis["stock_valuation_sale"] ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "বিক্রি মূল্যের আনুমানিক হিসাব" : "Estimated Sell Value")}
+                  icon={TrendingUp}
+                  color="bg-emerald-500"
+                  isDesktop={true}
+                  align={kpiConfig.align as any}
+                  size={kpiConfig.size as any}
+                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
+                />
+              </div>
+            )}
           </div>
         );
       }

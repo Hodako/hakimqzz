@@ -3152,11 +3152,11 @@ export default function MorePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-base text-foreground truncate">{user?.full_name || "User"}</h2>
               <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-wide border uppercase ${
-                user?.role === "owner"
+                user?.role !== "employee"
                   ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                   : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300"
               }`}>
-                {user?.role === "owner" ? (lang === "bn" ? "মালিক" : "Owner") : (lang === "bn" ? "কর্মচারী" : "Employee")}
+                {user?.role !== "employee" ? (lang === "bn" ? "মালিক (Owner)" : "Shop Owner") : (lang === "bn" ? "কর্মচারী (Employee)" : "Employee")}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">

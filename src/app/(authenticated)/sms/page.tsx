@@ -40,7 +40,18 @@ import {
   unpairSmsGatewayDeviceFn,
   sendTestGatewaySmsFn,
   getGatewayQueueLogsFn,
+  sendWhatsAppCampaignFn,
+  sendWhatsAppMessageFn,
 } from "@/lib/rpc";
+import {
+  isDesktopWhatsAppAvailable,
+  getDesktopWhatsAppBridge,
+  openDesktopWhatsAppWindow,
+  sendDesktopWhatsAppMessage,
+  sendDesktopWhatsAppBroadcast,
+  getDesktopWhatsAppStatus,
+  type DesktopWhatsAppStatus,
+} from "@/lib/desktop-whatsapp";
 import { calculateSmsParts, sanitizeBdPhoneNumber } from "@/lib/mimsms";
 
 function SmsCharacterCounter({
@@ -88,7 +99,23 @@ export default function SmsPage() {
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState("direct");
+  const [channel, setChannel] = useState<"sms" | "whatsapp">("sms");
+  const [waStatus, setWaStatus] = useState<DesktopWhatsAppStatus | null>(null);
+  const [waSendingProgress, setWaSendingProgress] = useState<{ current: number; total: number } | null>(null);
   const [rechargeOpen, setRechargeOpen] = useState(false);
+
+  useEffect(() => {
+    if (isDesktopWhatsAppAvailable()) {
+      getDesktopWhatsAppStatus().then(st => setWaStatus(st));
+      const bridge = getDesktopWhatsAppBridge();
+      if (bridge && typeof bridge.onStatusUpdate === "function") {
+        const cleanup = bridge.onStatusUpdate((snapshot: any) => {
+          setWaStatus(snapshot);
+        });
+        return cleanup;
+      }
+    }
+  }, []);
   const [selectedPackage, setSelectedPackage] = useState<{ count: number; price: number; nameBn: string; nameEn: string; rate: string }>({
     count: 500,
     price: 225,
@@ -501,14 +528,85 @@ export default function SmsPage() {
     }
   };
 
-  // Action: Send Direct SMS
+  // Action: Send Direct SMS or WhatsApp
   const handleSendDirect = async () => {
     if (!directNumbersList.length) {
       toast.error(lang === "bn" ? "দয়া করে অন্তত একটি সঠিক মোবাইল নম্বর লিখুন" : "Please enter at least one valid phone number");
       return;
     }
     if (!directMessage.trim()) {
-      toast.error(lang === "bn" ? "দয়া করে এসএমএস বার্তা লিখুন" : "Please enter message text");
+      toast.error(lang === "bn" ? "দয়া করে বার্তা লিখুন" : "Please enter message text");
+      return;
+    }
+
+    if (channel === "whatsapp") {
+      try {
+        setDirectSending(true);
+        if (isDesktopWhatsAppAvailable()) {
+          const bridge = getDesktopWhatsAppBridge();
+          const st = await bridge?.getStatus();
+          if (st?.status !== "connected") {
+            toast.error(lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ কানেক্ট করা নেই। দয়া করে কিউআর স্ক্যান করুন।" : "Desktop WhatsApp is not connected. Please scan QR first.");
+            openDesktopWhatsAppWindow();
+            return;
+          }
+
+          let sentCount = 0;
+          for (let i = 0; i < directNumbersList.length; i++) {
+            const phone = directNumbersList[i];
+            setWaSendingProgress({ current: i + 1, total: directNumbersList.length });
+            const res = await sendDesktopWhatsAppMessage(phone, directMessage);
+            if (res.sent) sentCount++;
+            if (i < directNumbersList.length - 1) {
+              await new Promise(r => setTimeout(r, 600));
+            }
+          }
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে ${sentCount} টি মেসেজ সফলভাবে পাঠানো হয়েছে!` : `Successfully sent ${sentCount} WhatsApp messages!`);
+          setDirectMessage("");
+          setDirectNumbers("");
+          return;
+        }
+
+        // Web or Server Baileys Fallback
+        const res = await sendWhatsAppCampaignFn({
+          data: {
+            recipientType: "direct_numbers",
+            directNumbers,
+            message: directMessage,
+            campaignTitle: "Direct WhatsApp Message",
+          },
+        });
+        if (res?.success) {
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে সফলভাবে পাঠানো হয়েছে!` : `Successfully sent via WhatsApp!`);
+          setDirectMessage("");
+          setDirectNumbers("");
+        } else {
+          if (directNumbersList.length === 1) {
+            const clean = directNumbersList[0].replace(/[^0-9]/g, "");
+            const bdPhone = clean.startsWith("88") ? clean : `88${clean}`;
+            window.open(`https://wa.me/${bdPhone}?text=${encodeURIComponent(directMessage)}`, "_blank");
+            toast.success(lang === "bn" ? "হোয়াটসঅ্যাপে ওপেন হয়েছে" : "Opened in WhatsApp");
+            setDirectMessage("");
+            setDirectNumbers("");
+          } else {
+            toast.error(res?.summary || (lang === "bn" ? "হোয়াটসঅ্যাপ মেসেজ পাঠানো যায়নি" : "Failed to send WhatsApp message"));
+          }
+        }
+      } catch (err: any) {
+        if (directNumbersList.length === 1) {
+          const clean = directNumbersList[0].replace(/[^0-9]/g, "");
+          const bdPhone = clean.startsWith("88") ? clean : `88${clean}`;
+          window.open(`https://wa.me/${bdPhone}?text=${encodeURIComponent(directMessage)}`, "_blank");
+          toast.success(lang === "bn" ? "হোয়াটসঅ্যাপে ওপেন হয়েছে" : "Opened in WhatsApp");
+          setDirectMessage("");
+          setDirectNumbers("");
+        } else {
+          toast.error(err?.message || (lang === "bn" ? "হোয়াটসঅ্যাপ মেসেজ ব্যর্থ হয়েছে" : "Failed to send WhatsApp message"));
+        }
+      } finally {
+        setDirectSending(false);
+        setWaSendingProgress(null);
+      }
       return;
     }
 
@@ -540,7 +638,7 @@ export default function SmsPage() {
     }
   };
 
-  // Action: Send Customer Campaign
+  // Action: Send Customer Campaign (SMS or WhatsApp)
   const handleSendCustomerCampaign = async () => {
     if (!custMessage.trim()) {
       toast.error(lang === "bn" ? "দয়া করে ক্যাম্পেইন বার্তা লিখুন" : "Please enter campaign message text");
@@ -554,6 +652,78 @@ export default function SmsPage() {
 
     if (targetCount === 0) {
       toast.error(lang === "bn" ? "কোন কাস্টমার পাওয়া যায়নি" : "No customers selected or available");
+      return;
+    }
+
+    if (channel === "whatsapp") {
+      let targets: any[] = [];
+      if (custTargetMode === "all") targets = validCustomers;
+      else if (custTargetMode === "dues") targets = customersWithDues;
+      else targets = validCustomers.filter(c => selectedCustIds.includes(c.id));
+
+      if (!targets.length) {
+        toast.error(lang === "bn" ? "কোন কাস্টমার পাওয়া যায়নি" : "No customers found");
+        return;
+      }
+
+      setCustSending(true);
+      try {
+        if (isDesktopWhatsAppAvailable()) {
+          const bridge = getDesktopWhatsAppBridge();
+          const st = await bridge?.getStatus();
+          if (st?.status !== "connected") {
+            toast.error(lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ কানেক্ট করা নেই। দয়া করে কিউআর স্ক্যান করুন।" : "Desktop WhatsApp is not connected. Please scan QR first.");
+            openDesktopWhatsAppWindow();
+            return;
+          }
+
+          let sentCount = 0;
+          for (let i = 0; i < targets.length; i++) {
+            const cust = targets[i];
+            const phone = cust.phone;
+            setWaSendingProgress({ current: i + 1, total: targets.length });
+            let msg = custMessage;
+            if (custPersonalized) {
+              msg = msg.replace(/{name}/g, cust.name || "Customer")
+                       .replace(/{due}/g, String(cust.due || 0));
+            }
+            const res = await sendDesktopWhatsAppMessage(phone, msg);
+            if (res.sent) sentCount++;
+            if (i < targets.length - 1) {
+              await new Promise(r => setTimeout(r, 600));
+            }
+          }
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে ${sentCount} জন কাস্টমারকে মেসেজ পাঠানো হয়েছে!` : `Successfully sent WhatsApp to ${sentCount} customers!`);
+          setCustMessage("");
+          setCustCampaignTitle("");
+          setSelectedCustIds([]);
+          return;
+        }
+
+        // Web or Server Baileys Fallback
+        const res = await sendWhatsAppCampaignFn({
+          data: {
+            recipientType: custTargetMode === "selected" ? "selected_customers" : "all_customers",
+            selectedIds: custTargetMode === "selected" ? selectedCustIds : custTargetMode === "dues" ? customersWithDues.map(c => c.id) : undefined,
+            message: custMessage,
+            campaignTitle: custCampaignTitle || "Customer WhatsApp Campaign",
+            isPersonalized: custPersonalized,
+          },
+        });
+        if (res?.success) {
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে সফলভাবে ${res.recipientCount} জন কাস্টমারকে পাঠানো হয়েছে!` : `Successfully sent WhatsApp to ${res.recipientCount} customers!`);
+          setCustMessage("");
+          setCustCampaignTitle("");
+          setSelectedCustIds([]);
+        } else {
+          toast.error(res?.summary || "Failed to send WhatsApp campaign");
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to send WhatsApp campaign");
+      } finally {
+        setCustSending(false);
+        setWaSendingProgress(null);
+      }
       return;
     }
 
@@ -587,7 +757,7 @@ export default function SmsPage() {
     }
   };
 
-  // Action: Send Supplier Campaign
+  // Action: Send Supplier Campaign (SMS or WhatsApp)
   const handleSendSupplierCampaign = async () => {
     if (!suppMessage.trim()) {
       toast.error(lang === "bn" ? "দয়া করে বার্তা লিখুন" : "Please enter message text");
@@ -596,7 +766,78 @@ export default function SmsPage() {
 
     const targetCount = suppTargetMode === "all" ? validParties.length : selectedSuppIds.length;
     if (targetCount === 0) {
-      toast.error(lang === "bn" ? "কোন সাপ্লায়ার পাওয়া যায়নি" : "No suppliers selected or available");
+      toast.error(lang === "bn" ? "কোন বায়ার বা সাপ্লায়ার পাওয়া যায়নি" : "No suppliers/buyers selected or available");
+      return;
+    }
+
+    if (channel === "whatsapp") {
+      let targets: any[] = [];
+      if (suppTargetMode === "all") targets = validParties;
+      else targets = validParties.filter(p => selectedSuppIds.includes(p.id));
+
+      if (!targets.length) {
+        toast.error(lang === "bn" ? "কোন বায়ার বা সাপ্লায়ার পাওয়া যায়নি" : "No suppliers/buyers found");
+        return;
+      }
+
+      setSuppSending(true);
+      try {
+        if (isDesktopWhatsAppAvailable()) {
+          const bridge = getDesktopWhatsAppBridge();
+          const st = await bridge?.getStatus();
+          if (st?.status !== "connected") {
+            toast.error(lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ কানেক্ট করা নেই। দয়া করে কিউআর স্ক্যান করুন।" : "Desktop WhatsApp is not connected. Please scan QR first.");
+            openDesktopWhatsAppWindow();
+            return;
+          }
+
+          let sentCount = 0;
+          for (let i = 0; i < targets.length; i++) {
+            const supp = targets[i];
+            const phone = supp.phone;
+            setWaSendingProgress({ current: i + 1, total: targets.length });
+            let msg = suppMessage;
+            if (suppPersonalized) {
+              msg = msg.replace(/{name}/g, supp.name || "Supplier/Buyer")
+                       .replace(/{due}/g, String(supp.due || 0));
+            }
+            const res = await sendDesktopWhatsAppMessage(phone, msg);
+            if (res.sent) sentCount++;
+            if (i < targets.length - 1) {
+              await new Promise(r => setTimeout(r, 600));
+            }
+          }
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে ${sentCount} জন বায়ার/সাপ্লায়ারকে পাঠানো হয়েছে!` : `Successfully sent WhatsApp to ${sentCount} buyers/suppliers!`);
+          setSuppMessage("");
+          setSuppCampaignTitle("");
+          setSelectedSuppIds([]);
+          return;
+        }
+
+        // Web or Server Baileys Fallback
+        const res = await sendWhatsAppCampaignFn({
+          data: {
+            recipientType: suppTargetMode === "selected" ? "selected_suppliers" : "all_suppliers",
+            selectedIds: suppTargetMode === "selected" ? selectedSuppIds : undefined,
+            message: suppMessage,
+            campaignTitle: suppCampaignTitle || "Supplier/Buyer WhatsApp Campaign",
+            isPersonalized: suppPersonalized,
+          },
+        });
+        if (res?.success) {
+          toast.success(lang === "bn" ? `হোয়াটসঅ্যাপে সফলভাবে ${res.recipientCount} জনকে পাঠানো হয়েছে!` : `Successfully sent WhatsApp to ${res.recipientCount} recipients!`);
+          setSuppMessage("");
+          setSuppCampaignTitle("");
+          setSelectedSuppIds([]);
+        } else {
+          toast.error(res?.summary || "Failed to send WhatsApp campaign");
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to send WhatsApp campaign");
+      } finally {
+        setSuppSending(false);
+        setWaSendingProgress(null);
+      }
       return;
     }
 
@@ -819,6 +1060,111 @@ export default function SmsPage() {
         </div>
       </div>
 
+      {/* Channel Selector: SMS vs WhatsApp */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border/80 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-muted-foreground mr-1">
+            {lang === "bn" ? "মেসেজ চ্যানেল:" : "Channel Mode:"}
+          </span>
+          <div className="inline-flex rounded-xl bg-muted p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setChannel("sms")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                channel === "sms"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MessageSquare className="size-3.5" />
+              <span>{lang === "bn" ? "এসএমএস (SMS Gateway)" : "SMS Gateway"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannel("whatsapp")}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                channel === "whatsapp"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MessageCircle className="size-3.5 text-emerald-400" />
+              <span>{lang === "bn" ? "হোয়াটসঅ্যাপ (WhatsApp)" : "WhatsApp"}</span>
+              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 uppercase font-black ${
+                channel === "whatsapp" ? "border-emerald-300 text-white bg-emerald-700/60" : "border-emerald-500/40 text-emerald-600"
+              }`}>
+                Free
+              </Badge>
+            </button>
+          </div>
+        </div>
+
+        {/* WhatsApp Realtime Desktop Status Indicator */}
+        {channel === "whatsapp" && (
+          <div className="flex items-center gap-2">
+            {waStatus?.status === "connected" ? (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-xs font-semibold">
+                <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>
+                  {lang === "bn"
+                    ? `হোয়াটসঅ্যাপ সংযুক্ত (${waStatus.phone || waStatus.name || "Active"})`
+                    : `WhatsApp Connected (${waStatus.phone || waStatus.name || "Active"})`}
+                </span>
+                {isDesktopWhatsAppAvailable() && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openDesktopWhatsAppWindow()}
+                    className="h-6 px-2 text-[10px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/20"
+                  >
+                    {lang === "bn" ? "উইন্ডো খুলুন" : "Open Window"}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 text-xs font-semibold">
+                <span className="size-2 rounded-full bg-amber-500" />
+                <span>{lang === "bn" ? "হোয়াটসঅ্যাপ ডিসকানেক্টেড" : "Desktop WhatsApp Offline"}</span>
+                {isDesktopWhatsAppAvailable() && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => openDesktopWhatsAppWindow()}
+                    className="h-6 px-2.5 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
+                  >
+                    <QrCode className="size-3 mr-1" />
+                    {lang === "bn" ? "কানেক্ট / QR স্ক্যান" : "Connect / QR Scan"}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* WhatsApp Sending Progress Bar */}
+      {waSendingProgress && (
+        <Card className="p-4 border-emerald-500/40 bg-emerald-500/10 rounded-2xl animate-in fade-in duration-200">
+          <div className="flex items-center justify-between gap-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="size-4 animate-spin text-emerald-600" />
+              <span>
+                {lang === "bn"
+                  ? `হোয়াটসঅ্যাপ বার্তা পাঠানো হচ্ছে (${waSendingProgress.current}/${waSendingProgress.total})...`
+                  : `Sending WhatsApp message (${waSendingProgress.current}/${waSendingProgress.total})...`}
+              </span>
+            </div>
+            <span>{Math.round((waSendingProgress.current / waSendingProgress.total) * 100)}%</span>
+          </div>
+          <div className="w-full bg-emerald-200/50 dark:bg-emerald-950/50 rounded-full h-2 mt-2 overflow-hidden">
+            <div
+              className="bg-emerald-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(waSendingProgress.current / waSendingProgress.total) * 100}%` }}
+            />
+          </div>
+        </Card>
+      )}
+
       {/* Main Feature Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <div className="overflow-x-auto pb-1 -mx-2.5 px-2.5 sm:mx-0 sm:px-0">
@@ -973,20 +1319,27 @@ export default function SmsPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">
-                      {lang === "bn" ? "রুট টাইপ:" : "Route Type:"}
-                    </Label>
-                    <Select value={directTxType} onValueChange={(val: "T" | "P") => setDirectTxType(val)}>
-                      <SelectTrigger className="h-9 w-44 rounded-xl text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="T">{lang === "bn" ? "ট্রানজেকশনাল (T) - দ্রুত" : "Transactional (T)"}</SelectItem>
-                        <SelectItem value="P">{lang === "bn" ? "প্রোমোশনাল (P)" : "Promotional (P)"}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {channel === "whatsapp" ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-xs font-medium">
+                      <MessageCircle className="w-4 h-4 shrink-0" />
+                      <span>{lang === "bn" ? "হোয়াটসঅ্যাপ ডিরেক্ট মেসেজ — আনলিমিটেড ও সম্পূর্ণ ফ্রি" : "WhatsApp Direct Message — Free & Unlimited"}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <Label className="text-xs text-muted-foreground whitespace-nowrap">
+                        {lang === "bn" ? "রুট টাইপ:" : "Route Type:"}
+                      </Label>
+                      <Select value={directTxType} onValueChange={(val: "T" | "P") => setDirectTxType(val)}>
+                        <SelectTrigger className="h-9 w-44 rounded-xl text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="T">{lang === "bn" ? "ট্রানজেকশনাল (T) - দ্রুত" : "Transactional (T)"}</SelectItem>
+                          <SelectItem value="P">{lang === "bn" ? "প্রোমোশনাল (P)" : "Promotional (P)"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <Button
                     onClick={handleSendDirect}
@@ -996,12 +1349,16 @@ export default function SmsPage() {
                     {directSending ? (
                       <>
                         <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending SMS..."}
+                        {channel === "whatsapp"
+                          ? (lang === "bn" ? "হোয়াটসঅ্যাপ পাঠানো হচ্ছে..." : "Sending WhatsApp...")
+                          : (lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending SMS...")}
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4 mr-2" />
-                        {lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send SMS (${directNumbersList.length})`}
+                        {channel === "whatsapp" ? <MessageCircle className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                        {channel === "whatsapp"
+                          ? (lang === "bn" ? `হোয়াটসঅ্যাপ পাঠান (${directNumbersList.length})` : `Send WhatsApp (${directNumbersList.length})`)
+                          : (lang === "bn" ? `পাঠান (${directNumbersList.length})` : `Send SMS (${directNumbersList.length})`)}
                       </>
                     )}
                   </Button>
@@ -1042,14 +1399,31 @@ export default function SmsPage() {
                     <span className="text-muted-foreground">{lang === "bn" ? "প্রাপক সংখ্যা:" : "Recipients:"}</span>
                     <span className="font-semibold font-num">{directNumbersList.length}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{lang === "bn" ? "প্রতি মেসেজ সাইজ:" : "Parts per SMS:"}</span>
-                    <span className="font-semibold font-num">{directParts.parts} part(s)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{lang === "bn" ? "মোট আনুমানিক খরচ:" : "Total SMS Credits:"}</span>
-                    <span className="font-semibold text-primary font-num">{directNumbersList.length * directParts.parts} units</span>
-                  </div>
+                  {channel === "whatsapp" ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{lang === "bn" ? "চ্যানেল:" : "Channel:"}</span>
+                        <span className="font-semibold text-emerald-600 flex items-center gap-1">
+                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{lang === "bn" ? "মোট খরচ:" : "Total Cost:"}</span>
+                        <span className="font-semibold text-emerald-600 font-num">0.00 ৳ (Free)</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{lang === "bn" ? "প্রতি মেসেজ সাইজ:" : "Parts per SMS:"}</span>
+                        <span className="font-semibold font-num">{directParts.parts} part(s)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{lang === "bn" ? "মোট আনুমানিক খরচ:" : "Total SMS Credits:"}</span>
+                        <span className="font-semibold text-primary font-num">{directNumbersList.length * directParts.parts} units</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1215,19 +1589,27 @@ export default function SmsPage() {
                     <Button
                       onClick={handleSendCustomerCampaign}
                       disabled={custSending || !custMessage.trim()}
-                      className="w-full sm:w-auto rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                      className={`w-full sm:w-auto rounded-xl px-6 font-medium text-white ${
+                        channel === "whatsapp" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
+                      }`}
                     >
                       {custSending ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {lang === "bn" ? "ক্যাম্পেইন পাঠানো হচ্ছে..." : "Broadcasting Campaign..."}
+                          {channel === "whatsapp"
+                            ? (lang === "bn" ? "হোয়াটসঅ্যাপ পাঠানো হচ্ছে..." : "Broadcasting WhatsApp...")
+                            : (lang === "bn" ? "ক্যাম্পেইন পাঠানো হচ্ছে..." : "Broadcasting Campaign...")}
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {lang === "bn"
-                            ? `পাঠান (${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length})`
-                            : `Send to ${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length} Customers`}
+                          {channel === "whatsapp" ? <MessageCircle className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                          {channel === "whatsapp"
+                            ? (lang === "bn"
+                                ? `হোয়াটসঅ্যাপ পাঠান (${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length})`
+                                : `Send WhatsApp to ${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length} Customers`)
+                            : (lang === "bn"
+                                ? `পাঠান (${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length})`
+                                : `Send to ${custTargetMode === "all" ? validCustomers.length : custTargetMode === "dues" ? customersWithDues.length : selectedCustIds.length} Customers`)}
                         </>
                       )}
                     </Button>
@@ -1466,19 +1848,27 @@ export default function SmsPage() {
                     <Button
                       onClick={handleSendSupplierCampaign}
                       disabled={suppSending || !suppMessage.trim()}
-                      className="w-full sm:w-auto rounded-xl px-6 bg-purple-600 hover:bg-purple-700 text-white font-medium"
+                      className={`w-full sm:w-auto rounded-xl px-6 font-medium text-white ${
+                        channel === "whatsapp" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-purple-600 hover:bg-purple-700"
+                      }`}
                     >
                       {suppSending ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          {lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending..."}
+                          {channel === "whatsapp"
+                            ? (lang === "bn" ? "হোয়াটসঅ্যাপ পাঠানো হচ্ছে..." : "Sending WhatsApp...")
+                            : (lang === "bn" ? "পাঠানো হচ্ছে..." : "Sending...")}
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {lang === "bn"
-                            ? `সাপ্লায়ারদের পাঠান (${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length})`
-                            : `Send to ${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length} Suppliers`}
+                          {channel === "whatsapp" ? <MessageCircle className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                          {channel === "whatsapp"
+                            ? (lang === "bn"
+                                ? `সাপ্লায়ারদের হোয়াটসঅ্যাপ পাঠান (${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length})`
+                                : `Send WhatsApp to ${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length} Suppliers`)
+                            : (lang === "bn"
+                                ? `সাপ্লায়ারদের পাঠান (${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length})`
+                                : `Send to ${suppTargetMode === "all" ? validParties.length : selectedSuppIds.length} Suppliers`)}
                         </>
                       )}
                     </Button>

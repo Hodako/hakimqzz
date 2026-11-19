@@ -68,7 +68,7 @@ async function insertCashboxEntry(
   entry: { kind: CashboxKind; amount: number; note?: string | null; ref_id?: string | null; created_at?: string },
   bypassValidation = false
 ) {
-  const safeAmount = Math.abs(Number(entry.amount) || 0);
+  const safeAmount = Math.round(Math.abs(Number(entry.amount) || 0) * 100) / 100;
   const delta = (entry.kind === "deposit" || entry.kind === "sale") ? safeAmount : -safeAmount;
   if (delta < 0 && !bypassValidation) {
     await checkCashboxBalanceEffect(db, ownerId, delta);
@@ -1032,7 +1032,10 @@ export async function createPayableSettlementFn(input: { data: { party_id: strin
   requirePermission(session, "parties");
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, party_id: data.party_id, amount: data.amount, note: data.note || null, created_at: new Date().toISOString() };
+  const createdAt = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : new Date().toISOString();
+  const doc = { _id: id, owner_id: session.ownerId, party_id: data.party_id, amount: data.amount, note: data.note || null, created_at: createdAt };
   await db.collection("party_payable_settlements").insertOne(doc as any);
 
   // Also insert cashbox entry when paying a party
@@ -1043,6 +1046,7 @@ export async function createPayableSettlementFn(input: { data: { party_id: strin
     amount: data.amount,
     note: data.note || `Paid to ${partyName} (Payable Settlement)`,
     ref_id: id,
+    created_at: doc.created_at,
   });
 
   return { ...doc, id };
@@ -1221,15 +1225,22 @@ export async function approveCourierPaymentFn(input: { data: { id: string } }) {
       }
     );
 
-    // Deposit into Cashbox
+    // Deposit into Cashbox idempotently
     if (totalAmount > 0) {
-      await insertCashboxEntry(db, session.ownerId, {
-        kind: "sale",
-        amount: totalAmount,
-        note: `Courier Payment Collected: ${s.product_name} (INV-${String(s._id).slice(-6).toUpperCase()})`,
+      const alreadyLogged = await db.collection("cashbox_entries").findOne({
         ref_id: String(s._id),
-        created_at: nowStr,
+        owner_id: session.ownerId,
+        kind: "sale",
       });
+      if (!alreadyLogged) {
+        await insertCashboxEntry(db, session.ownerId, {
+          kind: "sale",
+          amount: totalAmount,
+          note: `Courier Payment Collected: ${s.product_name} (INV-${String(s._id).slice(-6).toUpperCase()})`,
+          ref_id: String(s._id),
+          created_at: s.created_at || nowStr,
+        });
+      }
     }
   }
 
@@ -1491,6 +1502,7 @@ export async function editSaleFn(input: {
       amount: cashAmt,
       note: `Sale (Updated): ${data.product_name}`,
       ref_id: data.id,
+      created_at: oldSale.created_at || new Date().toISOString(),
     });
   }
 
@@ -1624,6 +1636,9 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
     : -((returnPrice - (Number(product.buy_price) || 0)) * returnQty);
 
   const id = crypto.randomUUID();
+  const returnCreatedAt = data.return_date && !isNaN(new Date(data.return_date).getTime())
+    ? new Date(data.return_date).toISOString()
+    : new Date().toISOString();
   const doc = {
     _id: id,
     owner_id: session.ownerId,
@@ -1637,7 +1652,7 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
     return_date: returnDate,
     profit_adjustment: profitAdj,
     note: data.note || null,
-    created_at: new Date().toISOString(),
+    created_at: returnCreatedAt,
   };
   await db.collection("returns").insertOne(doc as any);
 
@@ -1653,6 +1668,7 @@ export async function createDirectProductReturnFn(input: { data: { product_id: s
       amount: refundAmt,
       note: `Direct Return: ${product.name} (Qty: ${returnQty}, Buy Date: ${buyDate})`,
       ref_id: id,
+      created_at: doc.created_at,
     });
   }
 
@@ -2300,12 +2316,15 @@ export async function getSomitiFn() {
   return items.map((s) => ({ ...s, id: s._id as any as string }));
 }
 
-export async function createSomitiFn(input: { data: { kind: string; amount: number; note?: string | null; skipCashbox?: boolean; is_initial?: boolean } }) {
+export async function createSomitiFn(input: { data: { kind: string; amount: number; note?: string | null; skipCashbox?: boolean; is_initial?: boolean; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
   const db = await getDb();
   const id = crypto.randomUUID();
-  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: new Date().toISOString() };
+  const createdAt = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : new Date().toISOString();
+  const doc = { _id: id, owner_id: session.ownerId, ...data, created_at: createdAt };
   await db.collection("somiti_entries").insertOne(doc as any);
 
   // Sync to cashbox ONLY IF NOT skipCashbox / NOT initial opening balance!
@@ -2317,6 +2336,7 @@ export async function createSomitiFn(input: { data: { kind: string; amount: numb
       amount: Number(data.amount),
       note: data.note ? `Samity (${data.kind}): ${data.note}` : `Samity ${data.kind}`,
       ref_id: id,
+      created_at: doc.created_at,
     });
   }
 
@@ -2627,7 +2647,7 @@ export async function updateCashboxFn(input: { data: { id: string; kind: string;
   const oldIsPositive = oldEntry.kind === "deposit" || oldEntry.kind === "sale";
   const oldDelta = oldIsPositive ? Math.abs(Number(oldEntry.amount) || 0) : -Math.abs(Number(oldEntry.amount) || 0);
 
-  const safeNewAmount = Math.abs(Number(data.amount) || 0);
+  const safeNewAmount = Math.round(Math.abs(Number(data.amount) || 0) * 100) / 100;
   const newIsPositive = data.kind === "deposit" || data.kind === "sale";
   const newDelta = newIsPositive ? safeNewAmount : -safeNewAmount;
 
@@ -3786,7 +3806,7 @@ export async function deleteBankAccountFn(input: { data: { id: string } }) {
   return { success: true };
 }
 
-export async function createBankTransactionFn(input: { data: { account_id: string; type: "deposit" | "withdraw"; amount: number; note?: string | null; sync_cashbox?: boolean } }) {
+export async function createBankTransactionFn(input: { data: { account_id: string; type: "deposit" | "withdraw"; amount: number; note?: string | null; sync_cashbox?: boolean; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
   const db = await getDb();
@@ -3799,6 +3819,10 @@ export async function createBankTransactionFn(input: { data: { account_id: strin
     { $inc: { balance: balanceDelta } }
   );
 
+  const txCreatedAt = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : new Date().toISOString();
+
   const txDoc = {
     _id: txId,
     owner_id: session.ownerId,
@@ -3807,7 +3831,7 @@ export async function createBankTransactionFn(input: { data: { account_id: strin
     amount,
     sync_cashbox: data.sync_cashbox !== false,
     note: data.note || null,
-    created_at: new Date().toISOString(),
+    created_at: txCreatedAt,
   };
   await db.collection("bank_transactions").insertOne(txDoc as any);
 
@@ -3821,6 +3845,7 @@ export async function createBankTransactionFn(input: { data: { account_id: strin
       amount,
       note: noteText,
       ref_id: txId,
+      created_at: txDoc.created_at,
     });
   }
 
@@ -3834,11 +3859,15 @@ export async function getBankLoansFn() {
   return loans.map(l => ({ ...l, id: l._id.toString() }));
 }
 
-export async function createBankLoanFn(input: { data: { bank_name: string; loan_title: string; principal_amount: number; total_repayable: number; total_installments: number; installment_amount: number; receive_to_cashbox?: boolean; note?: string | null } }) {
+export async function createBankLoanFn(input: { data: { bank_name: string; loan_title: string; principal_amount: number; total_repayable: number; total_installments: number; installment_amount: number; receive_to_cashbox?: boolean; note?: string | null; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
   const db = await getDb();
   const loanId = crypto.randomUUID();
+
+  const loanCreatedAt = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : new Date().toISOString();
 
   const doc = {
     _id: loanId,
@@ -3854,7 +3883,7 @@ export async function createBankLoanFn(input: { data: { bank_name: string; loan_
     receive_to_cashbox: Boolean(data.receive_to_cashbox),
     status: "active",
     note: data.note || null,
-    created_at: new Date().toISOString(),
+    created_at: loanCreatedAt,
   };
 
   await db.collection("bank_loans").insertOne(doc as any);
@@ -3865,13 +3894,14 @@ export async function createBankLoanFn(input: { data: { bank_name: string; loan_
       amount: Number(data.principal_amount),
       note: `Bank Loan Disbursement: ${data.bank_name} (${data.loan_title})`,
       ref_id: loanId,
+      created_at: doc.created_at,
     });
   }
 
   return { ...doc, id: loanId };
 }
 
-export async function payBankLoanInstallmentFn(input: { data: { loan_id: string; amount: number; payment_method?: string; note?: string | null } }) {
+export async function payBankLoanInstallmentFn(input: { data: { loan_id: string; amount: number; payment_method?: string; note?: string | null; created_at?: string } }) {
   const { data = {} }: any = input ?? {};
   const session = await requireSession();
   const db = await getDb();
@@ -3896,6 +3926,10 @@ export async function payBankLoanInstallmentFn(input: { data: { loan_id: string;
     }
   );
 
+  const pmtCreatedAt = data.created_at && !isNaN(new Date(data.created_at).getTime())
+    ? new Date(data.created_at).toISOString()
+    : new Date().toISOString();
+
   const pmtDoc = {
     _id: pmtId,
     owner_id: session.ownerId,
@@ -3903,17 +3937,20 @@ export async function payBankLoanInstallmentFn(input: { data: { loan_id: string;
     amount,
     payment_method: data.payment_method || "cashbox",
     note: data.note || null,
-    created_at: new Date().toISOString(),
+    created_at: pmtCreatedAt,
   };
   await db.collection("bank_loan_payments").insertOne(pmtDoc as any);
 
-  // ALWAYS cut installment money from CASHBOX
-  await insertCashboxEntry(db, session.ownerId, {
-    kind: "withdraw",
-    amount,
-    note: `Bank Loan Installment: ${loan.bank_name} (${loan.loan_title}) - ${data.note || `Installment #${newPaidInstallments}`}`,
-    ref_id: pmtId,
-  });
+  // Cut from cashbox only when paid from cashbox/cash
+  if (pmtDoc.payment_method === "cashbox" || pmtDoc.payment_method === "cash") {
+    await insertCashboxEntry(db, session.ownerId, {
+      kind: "withdraw",
+      amount,
+      note: `Bank Loan Installment: ${loan.bank_name} (${loan.loan_title}) - ${data.note || `Installment #${newPaidInstallments}`}`,
+      ref_id: pmtId,
+      created_at: pmtDoc.created_at,
+    });
+  }
 
   return { success: true, id: pmtId, isFullyPaid, remaining: Math.max(Number(loan.total_repayable) - newPaidAmount, 0) };
 }
@@ -5743,6 +5780,12 @@ export async function createEmployeeSalaryFn(input: { data: any }) {
   const paymentMethod = data.payment_method || "cash";
   const title = `[বেতন প্রদান] ${empName} - ${month}`;
 
+  const salaryDate = data.created_at
+    ? new Date(data.created_at).toISOString()
+    : data.payment_date
+    ? new Date(data.payment_date).toISOString()
+    : new Date().toISOString();
+
   const doc = {
     _id: id,
     owner_id: session.ownerId,
@@ -5758,7 +5801,7 @@ export async function createEmployeeSalaryFn(input: { data: any }) {
     status: data.status || "paid",
     note: data.note || null,
     settled_shopping_ids: Array.isArray(data.settled_shopping_ids) ? data.settled_shopping_ids : [],
-    created_at: new Date().toISOString(),
+    created_at: salaryDate,
   };
 
   await db.collection("employee_salaries").insertOne(doc as any);
@@ -5838,6 +5881,12 @@ export async function createEmployeeExpenseFn(input: { data: any }) {
   const catLabel = category === "food" ? "খাবার ভাতা" : category === "travel" ? "যাতায়াত" : category === "tea" ? "নাস্তা/চা" : category === "bonus" ? "বোনাস" : category === "advance" || category === "salary_advance" ? "অগ্রিম বেতন" : isDebtRepayment ? "দোকান পাওনা আদায়" : category === "adjustment_add" ? "বেতন বৃদ্ধি/সমন্বয়" : category === "adjustment_deduct" ? "বেতন কর্তন/সমন্বয়" : "অন্যান্য";
   const title = `[কর্মচারী ${isDebtRepayment ? "পাওনা আদায়" : isAdjustment ? "সমন্বয়" : "খরচ"}] ${empName} (${catLabel}): ${note}`;
 
+  const expenseCreatedAt = data.created_at
+    ? new Date(data.created_at).toISOString()
+    : data.date
+    ? new Date(data.date).toISOString()
+    : new Date().toISOString();
+
   const doc = {
     _id: id,
     owner_id: session.ownerId,
@@ -5849,7 +5898,7 @@ export async function createEmployeeExpenseFn(input: { data: any }) {
     date: data.date || new Date().toISOString().slice(0, 10),
     month: data.month || (data.date || new Date().toISOString().slice(0, 10)).slice(0, 7),
     note: note || null,
-    created_at: new Date().toISOString(),
+    created_at: expenseCreatedAt,
   };
 
   await db.collection("employee_expenses").insertOne(doc as any);
@@ -5959,6 +6008,12 @@ export async function createEmployeeShoppingFn(input: { data: any }) {
   }
 
   // 2. Save document
+  const shoppingCreatedAt = data.created_at
+    ? new Date(data.created_at).toISOString()
+    : data.date
+    ? new Date(data.date).toISOString()
+    : new Date().toISOString();
+
   const doc = {
     _id: id,
     owner_id: session.ownerId,
@@ -5973,7 +6028,7 @@ export async function createEmployeeShoppingFn(input: { data: any }) {
     settled: false,
     date: data.date || new Date().toISOString().slice(0, 10),
     note: note || null,
-    created_at: new Date().toISOString(),
+    created_at: shoppingCreatedAt,
   };
 
   await db.collection("employee_shoppings").insertOne(doc as any);

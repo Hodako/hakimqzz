@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getMeFn, logoutFn, updateUserAvatarFn, getApiBase } from "@/lib/rpc";
 import type { PermissionSet } from "@/lib/permissions";
 import { clearAuthProfile, readAuthProfile, writeAuthProfile, writeBrand } from "@/lib/local-cache";
+import { getActiveEmployeeSession, clearActiveEmployeeSession } from "@/lib/employee-session";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 
@@ -78,12 +79,16 @@ function cacheUser(u: AuthUser | null) {
     localStorage.setItem("cw_industry", resolvedIndustry);
     localStorage.setItem("cw_onboarding_completed", "true");
   }
+  const isOwner = u.role === "owner" || u.role === "superadmin";
+  const activeEmp = isOwner ? null : getActiveEmployeeSession();
+  const resolvedRole = isOwner ? (u.role || "owner") : (activeEmp ? "employee" : (u.role || "owner"));
+
   writeAuthProfile({
     id: u.id,
     email: u.email,
-    full_name: u.full_name || (u as any).name || "Owner",
+    full_name: u.full_name || (u as any).name || (isOwner ? "Owner" : "Employee"),
     activated: u.activated ?? (u as any).is_activated ?? true,
-    role: (typeof window !== "undefined" && (!!window.localStorage.getItem("cw_active_employee_session") || window.localStorage.getItem("cw_active_session_role") === "employee" || u.role === "employee")) ? "employee" : (u.role || "owner"),
+    role: resolvedRole,
     business_id: u.business_id || (u.id ? `biz_${u.id}` : null),
     business_name: u.business_name || "Urobili",
     business_address: u.business_address,
@@ -117,12 +122,16 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
     anyP.industry ||
     p.industry ||
     (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "" : "");
+  const isOwner = p.role === "owner" || p.role === "superadmin";
+  const activeEmp = isOwner ? null : getActiveEmployeeSession();
+  const resolvedRole = isOwner ? (p.role || "owner") : (activeEmp ? "employee" : (p.role || "owner"));
+
   return {
     id: p.id,
     email: p.email,
-    full_name: p.full_name || anyP.name || "Owner",
+    full_name: p.full_name || anyP.name || (isOwner ? "Owner" : "Employee"),
     activated: p.activated ?? anyP.is_activated ?? true,
-    role: (typeof window !== "undefined" && (!!window.localStorage.getItem("cw_active_employee_session") || window.localStorage.getItem("cw_active_session_role") === "employee" || p.role === "employee")) ? "employee" : (p.role || "owner"),
+    role: resolvedRole,
     business_id: p.business_id || "urobili-default",
     business_name: p.business_name || "Urobili",
     business_address: anyP.business_address,
@@ -171,10 +180,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem("cw_industry", next.industry);
           localStorage.setItem("cw_onboarding_completed", "true");
         }
-        if (next.role !== "employee" && typeof window !== "undefined") {
-          window.localStorage.removeItem("cw_active_employee_session");
-          window.localStorage.removeItem("cw_active_session_role");
-          window.localStorage.removeItem("cw_employee_device_link_id");
+        if (next.role === "owner" || next.role === "superadmin" || next.role !== "employee") {
+          if (next.role !== "superadmin") next.role = "owner";
+          if (typeof window !== "undefined") {
+            const activeEmp = getActiveEmployeeSession();
+            if (!activeEmp) {
+              window.localStorage.removeItem("cw_active_employee_session");
+              window.localStorage.removeItem("cw_active_session_role");
+              window.localStorage.removeItem("cw_employee_device_link_id");
+            }
+          }
         }
         setUser(next);
         cacheUser(next);
@@ -208,6 +223,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Restore locally cached session immediately on client mount
     try {
+      if (typeof window !== "undefined") {
+        const rawEmp = window.localStorage.getItem("cw_active_employee_session");
+        if (rawEmp === "null" || rawEmp === "undefined" || rawEmp === "" || rawEmp === "{}") {
+          window.localStorage.removeItem("cw_active_employee_session");
+        }
+        if (!getActiveEmployeeSession()) {
+          window.localStorage.removeItem("cw_active_employee_session");
+          window.localStorage.removeItem("cw_active_session_role");
+        }
+      }
       const tokenExists = typeof window !== "undefined" && !!window.localStorage.getItem("auth_token");
       const cached = readAuthProfile();
       if (tokenExists && cached) {
@@ -257,7 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem("app_pin_unlocked");
-      if (newUser?.role !== "employee") {
+      if (newUser?.role === "owner" || newUser?.role === "superadmin" || newUser?.role !== "employee") {
+        if (newUser && newUser.role !== "superadmin") newUser.role = "owner";
         window.localStorage.removeItem("cw_active_employee_session");
         window.localStorage.removeItem("cw_active_session_role");
         window.localStorage.removeItem("cw_employee_device_link_id");

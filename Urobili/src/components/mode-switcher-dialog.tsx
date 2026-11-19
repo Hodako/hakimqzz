@@ -12,6 +12,7 @@ import { playTapSound, playErrorSound, playSaleSuccessSound } from "@/lib/audio"
 import { useAuth } from "@/hooks/use-auth";
 import { switchProfileFn, createProfileFn } from "@/lib/rpc";
 import { clearQueryCache } from "@/lib/query-cache";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 
 interface ModeSwitcherDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export function ModeSwitcherDialog({ open, onOpenChange, initialTab }: ModeSwitc
       .catch(() => {});
 
     try {
-      const activeEmp = JSON.parse(localStorage.getItem("cw_active_employee_session") || "null");
+      const activeEmp = getActiveEmployeeSession();
       setActiveEmpSession(activeEmp);
       if (activeEmp) {
         setCurrentSessionRole("employee");

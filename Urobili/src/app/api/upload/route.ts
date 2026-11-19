@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const authHeader = req.headers.get("authorization");
-    let effectiveToken = null;
+    let effectiveToken: string | null | undefined = null;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       effectiveToken = authHeader.substring(7);
     }

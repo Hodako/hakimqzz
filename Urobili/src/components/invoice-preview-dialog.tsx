@@ -928,6 +928,7 @@ export function InvoicePreviewDialog({
                       const labels: Record<InvoiceSectionId, { bn: string; en: string }> = {
                         header: { bn: "দোকানের হেডার ও ঠিকানা", en: "Shop Header & Address" },
                         meta: { bn: "ইনভয়েস নম্বর, তারিখ ও ক্রেতা", en: "Invoice No, Date & Customer" },
+                        customer: { bn: "গ্রাহক তথ্য", en: "Customer Details" },
                         before_items: { bn: "আইটেমের পূর্বের কাস্টম টেক্সট", en: "Custom Texts (Before Items)" },
                         items: { bn: "পণ্যের তালিকা টেবিল (Items)", en: "Purchased Items Table" },
                         after_items: { bn: "আইটেমের পরের কাস্টম টেক্সট", en: "Custom Texts (After Items)" },

@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { deleteSaleFn, deletePurchaseFn, deleteExpenseFn, deleteReturnFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -75,16 +76,16 @@ export default function TrackbackPage() {
   // Check if an employee session is active
   const [activeEmpSession, setActiveEmpSession] = useState<any>(null);
   useEffect(() => {
-    try { setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null")); } catch {}
+    try { setActiveEmpSession(getActiveEmployeeSession()); } catch {}
     const h = () => {
-      try { setActiveEmpSession(JSON.parse(localStorage.getItem("cw_active_employee_session") || "null")); } catch {}
+      try { setActiveEmpSession(getActiveEmployeeSession()); } catch {}
     };
     window.addEventListener("hz-employee-switched", h);
     window.addEventListener("storage", h);
     return () => { window.removeEventListener("hz-employee-switched", h); window.removeEventListener("storage", h); };
   }, []);
 
-  const isEmployee = activeEmpSession != null || user?.role === "employee";
+  const isEmployee = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && activeEmpSession != null);
 
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;

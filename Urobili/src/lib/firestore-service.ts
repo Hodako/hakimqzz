@@ -18,6 +18,7 @@ import { db, auth } from "./firebase";
 import { clearAuthProfile } from "./local-cache";
 import { clearQueryCache } from "./query-cache";
 import * as jose from "jose";
+import { getActiveEmployeeSession } from "./employee-session";
 
 // ── Multi-Tenant & Multi-Profile Isolation Layer ──────────────────────────────
 const TENANT_COLLECTIONS = new Set([
@@ -2808,14 +2809,9 @@ export async function fsChangeMyPassword(args: { currentPassword?: string; newPa
 export function fsGetCurrentUser() {
   if (typeof window === "undefined") return null;
   try {
-    const isEmpSession =
-      !!localStorage.getItem("cw_active_employee_session") ||
-      localStorage.getItem("cw_active_session_role") === "employee";
-
-    const empRaw = localStorage.getItem("cw_active_employee_session");
-    if (isEmpSession && empRaw) {
-      const parsed = JSON.parse(empRaw);
-      return { ...parsed, role: "employee" };
+    const activeEmp = getActiveEmployeeSession();
+    if (activeEmp) {
+      return { ...activeEmp, role: "employee" };
     }
 
     const raw =
@@ -2825,7 +2821,9 @@ export function fsGetCurrentUser() {
       localStorage.getItem("auth_profile");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (isEmpSession) parsed.role = "employee";
+      if (parsed.role !== "employee") {
+        parsed.role = parsed.role === "superadmin" ? "superadmin" : "owner";
+      }
       if (!parsed.industry && typeof window !== "undefined") {
         parsed.industry = localStorage.getItem("cw_industry") || "restaurant";
       }
