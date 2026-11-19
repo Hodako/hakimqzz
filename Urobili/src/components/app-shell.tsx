@@ -53,7 +53,11 @@ import { cashboxBalance } from "@/lib/cashbox-utils";
 import { CustomHomeIcon } from "@/components/custom-home-icon";
 import { AdminPopupDialog } from "@/components/admin-popup-dialog";
 import { PcEmeraldBackdrop } from "@/components/pc-emerald-backdrop";
-import { PcEmeraldQuickButton } from "@/components/pc-emerald-quick-button";
+import {
+  PrimaryHeaderSlot,
+  PRIMARY_HEADER_READY_EVENT,
+  getPrimaryHeaderTitle,
+} from "@/components/primary-header-slot";
 import {
   THEME_UPDATED_EVENT,
   isEmeraldModeEnabled,
@@ -424,7 +428,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ];
 
   const isRestaurant = user?.industry === "restaurant" || pathname.startsWith("/restaurant");
-  const hideMobileChromeForWaiter = isRestaurant && pathname.startsWith("/restaurant");
 
   const [moduleCustomizerOpen, setModuleCustomizerOpen] = useState(false);
   const [moduleConfig, setModuleConfig] = useState<ModuleConfig>(() =>
@@ -480,21 +483,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ]
       : baseSidebarGroups;
 
-  const bottomNav = hideMobileChromeForWaiter
-    ? []
-    : isEmployee
-      ? [
-          { to: "/dashboard", labelKey: "home" as const, icon: CustomHomeIcon },
-          { to: "/sales", labelKey: "sales" as const, icon: ShoppingBag },
-          { to: "/products", labelKey: "products" as const, icon: Package },
-          { to: "/customers", labelKey: "customers" as const, icon: Users, labelEn: "Customers", labelBn: "কাস্টমার" },
-          { to: "/employee-hub", labelKey: "employees" as const, icon: Users, labelEn: "Hub", labelBn: "হাব" },
-          { to: "/more", labelKey: "more" as const, icon: MoreHorizontal },
-        ]
+  const restaurantMobileNav: NavItem[] = [
+    { to: "/dashboard", labelKey: "home", icon: CustomHomeIcon, perm: "dashboard" },
+    { to: "/restaurant", labelKey: "sales", icon: Utensils, perm: "sales", labelEn: "POS", labelBn: "পিওএস" },
+    { to: "/products", labelKey: "products", icon: Package, perm: "products", labelEn: "Menu", labelBn: "মেনু" },
+    { to: "/cash-management", labelKey: "cash_management", icon: Banknote, perm: "expenses", labelEn: "Cash", labelBn: "ক্যাশ" },
+    { to: "/more", labelKey: "more", icon: MoreHorizontal },
+  ];
+
+  const bottomNav = isEmployee
+    ? [
+        { to: "/dashboard", labelKey: "home" as const, icon: CustomHomeIcon },
+        { to: isRestaurant ? "/restaurant" : "/sales", labelKey: "sales" as const, icon: isRestaurant ? Utensils : ShoppingBag, labelEn: isRestaurant ? "POS" : undefined, labelBn: isRestaurant ? "পিওএস" : undefined },
+        { to: "/products", labelKey: "products" as const, icon: Package, labelEn: isRestaurant ? "Menu" : undefined, labelBn: isRestaurant ? "মেনু" : undefined },
+        { to: "/customers", labelKey: "customers" as const, icon: Users, labelEn: "Customers", labelBn: "কাস্টমার" },
+        { to: "/employee-hub", labelKey: "employees" as const, icon: Users, labelEn: "Hub", labelBn: "হাব" },
+        { to: "/more", labelKey: "more" as const, icon: MoreHorizontal },
+      ]
+    : isRestaurant
+      ? restaurantMobileNav.filter(item => (!item.perm || Boolean(perms?.[item.perm])) && !disabledSet.has(item.to))
       : mobileNav.filter(item => (!item.perm || Boolean(perms?.[item.perm])) && !disabledSet.has(item.to));
 
   const brandName = user.business_name || "Urobili";
+  const routeTitle = getPrimaryHeaderTitle(pathname, user?.industry, lang);
   const userInitials = user.email?.slice(0, 2).toUpperCase() ?? "UR";
+
+  useEffect(() => {
+    window.dispatchEvent(new Event(PRIMARY_HEADER_READY_EVENT));
+  }, [pathname, user?.industry, lang]);
 
   const activeProfileId = user.activeProfile || (typeof window !== "undefined" ? localStorage.getItem("active_profile") : null) || "default";
   const profiles = user.profiles && user.profiles.length > 0
@@ -661,7 +677,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10">
-        <header className={`${hideMobileChromeForWaiter ? "hidden md:block" : ""} sticky top-0 inset-x-0 z-40 bg-card/98 backdrop-blur-md border-b border-border/50 shrink-0 shadow-xs`} style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 0px)" }}>
+        <header className="sticky top-0 inset-x-0 z-40 bg-card/98 backdrop-blur-md border-b border-border/50 shrink-0 shadow-xs" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 0px)" }}>
           {isUploading && (
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-zinc-200 dark:bg-zinc-800 z-50">
               <div
@@ -670,16 +686,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               />
             </div>
           )}
-          <div className="flex items-center justify-between h-12 px-2.5 sm:px-3 gap-1.5 sm:gap-2 overflow-hidden">
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+          <div className="flex items-center justify-between h-12 px-2.5 sm:px-3 gap-2 overflow-hidden">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0 max-w-[42%] sm:max-w-none">
               <SidebarTrigger className="inline-flex size-7 shrink-0 cursor-pointer" />
-              <div className="min-w-0 flex items-center gap-1.5 sm:gap-2 flex-1">
+              <div className="min-w-0 flex items-center gap-1.5 sm:gap-2">
                 <AppLogo size="sm" className="h-7 sm:h-8 max-h-8 w-auto shrink-0" />
-                <h1 className="font-serif font-semibold text-sm sm:text-base truncate leading-none text-foreground">{brandName}</h1>
+                <h1 className="font-serif font-semibold text-sm sm:text-base truncate leading-none text-foreground">
+                  {brandName}
+                </h1>
+                {routeTitle && (
+                  <span className="hidden lg:inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground truncate">
+                    <span className="opacity-40">/</span>
+                    <span className="text-foreground/90 font-semibold truncate">{routeTitle}</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* Unified Primary Header Action Slot (Replaces Dashboard Secondary Headers) */}
+            <div
+              id="urobili-primary-header-actions"
+              className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none min-w-0 mx-1 flex-1 justify-end md:justify-center"
+            />
+
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto md:ml-0">
               {/* Single Unified Mode & Profile/Branch Switcher: compact icon on phone, pill on tablet/PC */}
               <button
                 type="button"
@@ -701,14 +731,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ) : (
                   <Store className="size-3.5 sm:size-3 text-emerald-600 dark:text-emerald-400" />
                 )}
-                <span className="hidden sm:inline truncate max-w-[150px]">
+                <span className="hidden xl:inline truncate max-w-[130px]">
                   {activeEmpSession
                     ? activeEmpSession.name
                     : `${lang === "bn" ? "মালিক" : "Owner"} • ${currentProfile?.name || "Main ID"}`}
                 </span>
-                <span className="hidden sm:inline text-[9px] opacity-60">⇄</span>
+                <span className="hidden xl:inline text-[9px] opacity-60">⇄</span>
               </button>
-              {/* Dedicated PC/Tablet Custom Entry Quick Widget */}
+              {/* Compact Custom Entry Quick Trigger */}
               <DropdownMenu>
                 <div className="hidden md:inline-flex items-center rounded-full bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 transition-all shadow-2xs">
                   <button
@@ -717,12 +747,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       setCustomEntryType("sale");
                       setCustomEntryOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1.5 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold cursor-pointer hover:opacity-85 active:scale-95 transition-all"
+                    className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold cursor-pointer hover:opacity-85 active:scale-95 transition-all"
                     title={lang === "bn" ? "কাস্টম এন্ট্রি উইজেট (তারিখসহ লেনদেন) [Alt+C]" : "Custom Entry Widget (With Date) [Alt+C]"}
                   >
                     <CalendarPlus className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>{lang === "bn" ? "কাস্টম এন্ট্রি" : "Custom Entry"}</span>
-                    <span className="hidden lg:inline-flex text-[9px] px-1 py-0.2 bg-background/80 rounded border border-border/80 text-muted-foreground font-mono">Alt+C</span>
+                    <span className="hidden xl:inline">{lang === "bn" ? "কাস্টম এন্ট্রি" : "Custom Entry"}</span>
                   </button>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -811,40 +840,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <PcEmeraldQuickButton />
               <PWAInstallButton variant="outline" className="hidden sm:inline-flex h-8 px-2.5 text-xs" />
               <UniversalSearch role={user.role} permissions={user.permissions} />
-              <Link href="/more" title={lang === "bn" ? "হেল্প ও সাপোর্ট" : "Help & Support"} className="hidden md:inline-flex">
-                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-foreground">
-                  <HelpCircle className="icon-sm" />
-                </Button>
-              </Link>
               <Button variant="ghost" size="icon" className="size-8 hidden sm:inline-flex" onClick={toggle} aria-label="Theme">
                 {resolved === "dark" ? <Sun className="icon-sm" /> : <Moon className="icon-sm" />}
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  sessionStorage.removeItem("app_pin_unlocked");
-                  window.dispatchEvent(new Event("app_lock_screen"));
-                }}
-                className="size-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-600 rounded-lg cursor-pointer hidden sm:inline-flex"
-                title={lang === "bn" ? "স্ক্রিন লক করুন" : "Lock Screen"}
-              >
-                <Lock className="size-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-8 hidden sm:inline-flex">
-                    <Languages className="icon-sm" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setLang("bn")}>বাংলা {lang === "bn" && "✓"}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setLang("en")}>English {lang === "en" && "✓"}</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="size-8 cursor-pointer ring-1 ring-border/50 hover:ring-primary/40 rounded-full">
@@ -888,10 +888,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
                     <DropdownMenuItem
                       onClick={() => setLang(lang === "bn" ? "en" : "bn")}
-                      className="text-xs font-medium cursor-pointer sm:hidden"
+                      className="text-xs font-medium cursor-pointer"
                     >
                       <Languages className="size-3.5 mr-2 text-muted-foreground" />
-                      {lang === "bn" ? "English এ পরিবর্তন" : "বাংলায় পরিবর্তন"}
+                      {lang === "bn" ? "Switch to English" : "বাংলায় পরিবর্তন"}
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={() => router.push("/more")}
+                      className="text-xs font-medium cursor-pointer"
+                    >
+                      <HelpCircle className="size-3.5 mr-2 text-muted-foreground" />
+                      {lang === "bn" ? "হেল্প ও সাপোর্ট" : "Help & Support"}
                     </DropdownMenuItem>
 
                     <DropdownMenuItem
@@ -951,13 +959,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain ${hideMobileChromeForWaiter && isMobile ? "p-0" : `pt-3 pb-16 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}`}>
-          <div className={hideMobileChromeForWaiter && isMobile ? "w-full" : (isMobile ? "w-full max-w-lg mx-auto" : "w-full max-w-screen-2xl mx-auto")}>
+        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pt-3 pb-16 md:pb-4 ${isMobile ? "px-3" : "px-6 py-4"}`}>
+          <div className={isMobile ? "w-full max-w-lg mx-auto" : "w-full max-w-screen-2xl mx-auto"}>
             <PermissionGuard>
               {children}
             </PermissionGuard>
           </div>
-          {!hideMobileChromeForWaiter && <div className="md:hidden mobile-bottom-spacer" aria-hidden />}
+          <div className="md:hidden mobile-bottom-spacer" aria-hidden />
           <ModeSwitcherDialog open={modeSwitcherOpen} onOpenChange={setModeSwitcherOpen} />
           <CustomEntryDialog open={customEntryOpen} onOpenChange={setCustomEntryOpen} initialType={customEntryType} />
           <ModuleCustomizerDialog open={moduleCustomizerOpen} onOpenChange={setModuleCustomizerOpen} />

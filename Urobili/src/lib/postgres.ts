@@ -71,6 +71,13 @@ export const TENANT_COLLECTIONS = new Set([
   "restaurant_tables",
   "restaurant_orders",
   "restaurant_billing_queue",
+  "restaurant_drafts",
+  "restaurant_reservations",
+  "restaurant_qr_orders",
+  "pos_shifts",
+  "pharmacy_rx_orders",
+  "pharmacy_suppliers",
+  "pharmacy_hold_orders",
 ]);
 
 export function isTenantCollection(collectionName: string): boolean {
@@ -147,6 +154,7 @@ export async function ensureTenantTable(ownerId: string, collectionName: string)
       data JSONB NOT NULL
     );
     CREATE INDEX IF NOT EXISTS "idx_${table}_created" ON ${fqtn} (created_at DESC);
+    CREATE INDEX IF NOT EXISTS "idx_${table}_status" ON ${fqtn} ((data->>'status'));
     CREATE INDEX IF NOT EXISTS "idx_${table}_data" ON ${fqtn} USING gin (data);
   `);
 

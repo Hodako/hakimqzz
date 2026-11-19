@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("electronPOS", {
   whatsapp: {
     getStatus: () => ipcRenderer.invoke("wa:get-status"),
     start: () => ipcRenderer.invoke("wa:start"),
+    openWindow: () => ipcRenderer.invoke("wa:open-window"),
     disconnect: () => ipcRenderer.invoke("wa:disconnect"),
     sendMessage: (payload) => ipcRenderer.invoke("wa:send-message", payload),
     sendBroadcast: (payload) => ipcRenderer.invoke("wa:send-broadcast", payload),

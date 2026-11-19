@@ -6234,3 +6234,225 @@ export async function revokeEmployeeDeviceFn(input: { data: { deviceId: string }
   });
   return { success: true };
 }
+
+// ─── NexoPOS & Restaurant PostgreSQL Entities (Drafts, Reservations, QR, Shifts) ──
+export async function getRestaurantDraftsFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("restaurant_drafts").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertRestaurantDraftFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = String(data.id || `DRF-${Date.now().toString().slice(-6)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: data.status || "held", updated_at: now, created_at: data.created_at || now };
+  await db.collection("restaurant_drafts").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function deleteRestaurantDraftFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  await db.collection("restaurant_drafts").deleteOne({ id: data.id, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function getRestaurantReservationsFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("restaurant_reservations").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertRestaurantReservationFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = String(data.id || `RES-${Date.now().toString().slice(-6)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: data.status || "reserved", updated_at: now, created_at: data.created_at || now };
+  await db.collection("restaurant_reservations").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function deleteRestaurantReservationFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  await db.collection("restaurant_reservations").deleteOne({ id: data.id, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function getRestaurantQrOrdersFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("restaurant_qr_orders").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertRestaurantQrOrderFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = String(data.id || `QR-${Date.now().toString().slice(-5)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: data.status || "incoming", updated_at: now, created_at: data.created_at || now };
+  await db.collection("restaurant_qr_orders").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function getPosShiftsFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("pos_shifts").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).limit(30).toArray();
+}
+
+export async function openPosShiftFn(input: { data: { register_name?: string; opening_cash?: number; cashier_name?: string; note?: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = `SHF-${Date.now().toString().slice(-6)}`;
+  const now = new Date().toISOString();
+  const doc = {
+    id,
+    _id: id,
+    owner_id: session.ownerId,
+    register_name: sanitizeInput(data.register_name || "Main Register"),
+    cashier_name: sanitizeInput(data.cashier_name || session.email || "Cashier"),
+    opening_cash: Math.max(0, Number(data.opening_cash) || 0),
+    closing_cash: null,
+    expected_cash: null,
+    variance: null,
+    note: sanitizeInput(data.note || ""),
+    status: "open",
+    opened_at: now,
+    closed_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+  await db.collection("pos_shifts").insertOne(doc as any);
+  return doc;
+}
+
+export async function closePosShiftFn(input: { data: { id: string; closing_cash?: number; expected_cash?: number; note?: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const closing = Math.max(0, Number(data.closing_cash) || 0);
+  const expected = Math.max(0, Number(data.expected_cash) || 0);
+  const variance = closing - expected;
+  await db.collection("pos_shifts").updateOne(
+    { id: data.id, owner_id: session.ownerId },
+    {
+      $set: {
+        status: "closed",
+        closing_cash: closing,
+        expected_cash: expected,
+        variance,
+        close_note: sanitizeInput(data.note || ""),
+        closed_at: now,
+        updated_at: now,
+      },
+    }
+  );
+  return { success: true, id: data.id, closing_cash: closing, expected_cash: expected, variance };
+}
+
+// ─── PharmaSpot PostgreSQL Entities (Rx Orders, Suppliers, Hold Orders) ──────
+export async function getPharmacyRxOrdersFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("pharmacy_rx_orders").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertPharmacyRxOrderFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = String(data.id || `RX-${Date.now().toString().slice(-6)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: data.status || "pending", updated_at: now, created_at: data.created_at || now };
+  await db.collection("pharmacy_rx_orders").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function deletePharmacyRxOrderFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  await db.collection("pharmacy_rx_orders").deleteOne({ id: data.id, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function getPharmacySuppliersFn() {
+  const session = await requireSession();
+  requirePermission(session, "products");
+  const db = await getDb();
+  return await db.collection("pharmacy_suppliers").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertPharmacySupplierFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "products");
+  const db = await getDb();
+  const id = String(data.id || `SUP-${Date.now().toString().slice(-6)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: "active", updated_at: now, created_at: data.created_at || now };
+  await db.collection("pharmacy_suppliers").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function deletePharmacySupplierFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "products");
+  const db = await getDb();
+  await db.collection("pharmacy_suppliers").deleteOne({ id: data.id, owner_id: session.ownerId });
+  return { success: true };
+}
+
+export async function getPharmacyHoldOrdersFn() {
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  return await db.collection("pharmacy_hold_orders").find({ owner_id: session.ownerId }).sort({ created_at: -1 }).toArray();
+}
+
+export async function upsertPharmacyHoldOrderFn(input: { data: any }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  const id = String(data.id || `HOLD-${Date.now().toString().slice(-6)}`);
+  const now = new Date().toISOString();
+  const doc = { ...data, id, _id: id, owner_id: session.ownerId, status: "on_hold", updated_at: now, created_at: data.created_at || now };
+  await db.collection("pharmacy_hold_orders").updateOne({ id, owner_id: session.ownerId }, { $set: doc }, { upsert: true });
+  return doc;
+}
+
+export async function deletePharmacyHoldOrderFn(input: { data: { id: string } }) {
+  const { data = {} }: any = input ?? {};
+  const session = await requireSession();
+  requirePermission(session, "sales");
+  const db = await getDb();
+  await db.collection("pharmacy_hold_orders").deleteOne({ id: data.id, owner_id: session.ownerId });
+  return { success: true };
+}

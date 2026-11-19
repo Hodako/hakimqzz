@@ -33,6 +33,7 @@ import { parseSaleDate, toLocalDateStr } from "@/lib/sales-calc";
 import { updateProductFn } from "@/lib/rpc";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 
 type TimeRange = "today" | "7d" | "30d" | "this_month" | "all";
 type SortOption = "pieces_desc" | "revenue_desc" | "profit_desc" | "velocity_desc" | "stock_asc" | "stock_desc" | "margin_desc";
@@ -888,68 +889,74 @@ export default function ProductAnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-background pb-20 md:pb-12">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-card border-b px-3 py-2.5 sm:px-6 shadow-xs">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon" className="size-8 sm:size-9 rounded-full">
-                <ArrowLeft className="size-4 sm:size-5" />
-              </Button>
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-                  <BarChart2 className="size-5 sm:size-6 text-primary" />
-                  {lang === "bn" ? "পণ্য অ্যানালিটিক্স ও স্টক অডিট" : "Product Analytics & Stock Audit"}
-                </h1>
-              </div>
-              <p className="text-[11px] sm:text-xs text-muted-foreground hidden sm:block">
-                {lang === "bn"
-                  ? "বারকোড স্ক্যানার দিয়ে ফিজিক্যাল স্টক চেক ও বিক্রির বিশ্লেষণ"
-                  : "Physical stock audit scanner & sales intelligence"}
-              </p>
-            </div>
-          </div>
+      {/* Barcode Scanner & Refresh projected into AppShell Primary Header (No Double Sticky Header) */}
+      <PrimaryHeaderSlot>
+        <Button
+          variant={activeTab === "stock_scanner" ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            setActiveTab("stock_scanner");
+            setScannerOpen(true);
+          }}
+          className="h-7 px-2.5 rounded-full text-[11px] gap-1 font-semibold cursor-pointer"
+        >
+          <Scan className="size-3" />
+          <span>{lang === "bn" ? "স্ক্যানার" : "Scanner"}</span>
+        </Button>
 
-          {/* Quick Header Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <Button
-              variant={activeTab === "stock_scanner" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setActiveTab("stock_scanner");
-                setScannerOpen(true);
-              }}
-              className="h-8 sm:h-9 text-xs gap-1.5 shadow-xs font-semibold"
-            >
-              <Scan className="size-3.5 sm:size-4" />
-              <span>{lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsRefreshing(true);
-                qc.invalidateQueries({ queryKey: ["products"] });
-                qc.invalidateQueries({ queryKey: ["sales"] });
-                setTimeout(() => {
-                  setIsRefreshing(false);
-                  toast.success(lang === "bn" ? "তথ্য রিফ্রেশ হয়েছে" : "Data refreshed");
-                }, 400);
-              }}
-              disabled={isRefreshing}
-              className="size-8 sm:size-9 p-0"
-              title="Refresh"
-            >
-              <RefreshCw className={`size-3.5 sm:size-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </div>
-      </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setIsRefreshing(true);
+            qc.invalidateQueries({ queryKey: ["products"] });
+            qc.invalidateQueries({ queryKey: ["sales"] });
+            setTimeout(() => {
+              setIsRefreshing(false);
+              toast.success(lang === "bn" ? "তথ্য রিফ্রেশ হয়েছে" : "Data refreshed");
+            }, 400);
+          }}
+          disabled={isRefreshing}
+          className="size-7 p-0 rounded-full cursor-pointer"
+          title="Refresh"
+        >
+          <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+        </Button>
+      </PrimaryHeaderSlot>
 
       <div className="max-w-7xl mx-auto px-3 py-4 sm:px-6 space-y-4 sm:space-y-6">
+        <div className="flex md:hidden items-center justify-end gap-1.5">
+          <Button
+            variant={activeTab === "stock_scanner" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setActiveTab("stock_scanner");
+              setScannerOpen(true);
+            }}
+            className="h-8 text-xs gap-1.5 font-semibold"
+          >
+            <Scan className="size-3.5" />
+            <span>{lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode Scanner"}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setIsRefreshing(true);
+              qc.invalidateQueries({ queryKey: ["products"] });
+              qc.invalidateQueries({ queryKey: ["sales"] });
+              setTimeout(() => {
+                setIsRefreshing(false);
+                toast.success(lang === "bn" ? "তথ্য রিফ্রেশ হয়েছে" : "Data refreshed");
+              }, 400);
+            }}
+            disabled={isRefreshing}
+            className="size-8 p-0"
+            title="Refresh"
+          >
+            <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
         {/* Main Tab Navigation */}
         <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none border-b">
           <button

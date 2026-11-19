@@ -896,6 +896,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("wa:start", async () => {
     return await desktopWhatsApp.startWhatsApp(app.getPath("userData"), emitWaStatus);
   });
+  ipcMain.handle("wa:open-window", async () => {
+    return await desktopWhatsApp.openWindow();
+  });
   ipcMain.handle("wa:disconnect", async () => {
     return await desktopWhatsApp.disconnectWhatsApp(app.getPath("userData"));
   });
@@ -918,7 +921,12 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on("before-quit", () => {
+  desktopWhatsApp.prepareQuit();
+});
+
 app.on("window-all-closed", () => {
+  desktopWhatsApp.prepareQuit();
   if (serverProcess) {
     try {
       serverProcess.kill();

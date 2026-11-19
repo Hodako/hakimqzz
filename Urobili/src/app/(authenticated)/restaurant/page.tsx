@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { QrCode, Calendar, FileText, Tag } from "lucide-react";
+import { QrCode, Calendar, FileText, Tag, Store, Zap } from "lucide-react";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
+import { PosNumpadPayModal, type PosPayResult } from "@/components/pos-numpad-pay-modal";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { getProducts, getSales, type Product } from "@/lib/queries";
@@ -22,6 +24,17 @@ import {
   getBillingQueueFn,
   enqueueBillFn,
   updateBillingQueueStatusFn,
+  getRestaurantDraftsFn,
+  upsertRestaurantDraftFn,
+  deleteRestaurantDraftFn,
+  getRestaurantReservationsFn,
+  upsertRestaurantReservationFn,
+  deleteRestaurantReservationFn,
+  getRestaurantQrOrdersFn,
+  upsertRestaurantQrOrderFn,
+  getPosShiftsFn,
+  openPosShiftFn,
+  closePosShiftFn,
 } from "@/lib/rpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -274,26 +287,25 @@ export default function RestaurantPosPage() {
   const [settlingBusy, setSettlingBusy] = useState(false);
   const pendingAutoPrintRef = useRef(false);
 
-  // Split bill helper
+  // Split bill helper & NexoPOS Register Shift + Quick Item + Pay Numpad state
   const [splitCount, setSplitCount] = useState(2);
+  const [shifts, setShifts] = useState<any[]>([]);
+  const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [shiftRegisterName, setShiftRegisterName] = useState("Main Counter");
+  const [shiftOpeningCash, setShiftOpeningCash] = useState("2000");
+  const [shiftClosingCash, setShiftClosingCash] = useState("");
+  const [shiftBusy, setShiftBusy] = useState(false);
+  const [quickItemOpen, setQuickItemOpen] = useState(false);
+  const [quickItemName, setQuickItemName] = useState("");
+  const [quickItemPrice, setQuickItemPrice] = useState("");
+  const [payModalOpen, setPayModalOpen] = useState(false);
+
+  const openShift = useMemo(() => shifts.find((s) => s.status === "open"), [shifts]);
 
   // Sync combined discount into base discountAmount used by billing/queue handlers
   useEffect(() => {
     setDiscountAmount(Math.max(0, Number(productDiscount || 0) + Number(extraDiscount || 0) + Number(couponDiscount || 0)));
   }, [productDiscount, extraDiscount, couponDiscount]);
-
-  // Restore saved Drafts, Reservations & QR Orders
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const savedDrafts = localStorage.getItem("urobili_rest_drafts");
-      if (savedDrafts) setDraftOrders(JSON.parse(savedDrafts));
-      const savedRes = localStorage.getItem("urobili_rest_reservations");
-      if (savedRes) setReservations(JSON.parse(savedRes));
-      const savedQr = localStorage.getItem("urobili_rest_qr_orders");
-      if (savedQr) setQrOrders(JSON.parse(savedQr));
-    } catch (_) {}
-  }, []);
 
   // Auto-trigger 80mm thermal bill print when "Bill & Print" finishes settling
   useEffect(() => {
@@ -307,21 +319,27 @@ export default function RestaurantPosPage() {
     }
   }, [settledSale]);
 
-  // Load persisted Restaurant Floors, Tables & KDS Orders from PostgreSQL
+  // Load persisted Restaurant Floors, Tables, KDS, Queue, Drafts, Reservations, QR & Shifts from PostgreSQL
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [dbFloors, dbTables, dbOrders, dbQueue] = await Promise.all([
+        const [dbFloors, dbTables, dbOrders, dbQueue, dbDrafts, dbRes, dbQr, dbShifts] = await Promise.all([
           getRestaurantFloorsFn().catch(() => []),
           getRestaurantTablesFn().catch(() => []),
           getRestaurantOrdersFn().catch(() => []),
           getBillingQueueFn().catch(() => []),
+          getRestaurantDraftsFn().catch(() => []),
+          getRestaurantReservationsFn().catch(() => []),
+          getRestaurantQrOrdersFn().catch(() => []),
+          getPosShiftsFn().catch(() => []),
         ]);
         if (!active) return;
-        if (Array.isArray(dbQueue)) {
-          setBillingQueue(dbQueue);
-        }
+        if (Array.isArray(dbQueue)) setBillingQueue(dbQueue);
+        if (Array.isArray(dbDrafts)) setDraftOrders(dbDrafts);
+        if (Array.isArray(dbRes)) setReservations(dbRes);
+        if (Array.isArray(dbQr)) setQrOrders(dbQr);
+        if (Array.isArray(dbShifts)) setShifts(dbShifts);
         if (Array.isArray(dbFloors) && dbFloors.length > 0) {
           setFloors(dbFloors);
           setNewTableFloor(dbFloors[0].name || "Ground Floor");
@@ -514,31 +532,95 @@ export default function RestaurantPosPage() {
     setEditingNoteText("");
   }
 
-  function persistDrafts(next: DraftOrder[]) {
+  function persistDrafts(next: DraftOrder[], changed?: DraftOrder, deletedId?: string) {
     setDraftOrders(next);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("urobili_rest_drafts", JSON.stringify(next));
-      } catch (_) {}
-    }
+    if (changed) void upsertRestaurantDraftFn({ data: changed }).catch(() => {});
+    if (deletedId) void deleteRestaurantDraftFn({ data: { id: deletedId } }).catch(() => {});
   }
 
-  function persistReservations(next: TableReservation[]) {
+  function persistReservations(next: TableReservation[], changed?: TableReservation, deletedId?: string) {
     setReservations(next);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("urobili_rest_reservations", JSON.stringify(next));
-      } catch (_) {}
+    if (changed) void upsertRestaurantReservationFn({ data: changed }).catch(() => {});
+    if (deletedId) void deleteRestaurantReservationFn({ data: { id: deletedId } }).catch(() => {});
+  }
+
+  function persistQrOrders(next: QrMenuOrder[], changed?: QrMenuOrder) {
+    setQrOrders(next);
+    if (changed) void upsertRestaurantQrOrderFn({ data: changed }).catch(() => {});
+  }
+
+  async function handleOpenShift(e: React.FormEvent) {
+    e.preventDefault();
+    setShiftBusy(true);
+    try {
+      const created = await openPosShiftFn({
+        data: {
+          register_name: shiftRegisterName || "Main Counter",
+          opening_cash: Math.max(0, Number(shiftOpeningCash) || 0),
+          cashier_name: user?.full_name || user?.email || "Cashier",
+        },
+      });
+      setShifts((prev) => [created, ...prev]);
+      toast.success(lang === "bn" ? "নতুন রেজিস্টার শিফট খোলা হয়েছে" : "Register shift opened");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to open shift");
+    } finally {
+      setShiftBusy(false);
     }
   }
 
-  function persistQrOrders(next: QrMenuOrder[]) {
-    setQrOrders(next);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("urobili_rest_qr_orders", JSON.stringify(next));
-      } catch (_) {}
+  async function handleCloseShift(e: React.FormEvent) {
+    e.preventDefault();
+    if (!openShift) return;
+    setShiftBusy(true);
+    try {
+      const expected = (Number(openShift.opening_cash) || 0) + (restaurantStats.todayRevenue || 0);
+      await closePosShiftFn({
+        data: {
+          id: openShift.id,
+          closing_cash: Math.max(0, Number(shiftClosingCash) || 0),
+          expected_cash: expected,
+        },
+      });
+      setShifts((prev) =>
+        prev.map((s) =>
+          s.id === openShift.id
+            ? { ...s, status: "closed", closing_cash: Number(shiftClosingCash) || 0, expected_cash: expected, closed_at: new Date().toISOString() }
+            : s
+        )
+      );
+      setShiftClosingCash("");
+      toast.success(lang === "bn" ? "শিফট ক্লোজ ও হিসাব সংরক্ষিত হয়েছে" : "Register shift closed");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to close shift");
+    } finally {
+      setShiftBusy(false);
     }
+  }
+
+  function handleAddQuickCustomItem(e: React.FormEvent) {
+    e.preventDefault();
+    const nm = quickItemName.trim();
+    const pr = Number(quickItemPrice) || 0;
+    if (!nm || pr <= 0) return;
+    addToCart({
+      id: `quick_${Date.now()}`,
+      name: nm,
+      sell_price: pr,
+      buy_price: 0,
+      category: "Quick Item",
+    });
+    setQuickItemName("");
+    setQuickItemPrice("");
+    setQuickItemOpen(false);
+    toast.success(lang === "bn" ? `${nm} কার্টে যুক্ত হয়েছে` : `Added ${nm} to cart`);
+  }
+
+  async function handleNumpadPayConfirm(res: PosPayResult) {
+    setPaymentMethod(res.paymentMethod === "split" ? "cash" : res.paymentMethod);
+    if (res.autoPrint) pendingAutoPrintRef.current = true;
+    setPayModalOpen(false);
+    await handleSettleBill();
   }
 
   function handleNewOrder() {
@@ -564,7 +646,7 @@ export default function RestaurantPosPage() {
       couponDiscount,
       createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
-    persistDrafts([draft, ...draftOrders]);
+    persistDrafts([draft, ...draftOrders], draft);
     setCart([]);
     setProductDiscount(0);
     setExtraDiscount(0);
@@ -582,14 +664,14 @@ export default function RestaurantPosPage() {
     setProductDiscount(draft.productDiscount || 0);
     setExtraDiscount(draft.extraDiscount || 0);
     setCouponDiscount(draft.couponDiscount || 0);
-    persistDrafts(draftOrders.filter((d) => d.id !== draft.id));
+    persistDrafts(draftOrders.filter((d) => d.id !== draft.id), undefined, draft.id);
     setDraftsModalOpen(false);
     setActiveView("order");
     toast.success(lang === "bn" ? "ড্রাফট লোড করা হয়েছে" : `Loaded ${draft.label}`);
   }
 
   function handleDeleteDraft(id: string) {
-    persistDrafts(draftOrders.filter((d) => d.id !== id));
+    persistDrafts(draftOrders.filter((d) => d.id !== id), undefined, id);
   }
 
   async function handleAddReservation(e: React.FormEvent) {
@@ -608,7 +690,7 @@ export default function RestaurantPosPage() {
       notes: resNotes.trim(),
       status: "reserved",
     };
-    persistReservations([item, ...reservations]);
+    persistReservations([item, ...reservations], item);
     const tb = tables[resTable];
     if (tb && tb.status === "available") {
       const nextTable: TableState = { ...tb, status: "reserved", guests: item.guests };
@@ -636,14 +718,15 @@ export default function RestaurantPosPage() {
       setTables((prev) => ({ ...prev, [res.table]: nextTable }));
       void upsertRestaurantTableFn({ data: nextTable }).catch(() => {});
     }
-    persistReservations(reservations.map((r) => (r.id === res.id ? { ...r, status: "seated" } : r)));
+    const updatedRes: TableReservation = { ...res, status: "seated" };
+    persistReservations(reservations.map((r) => (r.id === res.id ? updatedRes : r)), updatedRes);
     setReservationsModalOpen(false);
     setActiveView("order");
     toast.success(lang === "bn" ? `${res.guestName} টেবিলে বসেছেন` : `Seated ${res.guestName} at ${res.table}`);
   }
 
   function handleCancelReservation(resId: string, tableName: string) {
-    persistReservations(reservations.filter((r) => r.id !== resId));
+    persistReservations(reservations.filter((r) => r.id !== resId), undefined, resId);
     const tb = tables[tableName];
     if (tb && tb.status === "reserved") {
       const nextTable: TableState = { ...tb, status: "available" };
@@ -673,7 +756,7 @@ export default function RestaurantPosPage() {
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       status: "incoming",
     };
-    persistQrOrders([qrOrder, ...qrOrders]);
+    persistQrOrders([qrOrder, ...qrOrders], qrOrder);
     toast.success(lang === "bn" ? "QR মেনু অর্ডার এসেছে" : `QR Menu order received for ${qrSelectedTable}`);
   }
 
@@ -692,7 +775,8 @@ export default function RestaurantPosPage() {
       setTables((prev) => ({ ...prev, [qOrder.table]: nextTable }));
       void upsertRestaurantTableFn({ data: nextTable }).catch(() => {});
     }
-    persistQrOrders(qrOrders.map((q) => (q.id === qOrder.id ? { ...q, status: "accepted" } : q)));
+    const updatedQr: QrMenuOrder = { ...qOrder, status: "accepted" };
+    persistQrOrders(qrOrders.map((q) => (q.id === qOrder.id ? updatedQr : q)), updatedQr);
     setQrModalOpen(false);
     setActiveView("order");
     toast.success(lang === "bn" ? `${qOrder.table} অর্ডার লোড হয়েছে` : `Accepted QR order onto ${qOrder.table}`);
@@ -1216,43 +1300,177 @@ export default function RestaurantPosPage() {
   const totalCartCount = cart.reduce((acc, it) => acc + it.qty, 0);
 
   return (
-    <div className="w-full min-h-[100dvh] md:min-h-[calc(100vh-64px)] flex flex-col bg-[#F9F9FB] md:bg-[#F8F6F0] dark:bg-zinc-950 select-none pb-20 md:pb-6">
-      {/* ════════════════════════════════════════════════════════════════════════ */}
-      {/* MOBILE WAITER PHONE UI (Matches Restaurant Waiter App Mockup)            */}
-      {/* ════════════════════════════════════════════════════════════════════════ */}
-      <div className="md:hidden flex flex-col flex-1 w-full">
-        {/* Vibrant Orange Top Header (#FF9100) */}
-        <header className="sticky top-0 z-40 w-full h-14 bg-[#FF9100] text-white px-4 flex items-center justify-between shadow-sm">
+    <div className="w-full min-h-[100dvh] md:min-h-[calc(100vh-64px)] flex flex-col bg-background text-foreground select-none pb-20 md:pb-6">
+      {/* Primary Header Controls (Single Header for Both Phone & PC - No Secondary Headers) */}
+      <PrimaryHeaderSlot>
+        {/* Mobile View: Quick Table Badge & Cart Button projected directly into Primary Header */}
+        <div className="flex md:hidden items-center gap-1.5">
           <button
             type="button"
-            onClick={() => setMobileTab("tables")}
-            className="text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-full flex items-center gap-1 cursor-pointer"
+            onClick={() => setMobileTab(mobileTab === "tables" ? "menu" : "tables")}
+            className="h-7 px-2.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
           >
-            <span>{orderType === "dine_in" ? selectedTable : orderType.toUpperCase()}</span>
+            <Grid className="size-3" />
+            <span className="max-w-[75px] truncate">{orderType === "dine_in" ? selectedTable : orderType.toUpperCase()}</span>
           </button>
-
-          <h1 className="text-lg font-bold tracking-tight">
-            {mobileTab === "menu"
-              ? (lang === "bn" ? "মেনু" : "Menu")
-              : mobileTab === "tables"
-                ? (lang === "bn" ? "টেবিল" : "Tables")
-                : (lang === "bn" ? "প্রোফাইল" : "Profile")}
-          </h1>
 
           <button
             type="button"
             onClick={() => setMobileCartOpen(true)}
-            className="relative p-1.5 rounded-full hover:bg-white/15 cursor-pointer"
-            aria-label="Open Order Cart"
+            className="relative h-7 px-2.5 rounded-full bg-[#FF6B00] hover:bg-[#E55F00] text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+            aria-label="Open Cart"
           >
-            <ShoppingCart className="size-6 text-white" />
-            {totalCartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-[#FF9100] text-[10px] font-extrabold flex items-center justify-center shadow-xs">
-                {totalCartCount}
+            <ShoppingCart className="size-3.5" />
+            <span>{totalCartCount}</span>
+          </button>
+        </div>
+
+        {/* Desktop View: Order Mode & Screen Views */}
+        <div className="hidden md:flex items-center gap-1.5">
+          <div className="inline-flex items-center gap-0.5 bg-muted/60 p-0.5 rounded-full border border-border/70 text-[11px] font-semibold">
+            {(
+              [
+                { id: "dine_in", en: "Dine-In", bn: "ডাইন-ইন" },
+                { id: "takeaway", en: "Takeaway", bn: "টেকঅ্যাওয়ে" },
+                { id: "delivery", en: "Delivery", bn: "ডেলিভারি" },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setOrderType(mode.id)}
+                className={`px-2.5 h-6 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                  orderType === mode.id
+                    ? "bg-background text-[#FF6B00] font-bold shadow-2xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {lang === "bn" ? mode.bn : mode.en}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setActiveView("order")}
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeView === "order"
+                ? "bg-[#FF6B00] text-white shadow-xs"
+                : "bg-card border border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <Utensils className="size-3" />
+            <span>{lang === "bn" ? "পিওএস" : "POS"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView(activeView === "tables" ? "order" : "tables")}
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeView === "tables"
+                ? "bg-[#FF6B00] text-white shadow-xs"
+                : "bg-card border border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <Grid className="size-3" />
+            <span>{lang === "bn" ? `টেবিল (${restaurantStats.totalTables})` : `Tables (${restaurantStats.totalTables})`}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView(activeView === "kds" ? "order" : "kds")}
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeView === "kds"
+                ? "bg-amber-500 text-white shadow-xs"
+                : "bg-card border border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <ChefHat className="size-3" />
+            <span>{lang === "bn" ? "কেডিএস" : "KDS"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView(activeView === "queue" ? "order" : "queue")}
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeView === "queue"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-card border border-border text-foreground hover:bg-muted"
+            }`}
+          >
+            <ListOrdered className="size-3" />
+            <span>{lang === "bn" ? "কিউ" : "Queue"}</span>
+            {pendingQueueCount > 0 && (
+              <span className={`px-1 rounded-full text-[9px] font-extrabold ${
+                activeView === "queue" ? "bg-white text-indigo-600" : "bg-indigo-600 text-white"
+              }`}>
+                {pendingQueueCount}
               </span>
             )}
           </button>
-        </header>
+
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => setActiveView(activeView === "owner" ? "order" : "owner")}
+              className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                activeView === "owner"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-card border border-border text-foreground hover:bg-muted"
+              }`}
+            >
+              <LayoutDashboard className="size-3" />
+              <span>{lang === "bn" ? "মালিক" : "Owner"}</span>
+            </button>
+          )}
+        </div>
+      </PrimaryHeaderSlot>
+
+      {/* ════════════════════════════════════════════════════════════════════════ */}
+      {/* MOBILE WAITER PHONE UI (Matches Restaurant Waiter App Mockup)            */}
+      {/* ════════════════════════════════════════════════════════════════════════ */}
+      <div className="md:hidden flex flex-col flex-1 w-full">
+        {/* Simplicity UI: Minimal Segmented Control for Phone View (No Bulky Secondary Header) */}
+        <div className="px-3.5 pt-2">
+          <div className="grid grid-cols-3 p-1 rounded-xl bg-card border border-border/80 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setMobileTab("menu")}
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                mobileTab === "menu"
+                  ? "bg-[#FF6B00] text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Utensils className="size-3.5" />
+              <span>{lang === "bn" ? "মেনু" : "Menu"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("tables")}
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                mobileTab === "tables"
+                  ? "bg-[#FF6B00] text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Grid className="size-3.5" />
+              <span>{lang === "bn" ? "টেবিল" : "Tables"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("profile")}
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                mobileTab === "profile"
+                  ? "bg-[#FF6B00] text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <User className="size-3.5" />
+              <span>{lang === "bn" ? "প্রোফাইল" : "Profile"}</span>
+            </button>
+          </div>
+        </div>
 
         {/* PHONE TAB 1: MENU (Food Menu Boxes + Top Categories) */}
         {mobileTab === "menu" && (
@@ -1541,214 +1759,26 @@ export default function RestaurantPosPage() {
             </div>
           </div>
         )}
-
-        {/* Fixed 3-Tab Waiter Bottom Navigation Bar (Menu | Tables | Profile) */}
-        <nav className="fixed bottom-0 inset-x-0 z-50 h-16 bg-white dark:bg-zinc-900 border-t border-slate-200 dark:border-zinc-800 grid grid-cols-3 shadow-lg">
-          <button
-            type="button"
-            onClick={() => setMobileTab("menu")}
-            className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold cursor-pointer ${
-              mobileTab === "menu" ? "text-[#FF9100]" : "text-slate-400"
-            }`}
-          >
-            <Utensils className="size-5" />
-            <span>{lang === "bn" ? "মেনু" : "Menu"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab("tables")}
-            className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold cursor-pointer ${
-              mobileTab === "tables" ? "text-[#FF9100]" : "text-slate-400"
-            }`}
-          >
-            <Grid className="size-5" />
-            <span>{lang === "bn" ? "টেবিল" : "Tables"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab("profile")}
-            className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold cursor-pointer ${
-              mobileTab === "profile" ? "text-[#FF9100]" : "text-slate-400"
-            }`}
-          >
-            <User className="size-5" />
-            <span>{lang === "bn" ? "প্রোফাইল" : "Profile"}</span>
-          </button>
-        </nav>
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════════ */}
       {/* DESKTOP RESTAURANT ERP VIEW                                              */}
       {/* ════════════════════════════════════════════════════════════════════════ */}
       <div className="hidden md:flex flex-col flex-1">
-      {/* ─── Top Control Header ─────────────────────────────────────────────────── */}
-      <div className="w-full bg-white dark:bg-zinc-900 border-b border-[#E8DFD3] dark:border-zinc-800 p-3 sm:p-4 px-4 sm:px-6 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Brand / Title & Floor Plan Toggle */}
-        <div className="flex items-center gap-3">
-          <div className="size-10 rounded-2xl bg-[#55A61D]/15 text-[#55A61D] flex items-center justify-center font-bold">
-            <Utensils className="size-5" />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold font-serif text-[#2C241E] dark:text-zinc-100 flex items-center gap-2">
-              <span>{lang === "bn" ? "রেস্তোরাঁ পিওএস ও ডাইনিং" : "Restaurant POS & Dining"}</span>
-              <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-[#55A61D]/15 text-[#55A61D] font-bold uppercase tracking-wider">
-                {lang === "bn" ? "লাইভ" : "Live"}
-              </span>
-            </h1>
-            <p className="text-xs text-[#7A6F66] dark:text-zinc-400">
-              {user?.business_name || "Urobili"} • {user?.tagline || "Smart Dining & Billing"}
-            </p>
-          </div>
-        </div>
-
-        {/* Center: Order Type Switcher (Dine-In, Takeaway, Delivery) */}
-        <div className="flex items-center gap-1 bg-[#F2ECE4] dark:bg-zinc-800 p-1 rounded-2xl border border-[#E8DFD3] dark:border-zinc-700 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setOrderType("dine_in")}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              orderType === "dine_in"
-                ? "bg-white dark:bg-zinc-900 text-[#55A61D] font-bold shadow-xs border border-[#55A61D]/30"
-                : "text-[#65594F] dark:text-zinc-400 hover:text-foreground"
-            }`}
-          >
-            <Utensils className="size-3.5" />
-            <span>{lang === "bn" ? "ডাইন-ইন" : "Dine-In"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOrderType("takeaway")}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              orderType === "takeaway"
-                ? "bg-white dark:bg-zinc-900 text-[#55A61D] font-bold shadow-xs border border-[#55A61D]/30"
-                : "text-[#65594F] dark:text-zinc-400 hover:text-foreground"
-            }`}
-          >
-            <ShoppingBag className="size-3.5" />
-            <span>{lang === "bn" ? "টেকঅ্যাওয়ে" : "Takeaway"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOrderType("delivery")}
-            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-              orderType === "delivery"
-                ? "bg-white dark:bg-zinc-900 text-[#55A61D] font-bold shadow-xs border border-[#55A61D]/30"
-                : "text-[#65594F] dark:text-zinc-400 hover:text-foreground"
-            }`}
-          >
-            <Truck className="size-3.5" />
-            <span>{lang === "bn" ? "ডেলিভারি" : "Delivery"}</span>
-          </button>
-        </div>
-
-        {/* Right: View Switcher (Owner Dashboard vs Menu vs Tables vs KDS) */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {isOwner && (
-            <button
-              type="button"
-              onClick={() => setActiveView(activeView === "owner" ? "order" : "owner")}
-              className={`h-10 px-3.5 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
-                activeView === "owner"
-                  ? "bg-emerald-600 text-white border-emerald-600"
-                  : "bg-white dark:bg-zinc-800 border-[#E8DFD3] dark:border-zinc-700 text-[#2C241E] dark:text-zinc-200 hover:bg-[#FAF7F2]"
-              }`}
-            >
-              <LayoutDashboard className={`size-4 ${activeView === "owner" ? "text-white" : "text-emerald-600"}`} />
-              <span>{lang === "bn" ? "মালিক ড্যাশবোর্ড" : "Owner Dashboard"}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setActiveView(activeView === "queue" ? "order" : "queue")}
-            className={`h-10 px-3.5 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
-              activeView === "queue"
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white dark:bg-zinc-800 border-[#E8DFD3] dark:border-zinc-700 text-[#2C241E] dark:text-zinc-200 hover:bg-[#FAF7F2]"
-            }`}
-          >
-            <ListOrdered className={`size-4 ${activeView === "queue" ? "text-white" : "text-indigo-600"}`} />
-            <span>{lang === "bn" ? "বিল কিউ" : "Bill Queue"}</span>
-            {pendingQueueCount > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                activeView === "queue" ? "bg-white text-indigo-600" : "bg-indigo-600 text-white"
-              }`}>
-                {pendingQueueCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveView(activeView === "kds" ? "order" : "kds")}
-            className={`h-10 px-3.5 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
-              activeView === "kds"
-                ? "bg-amber-500 text-white border-amber-500"
-                : "bg-white dark:bg-zinc-800 border-[#E8DFD3] dark:border-zinc-700 text-[#2C241E] dark:text-zinc-200 hover:bg-[#FAF7F2]"
-            }`}
-          >
-            <ChefHat className={`size-4 ${activeView === "kds" ? "text-white" : "text-amber-500"}`} />
-            <span>{lang === "bn" ? "কিচেন ডিসপ্লে" : "Kitchen Display"}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveView(activeView === "tables" ? "order" : "tables")}
-            className={`h-10 px-3.5 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer ${
-              activeView === "tables"
-                ? "bg-[#55A61D] text-white border-[#55A61D]"
-                : "bg-white dark:bg-zinc-800 border-[#E8DFD3] dark:border-zinc-700 text-[#2C241E] dark:text-zinc-200 hover:bg-[#FAF7F2]"
-            }`}
-          >
-            {activeView === "tables" ? (
-              <>
-                <List className="size-4 text-white" />
-                <span>{lang === "bn" ? "মেনু অর্ডারে যান" : "Back to Menu"}</span>
-              </>
-            ) : (
-              <>
-                <Grid className="size-4 text-[#55A61D]" />
-                <span>
-                  {lang === "bn"
-                    ? `টেবিল ম্যাপ (${restaurantStats.totalTables})`
-                    : `Floors & Tables (${restaurantStats.totalTables})`}
-                </span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* ─── Main Content Area ─────────────────────────────────────────────────── */}
       <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-4 p-3 sm:p-5">
         {activeView === "owner" && isOwner ? (
           <div className="col-span-12 space-y-5">
-            {/* Owner Dashboard Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-[#E8DFD3] dark:border-zinc-800 shadow-xs">
-              <div>
-                <h2 className="text-lg font-bold text-[#2C241E] dark:text-zinc-100 flex items-center gap-2">
-                  <LayoutDashboard className="size-5 text-emerald-600" />
-                  <span>{lang === "bn" ? "রেস্তোরাঁ ইআরপি মালিক ড্যাশবোর্ড" : "Restaurant ERP Owner Dashboard"}</span>
-                </h2>
-                <p className="text-xs text-[#7A6F66] dark:text-zinc-400">
-                  {lang === "bn"
-                    ? "সকল ফ্লোর, টেবিল ক্যাপাসিটি, লাইভ বিক্রয় এবং কিচেন অপারেশন নিয়ন্ত্রণ করুন"
-                    : "Manage multi-floor layout, set table seat capacities, and monitor live revenue & kitchen orders"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => router.push("/employees")} className="rounded-xl text-xs gap-1.5 cursor-pointer">
-                  <Users className="size-3.5" />
-                  <span>{lang === "bn" ? "ওয়েটার ও স্টাফ" : "Staff & Waiters"}</span>
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => router.push("/reports")} className="rounded-xl text-xs gap-1.5 cursor-pointer">
-                  <TrendingUp className="size-3.5" />
-                  <span>{lang === "bn" ? "রিপোর্ট" : "Reports"}</span>
-                </Button>
-                <Button size="sm" onClick={() => setActiveView("order")} className="rounded-xl text-xs bg-[#55A61D] hover:bg-[#489117] text-white cursor-pointer">
-                  {lang === "bn" ? "POS মেনুতে যান" : "Open POS Menu"}
-                </Button>
-              </div>
+            {/* Simplicity UI: Lightweight Contextual Links (No Secondary Header Card) */}
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => router.push("/employees")} className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer">
+                <Users className="size-3.5" />
+                <span>{lang === "bn" ? "ওয়েটার ও স্টাফ" : "Staff & Waiters"}</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => router.push("/reports")} className="h-8 rounded-xl text-xs gap-1.5 cursor-pointer">
+                <TrendingUp className="size-3.5" />
+                <span>{lang === "bn" ? "রিপোর্ট" : "Reports"}</span>
+              </Button>
             </div>
 
             {/* KPI Cards */}
@@ -1966,23 +1996,6 @@ export default function RestaurantPosPage() {
           </div>
         ) : activeView === "queue" ? (
           <div className="col-span-12 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-[#E8DFD3] dark:border-zinc-800 shadow-xs">
-              <div>
-                <h2 className="text-base font-bold text-[#2C241E] dark:text-zinc-100 flex items-center gap-2">
-                  <ListOrdered className="size-5 text-indigo-600" />
-                  <span>{lang === "bn" ? "ক্যাশিয়ার বিলিং কিউ সিস্টেম" : "Cashier Billing Queue"}</span>
-                </h2>
-                <p className="text-xs text-[#7A6F66] dark:text-zinc-400">
-                  {lang === "bn"
-                    ? "ওয়েটার বা ক্যাশিয়ারের পাঠানো বিলের অর্ডার প্রিন্ট ও পাস করে নিষ্পত্তি করুন"
-                    : "Print restaurant bills and pass queued orders to complete payment and free tables"}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setActiveView("order")} className="rounded-xl text-xs cursor-pointer">
-                {lang === "bn" ? "মেনুতে ফিরুন" : "Back to POS"}
-              </Button>
-            </div>
-
             {billingQueue.length === 0 ? (
               <Card className="p-12 text-center rounded-3xl border-[#E8DFD3] bg-white dark:bg-zinc-900 text-xs text-muted-foreground">
                 {lang === "bn"
@@ -2089,21 +2102,6 @@ export default function RestaurantPosPage() {
           </div>
         ) : activeView === "kds" ? (
           <div className="col-span-12 space-y-4">
-            <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-[#E8DFD3] dark:border-zinc-800 shadow-xs">
-              <div>
-                <h2 className="text-base font-bold text-[#2C241E] dark:text-zinc-100 flex items-center gap-2">
-                  <ChefHat className="size-5 text-amber-500" />
-                  <span>{lang === "bn" ? "লাইভ কিচেন ডিসপ্লে সিস্টেম (KDS)" : "Live Kitchen Display System (KDS)"}</span>
-                </h2>
-                <p className="text-xs text-[#7A6F66] dark:text-zinc-400">
-                  {lang === "bn" ? "অর্ডারের অবস্থা পরিবর্তন করুন: পেন্ডিং → রান্না হচ্ছে → প্রস্তুত → পরিবেশিত" : "Track and advance live kitchen tickets from Pending → Preparing → Ready → Served"}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setActiveView("order")} className="rounded-xl text-xs">
-                {lang === "bn" ? "মেনুতে ফিরুন" : "Back to Menu"}
-              </Button>
-            </div>
-
             {kdsOrders.length === 0 ? (
               <Card className="p-12 text-center rounded-3xl border-[#E8DFD3] bg-white dark:bg-zinc-900 text-xs text-muted-foreground">
                 {lang === "bn" ? "এখনো কোনো কিচেন অর্ডার (KOT) পাঠানো হয়নি।" : "No active Kitchen Order Tickets (KOT) yet. Send an order from the menu to see it here."}
@@ -2158,18 +2156,7 @@ export default function RestaurantPosPage() {
           </div>
         ) : activeView === "tables" ? (
           <div className="col-span-12 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-[#E8DFD3] dark:border-zinc-800 shadow-xs">
-              <div>
-                <h2 className="text-base font-bold text-[#2C241E] dark:text-zinc-100 flex items-center gap-2">
-                  <Grid className="size-5 text-[#55A61D]" />
-                  <span>{lang === "bn" ? "মাল্টি-ফ্লোর টেবিল অবস্থা" : "Multi-Floor Plan & Table Status"}</span>
-                </h2>
-                <p className="text-xs text-[#7A6F66] dark:text-zinc-400">
-                  {lang === "bn"
-                    ? "টেবিল নির্বাচন করে অর্ডার নিন অথবা ওয়েটার হিসেবে টেবিল ফ্রি করুন"
-                    : "Select any table to take orders or mark tables Free / Occupied"}
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 {["All Floors", ...floorNames].map((fl) => (
                   <button
@@ -2178,8 +2165,8 @@ export default function RestaurantPosPage() {
                     onClick={() => setSelectedFloor(fl)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                       selectedFloor === fl
-                        ? "bg-[#55A61D] text-white shadow-xs"
-                        : "bg-[#FAF7F2] dark:bg-zinc-800 text-[#65594F] dark:text-zinc-300 border border-[#E8DFD3] dark:border-zinc-700"
+                        ? "bg-[#FF6B00] text-white shadow-xs"
+                        : "bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700"
                     }`}
                   >
                     <Layers className="size-3.5" />
@@ -2189,11 +2176,11 @@ export default function RestaurantPosPage() {
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
-                  <span className="size-3 rounded-full bg-emerald-500" />
+                  <span className="size-2.5 rounded-full bg-emerald-500" />
                   <span>{lang === "bn" ? "ফ্রি টেবিল" : "Free"} ({restaurantStats.freeTables})</span>
                 </span>
                 <span className="flex items-center gap-1.5 text-rose-600 font-semibold">
-                  <span className="size-3 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="size-2.5 rounded-full bg-rose-500" />
                   <span>{lang === "bn" ? "ব্যস্ত" : "Occupied"} ({restaurantStats.occupiedTables})</span>
                 </span>
               </div>
@@ -2400,6 +2387,26 @@ export default function RestaurantPosPage() {
                         {reservations.filter((r) => r.status === "reserved").length}
                       </span>
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickItemOpen(true)}
+                    className="h-8 px-3 rounded-xl bg-slate-50 dark:bg-zinc-800 hover:bg-orange-50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Zap className="size-3.5 text-amber-500" />
+                    <span>{lang === "bn" ? "দ্রুত আইটেম" : "Quick Item"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShiftModalOpen(true)}
+                    className={`h-8 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
+                      openShift
+                        ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-700 dark:text-emerald-300"
+                        : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200"
+                    }`}
+                  >
+                    <Store className="size-3.5" />
+                    <span>{openShift ? (lang === "bn" ? "শিফট চালু" : "Register Open") : (lang === "bn" ? "শিফট খুলুন" : "Register")}</span>
                   </button>
                 </div>
 
@@ -2814,15 +2821,12 @@ export default function RestaurantPosPage() {
 
                     <Button
                       type="button"
-                      onClick={() => {
-                        pendingAutoPrintRef.current = true;
-                        void handleSettleBill();
-                      }}
+                      onClick={() => setPayModalOpen(true)}
                       disabled={cart.length === 0 || settlingBusy}
-                      className="h-10 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer"
+                      className="h-11 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer"
                     >
                       {settlingBusy ? <RefreshCw className="size-4 animate-spin" /> : <Printer className="size-4" />}
-                      <span>{lang === "bn" ? "বিল ও প্রিন্ট" : "Bill & Print"}</span>
+                      <span>{lang === "bn" ? "পে ও প্রিন্ট" : "Pay & Print"}</span>
                     </Button>
                   </div>
                 </div>
@@ -3300,6 +3304,110 @@ export default function RestaurantPosPage() {
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── NEXOPOS TOUCH NUMPAD & SPLIT PAYMENT MODAL ────────────────────────── */}
+      <PosNumpadPayModal
+        open={payModalOpen}
+        onOpenChange={setPayModalOpen}
+        totalAmount={grandTotal}
+        busy={settlingBusy}
+        title={orderType === "dine_in" ? `${selectedTable} • Order #${orderSeq}` : `Order #${orderSeq}`}
+        onConfirm={handleNumpadPayConfirm}
+      />
+
+      {/* ─── NEXOPOS REGISTER / SHIFT OPEN-CLOSE MODAL ─────────────────────────── */}
+      <Dialog open={shiftModalOpen} onOpenChange={setShiftModalOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-6 bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Store className="size-4 text-primary" />
+              <span>{lang === "bn" ? "ক্যাশ রেজিস্টার ও শিফট" : "Cash Register & Shift"}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {openShift ? (
+            <form onSubmit={handleCloseShift} className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                <div className="font-bold text-emerald-700 dark:text-emerald-300">
+                  {openShift.register_name} ({lang === "bn" ? "চলমান শিফট" : "Active Shift"})
+                </div>
+                <div className="text-muted-foreground">
+                  {lang === "bn" ? "শুরুর ক্যাশ:" : "Opening Cash:"} ৳ {Number(openShift.opening_cash || 0).toLocaleString()} •{" "}
+                  {lang === "bn" ? "আজকের বিক্রি:" : "Today's Sales:"} ৳ {restaurantStats.todayRevenue.toLocaleString()}
+                </div>
+                <div className="font-bold text-foreground">
+                  {lang === "bn" ? "সম্ভাব্য ড্রয়ার ক্যাশ:" : "Expected Drawer:"} ৳{" "}
+                  {(Number(openShift.opening_cash || 0) + restaurantStats.todayRevenue).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <label className="font-semibold block mb-1">
+                  {lang === "bn" ? "গণনাকৃত ক্লোজিং ক্যাশ (৳)" : "Counted Closing Cash (৳)"}
+                </label>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  value={shiftClosingCash}
+                  onChange={(e) => setShiftClosingCash(e.target.value)}
+                  placeholder="0"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <Button type="submit" disabled={shiftBusy} className="w-full h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer">
+                {lang === "bn" ? "শিফট ক্লোজ করুন" : "Close Register Shift"}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleOpenShift} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold block mb-1">{lang === "bn" ? "রেজিস্টারের নাম" : "Register / Counter Name"}</label>
+                <Input value={shiftRegisterName} onChange={(e) => setShiftRegisterName(e.target.value)} className="h-10 rounded-xl" />
+              </div>
+              <div>
+                <label className="font-semibold block mb-1">{lang === "bn" ? "ওপেনিং ক্যাশ ফ্লোট (৳)" : "Opening Cash Float (৳)"}</label>
+                <Input type="number" min={0} value={shiftOpeningCash} onChange={(e) => setShiftOpeningCash(e.target.value)} className="h-10 rounded-xl" />
+              </div>
+              <Button type="submit" disabled={shiftBusy} className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer">
+                {lang === "bn" ? "শিফট শুরু করুন" : "Open Register Shift"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── NEXOPOS QUICK CUSTOM PRODUCT MODAL ────────────────────────────────── */}
+      <Dialog open={quickItemOpen} onOpenChange={setQuickItemOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-6 bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Zap className="size-4 text-amber-500" />
+              <span>{lang === "bn" ? "দ্রুত কাস্টম আইটেম যোগ" : "Quick Custom Item"}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddQuickCustomItem} className="space-y-3 text-xs">
+            <Input
+              required
+              value={quickItemName}
+              onChange={(e) => setQuickItemName(e.target.value)}
+              placeholder={lang === "bn" ? "আইটেমের নাম (যেমন: এক্সট্রা প্যাকিং)" : "Item name (e.g. Special Platter)"}
+              className="h-10 rounded-xl"
+            />
+            <Input
+              required
+              type="number"
+              min={1}
+              value={quickItemPrice}
+              onChange={(e) => setQuickItemPrice(e.target.value)}
+              placeholder={lang === "bn" ? "মূল্য (৳)" : "Price (৳)"}
+              className="h-10 rounded-xl"
+            />
+            <Button type="submit" className="w-full h-10 rounded-xl bg-[#FF6B00] hover:bg-[#E55F00] text-white font-bold cursor-pointer">
+              {lang === "bn" ? "+ কার্টে যোগ করুন" : "+ Add to Cart"}
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

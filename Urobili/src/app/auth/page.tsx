@@ -42,12 +42,10 @@ import {
 } from "lucide-react";
 
 const INDUSTRIES = [
-  { id: "restaurant", labelEn: "Restaurant / Cafe", labelBn: "রেস্তোরাঁ ও ক্যাফে", icon: Utensils, desc: "Dine-in, KOT, table management & takeaway" },
-  { id: "fashion", labelEn: "Fashion & Boutique", labelBn: "ফ্যাশন ও বুটিক", icon: Shirt, desc: "Sizes, colors, barcode labels & invoices" },
-  { id: "grocery", labelEn: "Grocery & Superstore", labelBn: "মুদি ও সুপারশপ", icon: ShoppingCart, desc: "Fast billing, wholesale, units & stock" },
-  { id: "electronics", labelEn: "Electronics & Mobile", labelBn: "ইলেকট্রনিক্স ও গ্যাজেট", icon: Smartphone, desc: "IMEI, serial tracking & warranty receipts" },
-  { id: "pharmacy", labelEn: "Pharmacy & Healthcare", labelBn: "ফার্মেসি ও ড্রাগস", icon: Pill, desc: "Batch numbers, expiry alerts & fast retail" },
-  { id: "retail", labelEn: "General Retail / Wholesale", labelBn: "সাধারণ ব্যবসা / পাইকারি", icon: Briefcase, desc: "Standard inventory, ledger & POS invoicing" },
+  { id: "restaurant", labelEn: "Restaurant & Cafe", labelBn: "রেস্তোরাঁ ও ক্যাফে", icon: Utensils, desc: "Dine-in, KOT, multi-floor tables, shifts & takeaway" },
+  { id: "fashion", labelEn: "Fashion & Clothing", labelBn: "ফ্যাশন ও ক্লদিং", icon: Shirt, desc: "1-tap sizes, colors, barcode hangtags & fast checkout" },
+  { id: "grocery", labelEn: "Groceries & Superstore", labelBn: "মুদি ও সুপারশপ", icon: ShoppingCart, desc: "Fast billing, wholesale, weight units & stock" },
+  { id: "pharmacy", labelEn: "Pharmacy & Healthcare", labelBn: "ফার্মেসি ও হেলথকেয়ার", icon: Pill, desc: "Batch expiry alerts, Rx orders, hold bills & dispensing" },
 ];
 
 export default function AuthPage() {

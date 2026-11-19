@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 
 type Range = "today" | "yesterday" | "week" | "this_month" | "last_month" | "month" | "all";
 
@@ -381,32 +382,24 @@ export default function ProfitPage() {
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight font-serif">{lang === "bn" ? "লাভ ও লোকসান খতিয়ান" : "Profit & Loss Analytics"}</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {lang === "bn" ? "ব্যবসার মোট লাভ, পরিচালন খরচ এবং প্রকৃত আয়-ব্যয়ের হিসাব" : "Overview of sales revenue, cost of goods, overhead expenses, and actual profits"}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="h-8 text-xs beveled-button">
-                <Download className="size-3.5 mr-1" />
-                {t("download_csv")}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => exportCSV("en")}>
-                English (ইংরেজি)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => exportCSV("bn")}>
-                Bangla (বাংলা)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <PrimaryHeaderSlot>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-7 px-2.5 rounded-full text-[11px] font-semibold cursor-pointer">
+              <Download className="size-3 mr-1" />
+              {t("download_csv")}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => exportCSV("en")}>
+              English (ইংরেজি)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportCSV("bn")}>
+              Bangla (বাংলা)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PrimaryHeaderSlot>
 
       {/* Date Filters & Range Selectors */}
       <div className="bg-card/60 backdrop-blur-sm border rounded-xl p-3 space-y-3 beveled-card">
@@ -420,9 +413,25 @@ export default function ProfitPage() {
             <button onClick={() => { setRange("all"); setFrom(""); setTo(""); setPage(1); }} className={`px-2.5 py-1 rounded transition-colors ${range === "all" ? "bg-background shadow font-medium" : "text-muted-foreground"}`}>{lang === "bn" ? "সব সময়" : "All Time"}</button>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="size-3.5" />
-            <span>{lang === "bn" ? "কাস্টম রেঞ্জ:" : "Custom Range:"}</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="size-3.5" />
+              <span>{lang === "bn" ? "কাস্টম রেঞ্জ:" : "Custom Range:"}</span>
+            </div>
+            <div className="md:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]">
+                    <Download className="size-3 mr-1" />
+                    CSV
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportCSV("en")}>English</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportCSV("bn")}>Bangla</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
 

@@ -910,3 +910,27 @@ export const issueEmployeeDeviceCodeFn = makeWriteAction("issueEmployeeDeviceCod
 export const redeemEmployeeDeviceCodeFn = makeWriteAction("redeemEmployeeDeviceCodeFn");
 export const listEmployeeDevicesFn = makeReadAction("listEmployeeDevicesFn");
 export const revokeEmployeeDeviceFn = makeWriteAction("revokeEmployeeDeviceFn");
+
+// ── NexoPOS & Restaurant Persistent PostgreSQL Entities ───────────────────
+export const getRestaurantDraftsFn = makeReadAction("getRestaurantDraftsFn");
+export const upsertRestaurantDraftFn = makeWriteAction("upsertRestaurantDraftFn");
+export const deleteRestaurantDraftFn = makeWriteAction("deleteRestaurantDraftFn");
+export const getRestaurantReservationsFn = makeReadAction("getRestaurantReservationsFn");
+export const upsertRestaurantReservationFn = makeWriteAction("upsertRestaurantReservationFn");
+export const deleteRestaurantReservationFn = makeWriteAction("deleteRestaurantReservationFn");
+export const getRestaurantQrOrdersFn = makeReadAction("getRestaurantQrOrdersFn");
+export const upsertRestaurantQrOrderFn = makeWriteAction("upsertRestaurantQrOrderFn");
+export const getPosShiftsFn = makeReadAction("getPosShiftsFn");
+export const openPosShiftFn = makeWriteAction("openPosShiftFn");
+export const closePosShiftFn = makeWriteAction("closePosShiftFn");
+
+// ── PharmaSpot Persistent PostgreSQL Entities ─────────────────────────────
+export const getPharmacyRxOrdersFn = makeReadAction("getPharmacyRxOrdersFn");
+export const upsertPharmacyRxOrderFn = makeWriteAction("upsertPharmacyRxOrderFn");
+export const deletePharmacyRxOrderFn = makeWriteAction("deletePharmacyRxOrderFn");
+export const getPharmacySuppliersFn = makeReadAction("getPharmacySuppliersFn");
+export const upsertPharmacySupplierFn = makeWriteAction("upsertPharmacySupplierFn");
+export const deletePharmacySupplierFn = makeWriteAction("deletePharmacySupplierFn");
+export const getPharmacyHoldOrdersFn = makeReadAction("getPharmacyHoldOrdersFn");
+export const upsertPharmacyHoldOrderFn = makeWriteAction("upsertPharmacyHoldOrderFn");
+export const deletePharmacyHoldOrderFn = makeWriteAction("deletePharmacyHoldOrderFn");

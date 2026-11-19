@@ -89,6 +89,7 @@ import {
 import {
   isDesktopWhatsAppAvailable,
   getDesktopWhatsAppBridge,
+  openDesktopWhatsAppWindow,
   getWhatsAppMode,
   setWhatsAppMode,
   getWhatsAppAutoRules,
@@ -2592,6 +2593,23 @@ export default function SettingsPage() {
                         <span>{waStatus.status === "qr_ready" ? "Refresh QR Code" : (lang === "bn" ? "QR কোড জেনারেট করুন" : "Connect & Show QR Code")}</span>
                       </Button>
                     )}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await openDesktopWhatsAppWindow();
+                          toast.success(lang === "bn" ? "হোয়াটসঅ্যাপ ক্রোমিয়াম উইন্ডো খোলা হয়েছে" : "Opened Chromium WhatsApp Web Window");
+                        } catch (err: any) {
+                          toast.error(err?.message || "Failed to open window");
+                        }
+                      }}
+                      className="w-full h-9 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-bold gap-2"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>{lang === "bn" ? "হোয়াটসঅ্যাপ উইন্ডো দেখুন (Chromium)" : "Open WhatsApp Web Window (Chromium)"}</span>
+                    </Button>
 
                     {waStatus.lastError && (
                       <p className="text-xs text-rose-500">{waStatus.lastError}</p>

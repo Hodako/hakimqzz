@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -376,38 +377,12 @@ export default function AiAuditsPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4.5rem)] md:h-[calc(100vh-6rem)] w-full max-w-4xl mx-auto p-1.5 sm:p-3 space-y-2 sm:space-y-3.5 overflow-hidden">
-      {/* Financial Banking Header Panel */}
-      <div className="flex items-center justify-between bg-card/90 dark:bg-zinc-950/90 p-2.5 sm:p-3.5 rounded-2xl border border-border/80 shadow-md shrink-0 backdrop-blur-md">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Link href="/more">
-            <Button variant="ghost" size="icon" className="size-8 rounded-xl shrink-0 hover:bg-muted">
-              <ArrowLeft className="size-4" />
-            </Button>
-          </Link>
-          <div className="size-9 sm:size-10 rounded-xl bg-gradient-to-tr from-amber-600 via-indigo-600 to-emerald-600 text-white flex items-center justify-center shadow-md border border-white/20 shrink-0">
-            <Bot className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-extrabold tracking-tight text-foreground truncate">
-                {lang === "bn" ? "হাকিম ফাইন্যান্সিয়াল অডিট এজেন্ট" : "Urobili Financial Audit AI"}
-              </h1>
-              <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest shrink-0">
-                PRO-BANKING
-              </span>
-            </div>
-            <p className="text-[9.5px] sm:text-[10.5px] text-muted-foreground truncate mt-0.5 font-medium">
-              {lang === "bn" ? "রিয়েল-টাইম ক্যাশফ্লো, স্টক ও লাভ-ক্ষতি বিশ্লেষণ" : "Real-time Cashflow, Inventory & Profit Analytics"}
-            </p>
-          </div>
-        </div>
-        
-        <div className="hidden min-[420px]:flex items-center gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider select-none border border-emerald-500/20 shrink-0">
-          <span className="size-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+    <div className="flex flex-col h-[calc(100dvh-4.5rem)] md:h-[calc(100vh-5rem)] w-full max-w-4xl mx-auto p-1.5 sm:p-3 space-y-2 sm:space-y-3 overflow-hidden">
+      <PrimaryHeaderSlot>
+        <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2.5 h-7 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
           {lang === "bn" ? "লাইভ অডিট" : "Live Audit"}
-        </div>
-      </div>
+        </span>
+      </PrimaryHeaderSlot>
 
       {/* Main Financial Audit Chat Interface */}
       <Card className="flex-1 min-h-0 bg-card/80 dark:bg-zinc-950/80 backdrop-blur-xl border border-border/80 rounded-2xl flex flex-col overflow-hidden shadow-lg">

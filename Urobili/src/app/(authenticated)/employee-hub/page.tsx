@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 import {
   Users,
   Wallet,
@@ -891,78 +892,90 @@ export default function EmployeeHubPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-24 max-w-7xl mx-auto px-2 sm:px-4 pt-2 font-bensen">
-      {/* ── Page Header & Context Banner ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-card via-card to-indigo-500/5 border border-border/70 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xs">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button variant="outline" size="icon" className="size-9 rounded-xl border-border/80 hover:bg-muted shrink-0 cursor-pointer">
-              <ArrowLeft className="size-4" />
+      <PrimaryHeaderSlot>
+        {isOwner && (
+          <>
+            <Button
+              onClick={openAddEmployeeModal}
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-bold rounded-full gap-1 bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
+            >
+              <Plus className="size-3" />
+              <span>{lang === "bn" ? "নতুন কর্মী" : "Add Staff"}</span>
             </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-2xl font-black font-bensen tracking-tight flex items-center gap-2 text-foreground">
-                <Users className="size-5 sm:size-6 text-indigo-600 dark:text-indigo-400" />
-                <span>{lang === "bn" ? "কর্মচারী হাব" : "Employee Hub"}</span>
-              </h1>
-              <Badge className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 font-bold rounded-lg shadow-2xs">
-                {isOwner ? (lang === "bn" ? "👑 মালিক নিয়ন্ত্রণ" : "Owner Control") : (lang === "bn" ? "👤 স্টাফ টার্মিনাল" : "Staff Terminal")}
-              </Badge>
-            </div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
-              {lang === "bn"
-                ? "কর্মচারীদের সম্পূর্ণ তালিকা, পিন কোড, পারমিশন, রোলওভার বেতন, অগ্রিম উত্তোলন ও উপহার নিয়ন্ত্রণ কেন্দ্র।"
-                : "Manage staff roster, device pins, advance withdrawals, salary ledger rollover, and owner gifts."}
-            </p>
-          </div>
-        </div>
 
-        {/* Quick Actions Header Toolbar */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          {isOwner && (
-            <>
-              <Button
-                onClick={openAddEmployeeModal}
-                size="sm"
-                className="h-8.5 text-xs font-bold rounded-xl gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer"
-              >
-                <Plus className="size-3.5" />
-                <span>{lang === "bn" ? "নতুন কর্মী" : "Add Staff"}</span>
-              </Button>
+            <Button
+              onClick={() => {
+                if (allEmployees.length > 0 && !giftEmpId) setGiftEmpId(allEmployees[0].id);
+                setGiftAmount("");
+                setGiftNote("");
+                setGiftOpen(true);
+              }}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-bold rounded-full gap-1 border-lime-500/40 text-lime-700 dark:text-lime-300 cursor-pointer"
+            >
+              <Gift className="size-3" />
+              <span>{lang === "bn" ? "উপহার" : "Gift"}</span>
+            </Button>
+          </>
+        )}
 
-              <Button
-                onClick={() => {
-                  if (allEmployees.length > 0 && !giftEmpId) setGiftEmpId(allEmployees[0].id);
-                  setGiftAmount("");
-                  setGiftNote("");
-                  setGiftOpen(true);
-                }}
-                variant="outline"
-                size="sm"
-                className="h-8.5 text-xs font-bold rounded-xl gap-1.5 border-[#86efac] bg-[#B7F7A8]/40 hover:bg-[#B7F7A8] text-lime-950 dark:text-lime-300 shadow-2xs cursor-pointer"
-              >
-                <Gift className="size-3.5 text-lime-700 dark:text-lime-400" />
-                <span>{lang === "bn" ? "উপহার / বোনাস" : "Give Gift"}</span>
-              </Button>
-            </>
-          )}
+        <Button
+          onClick={() => {
+            if (isOwner && allEmployees.length > 0) {
+              setTakeEmpId(ownerViewEmpId !== "all" ? ownerViewEmpId : (selectedEmpId || allEmployees[0].id));
+            }
+            setTakeAmount("");
+            setTakeNote("");
+            setTakeMoneyOpen(true);
+          }}
+          size="sm"
+          className="h-7 px-2.5 text-[11px] font-bold rounded-full gap-1 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+        >
+          <ArrowDownLeft className="size-3" />
+          <span>{lang === "bn" ? "অগ্রিম" : "Advance"}</span>
+        </Button>
+      </PrimaryHeaderSlot>
 
-          <Button
-            onClick={() => {
-              if (isOwner && allEmployees.length > 0) {
-                setTakeEmpId(ownerViewEmpId !== "all" ? ownerViewEmpId : (selectedEmpId || allEmployees[0].id));
-              }
-              setTakeAmount("");
-              setTakeNote("");
-              setTakeMoneyOpen(true);
-            }}
-            size="sm"
-            className="h-8.5 text-xs font-bold rounded-xl gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
-          >
-            <ArrowDownLeft className="size-3.5" />
-            <span>{lang === "bn" ? "অগ্রিম উত্তোলন" : "Take Advance"}</span>
-          </Button>
-        </div>
+      <div className="flex md:hidden items-center justify-end gap-1.5 flex-wrap">
+        {isOwner && (
+          <>
+            <Button onClick={openAddEmployeeModal} size="sm" className="h-8 text-xs font-bold rounded-xl gap-1 bg-indigo-600 text-white cursor-pointer">
+              <Plus className="size-3.5" />
+              <span>{lang === "bn" ? "নতুন কর্মী" : "Add Staff"}</span>
+            </Button>
+            <Button
+              onClick={() => {
+                if (allEmployees.length > 0 && !giftEmpId) setGiftEmpId(allEmployees[0].id);
+                setGiftAmount("");
+                setGiftNote("");
+                setGiftOpen(true);
+              }}
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs font-bold rounded-xl gap-1 cursor-pointer"
+            >
+              <Gift className="size-3.5" />
+              <span>{lang === "bn" ? "উপহার" : "Gift"}</span>
+            </Button>
+          </>
+        )}
+        <Button
+          onClick={() => {
+            if (isOwner && allEmployees.length > 0) {
+              setTakeEmpId(ownerViewEmpId !== "all" ? ownerViewEmpId : (selectedEmpId || allEmployees[0].id));
+            }
+            setTakeAmount("");
+            setTakeNote("");
+            setTakeMoneyOpen(true);
+          }}
+          size="sm"
+          className="h-8 text-xs font-bold rounded-xl gap-1 bg-emerald-600 text-white cursor-pointer"
+        >
+          <ArrowDownLeft className="size-3.5" />
+          <span>{lang === "bn" ? "অগ্রিম" : "Advance"}</span>
+        </Button>
       </div>
 
       {/* ── Owner User Switcher Bar (Switch between All Staff or Any Individual User Stats) ── */}

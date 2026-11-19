@@ -28,6 +28,7 @@ import { canAccess, resolvePermissions } from "@/lib/permissions";
 import { readModuleConfig, getIndustryProfile, type ModuleConfig } from "@/lib/module-config";
 import { PcThemeQuickStudio } from "@/components/pc-theme-quick-studio";
 import { RestaurantDashboardView } from "@/components/restaurant-dashboard-view";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 import { ProductSearchSelect } from "@/components/product-search";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -2994,34 +2995,58 @@ export default function Dashboard() {
     const mobileIndustryProfile = getIndustryProfile(user?.industry);
     return (
       <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold font-serif">{t("dashboard")}</h1>
-            <p className="text-xs text-muted-foreground">
-              {lang === "bn" ? mobileIndustryProfile.labelBn : mobileIndustryProfile.labelEn}
-            </p>
+        {/* Actions projected directly into AppShell Primary Header on Mobile */}
+        <PrimaryHeaderSlot>
+          <Button
+            onClick={() => { playTapSound(); setSaleOpen(true); }}
+            size="sm"
+            className="h-7 px-3 gap-1 rounded-full bg-primary text-primary-foreground font-bold text-[11px] shadow-xs hover:bg-primary/90 cursor-pointer"
+          >
+            <ShoppingBag className="size-3.5" />
+            <span>{t("new_sale")}</span>
+          </Button>
+        </PrimaryHeaderSlot>
+
+        {/* Simplicity UI: Clean Minimal Filter Strip (No Secondary Header) */}
+        <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs">
+            <Button
+              type="button"
+              variant={!dateFilter.from && !dateFilter.to ? "default" : "ghost"}
+              size="sm"
+              className="h-7 text-xs px-2.5 rounded-lg font-bold cursor-pointer"
+              onClick={() => clearFilter()}
+            >
+              {lang === "bn" ? "সব" : "All"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer"
+              onClick={() => setPresetRange("today")}
+            >
+              {lang === "bn" ? "আজ" : "Today"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer"
+              onClick={() => setPresetRange("this_month")}
+            >
+              {lang === "bn" ? "মাস" : "Month"}
+            </Button>
           </div>
           <Button
             variant={showFilter ? "default" : "outline"}
             size="icon"
-            className="size-8"
+            className="size-8 shrink-0 rounded-xl"
             onClick={() => setShowFilter(!showFilter)}
             aria-label="Toggle filter"
           >
-            <ArrowUpDown className="size-4" />
+            <Calendar className="size-3.5 text-primary" />
           </Button>
-        </div>
-
-        {/* Industry Quick Actions Strip on Phone */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {mobileIndustryProfile.quickActions.map((qa) => (
-            <Link key={qa.to + qa.labelEn} href={qa.to}>
-              <Button size="sm" variant="outline" className="h-8 px-3 rounded-full text-xs font-semibold whitespace-nowrap cursor-pointer">
-                {lang === "bn" ? qa.labelBn : qa.labelEn}
-              </Button>
-            </Link>
-          ))}
         </div>
 
         {/* Date Filter Dropdown on Phone */}
@@ -3255,133 +3280,106 @@ export default function Dashboard() {
     );
   }
 
-  // ── Desktop Layout (No secondary header card, presets beside filter icon) ─────────────────
+  // ── Desktop Layout (No secondary header card; quick actions integrated into Primary Header) ──
   const industryProfile = getIndustryProfile(user?.industry);
   return (
     <div className="space-y-5">
-      {/* Dedicated Industry Identity, Characteristics & Quick Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-card/70 border border-border/80 px-4 py-3 rounded-2xl shadow-xs backdrop-blur-md">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-foreground">
-              {lang === "bn" ? industryProfile.labelBn : industryProfile.labelEn}
-            </span>
-            {(lang === "bn" ? industryProfile.characteristicsBn : industryProfile.characteristicsEn).map((ch) => (
-              <Badge key={ch} variant="secondary" className="text-[10px] font-semibold">
-                {ch}
-              </Badge>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {lang === "bn" ? industryProfile.taglineBn : industryProfile.taglineEn}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {industryProfile.quickActions.map((qa) => (
-            <Link key={qa.to + qa.labelEn} href={qa.to}>
-              <Button size="sm" variant="outline" className="h-8 px-3 rounded-xl text-xs font-semibold cursor-pointer">
-                {lang === "bn" ? qa.labelBn : qa.labelEn}
-              </Button>
-            </Link>
-          ))}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setUiStudioOpen(true)}
-            className="h-8 px-3 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer border-primary/40 text-primary"
-          >
-            <Palette className="size-3.5" />
-            <span>{lang === "bn" ? "থিম ও UI স্টুডিও" : "UI Studio"}</span>
-          </Button>
-        </div>
-      </div>
+      <PrimaryHeaderSlot>
+        {industryProfile.quickActions.map((qa) => (
+          <Link key={qa.to + qa.labelEn} href={qa.to} className="hidden sm:inline-flex">
+            <Button size="sm" variant="outline" className="h-7 px-2.5 rounded-full text-[11px] font-semibold cursor-pointer">
+              {lang === "bn" ? qa.labelBn : qa.labelEn}
+            </Button>
+          </Link>
+        ))}
+        <Button
+          onClick={() => { playTapSound(); setSaleOpen(true); }}
+          size="sm"
+          className="h-7 px-3 gap-1 rounded-full bg-primary text-primary-foreground font-bold text-[11px] shadow-xs hover:bg-primary/90 cursor-pointer"
+        >
+          <ShoppingBag className="size-3.5" />
+          <span>{t("new_sale")}</span>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setUiStudioOpen(true)}
+          className="h-7 px-2.5 rounded-full text-[11px] font-semibold gap-1 cursor-pointer border-primary/40 text-primary hidden md:inline-flex"
+        >
+          <Palette className="size-3" />
+          <span>{lang === "bn" ? "থিম" : "Theme"}</span>
+        </Button>
+      </PrimaryHeaderSlot>
       <PcThemeQuickStudio open={uiStudioOpen} onOpenChange={setUiStudioOpen} />
 
-      {/* Top Action & Filter Bar on PC */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-card/60 border border-border/80 p-2.5 rounded-2xl shadow-xs backdrop-blur-md">
-        {/* Presets directly beside the filter icon on PC */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Simplicity UI: Clean Minimal Date Filter Pills (No Bulky Secondary Header Banner) */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs flex-wrap">
           <Button
-            variant={showFilter ? "default" : "outline"}
+            variant={showFilter ? "default" : "ghost"}
             size="sm"
-            className="h-8 px-2.5 gap-1.5 rounded-xl font-semibold border-border cursor-pointer"
+            className="h-7 px-2.5 gap-1 rounded-lg text-xs font-semibold cursor-pointer"
             onClick={() => setShowFilter(!showFilter)}
             title={lang === "bn" ? "কাস্টম তারিখ ফিল্টার" : "Custom Date Filter"}
           >
             <Calendar className="size-3.5 text-primary" />
-            <span className="text-xs">{lang === "bn" ? "ফিল্টার" : "Filter"}</span>
+            <span>{lang === "bn" ? "ফিল্টার" : "Filter"}</span>
           </Button>
 
-          <div className="h-4 w-px bg-border mx-0.5 hidden sm:block" />
-
-          {/* Preset Buttons beside filter icon */}
           <Button
             type="button"
-            variant="outline"
+            variant={!dateFilter.from && !dateFilter.to ? "default" : "ghost"}
             size="sm"
-            className={`h-8 text-xs px-2.5 rounded-xl font-bold transition-all cursor-pointer ${!dateFilter.from && !dateFilter.to ? "bg-primary text-primary-foreground border-primary shadow-xs" : "bg-card hover:bg-muted"}`}
+            className="h-7 text-xs px-2.5 rounded-lg font-bold cursor-pointer transition-colors"
             onClick={() => clearFilter()}
           >
             {lang === "bn" ? "সব সময়" : "All Time"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
             onClick={() => setPresetRange("today")}
           >
             {lang === "bn" ? "আজ" : "Today"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
             onClick={() => setPresetRange("yesterday")}
           >
             {lang === "bn" ? "গতকাল" : "Yesterday"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
             onClick={() => setPresetRange("this_week")}
           >
             {lang === "bn" ? "এই সপ্তাহ" : "This Week"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
             onClick={() => setPresetRange("this_month")}
           >
             {lang === "bn" ? "এই মাস" : "This Month"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs px-2.5 rounded-xl font-semibold bg-card hover:bg-muted cursor-pointer"
+            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
             onClick={() => setPresetRange("last_month")}
           >
             {lang === "bn" ? "গত মাস" : "Last Month"}
-          </Button>
-        </div>
-
-        {/* Primary New Sale button */}
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => { playTapSound(); setSaleOpen(true); }}
-            size="sm"
-            className="h-8.5 px-4 gap-1.5 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
-          >
-            <ShoppingBag className="size-4" />
-            <span>{t("new_sale")}</span>
-            <span className="text-[10px] font-mono opacity-80 ml-0.5 hidden sm:inline">[Space]</span>
           </Button>
         </div>
       </div>

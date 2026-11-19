@@ -27,6 +27,14 @@ export function getDesktopWhatsAppBridge() {
   return (window as any).electronPOS?.whatsapp ?? null;
 }
 
+export function openDesktopWhatsAppWindow(): Promise<any> {
+  const bridge = getDesktopWhatsAppBridge();
+  if (bridge && typeof bridge.openWindow === "function") {
+    return bridge.openWindow();
+  }
+  return Promise.resolve(null);
+}
+
 export function getWhatsAppMode(): WhatsAppMode {
   if (typeof window === "undefined") return "manual";
   const v = localStorage.getItem(MODE_KEY);

@@ -53,8 +53,6 @@ export function getIndustryDefaultDisabledModules(industry?: string): string[] {
       return ["/restaurant", "/online-sells", "/somiti"];
     case "grocery":
       return ["/restaurant", "/online-sells", "/somiti"];
-    case "electronics":
-      return ["/restaurant", "/somiti"];
     default:
       return ["/restaurant"];
   }
@@ -72,14 +70,15 @@ export interface IndustryProfile {
 }
 
 export function getIndustryProfile(industry?: string): IndustryProfile {
-  const key = (industry || "retail").toLowerCase();
+  const raw = (industry || "fashion").toLowerCase();
+  const key = ["restaurant", "fashion", "pharmacy", "grocery"].includes(raw) ? raw : "fashion";
   const profiles: Record<string, IndustryProfile> = {
     restaurant: {
       id: "restaurant",
       labelEn: "Restaurant & Cafe ERP",
       labelBn: "রেস্তোরাঁ ও ক্যাফে ইআরপি",
-      taglineEn: "Multi-floor tables, waiter terminal, kitchen KOT & cashier billing queue",
-      taglineBn: "মাল্টি-ফ্লোর টেবিল, ওয়েটার টার্মিনাল, কিচেন টিকেট ও ক্যাশিয়ার বিল কিউ",
+      taglineEn: "NexoPOS-inspired dining POS, multi-floor tables, KDS, shifts & cashier bill queue",
+      taglineBn: "মাল্টি-ফ্লোর টেবিল, ওয়েটার টার্মিনাল, কিচেন ডিসপ্লে, শিফট ও বিল কিউ",
       quickActions: [
         { to: "/restaurant", labelEn: "Open Restaurant POS", labelBn: "রেস্তোরাঁ পিওএস খুলুন" },
         { to: "/products", labelEn: "Dishes & Menu", labelBn: "খাবার ও মেনু" },
@@ -90,76 +89,48 @@ export function getIndustryProfile(industry?: string): IndustryProfile {
     },
     fashion: {
       id: "fashion",
-      labelEn: "Fashion & Boutique ERP",
-      labelBn: "ফ্যাশন ও বুটিক ইআরপি",
-      taglineEn: "Size & color variants, garment hangtags, online orders & boutique POS",
-      taglineBn: "সাইজ ও কালার ভ্যারিয়েন্ট, গার্মেন্টস হ্যাংট্যাগ, অনলাইন অর্ডার ও বুটিক পিওএস",
+      labelEn: "Fashion & Clothing ERP",
+      labelBn: "ফ্যাশন ও ক্লদিং ইআরপি",
+      taglineEn: "1-tap size & color matrix POS, garment hangtags, online orders & instant checkout",
+      taglineBn: "সাইজ ও কালার ভ্যারিয়েন্ট পিওএস, গার্মেন্টস হ্যাংট্যাগ, অনলাইন অর্ডার ও দ্রুত বিলিং",
       quickActions: [
-        { to: "/sales", labelEn: "Boutique POS", labelBn: "বুটিক পিওএস" },
+        { to: "/erp", labelEn: "Easy Fashion POS", labelBn: "ইজি ফ্যাশন পিওএস" },
         { to: "/labels", labelEn: "Print Hangtags", labelBn: "হ্যাংট্যাগ প্রিন্ট" },
         { to: "/online-sells", labelEn: "Online Orders", labelBn: "অনলাইন অর্ডার" },
       ],
-      characteristicsEn: ["Size & Color Matrix", "Barcode Hangtags", "Courier & Online Sales"],
+      characteristicsEn: ["1-Tap Size & Color Matrix", "Barcode Hangtags", "Courier & Online Sales"],
       characteristicsBn: ["সাইজ ও কালার তালিকা", "বারকোড হ্যাংট্যাগ", "কুরিয়ার ও অনলাইন বিক্রি"],
-    },
-    electronics: {
-      id: "electronics",
-      labelEn: "Electronics & Gadgets ERP",
-      labelBn: "ইলেকট্রনিক্স ও গ্যাজেট ইআরপি",
-      taglineEn: "IMEI & serial tracking, warranty periods & service trackback",
-      taglineBn: "আইএমইআই ও সিরিয়াল ট্র্যাকিং, ওয়ারেন্টি মেয়াদ ও সার্ভিস ট্র্যাকব্যাক",
-      quickActions: [
-        { to: "/sales", labelEn: "Gadget POS", labelBn: "গ্যাজেট পিওএস" },
-        { to: "/trackback", labelEn: "Warranty Trackback", labelBn: "ওয়ারেন্টি ট্র্যাকব্যাক" },
-        { to: "/purchases", labelEn: "Stock Intake", labelBn: "স্টক ক্রয়" },
-      ],
-      characteristicsEn: ["IMEI / Serial Numbers", "Warranty Tracking", "Device Trackback"],
-      characteristicsBn: ["আইএমইআই ও সিরিয়াল নম্বর", "ওয়ারেন্টি ট্র্যাকিং", "ডিভাইস ট্র্যাকব্যাক"],
     },
     pharmacy: {
       id: "pharmacy",
       labelEn: "Pharmacy & Healthcare ERP",
       labelBn: "ফার্মেসি ও হেলথকেয়ার ইআরপি",
-      taglineEn: "Batch numbers, 90-day expiry alerts & rapid counter dispensing",
-      taglineBn: "ব্যাচ নম্বর, ৯০ দিনের মেয়াদ সতর্কতা ও দ্রুত কাউন্টার বিলিং",
+      taglineEn: "PharmaSpot dispensing POS, batch expiry quarantine, Rx queue & supplier directory",
+      taglineBn: "ব্যাচ নম্বর, ৯০ দিনের মেয়াদ সতর্কতা, প্রেসক্রিপশন কিউ ও দ্রুত কাউন্টার বিলিং",
       quickActions: [
-        { to: "/sales", labelEn: "Dispense POS", labelBn: "কাউন্টার পিওএস" },
+        { to: "/erp", labelEn: "Pharmacy POS", labelBn: "ফার্মেসি পিওএস" },
         { to: "/purchases", labelEn: "Reorder Medicines", labelBn: "ওষুধ ক্রয়" },
         { to: "/products", labelEn: "Batch & Expiry Stock", labelBn: "ব্যাচ ও মেয়াদ স্টক" },
       ],
-      characteristicsEn: ["Batch Tracking", "90-Day Expiry Alerts", "Supplier Reordering"],
-      characteristicsBn: ["ব্যাচ ট্র্যাকিং", "মেয়াদ সতর্কতা", "সাপ্লায়ার ক্রয়"],
+      characteristicsEn: ["Batch & Expiry Quarantine", "Rx & Hold Orders", "Supplier Directory"],
+      characteristicsBn: ["ব্যাচ ও মেয়াদ সুরক্ষা", "প্রেসক্রিপশন ও হোল্ড বিল", "সাপ্লায়ার ডিরেক্টরি"],
     },
     grocery: {
       id: "grocery",
-      labelEn: "Grocery & Superstore ERP",
+      labelEn: "Groceries & Superstore ERP",
       labelBn: "মুদি ও সুপারশপ ইআরপি",
       taglineEn: "Weight & unit pricing, wholesale tiers & fast barcode checkout",
       taglineBn: "ওজন ও ইউনিট মূল্য, পাইকারি রেট ও দ্রুত বারকোড চেকআউট",
       quickActions: [
-        { to: "/sales", labelEn: "Superstore POS", labelBn: "সুপারশপ পিওএস" },
+        { to: "/erp", labelEn: "Grocery POS", labelBn: "মুদি পিওএস" },
         { to: "/products", labelEn: "Weight & Unit Stock", labelBn: "ওজন ও ইউনিট স্টক" },
         { to: "/customers", labelEn: "Customer Dues", labelBn: "কাস্টমার বাকি" },
       ],
       characteristicsEn: ["Kg / Litre / Pack Units", "Wholesale Pricing", "Low-Stock Alerts"],
       characteristicsBn: ["কেজি / লিটার / প্যাক", "পাইকারি মূল্য", "কম স্টক সতর্কতা"],
     },
-    retail: {
-      id: "retail",
-      labelEn: "Retail & Wholesale ERP",
-      labelBn: "রিটেইল ও হোলসেল ইআরপি",
-      taglineEn: "Complete inventory, customer dues ledger, invoices & cashbox",
-      taglineBn: "সম্পূর্ণ ইনভেন্টরি, কাস্টমার বাকি খাতা, ইনভয়েস ও ক্যাশবক্স",
-      quickActions: [
-        { to: "/sales", labelEn: "Quick POS", labelBn: "দ্রুত পিওএস" },
-        { to: "/products", labelEn: "Inventory", labelBn: "পণ্য ও স্টক" },
-        { to: "/parties", labelEn: "Parties & Suppliers", labelBn: "পার্টি ও সাপ্লায়ার" },
-      ],
-      characteristicsEn: ["Fast Barcode POS", "Customer & Party Ledger", "Multi-Branch Ready"],
-      characteristicsBn: ["দ্রুত বারকোড পিওএস", "কাস্টমার ও পার্টি খাতা", "মাল্টি-ব্রাঞ্চ সাপোর্ট"],
-    },
   };
-  return profiles[key] || profiles.retail;
+  return profiles[key] || profiles.fashion;
 }
 
 export function getIndustryLabel(industry?: string, lang: "bn" | "en" = "en"): string {

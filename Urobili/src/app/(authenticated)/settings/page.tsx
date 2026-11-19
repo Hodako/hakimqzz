@@ -139,7 +139,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
+const BUSINESS_TYPES = ["fashion", "grocery", "restaurant", "pharmacy"];
 
 type SettingsTab = "profile" | "transfer" | "printing" | "hardware" | "sheets" | "staff" | "appearance" | "security" | "history" | "logs";
 

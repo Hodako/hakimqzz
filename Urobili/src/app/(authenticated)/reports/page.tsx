@@ -36,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PrimaryHeaderSlot } from "@/components/primary-header-slot";
 
 // Expense Category Map for Bengali / English
 const EXPENSE_CATEGORIES: Record<string, { bn: string; en: string }> = {
@@ -452,95 +453,103 @@ export default function ReportsGeneratorPage() {
 
   return (
     <div className="space-y-5 pb-12">
+      {/* Export Actions projected into AppShell Primary Header (No Secondary Header Card) */}
+      <PrimaryHeaderSlot>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-semibold rounded-full gap-1 cursor-pointer"
+            >
+              <FileSpreadsheet className="size-3 text-emerald-600 dark:text-emerald-400" />
+              <span>{lang === "bn" ? "CSV" : "CSV"}</span>
+              <ChevronDown className="size-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleDownloadCSV("bn")}>
+              Bangla (বাংলা স্প্রেডশিট)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDownloadCSV("en")}>
+              English (Spreadsheet)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              disabled={isGeneratingPdf}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-semibold rounded-full gap-1 cursor-pointer border-sky-500/40 text-sky-700 dark:text-sky-300"
+            >
+              <Printer className="size-3 text-sky-600 dark:text-sky-400" />
+              <span>{lang === "bn" ? "প্রিভিউ" : "Preview"}</span>
+              <ChevronDown className="size-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleGeneratePdf(true, "bn")}>
+              Bangla (বাংলা প্রিভিউ)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleGeneratePdf(true, "en")}>
+              English (Preview)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              disabled={isGeneratingPdf}
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-bold rounded-full bg-primary text-primary-foreground gap-1 cursor-pointer"
+            >
+              {isGeneratingPdf ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+              <span>{isGeneratingPdf ? "..." : "PDF"}</span>
+              <ChevronDown className="size-3 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleGeneratePdf(false, "bn")}>
+              Bangla PDF (বাংলা পিডিএফ)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleGeneratePdf(false, "en")}>
+              English PDF (ইংরেজি পিডিএফ)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PrimaryHeaderSlot>
+
       {/* ── Screen Controls Header (Hidden in Print) ── */}
       <div className="print:hidden space-y-4">
-        {/* Top bar with navigation & main action buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border/80 shadow-xs">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon" className="size-9 rounded-xl cursor-pointer">
-                <ArrowLeft className="size-4" />
+        <div className="flex md:hidden items-center justify-end gap-1.5 flex-wrap">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-xl gap-1 cursor-pointer">
+                <FileSpreadsheet className="size-3.5 text-emerald-600" />
+                <span>CSV</span>
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold font-serif text-foreground">
-                {lang === "bn" ? "ব্যবসায়িক প্রতিবেদন ও ক্যাটাগরি রিপোর্ট" : "Business & Category Report"}
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                {lang === "bn"
-                  ? `${bizName} · নির্বাচিত তারিখ: ${from === to ? from : `${from} হতে ${to}`}`
-                  : `${bizName} · Range: ${from === to ? from : `${from} to ${to}`}`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 text-xs font-semibold rounded-xl beveled-button gap-1.5 cursor-pointer"
-                >
-                  <FileSpreadsheet className="size-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>{lang === "bn" ? "এক্সেল / CSV" : "Download CSV"}</span>
-                  <ChevronDown className="size-3 opacity-60 ml-0.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleDownloadCSV("bn")}>
-                  Bangla (বাংলা স্প্রেডশিট)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownloadCSV("en")}>
-                  English (ইংরেজি Spreadsheet)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  disabled={isGeneratingPdf}
-                  variant="outline"
-                  size="sm"
-                  className="h-9 text-xs font-bold rounded-xl beveled-button gap-1.5 cursor-pointer shadow-xs border-sky-500/40 text-sky-700 dark:text-sky-300"
-                >
-                  <Printer className="size-4 text-sky-600 dark:text-sky-400" />
-                  <span>{lang === "bn" ? "পিডিএফ ভিউ" : "PDF Preview"}</span>
-                  <ChevronDown className="size-3 opacity-60 ml-0.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleGeneratePdf(true, "bn")}>
-                  Bangla (বাংলা প্রিভিউ)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleGeneratePdf(true, "en")}>
-                  English (ইংরেজি Preview)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  disabled={isGeneratingPdf}
-                  size="sm"
-                  className="h-9 text-xs font-bold rounded-xl beveled-button bg-primary text-primary-foreground gap-1.5 cursor-pointer shadow-xs"
-                >
-                  {isGeneratingPdf ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                  <span>{isGeneratingPdf ? (lang === "bn" ? "পিডিএফ তৈরি হচ্ছে..." : "Generating...") : (lang === "bn" ? "ডাউনলোড PDF" : "Download PDF")}</span>
-                  <ChevronDown className="size-3 opacity-70 ml-0.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleGeneratePdf(false, "bn")}>
-                  Bangla PDF (বাংলা পিডিএফ)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleGeneratePdf(false, "en")}>
-                  English PDF (ইংরেজি পিডিএফ)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleDownloadCSV("bn")}>Bangla CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownloadCSV("en")}>English CSV</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={isGeneratingPdf} size="sm" className="h-8 text-xs font-bold rounded-xl gap-1 cursor-pointer">
+                {isGeneratingPdf ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                <span>PDF</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleGeneratePdf(false, "bn")}>Bangla PDF</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleGeneratePdf(false, "en")}>English PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Date Filter Toolbar: Default is "Today" */}
