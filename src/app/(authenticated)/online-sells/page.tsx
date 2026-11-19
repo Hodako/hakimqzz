@@ -465,7 +465,7 @@ export default function OnlineSellsPage() {
             className="sm:hidden h-7.5 px-2.5 text-xs font-bold font-hind rounded-lg text-zinc-950 gap-1 shrink-0 border border-black/20 hover:brightness-95 transition-all shadow-2xs cursor-pointer"
           >
             <Plus className="size-3.5 stroke-[2.5]" />
-            <span>{lang === "bn" ? "নতুন অর্ডার" : "New"}</span>
+            <span>{lang === "bn" ? "নতুন এন্ট্রি" : "New Entry"}</span>
           </Button>
         </div>
 
@@ -512,7 +512,7 @@ export default function OnlineSellsPage() {
             className="hidden sm:flex h-8 px-3 text-xs font-bold font-hind rounded-xl text-zinc-950 border border-black/20 hover:brightness-95 transition-all shadow-2xs gap-1.5 cursor-pointer"
           >
             <Plus className="size-3.5 stroke-[2.5]" />
-            <span>{lang === "bn" ? "নতুন কুরিয়ার অর্ডার" : "New Courier Order"}</span>
+            <span>{lang === "bn" ? "নতুন এন্ট্রি (New Entry)" : "New Entry"}</span>
           </Button>
         </div>
       </div>

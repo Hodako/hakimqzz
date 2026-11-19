@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,20 +10,29 @@ import { ProductSearchSelect } from "@/components/product-search";
 import { CustomerSearchSelect } from "@/components/customer-search";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { useAuth } from "@/hooks/use-auth";
-import { getActiveEmployeeSession } from "@/lib/employee-session";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
-import { createSaleFn, createCustomerFn } from "@/lib/rpc";
-import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Eye, EyeOff, Tag } from "lucide-react";
+import { createSaleFn, createCustomerFn, steadfastCreateOrderFn, steadfastFraudCheckFn } from "@/lib/rpc";
+import { getBusinessSettingsFn } from "@/lib/rpc-admin";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap, Eye, ShieldCheck, MapPin } from "lucide-react";
 import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog";
 import { playTapSound, playScanSuccessSound, playSaleSuccessSound, playErrorSound } from "@/lib/audio";
 import { getWhatsAppInvoiceUrl } from "@/lib/whatsapp-helper";
-import { createHidScanBuffer, findProductsByScannedCode, getPosHardwareSettings, type ReceiptPrintMode } from "@/lib/pos-hardware";
+import { sendDesktopWhatsAppIfAuto } from "@/lib/desktop-whatsapp";
+import { createHidScanBuffer, findProductsByScannedCode, getPosHardwareSettings } from "@/lib/pos-hardware";
+import {
+  getDivisions,
+  getDistrictsByDivision,
+  getUpazilasByDistrict,
+  getUnionsByUpazila,
+  buildSteadfastAddress,
+} from "@/lib/bd-geo-data";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 export type SalePaymentType = "cash" | "bkash" | "bank" | "credit" | "online" | "split";
@@ -61,6 +70,7 @@ export function SaleDialog({
 }) {
   const { lang, t } = useT();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
 
   const [type, setType] = useState<SalePaymentType>(presetType ?? "cash");
@@ -72,21 +82,74 @@ export function SaleDialog({
   const [splitBkash, setSplitBkash] = useState("");
   const [splitBank, setSplitBank] = useState("");
   const [mobileSplitOpen, setMobileSplitOpen] = useState(true);
-  const [footerQuickPanelOpen, setFooterQuickPanelOpen] = useState(false);
   const [courierName, setCourierName] = useState("Steadfast Courier");
   const [trackingCode, setTrackingCode] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [showBuyPrice, setShowBuyPrice] = useState(false);
+  const [autoSendSteadfast, setAutoSendSteadfast] = useState(true);
+  const [sfFraudResult, setSfFraudResult] = useState<any | null>(null);
+  const [sfFraudBusy, setSfFraudBusy] = useState(false);
+
+  // BD Geographic Hierarchy for Online Sales & SteadFast Delivery
+  const [division, setDivision] = useState("Dhaka");
+  const [district, setDistrict] = useState("Dhaka");
+  const [upazila, setUpazila] = useState("");
+  const [union, setUnion] = useState("");
+  const [customUnion, setCustomUnion] = useState("");
+  const [addressDetails, setAddressDetails] = useState("");
+  const [manualRecipientName, setManualRecipientName] = useState("");
+  const [manualRecipientPhone, setManualRecipientPhone] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
+
+  const effectiveUnion = customUnion.trim() || union;
+  const builtFullAddress = useMemo(() => {
+    return buildSteadfastAddress({
+      division,
+      district,
+      upazila,
+      union: effectiveUnion,
+      addressDetails,
+    });
+  }, [division, district, upazila, effectiveUnion, addressDetails]);
+
+  const divisions = useMemo(() => getDivisions(), []);
+  const districts = useMemo(() => getDistrictsByDivision(division), [division]);
+  const upazilas = useMemo(() => getUpazilasByDistrict(district), [district]);
+  const unions = useMemo(() => getUnionsByUpazila(district, upazila), [district, upazila]);
+
+  const handleDivisionChange = (newDiv: string) => {
+    setDivision(newDiv);
+    const firstDist = getDistrictsByDivision(newDiv)[0]?.name || "";
+    setDistrict(firstDist);
+    setUpazila("");
+    setUnion("");
+    setCustomUnion("");
+  };
+
+  const handleDistrictChange = (newDist: string) => {
+    setDistrict(newDist);
+    setUpazila("");
+    setUnion("");
+    setCustomUnion("");
+  };
+
+  const handleUpazilaChange = (newUp: string) => {
+    setUpazila(newUp);
+    setUnion("");
+    setCustomUnion("");
+  };
+
+  const bizSettings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
+  const steadfastEnabled = Boolean((bizSettings.data?.business as any)?.steadfast_enabled);
   const [finalDiscount, setFinalDiscount] = useState("");
-  const [finalDiscountType, setFinalDiscountType] = useState<"fixed" | "percent">("fixed");
+  const [busy, setBusy] = useState(false);
   const [scanInput, setScanInput] = useState("");
-  const [printMode, setPrintMode] = useState<ReceiptPrintMode>("manual");
+  const [scannerSuffix, setScannerSuffix] = useState<"Enter" | "Tab" | "None">("Enter");
   const scanInputRef = useRef<HTMLInputElement>(null);
-  const initializedSaleRef = useRef(false);
-  const submittingRef = useRef(false);
   const lastAddToCartTimeRef = useRef(0);
-  const [scannerSuffix, setScannerSuffix] = useState<"Enter" | "Tab">("Enter");
+
+  useEffect(() => {
+    setScannerSuffix(getPosHardwareSettings().scannerSuffix);
+  }, [open]);
 
   const { data: products = [] } = useCachedQuery(["products"], getProducts);
   const { data: rawCustomers = [] } = useCachedQuery(["customers"], getCustomers);
@@ -123,27 +186,43 @@ export function SaleDialog({
   }
 
   const handleBarcodeScan = useCallback((scannedCode: string) => {
-    const matches = findProductsByScannedCode(products, String(scannedCode || ""));
-    if (matches.length > 1) {
-      playErrorSound();
-      toast.error(lang === "bn" ? `একই বারকোড (${scannedCode}) একাধিক পণ্যে আছে` : `Barcode ${scannedCode} belongs to multiple products`);
-      return;
-    }
+    const raw = String(scannedCode || "").trim();
+    if (!raw) return false;
+
+    const matches = findProductsByScannedCode(products, raw);
     const prod = matches[0];
+
     if (!prod) {
       playErrorSound();
-      toast.error(lang === "bn" ? `বারকোড/QR কোড (${scannedCode}) দ্বারা পণ্য পাওয়া যায়নি` : `No product found for Barcode/QR: ${scannedCode}`);
-      return;
+      toast.error(
+        lang === "bn"
+          ? `বারকোড (${raw}) দ্বারা পণ্য পাওয়া যায়নি`
+          : `No product found for Barcode: ${raw}`
+      );
+      return false;
     }
 
+    if (matches.length > 1) {
+      toast.info(
+        lang === "bn"
+          ? `${matches.length}টি পণ্যের কোড মিলেছে, প্রথম পণ্যটি কার্টে যোগ করা হয়েছে: ${prod.name}`
+          : `${matches.length} products matched this code; added first match: ${prod.name}`
+      );
+    }
+
+    playScanSuccessSound();
+
+    let newQty = 1;
     setCart(prev => {
       const idx = prev.findIndex(item => item.productId === prod.id);
       if (idx !== -1) {
         const updated = [...prev];
         const existingQty = Number(updated[idx].qty) || 0;
-        updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
+        newQty = existingQty + 1;
+        updated[idx] = { ...updated[idx], qty: String(newQty) };
         return updated;
       } else {
+        newQty = 1;
         return [...prev, {
           productId: prod.id,
           qty: "1",
@@ -153,44 +232,87 @@ export function SaleDialog({
       }
     });
 
-    playScanSuccessSound();
-    toast.success(lang === "bn" ? `কার্টে যুক্ত: ${prod.name}` : `Added to cart: ${prod.name}`);
-    setTimeout(() => {
-      scanInputRef.current?.focus();
-    }, 50);
+    toast.success(
+      lang === "bn"
+        ? `কার্টে যোগ হয়েছে: ${prod.name} (পরিমাণ: ${newQty})`
+        : `Added to cart: ${prod.name} (Qty: ${newQty})`
+    );
+
+    setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
+    return true;
   }, [products, lang]);
 
+  const handleBarcodeInputSubmit = useCallback((rawCode?: string) => {
+    const code = (rawCode ?? scanInput).trim();
+    if (!code) return;
+    handleBarcodeScan(code);
+    setScanInput("");
+    setTimeout(() => scanInputRef.current?.focus(), 50);
+  }, [scanInput, handleBarcodeScan]);
+
+  const wasOpenRef = useRef(false);
+  const lastPresetIdRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    if (!open) { initializedSaleRef.current = false; return; }
-    if (!initializedSaleRef.current) {
-      initializedSaleRef.current = true;
-      setPrintMode(getPosHardwareSettings().printMode);
-      setScannerSuffix(getPosHardwareSettings().scannerSuffix);
-      setScanInput("");
+    if (open && !wasOpenRef.current) {
+      wasOpenRef.current = true;
       setType(presetType ?? "cash");
-      setFooterQuickPanelOpen(false);
       setPartyId("");
       setPaid("");
       setSplitCash("");
       setSplitBkash("");
       setSplitBank("");
       setFinalDiscount("");
-      setFinalDiscountType("fixed");
+      setCourierName("Steadfast Courier");
+      setTrackingCode("");
+      setManualRecipientName("");
+      setManualRecipientPhone("");
+      setAddressDetails("");
+      setDeliveryNote("");
+      setSfFraudResult(null);
+      setDivision("Dhaka");
+      setDistrict("Dhaka");
+      setUpazila("");
+      setUnion("");
+      setCustomUnion("");
       if (presetCart && presetCart.length > 0) {
         setCart(presetCart.map(x => ({ ...x, discount: x.discount ?? "" })));
       } else if (presetProductId) {
+        lastPresetIdRef.current = presetProductId;
         const p = products.find(x => x.id === presetProductId);
         setCart([{ productId: presetProductId, qty: "1", sellPrice: p ? String(p.sell_price || "") : "", discount: "" }]);
       } else {
         setCart([]);
       }
       setDraft({ productId: "", qty: "1", sellPrice: "", discount: "" });
+      setScanInput("");
+      setTimeout(() => scanInputRef.current?.focus(), 80);
+    } else if (open && presetProductId && presetProductId !== lastPresetIdRef.current) {
+      // When a new presetProductId arrives while the dialog is already open (e.g. repeated scans)
+      lastPresetIdRef.current = presetProductId;
+      const p = products.find(x => x.id === presetProductId);
+      if (p) {
+        setCart(prev => {
+          const idx = prev.findIndex(item => item.productId === presetProductId);
+          if (idx !== -1) {
+            const updated = [...prev];
+            const existingQty = Number(updated[idx].qty) || 0;
+            updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
+            return updated;
+          } else {
+            return [...prev, {
+              productId: presetProductId,
+              qty: "1",
+              sellPrice: String(p.sell_price || ""),
+              discount: ""
+            }];
+          }
+        });
+      }
+    } else if (!open) {
+      wasOpenRef.current = false;
+      lastPresetIdRef.current = undefined;
     }
-
-    const focusTimer = setTimeout(() => {
-      scanInputRef.current?.focus();
-    }, 150);
-    return () => clearTimeout(focusTimer);
   }, [open, presetType, presetProductId, presetCart, products]);
 
   // Listen for global product add events (e.g. from dashboard scanner)
@@ -207,13 +329,14 @@ export function SaleDialog({
             const existingQty = Number(updated[idx].qty) || 0;
             updated[idx] = { ...updated[idx], qty: String(existingQty + 1) };
             return updated;
+          } else {
+            return [...prev, {
+              productId: pid,
+              qty: "1",
+              sellPrice: String(p.sell_price || ""),
+              discount: ""
+            }];
           }
-          return [...prev, {
-            productId: pid,
-            qty: "1",
-            sellPrice: String(p.sell_price || ""),
-            discount: ""
-          }];
         });
       }
     };
@@ -221,29 +344,31 @@ export function SaleDialog({
     return () => window.removeEventListener("df-add-product-to-sale", handleGlobalAdd);
   }, [open, products]);
 
+  // Ultra-fast Hardware Barcode Scanner listener (USB / Bluetooth HID guns) - Classic-World System
   useEffect(() => {
     if (!open) return;
 
-    const scanner = createHidScanBuffer(scannerSuffix);
+    const hidBuffer = createHidScanBuffer(scannerSuffix);
+    const handleHardwareScannerKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.id === "sale-barcode-input") return;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+      if (isInput) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey || busy) return;
-      const target = e.target as HTMLElement;
-      if (target && target.id === "sale-barcode-input") {
-        return;
-      }
-
-      const code = scanner.push(e.key, Date.now());
-      if (code) {
+      const scanned = hidBuffer.consumeKey(e, handleBarcodeScan);
+      if (scanned) {
         e.preventDefault();
         e.stopPropagation();
-        handleBarcodeScan(code);
+        handleBarcodeScan(scanned);
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, products, busy, scannerSuffix, handleBarcodeScan]);
+    window.addEventListener("keydown", handleHardwareScannerKeyDown, true);
+    return () => {
+      hidBuffer.clear();
+      window.removeEventListener("keydown", handleHardwareScannerKeyDown, true);
+    };
+  }, [open, handleBarcodeScan, scannerSuffix]);
 
   function lineTotal(line: CartLine) {
     const p = products.find(x => x.id === line.productId);
@@ -254,22 +379,10 @@ export function SaleDialog({
     return finalPrice * (Number(line.qty) || 0);
   }
 
-  const cartSubtotal = cart.reduce((a, l) => a + lineTotal(l), 0);
-  const lineDiscountsTotal = cart.reduce((a, l) => a + (Number(l.discount) || 0) * (Number(l.qty) || 1), 0);
-
-  const finalDiscountAmount = useMemo(() => {
-    const val = Number(finalDiscount) || 0;
-    if (val <= 0 || cartSubtotal <= 0) return 0;
-    if (finalDiscountType === "percent") {
-      const pct = Math.min(100, Math.max(0, val));
-      return Math.round((cartSubtotal * pct) / 100);
-    }
-    return Math.min(cartSubtotal, Math.max(0, val));
-  }, [finalDiscount, finalDiscountType, cartSubtotal]);
-
-  const sellTotal = Math.max(0, cartSubtotal - finalDiscountAmount);
-
-  const rawProfitTotal = cart.reduce((a, l) => {
+  const rawSellTotal = cart.reduce((a, l) => a + lineTotal(l), 0);
+  const finalDiscountNum = Math.min(Math.max(0, Number(finalDiscount) || 0), rawSellTotal);
+  const sellTotal = Math.max(0, rawSellTotal - finalDiscountNum);
+  const profitTotal = Math.max(0, cart.reduce((a, l) => {
     const p = products.find(x => x.id === l.productId);
     const sell = Number(l.sellPrice) || (p ? p.sell_price : 0) || 0;
     const disc = Number(l.discount) || 0;
@@ -277,8 +390,7 @@ export function SaleDialog({
     const qty = Number(l.qty) || 1;
     const buy = Number(p?.buy_price) || 0;
     return a + (finalPrice - buy) * qty;
-  }, 0);
-  const profitTotal = rawProfitTotal - finalDiscountAmount;
+  }, 0) - finalDiscountNum);
 
   const isFullPaid = type === "cash" || type === "bkash" || type === "bank";
   const splitCashNum = Math.max(0, Number(splitCash) || 0);
@@ -294,11 +406,6 @@ export function SaleDialog({
 
   function handleFooterPaymentSwitch(nextType: SalePaymentType) {
     setType(nextType);
-    if (nextType === "split" || nextType === "credit") {
-      setFooterQuickPanelOpen(true);
-    } else {
-      setFooterQuickPanelOpen(false);
-    }
   }
 
   function addToCart() {
@@ -354,13 +461,19 @@ export function SaleDialog({
     if (!open) return;
 
     const handleDialogKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement;
       const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
 
+      if (e.code === "Space" || e.key === " ") {
+        const isTextInput = isInput && (target as HTMLInputElement).type === "text" && (target as HTMLInputElement).value.length > 0;
+        if (!isTextInput && cart.length > 0 && !draft.productId && !busy) {
+          e.preventDefault();
+          submit(e as any, "print");
+        }
+      }
+
       if (e.key === "Enter") {
-        if (target === scanInputRef.current) return;
-        if (draft.productId && !isInput && target.tagName !== "BUTTON" && target.tagName !== "SELECT") {
+        if (draft.productId) {
           e.preventDefault();
           addToCart();
         }
@@ -374,7 +487,6 @@ export function SaleDialog({
 
   async function submit(e: React.FormEvent, action: "print" | "download" | "none" = "none") {
     e.preventDefault();
-    if (submittingRef.current) return;
     if (!user || cart.length === 0) {
       playErrorSound();
       return toast.error(t("select_product"));
@@ -388,7 +500,6 @@ export function SaleDialog({
     });
 
     if (emptyPriceIdx !== -1) {
-      submittingRef.current = false;
       playErrorSound();
       const p = products.find((x) => x.id === cart[emptyPriceIdx].productId);
       const name = p?.name ? `"${p.name}"` : `আইটেম #${emptyPriceIdx + 1}`;
@@ -409,7 +520,6 @@ export function SaleDialog({
       playErrorSound();
       return toast.error(lang === "bn" ? "বকেয়া থাকার কারণে কাস্টমার নির্বাচন করা আবশ্যক" : "Customer is required when there is remaining due");
     }
-    submittingRef.current = true;
     setBusy(true);
     try {
       const cartId = safeUUID();
@@ -443,14 +553,9 @@ export function SaleDialog({
       let remainingBank = type === "split" ? netBank : (type === "bank" ? sellTotal : 0);
       let remainingPaid = (type === "credit") ? effectivePaid : (type === "split" ? (netCash + netBkash + netBank) : (type === "online" ? 0 : sellTotal));
       let remainingDue = (type === "credit" || type === "split") ? due : (type === "online" ? sellTotal : 0);
+      let remainingFinalDisc = finalDiscountNum;
 
-      let remainingFinalDisc = finalDiscountAmount;
-      const salePayloads: any[] = [];
-      const activeEmpSession = getActiveEmployeeSession();
-      const isEmp = user?.role === "employee" || Boolean(activeEmpSession);
-      const employeeId = isEmp ? (activeEmpSession?.id || (user as any)?.employee_id || user?.id) : null;
-      const employeeName = isEmp ? (activeEmpSession?.name || user?.full_name || (user as any)?.name) : null;
-
+      let firstCreatedSaleId: string | null = null;
       for (let i = 0; i < cart.length; i++) {
         const line = cart[i];
         const product = products.find(p => p.id === line.productId);
@@ -463,22 +568,23 @@ export function SaleDialog({
           throw new Error(lang === "bn" ? `${product.name}-এর বিক্রয় মূল্য সঠিক নয়!` : `Invalid sell price for ${product.name}!`);
         }
         const disc = Math.max(0, Number(line.discount) || 0);
-        const itemLineSell = Math.max(rawSellPrice - disc, 0) * qtyNum;
+        const finalUnitSell = Math.max(rawSellPrice - disc, 0);
+        const lineItemSell = finalUnitSell * qtyNum;
 
-        // Distribute final discount proportionally across line items
-        let lineFinalDisc = 0;
-        if (finalDiscountAmount > 0 && cartSubtotal > 0) {
+        let allocatedFinalDisc = 0;
+        if (remainingFinalDisc > 0) {
           if (i === cart.length - 1) {
-            lineFinalDisc = Math.max(0, remainingFinalDisc);
+            allocatedFinalDisc = Math.min(remainingFinalDisc, lineItemSell);
+            remainingFinalDisc = Math.max(0, remainingFinalDisc - allocatedFinalDisc);
           } else {
-            const ratio = itemLineSell / cartSubtotal;
-            lineFinalDisc = Math.min(Math.round(finalDiscountAmount * ratio), remainingFinalDisc);
-            remainingFinalDisc -= lineFinalDisc;
+            const ratio = rawSellTotal > 0 ? lineItemSell / rawSellTotal : 1 / cart.length;
+            allocatedFinalDisc = Math.min(Math.round(finalDiscountNum * ratio), remainingFinalDisc, lineItemSell);
+            remainingFinalDisc -= allocatedFinalDisc;
           }
         }
 
-        const lineSell = Math.max(0, itemLineSell - lineFinalDisc);
-        const lineDiscTotal = (disc * qtyNum) + lineFinalDisc;
+        const lineSell = Math.max(lineItemSell - allocatedFinalDisc, 0);
+        const lineDiscTotal = (disc * qtyNum) + allocatedFinalDisc;
         const lineProfit = lineSell - (Number(product.buy_price || 0) * qtyNum);
 
         // Proportional paid & due distribution
@@ -531,41 +637,104 @@ export function SaleDialog({
           else if (type === "bank") lineBank = lineSell;
         }
 
-        salePayloads.push({
-          product_id: product.id,
-          product_name: product.name,
-          qty: qtyNum,
-          buy_price: Number(product.buy_price) || 0,
-          sell_price: rawSellPrice,
-          discount: lineDiscTotal,
-          profit: lineProfit,
-          type,
-          party_id: partyId || null,
-          paid_amount: linePaid,
-          due_amount: lineDue,
-          split_cash: lineCash,
-          split_bkash: lineBkash,
-          split_bank: lineBank,
-          cart_id: cartId,
-          courier_name: type === "online" ? courierName : undefined,
-          tracking_code: type === "online" ? trackingCode : undefined,
-          courier_status: type === "online" ? "pending" : undefined,
-          note: customerAddress ? `Address: ${customerAddress}` : undefined,
-          employee_id: employeeId || undefined,
-          employee_name: employeeName || undefined,
+        const createdSale = await createSaleFn({
+          data: {
+            product_id: product.id,
+            product_name: product.name,
+            qty: qtyNum,
+            buy_price: Number(product.buy_price) || 0,
+            sell_price: rawSellPrice,
+            discount: lineDiscTotal,
+            profit: lineProfit,
+            type,
+            party_id: partyId || null,
+            paid_amount: linePaid,
+            due_amount: lineDue,
+            split_cash: lineCash,
+            split_bkash: lineBkash,
+            split_bank: lineBank,
+            cart_id: cartId,
+            courier_name: type === "online" ? courierName : undefined,
+            tracking_code: type === "online" ? trackingCode : undefined,
+            courier_status: type === "online" ? "pending" : undefined,
+            note: (builtFullAddress || customerAddress) ? `Address: ${builtFullAddress || customerAddress}${deliveryNote ? ` | Note: ${deliveryNote}` : ""}` : undefined,
+            recipient_name: manualRecipientName || (customers.find((c: any) => c.id === partyId) as any)?.name || undefined,
+            recipient_phone: manualRecipientPhone || (customers.find((c: any) => c.id === partyId) as any)?.phone || undefined,
+            recipient_address: builtFullAddress || customerAddress || (customers.find((c: any) => c.id === partyId) as any)?.address || undefined,
+          },
+        });
+        if (!firstCreatedSaleId && createdSale?.id) {
+          firstCreatedSaleId = createdSale.id;
+        }
+      }
+
+      if (type === "online" && steadfastEnabled && autoSendSteadfast && firstCreatedSaleId && courierName.toLowerCase().includes("steadfast")) {
+        const cust = customers.find((c: any) => c.id === partyId);
+        const recName = String(manualRecipientName || cust?.name || "Customer").trim();
+        const recPhone = String(manualRecipientPhone || (cust as any)?.phone || "").trim();
+        const recAddr = String(builtFullAddress || customerAddress || (cust as any)?.address || "").trim();
+        if (recPhone && recAddr) {
+          try {
+            const sfRes = await steadfastCreateOrderFn({
+              data: {
+                saleId: firstCreatedSaleId,
+                recipient_name: recName,
+                recipient_phone: recPhone,
+                recipient_address: recAddr,
+                cod_amount: Math.max(0, Math.round(sellTotal)),
+                note: deliveryNote || undefined,
+              },
+            });
+            if (sfRes?.consignment?.tracking_code) {
+              setTrackingCode(sfRes.consignment.tracking_code);
+              toast.success(
+                lang === "bn"
+                  ? `SteadFast পার্সেল বুক হয়েছে! Tracking: ${sfRes.consignment.tracking_code}`
+                  : `SteadFast booked! Tracking: ${sfRes.consignment.tracking_code}`
+              );
+            }
+          } catch (sfErr: any) {
+            toast.warning(`Sale saved, SteadFast dispatch skipped: ${sfErr?.message || "Check phone/address"}`);
+          }
+        }
+      }
+
+      // Desktop Client-Compute WhatsApp Auto-Send (if Auto Mode is active)
+      const waCust = customers.find((c: any) => c.id === partyId);
+      const waPhone = String((waCust as any)?.phone || "").trim();
+      if (waPhone) {
+        const itemsSummary = cart
+          .map((l) => {
+            const p = products.find((x) => x.id === l.productId);
+            return `${p?.name || "Item"} ×${l.qty}`;
+          })
+          .join(", ");
+
+        const isCashSale = type === "cash" || !type;
+        const paidNum = isCashSale
+          ? Math.round(sellTotal)
+          : type === "credit"
+          ? Math.round(Number(paid) || 0)
+          : Math.round(sellTotal);
+        const dueNum = isCashSale ? 0 : Math.max(0, Math.round(sellTotal - paidNum));
+
+        void sendDesktopWhatsAppIfAuto(type === "online" ? "online" : "sale", {
+          phone: waPhone,
+          shopName: user?.business_name,
+          customerName: waCust?.name || "Customer",
+          itemsSummary,
+          amount: Math.round(sellTotal),
+          paidAmount: paidNum,
+          dueAmount: dueNum,
+          paymentType: type,
+          trackingCode: type === "online" ? (trackingCode || null) : null,
         });
       }
 
-      // Execute all sale lines in parallel for blazing-fast POS throughput
-      await Promise.all(salePayloads.map(payload => createSaleFn({ data: payload })));
-
-      // Parallel query invalidations for instant responsive UI
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["sales"] }),
-        qc.invalidateQueries({ queryKey: ["products"] }),
-        qc.invalidateQueries({ queryKey: ["party-detail"] }),
-        qc.invalidateQueries({ queryKey: ["cashbox"] }),
-      ]);
+      await qc.invalidateQueries({ queryKey: ["sales"] });
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["party-detail"] });
+      await qc.invalidateQueries({ queryKey: ["cashbox"] });
 
       playSaleSuccessSound();
 
@@ -588,14 +757,11 @@ export function SaleDialog({
       }
 
       const cust = customers.find(c => c.id === partyId);
-      const lineDiscountsTotal = cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0);
-      const totalCombinedDiscount = lineDiscountsTotal + finalDiscountAmount;
-
       const waUrl = getWhatsAppInvoiceUrl({
         invoiceNo: `INV-${cartId.slice(-6).toUpperCase()}`,
         customerName: cust?.name || (lang === "bn" ? "সম্মানিত ক্রেতা" : "Valued Customer"),
         customerPhone: cust?.phone || "",
-        shopName: user.business_name || user.full_name || "Urobili",
+        shopName: user.business_name || user.full_name || "Dream Fashion",
         shopPhone: user.business_phone_numbers || "",
         items: cart.map(c => {
           const prod = products.find(p => p.id === c.productId);
@@ -605,8 +771,8 @@ export function SaleDialog({
             price: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
           };
         }),
-        subtotal: cartSubtotal + lineDiscountsTotal,
-        discount: totalCombinedDiscount,
+        subtotal: rawSellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+        discount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0) + finalDiscountNum,
         total: sellTotal,
         paidAmount: type === "online" ? 0 : paidNum,
         dueAmount: type === "online" ? sellTotal : due,
@@ -630,9 +796,10 @@ export function SaleDialog({
         { duration: 6000 }
       );
 
-      if (action === "print" || (action === "none" && printMode === "automatic")) {
+      const hwSettings = getPosHardwareSettings();
+      if (action === "print" || (action === "none" && hwSettings.printMode === "automatic")) {
         const invoiceParams = {
-          businessName: user.business_name || user.full_name || "Urobili",
+          businessName: user.business_name || user.full_name || "Dream Fashion",
           userEmail: user.business_emails || user.email || "",
           shopAddress: user.business_address || "",
           shopPhoneNumbers: user.business_phone_numbers || "",
@@ -659,8 +826,8 @@ export function SaleDialog({
               sellPrice: Math.max(Number(c.sellPrice) || prod?.sell_price || 0, 0),
             };
           }),
-          subtotal: cartSubtotal + lineDiscountsTotal,
-          discountAmount: totalCombinedDiscount,
+          subtotal: rawSellTotal + cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0),
+          discountAmount: cart.reduce((acc, c) => acc + ((Number(c.discount) || 0) * (Number(c.qty) || 1)), 0) + finalDiscountNum,
           total: sellTotal,
           paidAmount: type === "online" ? 0 : (type === "split" && totalSplitPaid > sellTotal ? totalSplitPaid : paidNum),
           due: type === "online" ? sellTotal : due,
@@ -676,13 +843,11 @@ export function SaleDialog({
         }
       }
 
-      setFinalDiscount("");
-      setFinalDiscountType("fixed");
       onOpenChange(false);
     } catch (err: unknown) {
       playErrorSound();
       toast.error(err instanceof Error ? err.message : String(err));
-    } finally { submittingRef.current = false; setBusy(false); }
+    } finally { setBusy(false); }
   }
 
   const currentChangeAmount = (type === "split" && totalSplitPaid > sellTotal)
@@ -694,44 +859,27 @@ export function SaleDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent onOpenAutoFocus={e => { e.preventDefault(); scanInputRef.current?.focus(); }} className="w-[98vw] sm:max-w-[95vw] md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] max-h-[94dvh] flex flex-col overflow-hidden p-0 rounded-2xl border-border shadow-2xl">
+        <DialogContent className="w-[98vw] sm:max-w-[95vw] md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] max-h-[96dvh] flex flex-col overflow-hidden p-0 rounded-3xl border-border shadow-2xl">
           <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                {presetType === "online" || type === "online" ? <Truck className="size-4" /> : <ShoppingCart className="size-4" />}
+                {type === "online" ? <Truck className="size-4" /> : <ShoppingCart className="size-4" />}
               </div>
               <div>
                 <DialogTitle className="text-base font-bold">
-                  {presetType === "online" || type === "online" ? (lang === "bn" ? "নতুন অনলাইন কুরিয়ার অর্ডার" : "New Online Courier Order") : t("new_sale")}
+                  {type === "online" ? (lang === "bn" ? "নতুন অনলাইন কুরিয়ার অর্ডার" : "New Online Courier Order") : t("new_sale")}
                 </DialogTitle>
                 <p className="text-[11px] text-muted-foreground hidden sm:block">
-                  {presetType === "online" || type === "online"
+                  {type === "online"
                     ? (lang === "bn" ? "কুরিয়ার ক্যাশ অন ডেলিভারি সেলস এন্ট্রি" : "Courier Cash on Delivery Order")
                     : (lang === "bn" ? "দ্রুত বিক্রয় ও ইনভয়েস জেনারেশন" : "Fast POS Checkout & Invoice Generation")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={`h-7 px-2 text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors ${
-                  showBuyPrice
-                    ? "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300 font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setShowBuyPrice(v => !v)}
-                title={showBuyPrice ? (lang === "bn" ? "ক্রয়মূল্য লুকান" : "Hide buy price") : (lang === "bn" ? "ক্রয়মূল্য দেখুন" : "View buy price")}
-              >
-                {showBuyPrice ? <EyeOff className="size-3.5 text-amber-600" /> : <Eye className="size-3.5" />}
-                <span>{lang === "bn" ? (showBuyPrice ? "ক্রয় অন" : "ক্রয়মূল্য") : (showBuyPrice ? "Cost On" : "Buy Price")}</span>
-              </Button>
-              <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/60 font-medium">
-                <span><strong className="text-foreground">Enter</strong>: {lang === "bn" ? "কার্টে যোগ" : "Add to Cart"}</span>
-                  <span>·</span>
-                  <span>{lang === "bn" ? "স্ক্যান করলে পণ্য কার্টে যোগ হবে" : "Scans add items to the cart"}</span>
-              </div>
+            <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/60 font-medium">
+              <span><strong className="text-foreground">Enter</strong>: {lang === "bn" ? "কার্টে যোগ" : "Add to Cart"}</span>
+              <span>·</span>
+              <span><strong className="text-foreground">Space</strong>: {lang === "bn" ? "বিক্রি সম্পন্ন" : "Complete Sale"}</span>
             </div>
           </DialogHeader>
 
@@ -742,7 +890,6 @@ export function SaleDialog({
                 if (e.key === "Enter") {
                   if (draft.productId) {
                     e.preventDefault();
-                    e.stopPropagation();
                     const draftPriceStr = String(draft.sellPrice ?? "").trim();
                     if (!draftPriceStr || isNaN(Number(draftPriceStr)) || Number(draftPriceStr) <= 0) {
                       e.stopPropagation();
@@ -804,50 +951,313 @@ export function SaleDialog({
             >
               <div className="md:col-span-7 lg:col-span-6 space-y-3.5 min-w-0">
                 {/* Payment Method Selector or Courier Delivery Panel */}
-                {presetType === "online" || type === "online" ? (
-                  <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                        <Truck className="size-4 text-purple-600" />
-                        {lang === "bn" ? "কুরিয়ার পেমেন্ট (Courier Payment)" : "Courier Payment"}
-                      </span>
+                {type === "online" ? (
+                  <div className="p-3.5 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/30 rounded-2xl space-y-3.5 shadow-2xs">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="size-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                          <Truck className="size-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-purple-950 dark:text-purple-200">
+                            {lang === "bn" ? "অনলাইন কুরিয়ার এন্ট্রি (New Entry)" : "Online Courier New Entry"}
+                          </span>
+                          <p className="text-[10px] text-muted-foreground">
+                            {lang === "bn" ? "কুরিয়ার সার্ভিস: SteadFast Courier (ডিফল্ট)" : "Courier: SteadFast Courier (Default)"}
+                          </p>
+                        </div>
+                      </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                        ⏳ {lang === "bn" ? "পেমেন্ট অপেক্ষমাণ (Pending)" : "Payment: Pending"}
+                        ⏳ {lang === "bn" ? "পেমেন্ট: কুরিয়ারে অপেক্ষমাণ" : "Payment: Pending COD"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-tight">
-                      {lang === "bn"
-                        ? "কুরিয়ার পেমেন্ট পেন্ডিং থাকবে। কুরিয়ার টাকা রিসিভ করার পর সেলস পেজ থেকে 'পেমেন্ট গ্রহণ' করলে ক্যাশবক্সে জমা হবে।"
-                        : "Online sale profit is recorded immediately. Payment will deposit into Cashbox upon courier collection approval."}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+
+                    {/* Section 1: Customer Selection (Optional) or Direct Recipient Info */}
+                    <div className="p-2.5 bg-background/80 rounded-xl border border-border/80 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <span>{lang === "bn" ? "১. কাস্টমার নির্বাচন (ঐচ্ছিক)" : "1. Customer Selection (Optional)"}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            {lang === "bn" ? "— তালিকা থেকে বা নতুন যোগ করুন" : "— from list or add new"}
+                          </span>
+                        </Label>
+                        {partyId && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPartyId("")}
+                            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-rose-600 cursor-pointer"
+                          >
+                            {lang === "bn" ? "মুছে ফেলুন" : "Clear"}
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1">
+                          <CustomerSearchSelect
+                            customers={customers}
+                            value={partyId}
+                            onChange={(id) => {
+                              setPartyId(id);
+                              if (id) {
+                                const c = customers.find((x: any) => x.id === id);
+                                if (c) {
+                                  if (c.name && !manualRecipientName) setManualRecipientName(c.name);
+                                  if ((c as any).phone && !manualRecipientPhone) setManualRecipientPhone((c as any).phone);
+                                  if ((c as any).address && !addressDetails) setAddressDetails((c as any).address);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddCustomerOpen(true)}
+                          className="h-9 px-2.5 text-xs font-semibold rounded-xl border-dashed border-primary/40 text-primary hover:bg-primary/10 gap-1 shrink-0 cursor-pointer"
+                        >
+                          <Plus className="size-3.5" />
+                          <span>{lang === "bn" ? "নতুন" : "Add"}</span>
+                        </Button>
+                      </div>
+
+                      {/* Recipient Name and Phone */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <div className="space-y-1">
+                          <Label className="text-[10.5px] font-semibold text-muted-foreground">
+                            {lang === "bn" ? "প্রাপকের নাম" : "Recipient Name"}
+                          </Label>
+                          <Input
+                            value={manualRecipientName}
+                            onChange={(e) => setManualRecipientName(e.target.value)}
+                            placeholder={lang === "bn" ? "যেমন: তানভীর আহমেদ" : "e.g. Tanvir Ahmed"}
+                            className="h-8 text-xs font-medium"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10.5px] font-semibold text-muted-foreground">
+                              {lang === "bn" ? "মোবাইল নম্বর (১১ ডিজিট)" : "Recipient Phone (11-digit)"}
+                            </Label>
+                            {manualRecipientPhone && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={sfFraudBusy}
+                                onClick={async () => {
+                                  setSfFraudBusy(true);
+                                  try {
+                                    const r = await steadfastFraudCheckFn({ data: { phone: manualRecipientPhone } });
+                                    setSfFraudResult(r);
+                                  } catch (e: any) {
+                                    toast.error(e?.message || "Fraud check failed");
+                                  } finally {
+                                    setSfFraudBusy(false);
+                                  }
+                                }}
+                                className="h-5 px-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-500/10 gap-1 cursor-pointer"
+                              >
+                                <ShieldCheck className="size-3" />
+                                <span>{sfFraudBusy ? "..." : (lang === "bn" ? "ফ্রড চেক" : "Fraud Check")}</span>
+                              </Button>
+                            )}
+                          </div>
+                          <Input
+                            value={manualRecipientPhone}
+                            onChange={(e) => setManualRecipientPhone(e.target.value)}
+                            placeholder="017XXXXXXXX"
+                            maxLength={14}
+                            className="h-8 text-xs font-mono font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      {sfFraudResult && (
+                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10.5px] flex items-center justify-between">
+                          <span>মোট পার্সেল: <b>{sfFraudResult.total_parcels}</b></span>
+                          <span className="text-emerald-600 font-semibold">ডেলিভার্ড: <b>{sfFraudResult.total_delivered}</b></span>
+                          <span className="text-rose-600 font-semibold">বাতিল: <b>{sfFraudResult.total_cancelled}</b></span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 2: Cascading Geographic Address Selection (Division -> District -> Upazila -> Union -> Details) */}
+                    <div className="p-2.5 bg-background/80 rounded-xl border border-border/80 space-y-2.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <Label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <MapPin className="size-3.5 text-purple-600" />
+                          <span>{lang === "bn" ? "২. ডেলিভারি এলাকা ও ঠিকানা (SteadFast Geography)" : "2. Delivery Location (BD Geography)"}</span>
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {builtFullAddress.length}/250 char
+                        </span>
+                      </div>
+
+                      {/* Division & District */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "বিভাগ (Division)" : "Division"}</Label>
+                          <select
+                            value={division}
+                            onChange={(e) => handleDivisionChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            {divisions.map((d: any) => (
+                              <option key={d.name} value={d.name}>
+                                {lang === "bn" ? d.nameBn : d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "জেলা (District)" : "District"}</Label>
+                          <select
+                            value={district}
+                            onChange={(e) => handleDistrictChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            {districts.map((d: any) => (
+                              <option key={d.name} value={d.name}>
+                                {lang === "bn" ? d.nameBn : d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Upazila / Thana & Union / Area */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "উপজেলা / থানা (Upazila)" : "Upazila / Thana"}</Label>
+                          <select
+                            value={upazila}
+                            onChange={(e) => handleUpazilaChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            <option value="">{lang === "bn" ? "-- উপজেলা নির্বাচন করুন --" : "-- Select Upazila --"}</option>
+                            {upazilas.map((u: any) => (
+                              <option key={u.name} value={u.name}>
+                                {lang === "bn" ? u.nameBn : u.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "ইউনিয়ন / জোন / এলাকা" : "Union / Zone"}</Label>
+                          <select
+                            value={customUnion ? "__custom__" : union}
+                            onChange={(e) => {
+                              if (e.target.value === "__custom__") {
+                                setCustomUnion(" ");
+                                setUnion("");
+                              } else {
+                                setCustomUnion("");
+                                setUnion(e.target.value);
+                              }
+                            }}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            <option value="">{lang === "bn" ? "-- ইউনিয়ন / এলাকা --" : "-- Select Union/Area --"}</option>
+                            {unions.map((un: any) => (
+                              <option key={un} value={un}>
+                                {un}
+                              </option>
+                            ))}
+                            <option value="__custom__">{lang === "bn" ? "+ অন্য এলাকা / কাস্টম লিখুন..." : "+ Custom / Other Area..."}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Custom Union text input if selected */}
+                      {(customUnion !== "" || (upazila && unions.length === 0)) && (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "কাস্টম ইউনিয়ন / এলাকার নাম" : "Custom Union / Area"}</Label>
+                          <Input
+                            value={customUnion.trim()}
+                            onChange={(e) => setCustomUnion(e.target.value)}
+                            placeholder={lang === "bn" ? "এলাকার নাম লিখুন" : "Type area/union name"}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      )}
+
+                      {/* Address Details (House / Road / Sector / Village) */}
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                          {lang === "bn" ? "বাড়ি নং, রোড নং, সেক্টর, হোল্ডিং বিস্তারিত ঠিকানা" : "House, Road, Sector, Village & Details"}
+                        </Label>
+                        <Input
+                          value={addressDetails}
+                          onChange={(e) => setAddressDetails(e.target.value)}
+                          placeholder={lang === "bn" ? "যেমন: বাসা ১২, রোড ৪, ব্লক সি" : "e.g. House 12, Road 4, Block C"}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      {/* Live SteadFast Address Preview */}
+                      <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] space-y-0.5">
+                        <div className="text-[9.5px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                          {lang === "bn" ? "SteadFast-এ প্রেরিতব্য ঠিকানা (Preview):" : "SteadFast Address Preview:"}
+                        </div>
+                        <p className="font-medium text-foreground leading-snug break-words">
+                          {builtFullAddress || (lang === "bn" ? "বিভাগ, জেলা, উপজেলা ও ঠিকানা পূরণ করুন..." : "Select division, district, upazila & details...")}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Courier Settings & Auto-dispatch */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "কুরিয়ার সার্ভিস" : "Courier Service"}</Label>
                         <select
                           value={courierName}
                           onChange={(e) => setCourierName(e.target.value)}
-                          className="w-full h-8.5 text-xs rounded-lg border border-input bg-background px-2 font-medium"
+                          className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
                         >
                           <option value="Steadfast Courier">Steadfast Courier (স্টেডফাস্ট)</option>
                           <option value="Pathao Courier">Pathao Courier (পাঠাও)</option>
                           <option value="RedX Delivery">RedX Delivery (রেডএক্স)</option>
                           <option value="Sundarban Courier">Sundarban Courier (সুন্দরবন)</option>
-                          <option value="Paperfly">Paperfly (পেপারফ্লাই)</option>
-                          <option value="SA Paribahan">SA Paribahan (এস এ পরিবহন)</option>
-                          <option value="Custom Courier">Other / অন্য কুরিয়ার</option>
+                          <option value="Other Courier">Other / অন্য কুরিয়ার</option>
                         </select>
                       </div>
+
                       <div className="space-y-1">
-                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "ট্র্যাকিং কোড / ইনভয়েস" : "Tracking / Consignment ID"}</Label>
+                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "ডেলিভারি নোট / নির্দেশনা" : "Delivery Note"}</Label>
                         <Input
-                          value={trackingCode}
-                          onChange={(e) => setTrackingCode(e.target.value)}
-                          placeholder="e.g. ST-93821"
-                          className="h-8.5 text-xs font-mono"
-                        >
-                        </Input>
+                          value={deliveryNote}
+                          onChange={(e) => setDeliveryNote(e.target.value)}
+                          placeholder={lang === "bn" ? "যেমন: খুলে চেক করে দিতে হবে" : "e.g. Fragile / Handle with care"}
+                          className="h-8 text-xs"
+                        />
                       </div>
                     </div>
+
+                    {steadfastEnabled && (
+                      <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
+                        <label className="flex items-center gap-2 text-[11px] font-semibold text-purple-900 dark:text-purple-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={autoSendSteadfast}
+                            onChange={(e) => setAutoSendSteadfast(e.target.checked)}
+                            className="size-3.5 accent-purple-600 rounded"
+                          />
+                          <span>{lang === "bn" ? "সেল সেভ করার সাথে সাথে SteadFast-এ স্বয়ংক্রিয় বুকিং দিন" : "Auto-book to SteadFast on save"}</span>
+                        </label>
+                        {trackingCode && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 font-bold">
+                            {trackingCode}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -923,87 +1333,78 @@ export function SaleDialog({
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    {lang === "bn" ? "কাস্টমার" : "Customer"} {(type === "credit" || (type === "split" && due > 0)) ? "*" : ""}
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1">
-                      <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                {type !== "online" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      {lang === "bn" ? "কাস্টমার" : "Customer"} {(type === "credit" || (type === "split" && due > 0)) ? "*" : ""}
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1">
+                        <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                      </div>
+                      {partyId && (
+                        <Link href={`/customers/detail?id=${partyId}`} target="_blank">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-9 shrink-0 cursor-pointer text-primary hover:bg-primary/10 hover:border-primary/40"
+                            title={lang === "bn" ? "কাস্টমারের ক্রয়ের ইতিহাস দেখুন" : "View Customer Buying History"}
+                          >
+                            <History className="size-4" />
+                          </Button>
+                        </Link>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-9 shrink-0 cursor-pointer"
+                        onClick={() => setAddCustomerOpen(true)}
+                        title="Add Customer"
+                      >
+                        <Plus className="size-4" />
+                      </Button>
                     </div>
-                    {partyId && (
-                      <Link href={`/customers/detail?id=${partyId}`} target="_blank">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="size-9 shrink-0 cursor-pointer text-primary hover:bg-primary/10 hover:border-primary/40"
-                          title={lang === "bn" ? "কাস্টমারের ক্রয়ের ইতিহাস দেখুন" : "View Customer Buying History"}
-                        >
-                          <History className="size-4" />
-                        </Button>
-                      </Link>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0 cursor-pointer"
-                      onClick={() => setAddCustomerOpen(true)}
-                      title="Add Customer"
-                    >
-                      <Plus className="size-4" />
-                    </Button>
                   </div>
-                </div>
+                )}
 
                 <div className="border border-border/90 bg-card/60 rounded-xl p-3.5 space-y-3 shadow-2xs">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="sale-barcode-input" className="text-xs font-semibold flex items-center gap-1.5">
-                      <Scan className="size-3.5 text-primary" />
-                      {lang === "bn" ? "বারকোড স্ক্যান করুন" : "Scan a barcode"}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <ShoppingCart className="size-3.5 text-primary" />
+                      {t("select_product")}
                     </Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground font-mono">{lang === "bn" ? "ডিফল্ট পরিমাণ: ১" : "Default Qty: 1"}</span>
+                    </div>
+                  </div>
+
+                  {/* Direct Hardware Barcode / SKU Scan Input (Classic-World System) */}
+                  <div className="flex gap-1.5">
                     <Input
                       id="sale-barcode-input"
                       ref={scanInputRef}
                       value={scanInput}
                       onChange={e => setScanInput(e.target.value)}
                       onKeyDown={e => {
-                        if (e.key !== scannerSuffix && e.key !== "Enter") return;
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (busy) return;
-                        const code = e.currentTarget.value.trim();
-                        if (code) handleBarcodeScan(code);
-                        setScanInput("");
+                        if (e.key === "Enter" || (scannerSuffix === "Tab" && e.key === "Tab")) {
+                          e.preventDefault();
+                          handleBarcodeInputSubmit();
+                        }
                       }}
-                      placeholder={lang === "bn" ? `স্ক্যান করুন বা বারকোড লিখে ${scannerSuffix} চাপুন` : `Scan or type a barcode, then press ${scannerSuffix}`}
-                      autoComplete="off"
-                      className="h-10 text-sm bg-background"
+                      placeholder={lang === "bn" ? "বারকোড স্ক্যান করুন অথবা কোড লিখে Enter চাপুন..." : "Scan barcode or type code + Enter..."}
+                      className="h-9 text-xs font-mono border-primary/30 bg-background/80"
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      {lang === "bn" ? `USB বা Bluetooth স্ক্যানার Keyboard/HID মোডে রাখুন এবং ${scannerSuffix} suffix চালু করুন।` : `Use USB or Bluetooth scanner keyboard mode with a ${scannerSuffix} suffix.`}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                      <Scan className="size-3.5 text-primary" />
-                      {t("select_product")}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-all active:scale-90 touch-manipulation ${
-                          showBuyPrice ? "text-amber-700 dark:text-amber-300 bg-amber-500/15 font-semibold" : "text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => setShowBuyPrice(v => !v)}
-                        title={showBuyPrice ? (lang === "bn" ? "ক্রয়মূল্য লুকান" : "Hide buy price") : (lang === "bn" ? "ক্রয়মূল্য দেখুন" : "View buy price")}
-                      >
-                        {showBuyPrice ? <EyeOff className="size-3 text-amber-600" /> : <Eye className="size-3" />}
-                        <span>{lang === "bn" ? (showBuyPrice ? "ক্রয় অন" : "ক্রয়মূল্য") : (showBuyPrice ? "Cost On" : "Buy Price")}</span>
-                      </button>
-                      <span className="text-[10px] text-muted-foreground font-mono">{lang === "bn" ? "ডিফল্ট: ১" : "Default: 1"}</span>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleBarcodeInputSubmit()}
+                      className="h-9 px-3 shrink-0 cursor-pointer text-xs font-semibold"
+                    >
+                      {lang === "bn" ? "যোগ" : "Scan"}
+                    </Button>
                   </div>
 
                   {/* Product Name & Direct Sell Price Input Box side-by-side */}
@@ -1015,7 +1416,7 @@ export function SaleDialog({
                       <ProductSearchSelect
                         products={products}
                         value={draft.productId}
-                        showBuyPrice={showBuyPrice}
+                        onScanDirect={handleBarcodeScan}
                         onChange={v => {
                           const p = products.find(x => x.id === v);
                           setDraft(d => ({
@@ -1052,7 +1453,6 @@ export function SaleDialog({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            e.stopPropagation();
                             if (draft.productId) addToCart();
                           }
                         }}
@@ -1061,49 +1461,7 @@ export function SaleDialog({
                     </div>
                   </div>
 
-                  {(() => {
-                    const selectedProd = products.find(x => x.id === draft.productId);
-                    if (!selectedProd) return null;
-                    const unitSell = (Number(draft.sellPrice) || selectedProd.sell_price || 0) - (Number(draft.discount) || 0);
-                    const unitProfit = unitSell - (selectedProd.buy_price || 0);
-                    const estProfit = unitProfit * (Number(draft.qty) || 1);
-                    return (
-                      <div className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-amber-900 dark:text-amber-300 font-medium">
-                            {lang === "bn" ? "ক্রয়মূল্য:" : "Buy Price:"}
-                          </span>
-                          {showBuyPrice ? (
-                            <span className="font-bold text-amber-700 dark:text-amber-300 font-mono text-sm">
-                              ৳{selectedProd.buy_price ?? 0}
-                            </span>
-                          ) : (
-                            <span className="font-mono text-muted-foreground tracking-widest text-[11px]">••••••</span>
-                          )}
-                          {showBuyPrice && draft.sellPrice && (
-                            <span className={`text-[11px] font-semibold ${estProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                              ({lang === "bn" ? "লাভ" : "Profit"}: ৳{estProfit})
-                            </span>
-                          )}
-                          <span className="text-[10px] text-muted-foreground ml-auto sm:ml-2">
-                            ({lang === "bn" ? "মজুদ" : "Stock"}: {selectedProd.stock})
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 sm:size-6 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 active:scale-90 transition-all shrink-0 cursor-pointer touch-manipulation"
-                          onClick={() => setShowBuyPrice(v => !v)}
-                          title={showBuyPrice ? (lang === "bn" ? "ক্রয়মূল্য লুকান" : "Hide buy price") : (lang === "bn" ? "ক্রয়মূল্য দেখুন" : "View buy price")}
-                        >
-                          {showBuyPrice ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                        </Button>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Field label={t("qty")}>
                       <Input
                         type="number"
@@ -1115,31 +1473,12 @@ export function SaleDialog({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            e.stopPropagation();
                             if (draft.productId) addToCart();
                           }
                         }}
                       />
                     </Field>
-                    <Field label={t("sell_price")}>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        pattern="[0-9.]*"
-                        placeholder={t("sell_price")}
-                        value={draft.sellPrice}
-                        onChange={e => setDraft(d => ({ ...d, sellPrice: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (draft.productId) addToCart();
-                          }
-                        }}
-                      />
-                    </Field>
-                    <Field label={lang === "bn" ? "ছাড়" : "Discount"}>
+                    <Field label={lang === "bn" ? "ছাড় (Discount ৳)" : "Discount (৳)"}>
                       <Input
                         type="number"
                         step="any"
@@ -1151,7 +1490,6 @@ export function SaleDialog({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            e.stopPropagation();
                             if (draft.productId) addToCart();
                           }
                         }}
@@ -1181,32 +1519,17 @@ export function SaleDialog({
                       <ShoppingCart className="size-3.5 text-primary" />
                       {t("cart")} ({cart.length})
                     </Label>
-                    <div className="flex items-center gap-1.5">
+                    {cart.length > 0 && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className={`h-6 text-[10px] px-1.5 flex items-center gap-1 cursor-pointer transition-all active:scale-90 touch-manipulation ${
-                          showBuyPrice ? "text-amber-700 dark:text-amber-300 font-semibold bg-amber-500/15" : "text-muted-foreground hover:bg-muted"
-                        }`}
-                        onClick={() => setShowBuyPrice(v => !v)}
-                        title={showBuyPrice ? (lang === "bn" ? "ক্রয়মূল্য লুকান" : "Hide buy price") : (lang === "bn" ? "ক্রয়মূল্য দেখুন" : "View buy price")}
+                        className="h-6 text-[10px] text-destructive hover:bg-destructive/10 px-1.5"
+                        onClick={() => { setCart([]); setFinalDiscount(""); }}
                       >
-                        {showBuyPrice ? <EyeOff className="size-3 text-amber-600" /> : <Eye className="size-3" />}
-                        <span>{lang === "bn" ? (showBuyPrice ? "ক্রয় অন" : "ক্রয়মূল্য") : (showBuyPrice ? "Cost On" : "Cost")}</span>
+                        {lang === "bn" ? "কার্ট খালি করুন" : "Clear Cart"}
                       </Button>
-                      {cart.length > 0 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-[10px] text-destructive hover:bg-destructive/10 px-1.5"
-                          onClick={() => setCart([])}
-                        >
-                          {lang === "bn" ? "কার্ট খালি করুন" : "Clear Cart"}
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {cart.length === 0 ? (
@@ -1219,15 +1542,24 @@ export function SaleDialog({
                       {cart.map((line, i) => {
                         const p = products.find(x => x.id === line.productId);
                         return (
-                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-2.5 text-xs bg-card space-y-2 shadow-2xs">
-                            {/* Top Row: Product Name + Inline Sell Price Input + Delete Button */}
-                            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 font-semibold">
-                              <span className="truncate flex-1 min-w-[120px] text-zinc-900 dark:text-zinc-100 font-bold text-xs sm:text-sm" title={p?.name}>
-                                {i + 1}. {p?.name}
-                              </span>
-                              <div className="flex items-center gap-1.5 shrink-0">
+                          <div key={`${line.productId}-${i}`} className="border border-border/80 rounded-xl p-3 text-xs bg-card space-y-2.5 shadow-2xs hover:border-primary/40 transition-colors">
+                            {/* Top Row: Product Name + Prominent Sell Price Input Box + Remove Button */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate text-zinc-900 dark:text-zinc-100 font-bold text-xs sm:text-sm" title={p?.name}>
+                                  {i + 1}. {p?.name}
+                                </span>
+                                {p?.barcode && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    Barcode: {p.barcode}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Direct Sell Price Input Box right beside Product Name */}
+                              <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/30 shrink-0">
                                 <span className="text-[11px] font-bold text-primary whitespace-nowrap">
-                                  {lang === "bn" ? "দর ৳:" : "Price ৳:"}
+                                  {lang === "bn" ? "বিক্রি দর (৳):" : "Sell Price (৳):"}
                                 </span>
                                 <Input
                                   type="number"
@@ -1235,7 +1567,6 @@ export function SaleDialog({
                                   inputMode="decimal"
                                   data-cart-sell-price-index={i}
                                   value={line.sellPrice}
-                                  placeholder="0"
                                   onChange={e => {
                                     const val = e.target.value;
                                     setCart(prev => prev.map((item, idx) => idx === i ? { ...item, sellPrice: val } : item));
@@ -1255,31 +1586,32 @@ export function SaleDialog({
                                       }
                                     }
                                   }}
-                                  className="h-8 w-28 sm:w-32 text-xs font-mono font-bold px-2 border-primary/50 bg-background focus-visible:ring-1 focus-visible:ring-primary"
+                                  className="h-7 w-24 sm:w-28 px-2 text-xs sm:text-sm font-bold font-mono text-foreground text-right bg-background border-primary/40 rounded focus-visible:ring-1 focus-visible:ring-primary"
+                                  placeholder={lang === "bn" ? "দর লিখুন" : "Price"}
+                                  title={lang === "bn" ? "বিক্রি দর পরিবর্তন করুন" : "Edit Sell Price"}
                                 />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 shrink-0 text-destructive hover:bg-destructive/10 cursor-pointer"
-                                  onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
                               </div>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-7 shrink-0 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                                onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
+                                title={lang === "bn" ? "আইটেম মুছুন" : "Remove item"}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
                             </div>
 
-                            {/* Second Row: Quantity Controls, Discount Input, and Line Total */}
-                            <div className="grid grid-cols-12 gap-2 items-center pt-1 border-t border-border/40">
-                              {/* Quantity Controls */}
-                              <div className="col-span-5 sm:col-span-4">
-                                <label className="text-[10px] text-muted-foreground block mb-0.5 font-medium">
-                                  {lang === "bn" ? "পরিমাণ (Qty)" : "Qty"}
-                                </label>
-                                <div className="flex items-center border border-border rounded-lg bg-background h-7 overflow-hidden">
+                            {/* Bottom Row: Qty Stepper + Discount + Line Total */}
+                            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1.5 border-t border-border/50">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Qty Stepper */}
+                                <div className="flex items-center border border-border rounded-lg bg-background">
                                   <button
                                     type="button"
-                                    className="w-6 h-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer shrink-0"
+                                    className="size-6.5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                                     onClick={() => {
                                       const current = Number(line.qty) || 1;
                                       if (current > 1) {
@@ -1291,7 +1623,7 @@ export function SaleDialog({
                                   >
                                     <Minus className="size-3" />
                                   </button>
-                                  <input
+                                  <Input
                                     type="number"
                                     min="1"
                                     value={line.qty}
@@ -1299,11 +1631,11 @@ export function SaleDialog({
                                       const val = e.target.value;
                                       setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: val } : item));
                                     }}
-                                    className="w-full text-center font-mono font-bold text-xs bg-transparent focus:outline-none"
+                                    className="h-6.5 w-11 px-0.5 text-center font-mono font-bold text-xs border-0 rounded-none bg-transparent"
                                   />
                                   <button
                                     type="button"
-                                    className="w-6 h-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer shrink-0"
+                                    className="size-6.5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                                     onClick={() => {
                                       const current = Number(line.qty) || 0;
                                       setCart(prev => prev.map((item, idx) => idx === i ? { ...item, qty: String(current + 1) } : item));
@@ -1312,38 +1644,31 @@ export function SaleDialog({
                                     <Plus className="size-3" />
                                   </button>
                                 </div>
-                              </div>
 
-                              {/* Editable Item Discount */}
-                              <div className="col-span-4 sm:col-span-4">
-                                <label className="text-[10px] text-muted-foreground block mb-0.5 font-medium">
-                                  {lang === "bn" ? "ছাড় (Disc ৳)" : "Disc (৳)"}
-                                </label>
-                                <Input
-                                  type="number"
-                                  step="any"
-                                  inputMode="decimal"
-                                  value={line.discount}
-                                  placeholder="0"
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setCart(prev => prev.map((item, idx) => idx === i ? { ...item, discount: val } : item));
-                                  }}
-                                  className="h-7 text-xs font-mono px-2 bg-background"
-                                />
+                                {/* Discount per unit */}
+                                <div className="flex items-center gap-1 bg-muted/30 px-2 py-0.5 rounded-lg border border-border/50">
+                                  <span className="text-[10.5px] font-medium text-muted-foreground">{lang === "bn" ? "ছাড় (৳):" : "Disc (৳):"}</span>
+                                  <Input
+                                    type="number"
+                                    step="any"
+                                    inputMode="decimal"
+                                    value={line.discount || ""}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setCart(prev => prev.map((item, idx) => idx === i ? { ...item, discount: val } : item));
+                                    }}
+                                    className="h-6.5 w-16 px-1.5 text-[11px] font-mono text-right bg-background border-border/70 rounded"
+                                    placeholder="0"
+                                  />
+                                </div>
                               </div>
 
                               {/* Line Total */}
-                              <div className="col-span-3 sm:col-span-4 text-right">
-                                <span className="text-[10px] text-muted-foreground block mb-0.5 font-medium">
-                                  {lang === "bn" ? "মোট (Total)" : "Total"}
-                                </span>
-                                <div className="font-bold text-foreground font-serif text-sm">৳{lineTotal(line)}</div>
-                                {showBuyPrice && p && (
-                                  <div className="text-[9px] text-amber-700 dark:text-amber-400 font-mono font-medium">
-                                    (ক্রয় ৳{p.buy_price || 0})
-                                  </div>
-                                )}
+                              <div className="text-right">
+                                <div className="font-bold text-foreground font-serif text-xs sm:text-sm">৳{lineTotal(line).toLocaleString()}</div>
+                                <div className="text-[10px] text-muted-foreground font-mono">
+                                  (৳{line.sellPrice || 0} {Number(line.discount) > 0 ? `- ৳${line.discount}` : ""}) × {line.qty}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1676,148 +2001,36 @@ export function SaleDialog({
                   </div>
                 )}
 
-                <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-1.5 text-xs">
-                  {showBuyPrice && cart.length > 0 && (
-                    <div className="flex justify-between items-center text-amber-700 dark:text-amber-400 font-mono text-[11px] bg-amber-500/10 p-1.5 rounded-lg border border-amber-500/20">
-                      <span>{lang === "bn" ? "মোট ক্রয়মূল্য:" : "Total Cost:"} ৳{sellTotal - profitTotal}</span>
-                      <span className={`font-semibold ${profitTotal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                        {lang === "bn" ? "নিট লাভ:" : "Net Profit:"} ৳{profitTotal}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center text-muted-foreground">
-                    <span className="font-medium">{t("subtotal")}</span>
-                    <span className="font-mono font-bold text-sm text-foreground">৳{cartSubtotal}</span>
+                <div className="border border-border rounded-xl p-3 bg-muted/20 space-y-2 text-xs">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t("subtotal")}</span>
+                    <span className="font-mono font-medium">৳{rawSellTotal}</span>
                   </div>
 
-                  {/* Final Discount Options (Visible after adding products to cart) */}
-                  {cart.length > 0 && (
-                    <div className="bg-background/90 dark:bg-card/90 rounded-xl p-2.5 border border-border/80 space-y-2 shadow-2xs">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <Label className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                          <Tag className="size-3.5 text-primary" />
-                          <span>{lang === "bn" ? "সার্বিক ছাড় (Final Discount)" : "Final Discount"}</span>
-                        </Label>
-                        {finalDiscountAmount > 0 && (
-                          <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                            -৳{finalDiscountAmount}
-                            {finalDiscountType === "fixed" && cartSubtotal > 0 && (
-                              <span className="text-[9.5px] opacity-80 font-normal ml-1">
-                                ({((finalDiscountAmount / cartSubtotal) * 100).toFixed(0)}%)
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
+                  {/* Final Overall Cart Discount */}
+                  <div className="flex items-center justify-between gap-2 py-1 border-y border-border/60">
+                    <div className="flex items-center gap-1.5 font-bold text-foreground">
+                      <Sparkles className="size-3.5 text-amber-500" />
+                      <span>{lang === "bn" ? "ফাইনাল ছাড় / ডিসকাউন্ট:" : "Final Discount:"}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-rose-500 font-bold">−৳</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="0"
+                        value={finalDiscount}
+                        onChange={e => setFinalDiscount(e.target.value)}
+                        className="h-7 w-24 text-right text-xs font-bold font-mono bg-background border-border/80 text-rose-600 dark:text-rose-400 rounded-lg"
+                      />
+                    </div>
+                  </div>
 
-                      {/* Input & Unit Switch */}
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex rounded-lg border border-border p-0.5 bg-muted/60 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setFinalDiscountType("fixed")}
-                            className={`px-2 py-1 text-xs font-bold rounded transition-colors cursor-pointer ${
-                              finalDiscountType === "fixed"
-                                ? "bg-background text-foreground shadow-2xs font-serif"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                            title={lang === "bn" ? "টাকা হিসেবে ছাড়" : "Fixed Amount (৳)"}
-                          >
-                            ৳
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFinalDiscountType("percent")}
-                            className={`px-2 py-1 text-xs font-bold rounded transition-colors cursor-pointer ${
-                              finalDiscountType === "percent"
-                                ? "bg-background text-foreground shadow-2xs"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                            title={lang === "bn" ? "শতাংশ (%) হিসেবে ছাড়" : "Percentage (%)"}
-                          >
-                            %
-                          </button>
-                        </div>
-
-                        <div className="relative flex-1">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="any"
-                            inputMode="decimal"
-                            pattern="[0-9.]*"
-                            placeholder={finalDiscountType === "percent" ? "0 %" : "0 ৳"}
-                            value={finalDiscount}
-                            onChange={(e) => setFinalDiscount(e.target.value)}
-                            className="h-8 text-xs font-bold font-mono pr-7"
-                          />
-                          {finalDiscount && (
-                            <button
-                              type="button"
-                              onClick={() => setFinalDiscount("")}
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground size-5 flex items-center justify-center text-xs rounded-full cursor-pointer hover:bg-muted"
-                              title={lang === "bn" ? "ছাড় মুছুন" : "Clear discount"}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Quick Shortcut Preset Buttons */}
-                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                        <span className="text-[10px] text-muted-foreground font-medium mr-0.5">
-                          {lang === "bn" ? "কুইক:" : "Quick:"}
-                        </span>
-                        {(["20", "50", "100", "200"] as const).map((amt) => {
-                          const isSelected = finalDiscountType === "fixed" && finalDiscount === amt;
-                          return (
-                            <button
-                              key={`amt-${amt}`}
-                              type="button"
-                              onClick={() => {
-                                if (isSelected) {
-                                  setFinalDiscount("");
-                                } else {
-                                  setFinalDiscountType("fixed");
-                                  setFinalDiscount(amt);
-                                }
-                              }}
-                              className={`text-[10.5px] px-2 py-0.5 rounded-md font-mono border transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300 font-bold"
-                                  : "bg-muted/40 hover:bg-muted border-border/60 text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              ৳{amt}
-                            </button>
-                          );
-                        })}
-                        {(["5", "10", "15"] as const).map((pct) => {
-                          const isSelected = finalDiscountType === "percent" && finalDiscount === pct;
-                          return (
-                            <button
-                              key={`pct-${pct}`}
-                              type="button"
-                              onClick={() => {
-                                if (isSelected) {
-                                  setFinalDiscount("");
-                                } else {
-                                  setFinalDiscountType("percent");
-                                  setFinalDiscount(pct);
-                                }
-                              }}
-                              className={`text-[10.5px] px-2 py-0.5 rounded-md font-mono border transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300 font-bold"
-                                  : "bg-muted/40 hover:bg-muted border-border/60 text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              {pct}%
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {finalDiscountNum > 0 && (
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 font-semibold text-[11px]">
+                      <span>{lang === "bn" ? "সর্বশেষ ছাড় কর্তন:" : "Final Discount Deducted:"}</span>
+                      <span className="font-mono font-bold">−৳{finalDiscountNum}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-muted-foreground">
@@ -1858,197 +2071,92 @@ export function SaleDialog({
             </form>
           </div>
 
-          <DialogFooter className="px-4 sm:px-5 py-2.5 sm:py-3 shrink-0 border-t border-border bg-card flex flex-col items-stretch gap-2 sm:flex-col">
-            {footerQuickPanelOpen && (type === "split" || type === "credit") && (
-              <div className="w-full rounded-xl border border-border/80 bg-muted/30 px-2.5 py-2 flex flex-wrap items-center gap-2 text-xs animate-in fade-in duration-150">
-                {type === "split" ? (
-                  <>
-                    <span className="font-bold text-purple-700 dark:text-purple-300 shrink-0 flex items-center gap-1">
-                      <Split className="size-3.5" />
-                      {lang === "bn" ? "স্প্লিট:" : "Split:"}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">{lang === "bn" ? "নগদ" : "Cash"}</span>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={splitCash}
-                        onChange={(e) => setSplitCash(e.target.value)}
-                        className="h-7 w-20 text-xs font-bold px-2 bg-background"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-[#E2136E] font-semibold">{lang === "bn" ? "বিকাশ" : "bKash"}</span>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={splitBkash}
-                        onChange={(e) => setSplitBkash(e.target.value)}
-                        className="h-7 w-20 text-xs font-bold px-2 bg-background"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-sky-700 dark:text-sky-400 font-semibold">{lang === "bn" ? "ব্যাংক" : "Bank"}</span>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={splitBank}
-                        onChange={(e) => setSplitBank(e.target.value)}
-                        className="h-7 w-20 text-xs font-bold px-2 bg-background"
-                      />
-                    </div>
-                    <span className={`font-mono font-bold text-[11px] ${due > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                      {due > 0 ? `${lang === "bn" ? "বাকী:" : "Due:"} ৳${due}` : `✓ ${lang === "bn" ? "পরিশোধিত" : "Paid"}`}
-                    </span>
-                    {due > 0 && (
-                      <div className="w-44 min-w-[160px]">
-                        <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="font-bold text-amber-700 dark:text-amber-300 shrink-0 flex items-center gap-1">
-                      <CreditCard className="size-3.5" />
-                      {lang === "bn" ? "বাকী বিক্রি:" : "Credit:"}
-                    </span>
-                    <div className="w-48 min-w-[170px]">
-                      <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "জমা ৳" : "Paid ৳"}</span>
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={paid}
-                        onChange={(e) => setPaid(e.target.value)}
-                        className="h-7 w-20 text-xs font-bold px-2 bg-background"
-                      />
-                    </div>
-                    <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[10.5px] cursor-pointer" onClick={() => setPaid("0")}>
-                      {lang === "bn" ? "পুরো বাকী" : "Full Due"}
-                    </Button>
-                    <span className="font-mono font-bold text-[11px] text-rose-600 dark:text-rose-400">
-                      {lang === "bn" ? "বাকী:" : "Due:"} ৳{due}
-                    </span>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setFooterQuickPanelOpen(false)}
-                  className="ml-auto text-[11px] px-1.5 py-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                  title={lang === "bn" ? "বন্ধ করুন" : "Close"}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 w-full">
-              <div className="text-xs flex items-center gap-1.5 flex-wrap">
-                <span className="text-muted-foreground">{t("total")}: </span>
-                <span className="font-bold text-base font-serif text-foreground">৳{sellTotal}</span>
-                {finalDiscountAmount > 0 && (
-                  <span className="text-[10.5px] text-rose-600 dark:text-rose-400 font-mono font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                    {lang === "bn" ? "ছাড়:" : "Disc:"} -৳{finalDiscountAmount}
-                  </span>
-                )}
-                {showBuyPrice && cart.length > 0 && (
-                  <span className="text-[11px] text-amber-700 dark:text-amber-300 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                    {lang === "bn" ? "ক্রয়:" : "Cost:"} ৳{sellTotal - profitTotal} · {lang === "bn" ? "লাভ:" : "Profit:"} ৳{profitTotal}
-                  </span>
-                )}
+          <DialogFooter className="px-5 py-3 shrink-0 border-t border-border bg-card flex flex-row items-center justify-between sm:justify-between gap-2">
+            <div className="text-xs flex items-center gap-1.5 flex-wrap">
+              <span className="text-muted-foreground">{t("total")}: </span>
+              <span className="font-bold text-base font-serif text-foreground">৳{sellTotal}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {/* Last-second payment method quick switcher right before confirming */}
+              <div
+                className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-0.5"
+                role="group"
+                aria-label={lang === "bn" ? "পেমেন্ট পরিবর্তন করুন" : "Change payment method"}
+              >
+                {(
+                  [
+                    {
+                      key: "cash" as SalePaymentType,
+                      label: lang === "bn" ? "নগদ" : "Cash",
+                      activeCls: "bg-emerald-600 text-white border-emerald-600 shadow-2xs",
+                    },
+                    {
+                      key: "split" as SalePaymentType,
+                      label: lang === "bn" ? "স্প্লিট" : "Split",
+                      activeCls: "bg-purple-600 text-white border-purple-600 shadow-2xs",
+                    },
+                    {
+                      key: "credit" as SalePaymentType,
+                      label: lang === "bn" ? "বাকী" : "Credit",
+                      activeCls: "bg-amber-600 text-white border-amber-600 shadow-2xs",
+                    },
+                    {
+                      key: "bkash" as SalePaymentType,
+                      label: lang === "bn" ? "বিকাশ" : "bKash",
+                      activeCls: "bg-[#E2136E] text-white border-[#E2136E] shadow-2xs",
+                    },
+                  ] as const
+                ).map((opt) => {
+                  const active = type === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => handleFooterPaymentSwitch(opt.key)}
+                      className={`h-7 px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer border ${
+                        active
+                          ? opt.activeCls
+                          : "border-transparent text-muted-foreground hover:text-foreground hover:bg-background"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {/* Last-second payment method quick switcher right before confirming */}
-                <div
-                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-0.5"
-                  role="group"
-                  aria-label={lang === "bn" ? "পেমেন্ট পরিবর্তন করুন" : "Change payment method"}
-                >
-                  {(
-                    [
-                      {
-                        key: "cash" as SalePaymentType,
-                        label: lang === "bn" ? "নগদ" : "Cash",
-                        activeCls: "bg-emerald-600 text-white border-emerald-600 shadow-2xs",
-                      },
-                      {
-                        key: "split" as SalePaymentType,
-                        label: lang === "bn" ? "স্প্লিট" : "Split",
-                        activeCls: "bg-purple-600 text-white border-purple-600 shadow-2xs",
-                      },
-                      {
-                        key: "credit" as SalePaymentType,
-                        label: lang === "bn" ? "বাকী" : "Credit",
-                        activeCls: "bg-amber-600 text-white border-amber-600 shadow-2xs",
-                      },
-                      {
-                        key: "bkash" as SalePaymentType,
-                        label: lang === "bn" ? "বিকাশ" : "bKash",
-                        activeCls: "bg-[#E2136E] text-white border-[#E2136E] shadow-2xs",
-                      },
-                    ] as const
-                  ).map((opt) => {
-                    const active = type === opt.key;
-                    return (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => handleFooterPaymentSwitch(opt.key)}
-                        className={`h-7 px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer border ${
-                          active
-                            ? opt.activeCls
-                            : "border-transparent text-muted-foreground hover:text-foreground hover:bg-background"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={cart.length === 0}
-                  onClick={() => setInvoicePreviewOpen(true)}
-                  className="gap-1.5 h-9 font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
-                >
-                  <Eye className="size-3.5" />
-                  <span>{lang === "bn" ? "প্রিভিউ ও সাইজ" : "Preview & Size"}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy || cart.length === 0}
-                  onClick={(e) => submit(e, "print")}
-                  className="gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 h-9 font-medium cursor-pointer"
-                >
-                  <Printer className="size-3.5" />
-                  <span>{lang === "bn" ? "সংরক্ষণ ও প্রিন্ট" : "Save & print"}</span>
-                </Button>
-                <Button
-                  type="submit"
-                  form="sale-form"
-                  size="sm"
-                  disabled={busy || cart.length === 0}
-                  className="h-9 px-4 font-semibold cursor-pointer"
-                >
-                  {busy ? "…" : printMode === "automatic" ? (lang === "bn" ? "সংরক্ষণ ও অটো প্রিন্ট" : "Save & auto print") : t("record_sale")}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={cart.length === 0}
+                onClick={() => setInvoicePreviewOpen(true)}
+                className="gap-1.5 h-9 font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
+              >
+                <Eye className="size-3.5" />
+                <span>{lang === "bn" ? "প্রিভিউ ও সাইজ" : "Preview & Size"}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || cart.length === 0}
+                onClick={(e) => submit(e, "print")}
+                className="gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 h-9 font-medium cursor-pointer"
+              >
+                <Printer className="size-3.5" />
+                <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
+                <span className="text-[10px] opacity-70 font-mono hidden sm:inline">[Space]</span>
+              </Button>
+              <Button
+                type="submit"
+                form="sale-form"
+                size="sm"
+                disabled={busy || cart.length === 0}
+                className="h-9 px-4 font-semibold cursor-pointer"
+              >
+                {busy ? "…" : t("record_sale")}
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -2060,7 +2168,7 @@ export function SaleDialog({
         onOpenChange={setInvoicePreviewOpen}
         lang={lang}
         invoiceData={{
-          businessName: user?.business_name || user?.full_name || "Urobili POS",
+          businessName: user?.business_name || user?.full_name || "Dream Fashion POS",
           userEmail: user?.business_emails || user?.email || "",
           shopAddress: user?.business_address || "",
           shopPhoneNumbers: user?.business_phone_numbers || "",
@@ -2080,8 +2188,8 @@ export function SaleDialog({
               sellPrice: Math.max((Number(c.sellPrice) || prod?.sell_price || 0) - (Number(c.discount) || 0), 0),
             };
           }),
-          subtotal: cartSubtotal + lineDiscountsTotal,
-          discountAmount: finalDiscountAmount,
+          subtotal: rawSellTotal,
+          discountAmount: finalDiscountNum,
           total: sellTotal,
           paidAmount: type === "online" ? 0 : paidNum,
           due: type === "online" ? sellTotal : due,

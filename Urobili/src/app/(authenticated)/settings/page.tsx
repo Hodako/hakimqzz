@@ -10,7 +10,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { ModuleCustomizerDialog } from "@/components/module-customizer-dialog";
 import { toast } from "sonner";
 import {
   getBusinessSettingsFn,
@@ -30,16 +29,9 @@ import {
   applyAssetTransferKeyFn,
   listMyTransferKeysFn,
   deleteTransferKeyFn,
-  getEmployeesFn,
-  updateEmployeeFn,
-  createEmployeeFn,
-  deleteEmployeeFn,
 } from "@/lib/rpc";
-import { OwnerEmployeeDeviceLink } from "@/components/employee-device-link";
-import { EmeraldUiSettings } from "@/components/emerald-ui-settings";
-import { persistStoreLogo } from "@/lib/store-branding";
-import { writeBrand } from "@/lib/local-cache";
 import Link from "next/link";
+import { EmeraldUiSettings } from "@/components/emerald-ui-settings";
 import {
   Trash2,
   RotateCcw,
@@ -53,20 +45,16 @@ import {
   RefreshCw,
   AlertTriangle,
   Printer,
-  Scan,
   Store,
   Sparkles,
-  Flame,
   ExternalLink,
   Plus,
   Mail,
   UserPlus,
   Shield,
-  ShieldCheck,
   Clock,
   CheckCircle,
   GripVertical,
-  Pencil,
   ChevronUp,
   ChevronDown,
   ArrowUpDown,
@@ -77,6 +65,7 @@ import {
   ArrowRightLeft,
   KeyRound,
   Copy,
+  Link2,
   Check,
   Share2,
   Download,
@@ -94,17 +83,28 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Calendar,
-  ClipboardList,
+  Truck,
+  MessageCircle,
+  QrCode,
 } from "lucide-react";
-import { ActivityLogsViewer } from "@/components/activity-logs-viewer";
+import {
+  isDesktopWhatsAppAvailable,
+  getDesktopWhatsAppBridge,
+  openDesktopWhatsAppWindow,
+  getWhatsAppMode,
+  setWhatsAppMode,
+  getWhatsAppAutoRules,
+  setWhatsAppAutoRules,
+  type WhatsAppMode,
+  type WhatsAppAutoRules,
+  type DesktopWhatsAppStatus,
+} from "@/lib/desktop-whatsapp";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
 import { PosHardwareSettings } from "@/components/pos-hardware-settings";
 import { LabelPrintingStudio } from "@/components/label-print-dialog";
-import { findProductsByScannedCode, getPosHardwareSettings, savePosHardwareSettings, type ReceiptPrintMode } from "@/lib/pos-hardware";
-import { printPwaInvoice } from "@/lib/invoice-printer";
-import { getProducts } from "@/lib/queries";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, type PermissionSet } from "@/lib/permissions";
 import {
+  uploadImageFn,
   verifyOwnerPasswordFn,
   emptyCashboxFn,
   resetProductsFn,
@@ -112,7 +112,6 @@ import {
   resetPurchasesFn,
   resetAllDataFn,
   bulkExportToGoogleSheetsFn,
-  exportFullBackupFn,
   toggleGoogleSheetsSyncFn,
   resetSomitiFn,
   resetExpensesFn,
@@ -123,6 +122,7 @@ import {
   sendEmployeeInvitationFn,
   listEmployeeInvitationsFn,
   cancelEmployeeInvitationFn,
+  steadfastCheckBalanceFn,
 } from "@/lib/rpc";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
@@ -139,13 +139,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-const BUSINESS_TYPES = ["fashion", "grocery", "restaurant", "pharmacy"];
+const BUSINESS_TYPES = ["retail", "wholesale", "fashion", "grocery", "services"];
 
-type SettingsTab = "profile" | "transfer" | "printing" | "hardware" | "sheets" | "staff" | "appearance" | "security" | "history" | "logs";
+type SettingsTab = "profile" | "transfer" | "printing" | "sheets" | "steadfast" | "whatsapp" | "staff" | "appearance" | "security" | "history";
 
 export default function SettingsPage() {
   const { lang, t } = useT();
-  const { user, refresh, updateUser } = useAuth();
+  const { user, refresh } = useAuth();
   const { theme, setTheme, accentColor, setAccentColor, bgStyle, setBgStyle } = useTheme();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
@@ -160,54 +160,6 @@ export default function SettingsPage() {
 
   const [busy, setBusy] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("profile");
-  const [printMode, setPrintMode] = useState<ReceiptPrintMode>("manual");
-  const [scannerSuffix, setScannerSuffix] = useState<"Enter" | "Tab">("Enter");
-  const [scannerTestCode, setScannerTestCode] = useState("");
-  const [scannerTestResult, setScannerTestResult] = useState("");
-  const [moduleCustomizerOpen, setModuleCustomizerOpen] = useState(false);
-  const hardwareProducts = useQuery({ queryKey: ["products"], queryFn: getProducts, enabled: settingsTab === "hardware" || settingsTab === "printing" });
-
-  useEffect(() => {
-    setPrintMode(getPosHardwareSettings().printMode);
-    setScannerSuffix(getPosHardwareSettings().scannerSuffix);
-  }, []);
-
-  const testScanner = () => {
-    const code = scannerTestCode.trim();
-    if (!code) return;
-    if (hardwareProducts.isLoading || hardwareProducts.isError) {
-      setScannerTestResult(lang === "bn" ? "পণ্যের তালিকা লোড হয়নি। আবার চেষ্টা করুন।" : "Products are unavailable. Try again after they load.");
-      return;
-    }
-    const matches = findProductsByScannedCode(hardwareProducts.data || [], code);
-    setScannerTestResult(matches.length === 1
-      ? (lang === "bn" ? `পাওয়া গেছে: ${matches[0].name}` : `Found: ${matches[0].name}`)
-      : matches.length > 1
-        ? (lang === "bn" ? `একাধিক পণ্যে বারকোড ${code} আছে` : `Barcode ${code} belongs to multiple products`)
-        : (lang === "bn" ? `স্ক্যান পাওয়া গেছে: ${code} · কোনো পণ্য মেলেনি` : `Scan received: ${code} · no matching product`));
-    setScannerTestCode("");
-  };
-
-  const testPrinter = async () => {
-    const hw = getPosHardwareSettings();
-    const w = hw.paperWidthMm || 80;
-    await printPwaInvoice({
-      businessName: settings.data?.business?.name || "Urobili",
-      shopAddress: settings.data?.business?.address || "",
-      shopPhoneNumbers: settings.data?.business?.phone_numbers || "",
-      pageSize: w <= 62 ? "58mm" : w <= 105 ? "80mm" : "A4",
-      invoiceNo: "TEST-RECEIPT",
-      invoiceDate: new Date().toLocaleString(),
-      customerName: "Printer test",
-      items: [{ product: { name: "Test item" }, qty: 1, sellPrice: 1 }],
-      subtotal: 1,
-      discountAmount: 0,
-      total: 1,
-      paidAmount: 1,
-      due: 0,
-      terms: "Hardware test · No sale recorded",
-    });
-  };
 
   // Transfer Keys State
   const myTransferKeys = useQuery({ queryKey: ["my-transfer-keys"], queryFn: listMyTransferKeysFn, enabled: !!user });
@@ -526,323 +478,14 @@ export default function SettingsPage() {
   const [pinLockEnabled, setPinLockEnabled] = useState(false);
   const [pinCodeVal, setPinCodeVal] = useState("1234");
   const [pinTimeoutVal, setPinTimeoutVal] = useState("10");
-  const [showOwnerPin, setShowOwnerPin] = useState(false);
-  const [defaultStaffPin, setDefaultStaffPin] = useState("0000");
-  const [showDefaultStaffPin, setShowDefaultStaffPin] = useState(false);
-
-  // Employee PIN management state
-  const [selectedEmpForPin, setSelectedEmpForPin] = useState<any | null>(null);
-  const [newEmpPin, setNewEmpPin] = useState("");
-  const [showNewEmpPin, setShowNewEmpPin] = useState(false);
-  const [savingEmpPin, setSavingEmpPin] = useState(false);
-
-  // Staff Modal Management State (Add & Edit Settings)
-  const [addStaffDialogOpen, setAddStaffDialogOpen] = useState(false);
-  const [editStaffDialogOpen, setEditStaffDialogOpen] = useState(false);
-  const [staffEditingEmp, setStaffEditingEmp] = useState<any | null>(null);
-  const [staffFormName, setStaffFormName] = useState("");
-  const [staffFormPhone, setStaffFormPhone] = useState("");
-  const [staffFormDesignation, setStaffFormDesignation] = useState("Sales Staff");
-  const [staffFormSalary, setStaffFormSalary] = useState("");
-  const [staffFormAdvanceLimit, setStaffFormAdvanceLimit] = useState("");
-  const [staffFormPin, setStaffFormPin] = useState("1234");
-  const [staffFormSaving, setStaffFormSaving] = useState(false);
-  const [staffPermSales, setStaffPermSales] = useState(true);
-  const [staffPermProducts, setStaffPermProducts] = useState(true);
-  const [staffPermCashbox, setStaffPermCashbox] = useState(true);
-  const [staffPermExpenses, setStaffPermExpenses] = useState(true);
-  const [staffPermSomiti, setStaffPermSomiti] = useState(false);
-  const [staffPermProfitLoss, setStaffPermProfitLoss] = useState(false);
-  const [staffPermPurchases, setStaffPermPurchases] = useState(false);
-  const [staffPermParties, setStaffPermParties] = useState(false);
-
-  const handleOpenAddStaff = () => {
-    setStaffFormName("");
-    setStaffFormPhone("");
-    setStaffFormDesignation("Sales Staff");
-    setStaffFormSalary("");
-    setStaffFormAdvanceLimit("");
-    setStaffFormPin("1234");
-    setStaffPermSales(true);
-    setStaffPermProducts(true);
-    setStaffPermCashbox(true);
-    setStaffPermExpenses(true);
-    setStaffPermSomiti(false);
-    setStaffPermProfitLoss(false);
-    setStaffPermPurchases(false);
-    setStaffPermParties(false);
-    setAddStaffDialogOpen(true);
-  };
-
-  const handleOpenEditStaff = (emp: any) => {
-    setStaffEditingEmp(emp);
-    setStaffFormName(emp.name || emp.full_name || "");
-    setStaffFormPhone(emp.phone || "");
-    setStaffFormDesignation(emp.designation || "Sales Staff");
-    setStaffFormSalary(String(emp.base_salary || emp.monthly_salary || ""));
-    setStaffFormAdvanceLimit(String(emp.advance_limit || ""));
-    setStaffFormPin(String(emp.pin || emp.plain_password || emp.password || "1234"));
-    const p = emp.permissions || {};
-    setStaffPermSales(p.sales !== false);
-    setStaffPermProducts(p.products !== false);
-    setStaffPermCashbox(p.cashbox !== false);
-    setStaffPermExpenses(p.expenses !== false);
-    setStaffPermSomiti(Boolean(p.somiti));
-    setStaffPermProfitLoss(Boolean(p.profit_loss));
-    setStaffPermPurchases(Boolean(p.purchases));
-    setStaffPermParties(Boolean(p.parties));
-    setEditStaffDialogOpen(true);
-  };
-
-  const handleSaveStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!staffFormName.trim()) {
-      toast.error(lang === "bn" ? "কর্মচারীর নাম আবশ্যক" : "Employee name is required");
-      return;
-    }
-    const cleanPin = staffFormPin.trim() || "1234";
-    if (!/^\d{4,9}$/.test(cleanPin)) {
-      toast.error(lang === "bn" ? "পিন কোড ৪ থেকে ৯ সংখ্যার হতে হবে" : "PIN must be 4 to 9 digits");
-      return;
-    }
-
-    setStaffFormSaving(true);
-    try {
-      const salNum = parseFloat(staffFormSalary) || 0;
-      const advNum = staffFormAdvanceLimit ? parseFloat(staffFormAdvanceLimit) : salNum;
-
-      const permissionsObj = {
-        sales: staffPermSales,
-        products: staffPermProducts,
-        cashbox: staffPermCashbox,
-        expenses: staffPermExpenses,
-        somiti: staffPermSomiti,
-        profit_loss: staffPermProfitLoss,
-        purchases: staffPermPurchases,
-        parties: staffPermParties,
-      };
-
-      if (staffEditingEmp) {
-        await updateEmployeeFn({
-          data: {
-            id: staffEditingEmp.id,
-            name: staffFormName.trim(),
-            phone: staffFormPhone.trim() || null,
-            designation: staffFormDesignation.trim(),
-            base_salary: salNum,
-            monthly_salary: salNum,
-            advance_limit: advNum,
-            pin: cleanPin,
-            plain_password: cleanPin,
-            password: cleanPin,
-            status: staffEditingEmp.status || "active",
-            permissions: permissionsObj,
-          },
-        });
-        try {
-          const { fsUpdateEmployee } = await import("@/lib/firestore-service");
-          await fsUpdateEmployee(staffEditingEmp.id, {
-            name: staffFormName.trim(),
-            designation: staffFormDesignation.trim(),
-            base_salary: salNum,
-            monthly_salary: salNum,
-            advance_limit: advNum,
-            pin: cleanPin,
-            permissions: permissionsObj,
-          });
-        } catch (_) {}
-
-        if (typeof window !== "undefined") {
-          try {
-            const raw = localStorage.getItem("cw_active_employee_session");
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed.id === staffEditingEmp.id) {
-                parsed.permissions = permissionsObj;
-                parsed.advance_limit = advNum;
-                parsed.base_salary = salNum;
-                parsed.name = staffFormName.trim();
-                localStorage.setItem("cw_active_employee_session", JSON.stringify(parsed));
-                window.dispatchEvent(new Event("storage"));
-              }
-            }
-          } catch (_) {}
-        }
-
-        toast.success(lang === "bn" ? "কর্মচারী তথ্য ও পারমিশন আপডেট হয়েছে!" : "Employee settings and permissions updated successfully!");
-        setEditStaffDialogOpen(false);
-      } else {
-        await createEmployeeFn({
-          data: {
-            name: staffFormName.trim(),
-            phone: staffFormPhone.trim() || null,
-            designation: staffFormDesignation.trim(),
-            base_salary: salNum,
-            monthly_salary: salNum,
-            advance_limit: advNum,
-            pin: cleanPin,
-            plain_password: cleanPin,
-            password: cleanPin,
-            status: "active",
-            permissions: permissionsObj,
-          },
-        });
-        toast.success(lang === "bn" ? "নতুন কর্মচারী সফলভাবে যুক্ত হয়েছে!" : "New employee added successfully!");
-        setAddStaffDialogOpen(false);
-      }
-
-      employeesListQuery.refetch();
-      qc.invalidateQueries({ queryKey: ["employees"] });
-      qc.invalidateQueries({ queryKey: ["business-settings"] });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save employee");
-    } finally {
-      setStaffFormSaving(false);
-    }
-  };
-
-  const employeesListQuery = useQuery({
-    queryKey: ["employees"],
-    queryFn: async () => {
-      try {
-        const res = await getEmployeesFn();
-        if (Array.isArray(res) && res.length > 0) return res;
-      } catch (_) {}
-      try {
-        const { fsGetEmployees } = await import("@/lib/firestore-service");
-        return await fsGetEmployees();
-      } catch (_) {
-        return [];
-      }
-    },
-    enabled: !!user,
-  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setPinLockEnabled(localStorage.getItem("app_pin_code_enabled") !== "false");
+      setPinLockEnabled(localStorage.getItem("app_pin_code_enabled") === "true");
       setPinCodeVal(localStorage.getItem("app_pin_code_val") || "1234");
       setPinTimeoutVal(localStorage.getItem("app_pin_timeout") || "10");
     }
   }, []);
-
-  useEffect(() => {
-    if (settings.data?.owner_pin) {
-      setPinCodeVal(settings.data.owner_pin);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("app_pin_code_val", settings.data.owner_pin);
-      }
-    }
-  }, [settings.data]);
-
-  async function handleSaveOwnerPin(customPin?: string) {
-    const cleanPin = (customPin !== undefined ? customPin : pinCodeVal).trim();
-    if (!/^\d{4,9}$/.test(cleanPin)) {
-      toast.error(lang === "bn" ? "মালিক পিন কোড ৪ থেকে ৯ সংখ্যার হতে হবে।" : "Owner PIN must be 4 to 9 digits.");
-      return;
-    }
-    setPinCodeVal(cleanPin);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("app_pin_code_val", cleanPin);
-      window.dispatchEvent(new Event("storage"));
-    }
-    try {
-      await updateBusinessSettingsFn({
-        data: {
-          owner_pin: cleanPin,
-        },
-      });
-      try {
-        const { fsUpdateBusinessSettings } = await import("@/lib/firestore-service");
-        await fsUpdateBusinessSettings({ owner_pin: cleanPin });
-      } catch (_) {}
-      qc.invalidateQueries({ queryKey: ["business-settings"] });
-    } catch (_) {}
-    toast.success(lang === "bn" ? "দোকান মালিকের পিন কোড সফলভাবে সংরক্ষিত হয়েছে!" : "Owner PIN code saved successfully!");
-  }
-
-  async function handleSaveDefaultStaffPin() {
-    const cleanPin = defaultStaffPin.trim();
-    if (!/^\d{4,6}$/.test(cleanPin)) {
-      toast.error(lang === "bn" ? "স্টাফ পিন কোড ৪ থেকে ৯ সংখ্যার হতে হবে।" : "Staff PIN must be 4 digits.");
-      return;
-    }
-    if (typeof window !== "undefined") {
-      localStorage.setItem("app_employee_pin_code_val", cleanPin);
-      localStorage.setItem("cw_default_staff_pin", cleanPin);
-      window.dispatchEvent(new Event("storage"));
-    }
-    try {
-      await updateBusinessSettingsFn({
-        data: {
-          default_staff_pin: cleanPin,
-        },
-      });
-    } catch (_) {}
-    toast.success(lang === "bn" ? "ডিফল্ট স্টাফ পিন কোড সংরক্ষিত হয়েছে!" : "Default staff PIN saved!");
-  }
-
-  async function handleSaveEmployeePin() {
-    if (!selectedEmpForPin) return;
-    const cleanPin = newEmpPin.trim();
-    if (!/^\d{4,6}$/.test(cleanPin)) {
-      toast.error(lang === "bn" ? "কর্মচারীর পিন কোড ৪ থেকে ৯ সংখ্যার হতে হবে।" : "Employee PIN must be 4 to 9 digits.");
-      return;
-    }
-    setSavingEmpPin(true);
-    try {
-      const empId = selectedEmpForPin.id;
-      try {
-        const { fsUpdateEmployee } = await import("@/lib/firestore-service");
-        await fsUpdateEmployee(empId, {
-          pin: cleanPin,
-          password: cleanPin,
-          plain_password: cleanPin,
-        });
-      } catch (_) {}
-      try {
-        await updateEmployeeFn({
-          data: {
-            id: empId,
-            pin: cleanPin,
-            password: cleanPin,
-            plain_password: cleanPin,
-          },
-        });
-      } catch (_) {}
-
-      // Update local storage cache
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem("cw_employee_accounts");
-          if (raw) {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) {
-              const idx = arr.findIndex((x: any) => x.id === empId);
-              if (idx >= 0) {
-                arr[idx] = { ...arr[idx], pin: cleanPin, password: cleanPin, plain_password: cleanPin };
-                localStorage.setItem("cw_employee_accounts", JSON.stringify(arr));
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      toast.success(
-        lang === "bn"
-          ? `কর্মচারী (${selectedEmpForPin.name || selectedEmpForPin.full_name || selectedEmpForPin.email})-এর পিন সফলভাবে পরিবর্তন হয়েছে!`
-          : `PIN updated for ${selectedEmpForPin.name || selectedEmpForPin.full_name || selectedEmpForPin.email}!`
-      );
-      setSelectedEmpForPin(null);
-      setNewEmpPin("");
-      qc.invalidateQueries({ queryKey: ["employees"] });
-      qc.invalidateQueries({ queryKey: ["business-settings"] });
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update employee PIN");
-    } finally {
-      setSavingEmpPin(false);
-    }
-  }
 
   useEffect(() => {
     const saved = localStorage.getItem("hz_kpi_config");
@@ -961,6 +604,45 @@ export default function SettingsPage() {
   const [fontScale, setFontScale] = useState("100%");
   const [lineSpacing, setLineSpacing] = useState("6px");
 
+  // SteadFast Courier Integration State
+  const [steadfastEnabled, setSteadfastEnabled] = useState(false);
+  const [steadfastApiKey, setSteadfastApiKey] = useState("");
+  const [steadfastSecretKey, setSteadfastSecretKey] = useState("");
+  const [steadfastBalance, setSteadfastBalance] = useState<number | null>(null);
+  const [steadfastBusy, setSteadfastBusy] = useState(false);
+
+  // Desktop Client-Compute WhatsApp State
+  const [waAvailable, setWaAvailable] = useState(false);
+  const [waStatus, setWaStatus] = useState<DesktopWhatsAppStatus>({
+    status: "disconnected",
+    qrCodeDataUrl: null,
+    phone: null,
+    name: null,
+    isDesktop: false,
+  });
+  const [waMode, setWaModeState] = useState<WhatsAppMode>("manual");
+  const [waRules, setWaRulesState] = useState<WhatsAppAutoRules>({ onSale: true, onOnlineOrder: true, onTracking: true });
+  const [waTestPhone, setWaTestPhone] = useState("");
+  const [waTestMsg, setWaTestMsg] = useState("Hello from Dream Fashion Desktop POS!");
+  const [waBusy, setWaBusy] = useState(false);
+
+  useEffect(() => {
+    setWaAvailable(isDesktopWhatsAppAvailable());
+    setWaModeState(getWhatsAppMode());
+    setWaRulesState(getWhatsAppAutoRules());
+    const bridge = getDesktopWhatsAppBridge();
+    if (!bridge) return;
+    bridge.getStatus().then((st: DesktopWhatsAppStatus) => {
+      if (st) setWaStatus(st);
+    }).catch(() => {});
+    const unsub = bridge.onStatusUpdate((st: DesktopWhatsAppStatus) => {
+      if (st) setWaStatus(st);
+    });
+    return () => {
+      try { unsub(); } catch {}
+    };
+  }, []);
+
   useEffect(() => {
     if (biz?.logo_url) {
       setLogoUrl(biz.logo_url);
@@ -974,7 +656,56 @@ export default function SettingsPage() {
     if (biz?.invoice_line_spacing) {
       setLineSpacing(biz.invoice_line_spacing);
     }
-  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing]);
+    if (biz) {
+      setSteadfastEnabled(Boolean((biz as any).steadfast_enabled));
+      setSteadfastApiKey(String((biz as any).steadfast_api_key || ""));
+      setSteadfastSecretKey(String((biz as any).steadfast_secret_key || ""));
+    }
+  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing, (biz as any)?.steadfast_enabled, (biz as any)?.steadfast_api_key, (biz as any)?.steadfast_secret_key]);
+
+  async function handleTestSteadfast() {
+    if (!steadfastApiKey.trim() || !steadfastSecretKey.trim()) {
+      toast.error(lang === "bn" ? "Api-Key এবং Secret-Key দিন" : "Enter both Api-Key and Secret-Key");
+      return;
+    }
+    setSteadfastBusy(true);
+    try {
+      const res = await steadfastCheckBalanceFn({
+        data: { apiKey: steadfastApiKey.trim(), secretKey: steadfastSecretKey.trim() },
+      });
+      setSteadfastBalance(Number(res?.current_balance ?? 0));
+      toast.success(
+        lang === "bn"
+          ? `SteadFast সংযুক্ত! বর্তমান ব্যালেন্স: ৳${res?.current_balance ?? 0}`
+          : `SteadFast connected! Balance: ৳${res?.current_balance ?? 0}`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "SteadFast connection failed");
+    } finally {
+      setSteadfastBusy(false);
+    }
+  }
+
+  async function handleSaveSteadfast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isOwner) return;
+    setSteadfastBusy(true);
+    try {
+      await updateBusinessSettingsFn({
+        data: {
+          steadfast_enabled: steadfastEnabled,
+          steadfast_api_key: steadfastApiKey.trim(),
+          steadfast_secret_key: steadfastSecretKey.trim(),
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["business-settings"] });
+      toast.success(lang === "bn" ? "SteadFast কুরিয়ার সেটিংস সংরক্ষিত হয়েছে!" : "SteadFast Courier settings saved!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save SteadFast settings");
+    } finally {
+      setSteadfastBusy(false);
+    }
+  }
 
   // Cropper states
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
@@ -1111,20 +842,22 @@ export default function SettingsPage() {
     ctx.drawImage(img, drawX, drawY, renderedWidth, renderedHeight);
 
     const dataUrl = canvas.toDataURL(cropImageType || "image/png");
-    const loadId = toast.loading("Saving cropped logo...");
+    const loadId = toast.loading("Uploading cropped logo...");
     try {
-      const { finalUrl } = await persistStoreLogo({
-        input: dataUrl,
-        fileName: cropImageName || "logo.png",
-        businessName: biz?.name || user?.business_name,
-        fallbackName: user?.business_name,
-        updateUser,
-        qc,
-      });
-      setLogoUrl(finalUrl);
-      toast.success(lang === "bn" ? "দোকানের লোগো সংরক্ষিত হয়েছে!" : "Store logo updated successfully!", { id: loadId });
+      const res: any = await uploadImageFn({ data: { base64: dataUrl, fileName: cropImageName || "logo.png" } });
+      const url = res?.url || res?.data?.url;
+      if (url) {
+        setLogoUrl(url);
+        await updateBusinessSettingsFn({
+          data: { logo_url: url },
+        });
+        qc.invalidateQueries({ queryKey: ["business-settings"] });
+        toast.success("Logo uploaded and updated successfully!", { id: loadId });
+      } else {
+        toast.error("Upload failed", { id: loadId });
+      }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save store logo", { id: loadId });
+      toast.error(err instanceof Error ? err.message : "Failed to upload image", { id: loadId });
     } finally {
       setCropImageSrc(null);
     }
@@ -1134,13 +867,11 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!isOwner) return;
     const fd = new FormData(e.currentTarget);
-    const nextName = String(fd.get("name") || "").trim();
-    const nextLogo = logoUrl || biz?.logo_url || "/logo.png";
     setBusy(true);
     try {
       await updateBusinessSettingsFn({
         data: {
-          name: nextName,
+          name: String(fd.get("name") || "").trim(),
           address: String(fd.get("address") || "").trim(),
           phone_numbers: String(fd.get("phone_numbers") || "").trim(),
           emails: String(fd.get("emails") || "").trim(),
@@ -1148,11 +879,9 @@ export default function SettingsPage() {
           invoice_terms: String(fd.get("invoice_terms") || "").trim(),
           invoice_watermark: String(fd.get("invoice_watermark") || "").trim(),
           invoice_watermark_enabled: fd.get("invoice_watermark_enabled") === "on",
-          logo_url: nextLogo,
+          logo_url: logoUrl || biz?.logo_url || "/logo.png",
         },
       });
-      writeBrand({ name: nextName || user?.business_name || "Urobili", logo_url: nextLogo });
-      updateUser({ ...(nextName ? { business_name: nextName } : {}), logo_url: nextLogo });
       qc.invalidateQueries({ queryKey: ["business-settings"] });
       toast.success(lang === "bn" ? "দোকান প্রোফাইল সংরক্ষিত হয়েছে!" : "Business profile saved successfully!");
     } catch (err: unknown) {
@@ -1496,12 +1225,12 @@ export default function SettingsPage() {
     { id: "profile", label: lang === "bn" ? "দোকান প্রোফাইল" : "Shop Profile", icon: Store },
     { id: "transfer", label: lang === "bn" ? "অ্যাসেট ট্রান্সফার ও কি" : "Transfer Assets & Keys", icon: ArrowRightLeft, count: (myTransferKeys.data || []).length },
     { id: "printing", label: lang === "bn" ? "প্রিন্ট ও ইনভয়েস" : "POS & Printing", icon: Printer },
-    { id: "hardware", label: lang === "bn" ? "হার্ডওয়্যার" : "Hardware", icon: Scan },
     { id: "sheets", label: lang === "bn" ? "গুগল শিট ও ক্লাউড" : "Google Sheets & Cloud", icon: FileSpreadsheet },
+    { id: "steadfast", label: lang === "bn" ? "SteadFast কুরিয়ার" : "SteadFast Courier", icon: Truck },
+    { id: "whatsapp", label: lang === "bn" ? "হোয়াটসঅ্যাপ (QR)" : "WhatsApp (Desktop QR)", icon: MessageCircle },
     { id: "staff", label: lang === "bn" ? "কর্মচারী ও আমন্ত্রণ" : "Staff & Invitations", icon: Users, count: activeEmployees.length + pendingInvites.length },
     { id: "appearance", label: lang === "bn" ? "থিম ও ডিসপ্লে" : "Appearance & Themes", icon: Sparkles },
     { id: "security", label: lang === "bn" ? "নিরাপত্তা ও রিসেট" : "Security & Reset", icon: ShieldAlert },
-    { id: "logs", label: lang === "bn" ? "অ্যাক্টিভিটি ও সিস্টেম লগ" : "Activity & System Logs", icon: ClipboardList },
     { id: "history", label: lang === "bn" ? "ইতিহাস ও রিসাইকেল বিন" : "History & Recycle Bin", icon: HistoryIcon, count: (Array.isArray(recycleBin.data) ? recycleBin.data : []).length },
   ];
 
@@ -1536,12 +1265,210 @@ export default function SettingsPage() {
             className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-xs cursor-pointer transition-all hover:scale-[1.02] active:scale-95"
             title={lang === "bn" ? "যেকোনো তারিখ ও সময়ের এন্ট্রি ডায়ালগ খুলুন [Alt+C]" : "Open Custom Entry Dialog with Date [Alt+C]"}
           >
-            <Flame className="size-4 animate-pulse text-amber-300" />
+            <Sparkles className="size-4 animate-pulse" />
             <span>{lang === "bn" ? "কাস্টম এন্ট্রি ডায়ালগ" : "Custom Entry Dialog"}</span>
             <kbd className="hidden md:inline-flex text-[10px] px-1.5 py-0.5 bg-black/20 rounded font-mono leading-none">
               Alt+C
             </kbd>
           </Button>
+        </div>
+      </div>
+
+      {/* Top Secondary Div: Custom Entry Quick Launch Hub (PC & Tablet Only - hidden on phone) */}
+      <div className="hidden md:block p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-foreground">
+                  {lang === "bn" ? "কাস্টম এন্ট্রি ও দ্রুত শর্টকাট" : "Custom Entry & Quick Actions"}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                  <Calendar className="size-3" />
+                  {lang === "bn" ? "তারিখ নির্বাচন সমর্থিত" : "Custom Date Supported"}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {lang === "bn"
+                  ? "যেকোনো পেছনের বা বর্তমান তারিখ ও সময় নির্বাচন করে সরাসরি সেল, খরচ, ক্রয় ও ক্যাশ এন্ট্রি করুন"
+                  : "Record backdated or forward-dated sales, expenses, purchases, and cashbox transactions"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg border border-border/50 self-start sm:self-auto">
+            <span>{lang === "bn" ? "পিসি শর্টকাট:" : "PC Hotkey:"}</span>
+            <kbd className="font-mono font-bold text-foreground bg-background px-1 py-0.2 rounded border border-border text-[10px]">Alt + C</kbd>
+            <span className="opacity-60">|</span>
+            <kbd className="font-mono font-bold text-foreground bg-background px-1 py-0.2 rounded border border-border text-[10px]">Alt + 1..6</kbd>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 pt-1">
+          {/* 1. Custom Sale (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "sale" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-emerald-500/10 hover:border-emerald-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "তারিখসহ বিক্রি এন্ট্রি [Alt+1]" : "Custom Sale with Date [Alt+1]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <ShoppingBag className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "কাস্টম বিক্রি" : "Custom Sale"}
+            </span>
+            <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "তারিখসহ" : "With Date"}
+            </span>
+          </button>
+
+          {/* 2. Custom Expense (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "expense" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-rose-500/10 hover:border-rose-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "তারিখসহ খরচ এন্ট্রি [Alt+2]" : "Custom Expense with Date [Alt+2]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <Receipt className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "কাস্টম খরচ" : "Custom Expense"}
+            </span>
+            <span className="text-[9px] font-medium text-rose-600 dark:text-rose-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "তারিখসহ" : "With Date"}
+            </span>
+          </button>
+
+          {/* 3. Custom Purchase / Restock (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "purchase" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-indigo-500/10 hover:border-indigo-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "তারিখসহ ক্রয় এন্ট্রি [Alt+3]" : "Custom Purchase with Date [Alt+3]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <ShoppingCart className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "কাস্টম ক্রয়" : "Custom Buy"}
+            </span>
+            <span className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "তারিখসহ" : "With Date"}
+            </span>
+          </button>
+
+          {/* 4. Cash Deposit / Add Money (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "deposit" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-emerald-500/10 hover:border-emerald-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "ক্যাশবক্সে টাকা জমা (তারিখসহ) [Alt+4]" : "Cash Deposit with Date [Alt+4]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <ArrowDownLeft className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "টাকা জমা" : "Deposit"}
+            </span>
+            <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "ক্যাশবক্স" : "Cashbox"}
+            </span>
+          </button>
+
+          {/* 5. Cash Withdraw (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "withdraw" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-amber-500/10 hover:border-amber-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "ক্যাশবক্স থেকে টাকা উত্তোলন (তারিখসহ) [Alt+5]" : "Cash Withdraw with Date [Alt+5]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <ArrowUpRight className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "টাকা উত্তোলন" : "Withdraw"}
+            </span>
+            <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "ক্যাশবক্স" : "Cashbox"}
+            </span>
+          </button>
+
+          {/* 6. Due Collection (with date) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_custom_entry", { detail: { initialType: "due_collection" } }));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-cyan-500/10 hover:border-cyan-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "তারিখসহ বাকি আদায় [Alt+6]" : "Due Collection with Date [Alt+6]"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <Banknote className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "বাকি আদায়" : "Due Collect"}
+            </span>
+            <span className="text-[9px] font-medium text-cyan-600 dark:text-cyan-400 mt-0.5 flex items-center gap-0.5">
+              <Calendar className="size-2.5" />
+              {lang === "bn" ? "তারিখসহ" : "With Date"}
+            </span>
+          </button>
+
+          {/* 7. Switch ID / Profile */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_mode_switcher"));
+            }}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-purple-500/10 hover:border-purple-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "মোড ও প্রোফাইল পরিবর্তন" : "Switch Profile & Mode"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <Users className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "প্রোফাইল সুইচ" : "Switch ID"}
+            </span>
+            <span className="text-[9px] font-medium text-purple-600 dark:text-purple-400 mt-0.5">
+              {lang === "bn" ? "আইডি বদল" : "Multi-ID"}
+            </span>
+          </button>
+
+          {/* 8. Transfer Assets */}
+          <button
+            type="button"
+            onClick={() => setSettingsTab("transfer")}
+            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-muted/40 hover:bg-amber-500/10 hover:border-amber-500/30 border border-border/60 transition-all text-center group cursor-pointer active:scale-95 shadow-2xs"
+            title={lang === "bn" ? "অ্যাসেট ট্রান্সফার কি তৈরি করুন" : "Transfer Assets & Keys"}
+          >
+            <div className="size-8 sm:size-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform flex items-center justify-center mb-1.5 shadow-2xs">
+              <ArrowRightLeft className="size-4" />
+            </div>
+            <span className="text-[11px] font-bold text-foreground truncate w-full">
+              {lang === "bn" ? "অ্যাসেট ট্রান্সফার" : "Transfer Key"}
+            </span>
+            <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400 mt-0.5">
+              {lang === "bn" ? "ডাটা কি" : "Data Key"}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -1598,49 +1525,6 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {settingsTab === "hardware" && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Card className="p-5 sm:p-6 space-y-4 rounded-2xl">
-            <div>
-              <h2 className="font-bold text-base flex items-center gap-2"><Scan className="size-4 text-primary" />{lang === "bn" ? "বারকোড স্ক্যানার" : "Barcode scanner"}</h2>
-              <p className="text-xs text-muted-foreground mt-1">{lang === "bn" ? "USB বা Bluetooth স্ক্যানারকে Keyboard/HID মোডে জোড়া দিন। স্ক্যানের শেষ কী নিচের সেটিংয়ের সাথে মিলিয়ে দিন।" : "Pair a USB or Bluetooth scanner in keyboard/HID mode. Match its ending key to the setting below."}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="scanner-suffix">{lang === "bn" ? "স্ক্যানের শেষ কী" : "Scanner ending key"}</Label>
-              <select id="scanner-suffix" value={scannerSuffix} onChange={e => { const value = e.target.value === "Tab" ? "Tab" : "Enter"; setScannerSuffix(value); savePosHardwareSettings({ scannerSuffix: value }); }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                <option value="Enter">Enter</option>
-                <option value="Tab">Tab</option>
-              </select>
-              <Label htmlFor="hardware-scanner-test">{lang === "bn" ? "স্ক্যানার পরীক্ষা" : "Test scanner"}</Label>
-              <div className="flex gap-2">
-                <Input id="hardware-scanner-test" value={scannerTestCode} onChange={e => setScannerTestCode(e.target.value)} onKeyDown={e => { if (e.key === scannerSuffix) { e.preventDefault(); testScanner(); } }} placeholder={lang === "bn" ? "এখানে স্ক্যান করুন" : "Scan here"} autoComplete="off" />
-                <Button type="button" variant="outline" onClick={testScanner} disabled={!scannerTestCode.trim() || hardwareProducts.isLoading}>{lang === "bn" ? "পরীক্ষা" : "Test"}</Button>
-              </div>
-              {scannerTestResult && <p role="status" className="text-xs font-medium text-foreground">{scannerTestResult}</p>}
-            </div>
-            <p className="text-xs text-muted-foreground">{lang === "bn" ? "নতুন বিক্রিতে স্ক্যান করলে পণ্য সরাসরি কার্টে যোগ হয়। অন্য ঘরে টাইপ করার সময় স্ক্যান করতে স্ক্যান ঘরটি নির্বাচন করুন।" : "In New Sale, each scan adds the item directly to the cart. Select its scan field when returning from another text field."}</p>
-          </Card>
-
-          <Card className="p-5 sm:p-6 space-y-4 rounded-2xl">
-            <div>
-              <h2 className="font-bold text-base flex items-center gap-2"><Printer className="size-4 text-primary" />{lang === "bn" ? "রসিদ প্রিন্টার" : "Receipt printer"}</h2>
-              <p className="text-xs text-muted-foreground mt-1">{lang === "bn" ? "প্রিন্টার ড্রাইভার ইনস্টল করে USB বা Bluetooth প্রিন্টারকে ডিভাইসের প্রিন্টার তালিকায় যোগ করুন।" : "Install the printer manufacturer’s driver and add the USB or Bluetooth printer to this device’s printer list."}</p>
-            </div>
-            <fieldset className="space-y-2">
-              <legend className="text-xs font-semibold mb-2">{lang === "bn" ? "বিক্রির পর প্রিন্ট" : "Printing after a sale"}</legend>
-              {(["manual", "automatic"] as const).map(mode => (
-                <label key={mode} className="flex items-start gap-3 rounded-xl border border-border p-3 cursor-pointer">
-                  <input type="radio" name="receipt-print-mode" value={mode} checked={printMode === mode} onChange={() => { setPrintMode(mode); savePosHardwareSettings({ printMode: mode }); }} className="mt-0.5 accent-primary" />
-                  <span className="text-xs"><strong className="block text-foreground">{mode === "manual" ? (lang === "bn" ? "ম্যানুয়াল" : "Manual") : (lang === "bn" ? "অটোমেটিক" : "Automatic")}</strong><span className="text-muted-foreground">{mode === "manual" ? (lang === "bn" ? "শুধু ‘সংরক্ষণ ও প্রিন্ট’ চাপলে প্রিন্ট খুলবে।" : "Print only when you choose Save & print.") : (lang === "bn" ? "বিক্রি সংরক্ষণের পর প্রিন্ট ডায়ালগ খুলবে।" : "Open the print dialog after a sale is saved.")}</span></span>
-                </label>
-              ))}
-            </fieldset>
-            <Button type="button" variant="outline" onClick={testPrinter} className="gap-2"><Printer className="size-4" />{lang === "bn" ? "টেস্ট রসিদ প্রিন্ট" : "Print test receipt"}</Button>
-            <p className="text-xs text-muted-foreground">{lang === "bn" ? "এই ওয়েব সংস্করণে ব্রাউজারের প্রিন্ট ডায়ালগ থেকে প্রিন্টার নির্বাচন করুন। কাগজের মাপ POS & Printing-এ ঠিক করুন।" : "Choose the printer in the browser print dialog. Set the paper size in POS & Printing."}</p>
-          </Card>
-        </div>
-      )}
-
       {(isOwner || hasDangerZoneAccess) && biz && (
         <div className="space-y-6">
           {/* ── TAB 1: SHOP PROFILE & BRANDING ──────────────────────────────── */}
@@ -1657,31 +1541,7 @@ export default function SettingsPage() {
                       {lang === "bn" ? "দোকানের নাম, ঠিকানা এবং যোগাযোগের তথ্য পরিচালনা করুন" : "Manage company identity, phone numbers, and official address"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Link href="/erp">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl text-xs font-bold gap-1.5 cursor-pointer"
-                      >
-                        <LayoutGrid className="size-3.5 text-primary" />
-                        <span>{lang === "bn" ? "ইন্ডাস্ট্রি ইআরপি ওয়ার্কস্পেস" : "Industry ERP"}</span>
-                      </Button>
-                    </Link>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setModuleCustomizerOpen(true)}
-                      className="rounded-xl text-xs font-bold gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="size-3.5 text-primary" />
-                      <span>{lang === "bn" ? "মডিউল ও KPI কাস্টমাইজ" : "Modules & KPIs"}</span>
-                    </Button>
-                  </div>
                 </div>
-                <ModuleCustomizerDialog open={moduleCustomizerOpen} onOpenChange={setModuleCustomizerOpen} />
 
                 <form onSubmit={saveBusiness} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1690,28 +1550,10 @@ export default function SettingsPage() {
                       <Input name="name" defaultValue={biz.name} placeholder="Dream IT POS" className="h-10 rounded-xl text-xs" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold flex items-center justify-between">
-                        <span>{lang === "bn" ? "ব্যবসার ধরন (লক করা)" : "Business Industry (Locked)"}</span>
-                        {biz.business_type && (
-                          <span className="text-[10px] font-bold text-amber-600">
-                            {lang === "bn" ? "পরিবর্তনযোগ্য নয়" : "Locked"}
-                          </span>
-                        )}
-                      </Label>
-                      <select
-                        name="business_type"
-                        defaultValue={biz.business_type}
-                        disabled={Boolean(biz.business_type)}
-                        className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize disabled:opacity-70 disabled:cursor-not-allowed"
-                      >
-                        {!BUSINESS_TYPES.includes(biz.business_type) && biz.business_type && (
-                          <option value={biz.business_type}>{biz.business_type}</option>
-                        )}
+                      <Label className="text-xs font-semibold">Business Category</Label>
+                      <select name="business_type" defaultValue={biz.business_type} className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs capitalize">
                         {BUSINESS_TYPES.map(bt => <option key={bt} value={bt}>{bt}</option>)}
                       </select>
-                      {biz.business_type && (
-                        <input type="hidden" name="business_type" value={biz.business_type} />
-                      )}
                     </div>
                   </div>
 
@@ -2311,8 +2153,7 @@ export default function SettingsPage() {
               <div className="lg:col-span-12">
                 <LabelPrintingStudio
                   embedded
-                  products={hardwareProducts.data || []}
-                  shopName={biz.name || user?.business_name || "CLASSIC WORLD"}
+                  shopName={biz.name || user?.business_name || "DREAM FASHION"}
                   lang={lang}
                 />
               </div>
@@ -2461,42 +2302,19 @@ export default function SettingsPage() {
                       type="button"
                       onClick={handleBulkExport}
                       disabled={isBulkExporting || !biz.google_sheets_spreadsheet_id}
-                      className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 flex-1 shadow-sm cursor-pointer"
+                      className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 flex-1 shadow-sm"
                     >
                       {isBulkExporting ? (
                         <>
                           <RefreshCw className="size-3.5 animate-spin" />
-                          <span>{lang === "bn" ? "গুগল শিটে সিঙ্ক হচ্ছে..." : "Syncing Database to Google Sheets..."}</span>
+                          <span>Syncing Database to Google Sheets...</span>
                         </>
                       ) : (
                         <>
                           <RefreshCw className="size-3.5" />
-                          <span>{lang === "bn" ? "সব ডাটা গুগল শিটে ব্যাকআপ করুন" : "Sync All Existing Data Now"}</span>
+                          <span>Sync All Existing Data Now</span>
                         </>
                       )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={async () => {
-                        try {
-                          const snap = await exportFullBackupFn();
-                          const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `urobili-backup-${new Date().toISOString().slice(0, 10)}.json`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          toast.success(lang === "bn" ? "সম্পূর্ণ ডাটাবেজ ব্যাকআপ ডাউনলোড হয়েছে" : "Full PostgreSQL JSON backup downloaded");
-                        } catch (err: any) {
-                          toast.error(err?.message || "Backup download failed");
-                        }
-                      }}
-                      className="h-10 rounded-xl font-bold text-xs gap-2 cursor-pointer"
-                    >
-                      <Download className="size-3.5" />
-                      <span>{lang === "bn" ? "ফুল JSON ব্যাকআপ ডাউনলোড" : "Download Full JSON Backup"}</span>
                     </Button>
                   </div>
 
@@ -2564,210 +2382,610 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ── TAB 4: EMPLOYEE SETUP & DEVICE PAIRING (NO EMAIL INVITATION) ── */}
-          {settingsTab === "staff" && (
-            <div className="space-y-6">
-              {/* Active Staff Members Card */}
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                      <Users className="size-5" />
+          {/* ── TAB: STEADFAST COURIER INTEGRATION ──────────────────────── */}
+          {settingsTab === "steadfast" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <Truck className="size-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-bold text-base sm:text-lg text-foreground">
-                          {lang === "bn" ? "দোকানের কর্মচারীবৃন্দ ও এক্সেস সেটআপ" : "Store Staff & Device Access Setup"}
-                        </h2>
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs font-bold">
-                          {((employeesListQuery.data && employeesListQuery.data.length > 0) ? employeesListQuery.data : activeEmployees).length} {lang === "bn" ? "জন কর্মী" : "Staff"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <h2 className="text-base font-bold text-foreground">
+                        {lang === "bn" ? "SteadFast কুরিয়ার API ইন্টিগ্রেশন" : "SteadFast Courier API Integration"}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
                         {lang === "bn"
-                          ? "কর্মচারী যুক্ত করুন, টার্মিনাল লিংক করার কোড তৈরি করুন এবং বেতন ও পিন সেটিংস পরিবর্তন করুন।"
-                          : "Manage employee accounts, generate pairing codes for linking devices, and edit staff salaries and PINs."}
+                          ? "ড্যাশবোর্ড ও অনলাইন সেল থেকে সরাসরি পার্সেল বুকিং, ট্র্যাকিং ও ফ্রড চেক করুন।"
+                          : "Book parcels, check customer fraud scores, and auto-sync delivery completion from Online Sales & Dashboard."}
                       </p>
                     </div>
                   </div>
+                  <Badge variant="outline" className={steadfastEnabled ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" : "bg-muted text-muted-foreground"}>
+                    {steadfastEnabled ? (lang === "bn" ? "সক্রিয়" : "Enabled") : (lang === "bn" ? "নিষ্ক্রিয়" : "Disabled")}
+                  </Badge>
+                </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      type="button"
-                      onClick={handleOpenAddStaff}
-                      size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 rounded-xl px-3.5 text-xs gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <UserPlus className="size-3.5" />
-                      <span>{lang === "bn" ? "নতুন কর্মচারী যোগ করুন" : "Add New Employee"}</span>
-                    </Button>
+                <form onSubmit={handleSaveSteadfast} className="space-y-4">
+                  <label className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 border border-border/70 cursor-pointer">
+                    <div>
+                      <div className="text-sm font-bold text-foreground">
+                        {lang === "bn" ? "SteadFast কুরিয়ার চালু করুন" : "Enable SteadFast Courier"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {lang === "bn"
+                          ? "নতুন অনলাইন সেল করার সাথে সাথেই SteadFast-এ পাঠানোর অপশন চালু হবে।"
+                          : "Enables 1-click parcel dispatch, tracking sync, and fraud check across Online Sales & Dashboard."}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={steadfastEnabled}
+                      onChange={(e) => setSteadfastEnabled(e.target.checked)}
+                      className="size-5 accent-emerald-600 cursor-pointer"
+                    />
+                  </label>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">SteadFast Api-Key</Label>
+                    <Input
+                      value={steadfastApiKey}
+                      onChange={(e) => setSteadfastApiKey(e.target.value)}
+                      placeholder="Enter your SteadFast Api-Key"
+                      className="h-10 rounded-xl font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">SteadFast Secret-Key</Label>
+                    <Input
+                      type="password"
+                      value={steadfastSecretKey}
+                      onChange={(e) => setSteadfastSecretKey(e.target.value)}
+                      placeholder="Enter your SteadFast Secret-Key"
+                      className="h-10 rounded-xl font-mono text-xs"
+                    />
+                  </div>
+
+                  {/* SteadFast Webhook URL Box */}
+                  <div className="p-3.5 rounded-2xl bg-muted/60 border border-border/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Link2 className="size-3.5 text-emerald-600" />
+                        <span>{lang === "bn" ? "SteadFast ওয়েবহুক (Webhook Callback URL)" : "SteadFast Webhook Callback URL"}</span>
+                      </Label>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                        Live Auto-Sync
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/steadfast` : "https://your-domain.com/api/webhooks/steadfast"}
+                        className="h-9 rounded-xl font-mono text-[11px] bg-background text-foreground flex-1 select-all"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const url = typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/steadfast` : "/api/webhooks/steadfast";
+                          navigator.clipboard.writeText(url);
+                          toast.success(lang === "bn" ? "ওয়েবহুক URL কপি হয়েছে!" : "Webhook URL copied to clipboard!");
+                        }}
+                        className="h-9 px-3 rounded-xl text-xs font-semibold gap-1.5 shrink-0"
+                      >
+                        <Copy className="size-3.5" />
+                        <span>{lang === "bn" ? "কপি" : "Copy"}</span>
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      {lang === "bn"
+                        ? "এই URL-টি আপনার SteadFast মার্চেন্ট প্যানেলের Settings > Webhook অপশনে পেস্ট করুন। পার্সেল ডেলিভার্ড বা রিটার্ন হলে স্বয়ংক্রিয়ভাবে স্ট্যাটাস সিঙ্ক হবে ও ক্যাশবক্সে জমা হবে।"
+                        : "Paste this URL in your SteadFast Merchant Portal > Settings > Webhook. Parcel status will automatically sync and settled COD will deposit to Cashbox upon delivery."}
+                    </p>
+                  </div>
+
+                  {steadfastBalance !== null && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                        {lang === "bn" ? "বর্তমান SteadFast ব্যালেন্স:" : "Current SteadFast Balance:"}
+                      </span>
+                      <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                        ৳ {steadfastBalance.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2.5 pt-2">
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        employeesListQuery.refetch();
-                        qc.invalidateQueries({ queryKey: ["employees"] });
-                        toast.info(lang === "bn" ? "কর্মচারী তালিকা রিফ্রেশ হয়েছে" : "Staff list refreshed");
-                      }}
-                      className="h-9 px-3 rounded-xl text-xs font-semibold gap-1.5 border-border/80 cursor-pointer"
+                      disabled={steadfastBusy}
+                      onClick={handleTestSteadfast}
+                      className="h-10 rounded-xl text-xs font-bold gap-2"
                     >
-                      <RefreshCw className={`size-3.5 ${employeesListQuery.isFetching ? "animate-spin" : ""}`} />
-                      <span>{lang === "bn" ? "রিফ্রেশ" : "Refresh"}</span>
+                      <RefreshCw className={`size-3.5 ${steadfastBusy ? "animate-spin" : ""}`} />
+                      <span>{lang === "bn" ? "ব্যালেন্স ও কানেকশন টেস্ট" : "Test & Check Balance"}</span>
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={steadfastBusy || !isOwner}
+                      className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2 flex-1"
+                    >
+                      <CheckCircle className="size-3.5" />
+                      <span>{lang === "bn" ? "SteadFast সেটিংস সেভ করুন" : "Save SteadFast Settings"}</span>
                     </Button>
                   </div>
+                </form>
+              </Card>
+
+              <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-3">
+                <h3 className="text-sm font-bold text-foreground">
+                  {lang === "bn" ? "কিভাবে কাজ করে?" : "Supported SteadFast Features"}
+                </h3>
+                <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
+                  <li>{lang === "bn" ? "নতুন অনলাইন সেলের সময় সাথে সাথে SteadFast অর্ডার তৈরি ও ট্র্যাকিং কোড সেভ।" : "Create SteadFast consignment immediately after an Online Sale and save tracking code."}</li>
+                  <li>{lang === "bn" ? "কাস্টমারের ১১-ডিজিটের নাম্বারে ফ্রড চেক (মোট পার্সেল, ডেলিভার্ড, ক্যানসেল্ড)।" : "Run Fraud Check on 11-digit phone numbers (Total parcels, Delivered, Cancelled)."}</li>
+                  <li>{lang === "bn" ? "ট্র্যাকিং স্ট্যাটাস সিঙ্ক: ডেলিভার্ড হলে অটোমেটিক ক্যাশবক্সে COD টাকা জমা হবে।" : "Live status tracking: when SteadFast marks 'delivered', order auto-completes and deposits COD to Cashbox."}</li>
+                  <li>{lang === "bn" ? "বাল্ক অর্ডার ডিসপ্যাচ এবং ড্যাশবোর্ড কুইক ট্র্যাকিং।" : "Single & bulk dispatch directly from Online Sales and Dashboard."}</li>
+                </ul>
+              </Card>
+            </div>
+          )}
+
+          {/* ── TAB: DESKTOP WHATSAPP (CLIENT COMPUTE QR + AUTO/MANUAL) ────── */}
+          {settingsTab === "whatsapp" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <QrCode className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-foreground">
+                        {lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ QR (লোকাল কম্পিউট)" : "Desktop WhatsApp QR (Client Compute)"}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {lang === "bn"
+                          ? "সম্পূর্ণ আপনার নিজের কম্পিউটারে চলে — কোনো ক্লাউড সার্ভারে সেশন যায় না।"
+                          : "Runs 100% locally inside your Desktop App using your own computer."}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={waStatus.status === "connected" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" : "bg-muted text-muted-foreground"}>
+                    {waStatus.status === "connected" ? "Connected" : waStatus.status === "qr_ready" ? "Scan QR" : waStatus.status === "connecting" ? "Connecting..." : "Disconnected"}
+                  </Badge>
                 </div>
 
-                {/* Helper notice */}
-                <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-3.5 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
-                  <Smartphone className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-                  <div className="space-y-0.5 leading-relaxed">
-                    <p className="font-bold text-foreground">
-                      {lang === "bn" ? "ডিভাইস লিংক ও পিন লগইন সিস্টেম:" : "Device Pairing & Direct PIN System:"}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
+                {!waAvailable ? (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-200 space-y-1.5">
+                    <div className="font-bold">{lang === "bn" ? "ডেস্কটপ অ্যাপ প্রয়োজন" : "Desktop App Required for Local Compute"}</div>
+                    <p>
                       {lang === "bn"
-                        ? "কর্মচারীদের আলাদা কোনো ইমেইলের প্রয়োজন নেই। 'ডিভাইস লিংক' বাটনে ক্লিক করে কোড দিয়ে কর্মচারীর মোবাইল বা কম্পিউটার যুক্ত করুন অথবা তার ব্যক্তিগত পিন কোড দিয়ে সরাসরি লগইন করান।"
-                        : "Employees do not need an email account. Click 'Link Device' to generate pairing codes for cashier terminals/phones, or employees can sign in directly using their personal PIN."}
+                        ? "ক্লায়েন্ট কম্পিউটে WhatsApp QR এবং অটো মেসেজ চালাতে Dream Fashion Windows Desktop অ্যাপটি ব্যবহার করুন।"
+                        : "Open Dream Fashion Windows Desktop App to link your WhatsApp via QR code and send automated messages from your own PC."}
                     </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    {waStatus.status === "qr_ready" && waStatus.qrCodeDataUrl && (
+                      <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white border border-border">
+                        <img src={waStatus.qrCodeDataUrl} alt="WhatsApp QR Code" className="w-56 h-56 rounded-xl" />
+                        <p className="text-xs font-semibold text-slate-700 text-center">
+                          {lang === "bn" ? "ফোনের WhatsApp > Linked Devices থেকে এই QR স্ক্যান করুন" : "Open WhatsApp > Linked Devices on your phone and scan this QR"}
+                        </p>
+                      </div>
+                    )}
 
-                {/* Employees Grid */}
-                {(() => {
-                  const staffList = (employeesListQuery.data && employeesListQuery.data.length > 0) ? employeesListQuery.data : activeEmployees;
-                  if (staffList.length === 0) {
-                    return (
-                      <div className="text-center py-12 space-y-2 border border-dashed border-border/80 rounded-2xl bg-muted/20">
-                        <Users className="size-9 mx-auto text-muted-foreground/50" />
-                        <p className="text-sm font-bold text-foreground">
-                          {lang === "bn" ? "এখনো কোনো কর্মচারী যুক্ত করা হয়নি" : "No Staff Members Added Yet"}
-                        </p>
-                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                          {lang === "bn"
-                            ? "উপরের 'নতুন কর্মচারী যোগ করুন' বাটনে ক্লিক করে সরাসরি কর্মচারীর নাম, পদবি, বেতন ও পিন সেট করুন।"
-                            : "Click 'Add New Employee' above to register staff with designated salary and PIN."}
-                        </p>
+                    {waStatus.status === "connected" && (
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                            {waStatus.name || "WhatsApp Linked"}
+                          </div>
+                          {waStatus.phone && (
+                            <div className="text-xs font-mono text-muted-foreground">+{waStatus.phone}</div>
+                          )}
+                        </div>
                         <Button
                           type="button"
-                          onClick={handleOpenAddStaff}
+                          variant="destructive"
                           size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs mt-2"
+                          disabled={waBusy}
+                          onClick={async () => {
+                            setWaBusy(true);
+                            try {
+                              const bridge = getDesktopWhatsAppBridge();
+                              if (bridge) setWaStatus(await bridge.disconnect());
+                              toast.success("WhatsApp disconnected");
+                            } finally {
+                              setWaBusy(false);
+                            }
+                          }}
+                          className="h-9 rounded-xl text-xs font-bold"
                         >
-                          <UserPlus className="size-3.5 mr-1.5" />
-                          <span>{lang === "bn" ? "প্রথম কর্মচারী যোগ করুন" : "Add First Employee"}</span>
+                          Disconnect
                         </Button>
                       </div>
-                    );
-                  }
+                    )}
 
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
-                      {staffList.map((emp: any) => {
-                        const empName = emp.name || emp.full_name || "Employee";
-                        const currentPin = emp.pin || emp.plain_password || emp.password || "1234";
-                        const baseSal = Number(emp.base_salary || emp.monthly_salary) || 0;
-                        const advLimit = emp.advance_limit !== undefined && emp.advance_limit !== null
-                          ? Number(emp.advance_limit)
-                          : baseSal;
+                    {waStatus.status !== "connected" && (
+                      <Button
+                        type="button"
+                        disabled={waBusy}
+                        onClick={async () => {
+                          setWaBusy(true);
+                          try {
+                            const bridge = getDesktopWhatsAppBridge();
+                            if (bridge) setWaStatus(await bridge.start());
+                          } catch (err: any) {
+                            toast.error(err?.message || "Failed to start WhatsApp");
+                          } finally {
+                            setWaBusy(false);
+                          }
+                        }}
+                        className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2"
+                      >
+                        <QrCode className="size-4" />
+                        <span>{waStatus.status === "qr_ready" ? "Refresh QR Code" : (lang === "bn" ? "QR কোড জেনারেট করুন" : "Connect & Show QR Code")}</span>
+                      </Button>
+                    )}
 
-                        return (
-                          <div
-                            key={emp.id}
-                            className="p-4 rounded-2xl bg-muted/40 border border-border/80 hover:border-border transition-all flex flex-col justify-between gap-3 text-xs shadow-2xs"
-                          >
-                            <div className="space-y-2 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="size-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-xs shrink-0">
-                                    {empName.slice(0, 2).toUpperCase()}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="font-bold text-foreground text-sm truncate">{empName}</p>
-                                    <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-                                      <Badge variant="secondary" className="text-[10px] font-normal py-0 px-1.5 h-4">
-                                        {emp.designation || "Staff"}
-                                      </Badge>
-                                      {emp.phone && (
-                                        <span className="text-[10px] text-muted-foreground">{emp.phone}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await openDesktopWhatsAppWindow();
+                          toast.success(lang === "bn" ? "হোয়াটসঅ্যাপ ক্রোমিয়াম উইন্ডো খোলা হয়েছে" : "Opened Chromium WhatsApp Web Window");
+                        } catch (err: any) {
+                          toast.error(err?.message || "Failed to open window");
+                        }
+                      }}
+                      className="w-full h-9 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-bold gap-2"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>{lang === "bn" ? "হোয়াটসঅ্যাপ উইন্ডো দেখুন (Chromium)" : "Open WhatsApp Web Window (Chromium)"}</span>
+                    </Button>
 
-                                <div className="flex items-center gap-1 text-[11px] font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 shrink-0">
-                                  <KeyRound className="size-3 text-amber-500" />
-                                  <span>PIN: {currentPin}</span>
-                                </div>
-                              </div>
+                    {waStatus.lastError && (
+                      <p className="text-xs text-rose-500">{waStatus.lastError}</p>
+                    )}
+                  </div>
+                )}
+              </Card>
 
-                              {/* Salary & Advance Details */}
-                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[11px]">
-                                <div className="rounded-xl bg-background/60 p-2 border border-border/50">
-                                  <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "মূল বেতন:" : "Salary:"}</span>
-                                  <span className="font-bold text-foreground font-mono">৳{baseSal.toLocaleString()}</span>
-                                </div>
-                                <div className="rounded-xl bg-amber-500/5 p-2 border border-amber-500/20">
-                                  <span className="text-[10px] text-amber-700 dark:text-amber-400 block">{lang === "bn" ? "অগ্রিম সীমা:" : "Adv. Limit:"}</span>
-                                  <span className="font-bold text-amber-700 dark:text-amber-300 font-mono">৳{advLimit.toLocaleString()}</span>
-                                </div>
-                              </div>
-                            </div>
+              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="border-b border-border/60 pb-3">
+                  <h3 className="text-base font-bold text-foreground">
+                    {lang === "bn" ? "মেসেজ মোড (Auto / Manual)" : "Automation Mode (Auto / Manual)"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {lang === "bn"
+                      ? "অটো মোডে সেল বা অনলাইন অর্ডার হলেই কাস্টমারকে অটোমেটিক মেসেজ যাবে।"
+                      : "Switch between Auto Mode (instant customer notifications) and Manual Mode (send on click)."}
+                  </p>
+                </div>
 
-                            {/* Actions bar */}
-                            <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-border/50 flex-wrap">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {/* Device Pairing Link Code Generator */}
-                                <OwnerEmployeeDeviceLink
-                                  employeeId={emp.id}
-                                  employeeName={empName}
-                                  employeePin={currentPin}
-                                />
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaModeState("auto");
+                      setWhatsAppMode("auto");
+                      toast.success("WhatsApp Mode set to AUTO");
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      waMode === "auto"
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="text-sm font-bold">Auto Mode</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">Send automatically on new orders & tracking updates</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaModeState("manual");
+                      setWhatsAppMode("manual");
+                      toast.success("WhatsApp Mode set to MANUAL");
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      waMode === "manual"
+                        ? "bg-primary/15 border-primary text-primary ring-1 ring-primary/30"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="text-sm font-bold">Manual Mode</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">Send only when you click the WhatsApp button</div>
+                  </button>
+                </div>
 
-                                {/* Edit Staff Settings Button */}
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleOpenEditStaff(emp)}
-                                  className="h-8 px-2.5 rounded-xl border-border hover:bg-muted text-xs font-semibold gap-1 cursor-pointer"
-                                  title={lang === "bn" ? "কর্মচারী সেটিংস পরিবর্তন" : "Edit Staff Settings"}
-                                >
-                                  <Pencil className="size-3 text-primary" />
-                                  <span>{lang === "bn" ? "সেটিংস" : "Edit"}</span>
-                                </Button>
+                {waMode === "auto" && (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-muted/30 border border-border/60">
+                    <div className="text-xs font-bold text-foreground mb-1">Auto-Send Triggers</div>
+                    {[
+                      { key: "onSale" as const, label: "POS / Store Sales (with customer phone)" },
+                      { key: "onOnlineOrder" as const, label: "New Online / Courier Orders" },
+                      { key: "onTracking" as const, label: "SteadFast Tracking & Delivery Updates" },
+                    ].map((r) => (
+                      <label key={r.key} className="flex items-center justify-between text-xs cursor-pointer py-1">
+                        <span>{r.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={waRules[r.key]}
+                          onChange={(e) => {
+                            const next = { ...waRules, [r.key]: e.target.checked };
+                            setWaRulesState(next);
+                            setWhatsAppAutoRules(next);
+                          }}
+                          className="size-4 accent-emerald-600"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
 
-                                {/* Permissions Button */}
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openPermissionsModal(emp)}
-                                  className="h-8 px-2 rounded-xl border-border hover:bg-muted text-xs font-semibold gap-1 cursor-pointer"
-                                  title="Manage Access & Permissions"
-                                >
-                                  <Shield className="size-3 text-muted-foreground" />
-                                  <span className="hidden sm:inline">{lang === "bn" ? "পারমিশন" : "Perms"}</span>
-                                </Button>
-                              </div>
+                <div className="pt-2 border-t border-border/60 space-y-2.5">
+                  <div className="text-xs font-bold text-foreground">Manual / Test Message</div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={waTestPhone}
+                      onChange={(e) => setWaTestPhone(e.target.value)}
+                      placeholder="017XXXXXXXX"
+                      className="h-9 rounded-xl text-xs font-mono"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!waAvailable || waStatus.status !== "connected" || waBusy}
+                      onClick={async () => {
+                        setWaBusy(true);
+                        try {
+                          const bridge = getDesktopWhatsAppBridge();
+                          await bridge.sendMessage({ phone: waTestPhone, message: waTestMsg });
+                          toast.success("WhatsApp message sent from your computer!");
+                        } catch (err: any) {
+                          toast.error(err?.message || "Failed to send");
+                        } finally {
+                          setWaBusy(false);
+                        }
+                      }}
+                      className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5 shrink-0"
+                    >
+                      {waBusy ? (
+                        <>
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          <span>Sending...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="size-3.5" />
+                          <span>Send</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <Input
+                    value={waTestMsg}
+                    onChange={(e) => setWaTestMsg(e.target.value)}
+                    placeholder="Message text..."
+                    className="h-9 rounded-xl text-xs"
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
 
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveEmployee(emp.id)}
-                                className="h-8 px-2 text-destructive hover:bg-destructive/10 rounded-xl shrink-0 cursor-pointer"
-                                title="Remove Staff Access"
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
+          {/* ── TAB 4: EMPLOYEE INVITATIONS & STAFF ACCESS ──────────────────── */}
+          {settingsTab === "staff" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Send Employee Invitation Form */}
+                <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2.5 text-primary">
+                      <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+                        <UserPlus className="size-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-foreground">
+                          {lang === "bn" ? "নতুন কর্মচারী আমন্ত্রণ" : "Invite Employee by Email"}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          {lang === "bn"
+                            ? "কর্মচারীর ইমেইল দিয়ে আমন্ত্রণ পাঠান। তিনি লগইন করলেই একাউন্টে নোটিফিকেশন পাবেন।"
+                            : "Enter staff email. When they log in or create an account, they get a joining popup."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSendStaffInvitation} className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Employee Email Address *</Label>
+                      <Input
+                        type="email"
+                        required
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="employee@gmail.com"
+                        className="h-10 rounded-xl text-xs"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Full Name (Optional)</Label>
+                        <Input
+                          value={inviteName}
+                          onChange={e => setInviteName(e.target.value)}
+                          placeholder="e.g. Shakil Ahmed"
+                          className="h-10 rounded-xl text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Role / Designation</Label>
+                        <select
+                          value={inviteDesignation}
+                          onChange={e => setInviteDesignation(e.target.value)}
+                          className="w-full h-10 rounded-xl border border-input bg-input px-3 text-xs"
+                        >
+                          <option value="Sales Staff">Sales Staff</option>
+                          <option value="Cashier">Cashier</option>
+                          <option value="Store Manager">Store Manager</option>
+                          <option value="Inventory Officer">Inventory Officer</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={inviteSending || !inviteEmail.trim()}
+                      className="w-full h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs gap-2 shadow-sm mt-2"
+                    >
+                      {inviteSending ? (
+                        <>
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          <span>Sending Invitation...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="size-3.5" />
+                          <span>{lang === "bn" ? "আমন্ত্রণ পাঠান" : "Send Staff Invitation"}</span>
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </Card>
+
+                {/* Pending Email Invitations */}
+                <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-amber-500" />
+                      <h3 className="font-bold text-sm text-foreground">
+                        {lang === "bn" ? "অপেক্ষারত আমন্ত্রণসমূহ" : "Pending Email Invitations"}
+                      </h3>
+                    </div>
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-xs">
+                      {pendingInvites.length} Pending
+                    </Badge>
+                  </div>
+
+                  {pendingInvites.length > 0 ? (
+                    <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+                      {pendingInvites.map((inv: any) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between p-3 rounded-2xl bg-muted/40 border border-border/80 text-xs"
+                        >
+                          <div className="space-y-0.5 min-w-0 pr-2">
+                            <p className="font-bold text-foreground truncate">{inv.employee_email}</p>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                              <span>{inv.designation || "Staff"}</span>
+                              {inv.created_at && <span>• {new Date(inv.created_at).toLocaleDateString()}</span>}
                             </div>
                           </div>
-                        );
-                      })}
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelInvitation(inv.id)}
+                            className="h-8 px-2.5 rounded-xl text-destructive hover:bg-destructive/10 text-xs font-semibold shrink-0"
+                          >
+                            Revoke
+                          </Button>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })()}
+                  ) : (
+                    <div className="text-center py-8 space-y-1.5 border border-dashed border-border/80 rounded-2xl">
+                      <Mail className="size-6 text-muted-foreground mx-auto opacity-50" />
+                      <p className="text-xs text-muted-foreground">No pending invitations.</p>
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+              {/* Active Staff Members Table */}
+              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5 text-primary">
+                    <Users className="size-5" />
+                    <div>
+                      <h3 className="font-bold text-sm text-foreground">
+                        {lang === "bn" ? "সক্রিয় কর্মচারীবৃন্দ" : "Active Staff Members"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">Employees with access to this shop</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs">
+                    {activeEmployees.length} Active Staff
+                  </Badge>
+                </div>
+
+                {activeEmployees.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {activeEmployees.map((emp: any) => (
+                        <div
+                          key={emp.id}
+                          className="p-3.5 rounded-2xl bg-muted/40 border border-border/80 flex flex-col justify-between gap-3 text-xs"
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-foreground truncate">
+                                {emp.full_name || emp.email.split("@")[0]}
+                              </span>
+                              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30 px-1.5 py-0 h-4">
+                                Active
+                              </Badge>
+                              {emp.permissions?.danger_zone && (
+                                <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 border-red-500/30 px-1.5 py-0 h-4 font-bold">
+                                  Danger Zone
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground truncate">{emp.email}</p>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openPermissionsModal(emp)}
+                              className="h-8 px-2.5 rounded-xl border-primary/30 hover:bg-primary/10 text-primary text-xs font-semibold gap-1.5 cursor-pointer"
+                              title="Manage Access & Permissions"
+                            >
+                              <Shield className="size-3.5" />
+                              <span>{lang === "bn" ? "পারমিশন কন্ট্রোল" : "Access & Permissions"}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveEmployee(emp.id)}
+                              className="h-8 px-2 text-destructive hover:bg-destructive/10 rounded-xl shrink-0 cursor-pointer"
+                              title="Remove Staff Access"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                ) : (
+                  <div className="text-center py-8 space-y-1.5 border border-dashed border-border/80 rounded-2xl">
+                    <Users className="size-7 text-muted-foreground mx-auto opacity-50" />
+                    <p className="text-xs text-muted-foreground">No active employees joined yet.</p>
+                    <p className="text-[11px] text-muted-foreground">Send an invitation above to add your team members.</p>
+                  </div>
+                )}
               </Card>
             </div>
           )}
@@ -2855,6 +3073,7 @@ export default function SettingsPage() {
                 </div>
               </Card>
 
+              {/* Emerald Glass UI & Advanced Theme Studio */}
               <div className="lg:col-span-6">
                 <EmeraldUiSettings />
               </div>
@@ -3352,319 +3571,99 @@ export default function SettingsPage() {
           )}
 
           {settingsTab === "security" && (
-            <div className="space-y-6">
-              {/* 1. SHOP OWNER PIN & SCREEN SECURITY */}
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Shield className="size-5 text-amber-500" />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Screen Security & Admin PIN Code Lock */}
+              <Card className="lg:col-span-12 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                      <Lock className="size-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-bold text-base sm:text-lg text-foreground">
-                          {lang === "bn" ? "দোকান মালিকের ৪ থেকে ৯ সংখ্যার পিন ও স্ক্রিন সিকিউরিটি" : "Owner 4 to 9-digit PIN & Screen Security"}
-                        </h2>
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold">
-                          OWNER ACCESS
-                        </Badge>
-                      </div>
+                      <h2 className="font-bold text-base text-foreground">
+                        {lang === "bn" ? "স্ক্রিন সিকিউরিটি ও অ্যাডমিন পিন কোড লক" : "Screen Security & Admin PIN Lock"}
+                      </h2>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {lang === "bn"
-                          ? "দোকান মালিক হিসেবে আপনার নিজস্ব ৪ থেকে ৯ সংখ্যার পিন কোড সেট করুন এবং স্ক্রিন লক সক্রিয় রাখুন।"
-                          : "Set your personal 4 to 9-digit Owner PIN to protect your POS and enable auto screen locking."}
+                        {lang === "bn" ? "সাইটে প্রবেশের সময় ৪ সংখ্যার পিন কোড সক্রিয় করুন" : "Require a 4-digit PIN code to enter and access this website"}
                       </p>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {pinLockEnabled ? (lang === "bn" ? "লক সক্রিয়" : "Lock Enabled") : (lang === "bn" ? "লক নিষ্ক্রিয়" : "Lock Disabled")}
-                    </span>
-                    <Switch
-                      checked={pinLockEnabled}
-                      onCheckedChange={(checked) => {
-                        setPinLockEnabled(checked);
-                        localStorage.setItem("app_pin_code_enabled", checked ? "true" : "false");
-                        if (checked && !pinCodeVal) {
-                          setPinCodeVal("1234");
-                          localStorage.setItem("app_pin_code_val", "1234");
-                        }
-                        window.dispatchEvent(new Event("storage"));
-                        toast.success(checked ? (lang === "bn" ? "পিন লক সক্রিয় করা হয়েছে!" : "PIN Lock enabled!") : (lang === "bn" ? "পিন লক নিষ্ক্রিয় করা হয়েছে" : "PIN Lock disabled"));
-                      }}
-                    />
-                  </div>
+                  <Switch
+                    checked={pinLockEnabled}
+                    onCheckedChange={(checked) => {
+                      setPinLockEnabled(checked);
+                      localStorage.setItem("app_pin_code_enabled", checked ? "true" : "false");
+                      if (checked && !pinCodeVal) {
+                        setPinCodeVal("1234");
+                        localStorage.setItem("app_pin_code_val", "1234");
+                      }
+                      window.dispatchEvent(new Event("storage"));
+                      toast.success(checked ? (lang === "bn" ? "পিন লক সক্রিয় করা হয়েছে!" : "PIN Lock enabled!") : (lang === "bn" ? "পিন লক নিষ্ক্রিয় করা হয়েছে" : "PIN Lock disabled"));
+                    }}
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                  {/* Owner PIN Setting */}
-                  <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        <Lock className="size-3.5 text-amber-500" />
-                        <span>{lang === "bn" ? "দোকান মালিকের পিন কোড" : "Owner PIN Code"}</span>
-                      </Label>
-                      <button
-                        type="button"
-                        onClick={() => setShowOwnerPin(!showOwnerPin)}
-                        className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
-                      >
-                        {showOwnerPin ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                        <span>{showOwnerPin ? (lang === "bn" ? "লুকান" : "Hide") : (lang === "bn" ? "দেখান" : "Show")}</span>
-                      </button>
+                {pinLockEnabled && (
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">{lang === "bn" ? "৪ সংখ্যার পিন কোড সেট করুন" : "Set 4-Digit PIN Code"}</Label>
+                        <Input
+                          type="password"
+                          maxLength={6}
+                          value={pinCodeVal}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, "");
+                            setPinCodeVal(val);
+                            localStorage.setItem("app_pin_code_val", val);
+                            window.dispatchEvent(new Event("storage"));
+                          }}
+                          placeholder="e.g. 1234"
+                          className="h-10 rounded-xl text-base font-mono tracking-widest text-center font-bold"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">{lang === "bn" ? "অটো-লক সময়সীমা (নিষ্ক্রিয় থাকলে)" : "Auto-Lock Inactivity Timeout"}</Label>
+                        <select
+                          value={pinTimeoutVal}
+                          onChange={(e) => {
+                            setPinTimeoutVal(e.target.value);
+                            localStorage.setItem("app_pin_timeout", e.target.value);
+                            window.dispatchEvent(new Event("storage"));
+                            toast.success(lang === "bn" ? "অটো-লক সময়সীমা আপডেট হয়েছে" : "Auto-lock timeout updated");
+                          }}
+                          className="h-10 w-full rounded-xl border border-input bg-background px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          <option value="1">{lang === "bn" ? "১ মিনিট নিষ্ক্রিয় থাকলে" : "1 minute of inactivity"}</option>
+                          <option value="5">{lang === "bn" ? "৫ মিনিট নিষ্ক্রিয় থাকলে" : "5 minutes of inactivity"}</option>
+                          <option value="10">{lang === "bn" ? "১০ মিনিট (ডিফল্ট)" : "10 minutes (Default)"}</option>
+                          <option value="30">{lang === "bn" ? "৩০ মিনিট নিষ্ক্রিয় থাকলে" : "30 minutes of inactivity"}</option>
+                          <option value="0">{lang === "bn" ? "কখনই অটো-লক হবে না (শুধু ম্যানুয়াল)" : "Never (Manual lock only)"}</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="flex gap-2">
-                      <Input
-                        type={showOwnerPin ? "text" : "password"}
-                        maxLength={9}
-                        value={pinCodeVal}
-                        onChange={(e) => setPinCodeVal(e.target.value.replace(/[^0-9]/g, ""))}
-                        placeholder="1234"
-                        className="h-10 rounded-xl text-base font-mono tracking-widest text-center font-bold bg-background"
-                      />
+                    <div className="flex justify-end pt-1">
                       <Button
                         type="button"
-                        onClick={() => handleSaveOwnerPin()}
-                        className="h-10 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shrink-0 cursor-pointer shadow-xs"
+                        variant="outline"
+                        className="h-9 px-4 rounded-xl text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+                        onClick={() => {
+                          sessionStorage.removeItem("app_pin_unlocked");
+                          window.dispatchEvent(new Event("app_lock_screen"));
+                          toast.info(lang === "bn" ? "স্ক্রিন লক করা হয়েছে" : "Screen locked!");
+                        }}
                       >
-                        {lang === "bn" ? "সংরক্ষণ" : "Save"}
+                        <Lock className="size-3.5" />
+                        {lang === "bn" ? "এখনই স্ক্রিন লক করুন" : "Lock Screen Now"}
                       </Button>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      {lang === "bn" ? "মালিকের জরুরি আনলক ও সিকিউরিটি পাসকোড।" : "Primary owner PIN for lock screen and POS authorization."}
-                    </p>
                   </div>
-
-                  {/* Auto-Lock Inactivity Timeout */}
-                  <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
-                    <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                      <Clock className="size-3.5 text-indigo-500" />
-                      <span>{lang === "bn" ? "অটো-লক সময়সীমা (নিষ্ক্রিয় থাকলে)" : "Auto-Lock Timeout"}</span>
-                    </Label>
-
-                    <select
-                      value={pinTimeoutVal}
-                      onChange={(e) => {
-                        setPinTimeoutVal(e.target.value);
-                        localStorage.setItem("app_pin_timeout", e.target.value);
-                        window.dispatchEvent(new Event("storage"));
-                        toast.success(lang === "bn" ? "অটো-লক সময়সীমা আপডেট হয়েছে" : "Auto-lock timeout updated");
-                      }}
-                      className="h-10 w-full rounded-xl border border-input bg-background px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
-                    >
-                      <option value="1">{lang === "bn" ? "১ মিনিট নিষ্ক্রিয় থাকলে" : "1 minute of inactivity"}</option>
-                      <option value="5">{lang === "bn" ? "৫ মিনিট নিষ্ক্রিয় থাকলে" : "5 minutes of inactivity"}</option>
-                      <option value="10">{lang === "bn" ? "১০ মিনিট (ডিফল্ট)" : "10 minutes (Default)"}</option>
-                      <option value="30">{lang === "bn" ? "৩০ মিনিট নিষ্ক্রিয় থাকলে" : "30 minutes of inactivity"}</option>
-                      <option value="0">{lang === "bn" ? "কখনই না (শুধু ম্যানুয়াল লক)" : "Never (Manual lock only)"}</option>
-                    </select>
-                    <p className="text-[11px] text-muted-foreground">
-                      {lang === "bn" ? "ব্যবহারকারী নিষ্ক্রিয় থাকলে সফটওয়্যার স্বয়ংক্রিয় লক হবে।" : "Automatically locks POS screen when idle."}
-                    </p>
-                  </div>
-
-                  {/* Employee PIN Info & Management Direct Link */}
-                  <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3 flex flex-col justify-between">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
-                        <Users className="size-3.5 text-emerald-500" />
-                        <span>{lang === "bn" ? "কর্মচারী ও স্টাফ পিন কোড" : "Employee & Staff PINs"}</span>
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        {lang === "bn"
-                          ? "নিরাপত্তার কারণে কোনো ডিফল্ট পিন কাজ করবে না। স্টাফ ট্যাবে কর্মচারী যুক্ত করে তাদের জন্য নির্দিষ্ট পিন সেট করুন।"
-                          : "Default staff PINs are disabled for security. Assign dedicated PINs to each added employee in Staff tab."}
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setSettingsTab("staff")}
-                      className="w-full h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs font-bold gap-2 cursor-pointer shadow-2xs"
-                    >
-                      <UserPlus className="size-3.5" />
-                      <span>{lang === "bn" ? "স্টাফ ও পিন ব্যবস্থাপনা" : "Manage Staff & PINs"}</span>
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-amber-500" />
-                    <span>{lang === "bn" ? "লক স্ক্রিন অবিলম্বে টেস্ট করতে নিচের বাটনে চাপুন:" : "Test your lock screen immediately:"}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 px-4 rounded-xl text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer shadow-2xs"
-                    onClick={() => {
-                      sessionStorage.removeItem("app_pin_unlocked");
-                      window.dispatchEvent(new Event("app_lock_screen"));
-                      toast.info(lang === "bn" ? "স্ক্রিন লক করা হয়েছে" : "Screen locked!");
-                    }}
-                  >
-                    <Lock className="size-3.5" />
-                    {lang === "bn" ? "এখনই স্ক্রিন লক করুন" : "Lock Screen Now"}
-                  </Button>
-                </div>
+                )}
               </Card>
 
-              {/* 2. EMPLOYEE PIN CODE MANAGEMENT SUITE (OWNER CAN VIEW & CHANGE ALL STAFF PINS) */}
-              <Card className="p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                      <Users className="size-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-bold text-base sm:text-lg text-foreground">
-                          {lang === "bn" ? "কর্মচারীদের পিন কোড পরিচালনা" : "Employee PIN Code Management"}
-                        </h2>
-                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 text-xs">
-                          {((employeesListQuery.data && employeesListQuery.data.length > 0) ? employeesListQuery.data : activeEmployees).length} {lang === "bn" ? "জন কর্মচারী" : "Staff"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {lang === "bn"
-                          ? "দোকান মালিক হিসেবে প্রতিটি কর্মচারীর ৪ থেকে ৯ সংখ্যার পিন কোড দেখুন ও সরাসরি পরিবর্তন করুন। কর্মচারী এই পিন দিয়ে লগইন করতে পারবে।"
-                          : "View and update 4 to 9-digit PIN codes for your staff members. Employees can log in directly using this PIN."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      employeesListQuery.refetch();
-                      qc.invalidateQueries({ queryKey: ["employees"] });
-                      toast.info(lang === "bn" ? "কর্মচারী তালিকা রিফ্রেশ করা হয়েছে" : "Employee list refreshed");
-                    }}
-                    className="h-8.5 px-3 rounded-xl text-xs font-semibold gap-1.5 border-border/80 cursor-pointer self-start sm:self-center"
-                  >
-                    <RefreshCw className={`size-3.5 ${employeesListQuery.isFetching ? "animate-spin" : ""}`} />
-                    <span>{lang === "bn" ? "তালিকা রিফ্রেশ" : "Refresh List"}</span>
-                  </Button>
-                </div>
-
-                {/* Helper notice */}
-                <div className="rounded-2xl bg-indigo-500/5 border border-indigo-500/20 p-3 text-xs text-indigo-700 dark:text-indigo-300 flex items-start gap-2.5">
-                  <KeyRound className="size-4 shrink-0 text-indigo-500 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-semibold text-foreground">
-                      {lang === "bn" ? "💡 কর্মচারী পিন ব্যবহারের নিয়ম:" : "💡 How Staff PIN Login Works:"}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      {lang === "bn"
-                        ? "কর্মচারী সাইন-ইন পেজে মোবাইল নম্বর বা ইউজারনেম লিখে আপনার সেট করা ৪ থেকে ৯ সংখ্যার পিন প্রবেশ করলেই সরাসরি তার কর্মচারী একাউন্ট ওপেন হবে।"
-                        : "Staff members can enter their registered phone/username and the 4 to 9-digit PIN configured below to immediately log in."}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Employee PIN Grid */}
-                {(() => {
-                  const staffList = (employeesListQuery.data && employeesListQuery.data.length > 0) ? employeesListQuery.data : activeEmployees;
-                  if (staffList.length === 0) {
-                    return (
-                      <div className="text-center py-10 space-y-2 border border-dashed border-border/80 rounded-2xl bg-muted/20">
-                        <Users className="size-8 mx-auto text-muted-foreground/50" />
-                        <p className="text-sm font-semibold text-foreground">
-                          {lang === "bn" ? "কোনো সক্রিয় কর্মচারী যুক্ত নেই" : "No Staff Members Found"}
-                        </p>
-                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                          {lang === "bn"
-                            ? "কর্মচারী ও আমন্ত্রণ ট্যাব থেকে নতুন কর্মচারী যোগ করুন।"
-                            : "Add or invite employees from the Staff & Invitations tab to configure their PINs."}
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSettingsTab("staff")}
-                          className="text-xs rounded-xl mt-2"
-                        >
-                          {lang === "bn" ? "কর্মচারী ট্যাবে যান" : "Go to Staff Tab"}
-                        </Button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
-                      {staffList.map((emp: any) => {
-                        const currentPin = emp.pin || emp.plain_password || emp.password || "1234";
-                        const empName = emp.name || emp.full_name || emp.email?.split("@")[0] || "Employee";
-                        const empContact = emp.phone || emp.email || "No contact";
-
-                        return (
-                          <div
-                            key={emp.id}
-                            className="p-4 rounded-2xl bg-muted/40 border border-border/80 hover:border-border transition-all flex flex-col justify-between gap-3 text-xs shadow-2xs"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="size-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-xs shrink-0">
-                                  {empName.slice(0, 2).toUpperCase()}
-                                </div>
-                                <div className="min-w-0 space-y-0.5">
-                                  <p className="font-bold text-foreground text-sm truncate">{empName}</p>
-                                  <p className="text-[11px] text-muted-foreground truncate">{empContact}</p>
-                                  <div className="flex items-center gap-1.5 pt-0.5">
-                                    <Badge variant="secondary" className="text-[10px] font-normal py-0 px-1.5 h-4">
-                                      {emp.designation || "Staff"}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-[10px] py-0 px-1.5 h-4 ${
-                                        emp.status === "inactive"
-                                          ? "bg-muted text-muted-foreground"
-                                          : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                      }`}
-                                    >
-                                      {emp.status === "inactive" ? (lang === "bn" ? "নিষ্ক্রিয়" : "Inactive") : (lang === "bn" ? "সক্রিয়" : "Active")}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Current PIN Display & Action */}
-                            <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-border/50">
-                              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 font-mono font-bold text-xs">
-                                <KeyRound className="size-3 text-amber-500" />
-                                <span>{lang === "bn" ? "পিন:" : "PIN:"} {currentPin}</span>
-                              </div>
-
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedEmpForPin(emp);
-                                  setNewEmpPin(currentPin);
-                                }}
-                                className="h-8 px-2.5 rounded-xl border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 text-xs font-semibold gap-1 cursor-pointer"
-                              >
-                                <Pencil className="size-3" />
-                                <span>{lang === "bn" ? "পিন পরিবর্তন" : "Change PIN"}</span>
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </Card>
-
-              {/* Row: Password & Danger Zone */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Change Password */}
               <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-4">
                 <div className="flex items-center gap-2 text-primary border-b border-border/60 pb-3">
                   <Shield className="size-5" />
@@ -3812,13 +3811,8 @@ export default function SettingsPage() {
                     </div>
                   </Card>
                 )}
-                </div>
               </div>
             </div>
-          )}
-
-          {settingsTab === "logs" && (
-            <ActivityLogsViewer />
           )}
         </div>
       )}
@@ -4113,323 +4107,6 @@ export default function SettingsPage() {
               Crop & Upload
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Employee PIN Change Dialog Modal ── */}
-      <Dialog open={selectedEmpForPin !== null} onOpenChange={(open) => !open && setSelectedEmpForPin(null)}>
-        <DialogContent className="sm:max-w-[420px] rounded-3xl p-6 bg-card border-border shadow-2xl">
-          <DialogHeader className="space-y-1.5">
-            <div className="size-11 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 mb-1">
-              <KeyRound className="size-5" />
-            </div>
-            <DialogTitle className="text-base sm:text-lg font-bold">
-              {lang === "bn" ? "কর্মচারীর পিন কোড পরিবর্তন" : "Change Employee PIN Code"}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              {selectedEmpForPin && (
-                <span>
-                  {lang === "bn"
-                    ? `"${selectedEmpForPin.name || selectedEmpForPin.full_name || selectedEmpForPin.email}" এর জন্য ৪ থেকে ৯ সংখ্যার সিকিউরিটি পিন সেট করুন।`
-                    : `Set new 4 to 9-digit security PIN for "${selectedEmpForPin.name || selectedEmpForPin.full_name || selectedEmpForPin.email}".`}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSaveEmployeePin();
-            }}
-            className="space-y-4 pt-2"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <Lock className="size-3.5 text-amber-500" />
-                  <span>{lang === "bn" ? "নতুন ৪ থেকে ৯ সংখ্যার পিন কোড" : "New 4 to 9-digit PIN"}</span>
-                </Label>
-                <button
-                  type="button"
-                  onClick={() => setShowNewEmpPin(!showNewEmpPin)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
-                >
-                  {showNewEmpPin ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                  <span>{showNewEmpPin ? (lang === "bn" ? "লুকান" : "Hide") : (lang === "bn" ? "দেখান" : "Show")}</span>
-                </button>
-              </div>
-
-              <Input
-                type={showNewEmpPin ? "text" : "password"}
-                maxLength={9}
-                required
-                value={newEmpPin}
-                onChange={(e) => setNewEmpPin(e.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="••••"
-                className="h-12 rounded-2xl text-xl font-mono tracking-widest text-center font-bold bg-muted/40 border-border"
-                autoFocus
-              />
-
-              {/* Quick preset buttons */}
-              <div className="flex items-center gap-1.5 pt-1">
-                <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "দ্রুত পিন:" : "Quick:"}</span>
-                {["1234", "0000", "5555", "7777"].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setNewEmpPin(preset)}
-                    className="px-2 py-0.5 rounded-lg bg-muted hover:bg-muted/80 text-[10px] font-mono font-bold text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border/50">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSelectedEmpForPin(null)}
-                disabled={savingEmpPin}
-                className="rounded-xl text-xs cursor-pointer"
-              >
-                {lang === "bn" ? "বাতিল" : "Cancel"}
-              </Button>
-              <Button
-                type="submit"
-                disabled={savingEmpPin || newEmpPin.trim().length < 4}
-                className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1.5 cursor-pointer shadow-xs"
-              >
-                {savingEmpPin ? (
-                  <>
-                    <RefreshCw className="size-3.5 animate-spin" />
-                    <span>{lang === "bn" ? "সংরক্ষণ হচ্ছে..." : "Saving..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="size-3.5" />
-                    <span>{lang === "bn" ? "পিন সংরক্ষণ করুন" : "Save PIN"}</span>
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Add / Edit Staff Modal Dialog ── */}
-      <Dialog
-        open={addStaffDialogOpen || editStaffDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAddStaffDialogOpen(false);
-            setEditStaffDialogOpen(false);
-            setStaffEditingEmp(null);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-card border-border shadow-2xl">
-          <DialogHeader className="space-y-1.5 pb-2 border-b border-border/60">
-            <div className="size-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 mb-1">
-              <UserPlus className="size-5" />
-            </div>
-            <DialogTitle className="text-base sm:text-lg font-bold">
-              {staffEditingEmp
-                ? (lang === "bn" ? "কর্মচারী তথ্য ও সেটিংস পরিবর্তন" : "Edit Staff Settings")
-                : (lang === "bn" ? "নতুন কর্মচারী যোগ করুন" : "Add New Employee")}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              {lang === "bn"
-                ? "কর্মচারীর নাম, পদবি, মাসিক বেতন ও সিকিউরিটি পিন সেট করুন।"
-                : "Configure employee designation, monthly base salary, advance limit, and PIN."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveStaff} className="space-y-3.5 pt-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">
-                {lang === "bn" ? "কর্মচারীর পুরো নাম *" : "Full Name *"}
-              </Label>
-              <Input
-                required
-                value={staffFormName}
-                onChange={(e) => setStaffFormName(e.target.value)}
-                placeholder="e.g. Parvez Ahmed"
-                className="h-10 rounded-xl text-xs"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  {lang === "bn" ? "পদবি / রোল" : "Designation"}
-                </Label>
-                <Input
-                  value={staffFormDesignation}
-                  onChange={(e) => setStaffFormDesignation(e.target.value)}
-                  placeholder="Sales Staff, Cashier"
-                  className="h-10 rounded-xl text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  {lang === "bn" ? "মোবাইল নম্বর (ঐচ্ছিক)" : "Phone (Optional)"}
-                </Label>
-                <Input
-                  value={staffFormPhone}
-                  onChange={(e) => setStaffFormPhone(e.target.value)}
-                  placeholder="017xxxxxxxx"
-                  className="h-10 rounded-xl text-xs font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  {lang === "bn" ? "মাসিক মূল বেতন (৳)" : "Monthly Salary (৳)"}
-                </Label>
-                <Input
-                  type="number"
-                  value={staffFormSalary}
-                  onChange={(e) => setStaffFormSalary(e.target.value)}
-                  placeholder="15000"
-                  className="h-10 rounded-xl text-xs font-mono"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  {lang === "bn" ? "অগ্রিম তোলার সীমা (৳)" : "Advance Limit (৳)"}
-                </Label>
-                <Input
-                  type="number"
-                  value={staffFormAdvanceLimit}
-                  onChange={(e) => setStaffFormAdvanceLimit(e.target.value)}
-                  placeholder="Leave empty for salary"
-                  className="h-10 rounded-xl text-xs font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <KeyRound className="size-3.5 text-amber-500" />
-                  <span>{lang === "bn" ? "লগইন পিন কোড (৪-৯ সংখ্যা) *" : "Login PIN (4-9 digits) *"}</span>
-                </Label>
-                <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "ডিফল্ট: 1234" : "Default: 1234"}</span>
-              </div>
-              <Input
-                type="text"
-                maxLength={9}
-                required
-                value={staffFormPin}
-                onChange={(e) => setStaffFormPin(e.target.value.replace(/[^0-9]/g, ""))}
-                placeholder="1234"
-                className="h-11 rounded-xl text-base font-mono tracking-widest text-center font-bold"
-              />
-            </div>
-
-            {/* KPI & Access Permissions */}
-            <div className="space-y-2 pt-2 border-t border-border/60">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5 text-indigo-600" />
-                  <span>{lang === "bn" ? "কেপিআই ও এক্সেস পারমিশন নিয়ন্ত্রণ" : "KPI & Access Permissions"}</span>
-                </Label>
-                <span className="text-[10px] text-muted-foreground">{lang === "bn" ? "মালিকের নিয়ন্ত্রণ" : "Owner controlled"}</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {lang === "bn"
-                  ? "যেসব কেপিআই বা মেনু কর্মচারীর জন্য অন রাখবেন তা নির্বাচন করুন।"
-                  : "Toggle which KPI cards and sidebar menus this staff member can access."}
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "বিক্রি ও পিওএস (POS)" : "Sales (POS)"}</span>
-                  <Switch checked={staffPermSales} onCheckedChange={setStaffPermSales} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "পণ্য তালিকা ও স্টক" : "Products Stock"}</span>
-                  <Switch checked={staffPermProducts} onCheckedChange={setStaffPermProducts} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "ক্যাশ বক্স ব্যালেন্স" : "Cash Box Live"}</span>
-                  <Switch checked={staffPermCashbox} onCheckedChange={setStaffPermCashbox} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "দোকানের খরচ সমূহ" : "Store Expenses"}</span>
-                  <Switch checked={staffPermExpenses} onCheckedChange={setStaffPermExpenses} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <div>
-                    <span className="text-xs font-medium block">{lang === "bn" ? "সমিতি ও সঞ্চয় কেপিআই" : "Samity KPI"}</span>
-                    <span className="text-[9px] text-muted-foreground">{lang === "bn" ? "ডিফল্ট: অফ" : "Default: Off"}</span>
-                  </div>
-                  <Switch checked={staffPermSomiti} onCheckedChange={setStaffPermSomiti} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <div>
-                    <span className="text-xs font-medium block">{lang === "bn" ? "লাভ-লোকসান কেপিআই" : "Profit & Loss KPI"}</span>
-                    <span className="text-[9px] text-muted-foreground">{lang === "bn" ? "ডিফল্ট: অফ" : "Default: Off"}</span>
-                  </div>
-                  <Switch checked={staffPermProfitLoss} onCheckedChange={setStaffPermProfitLoss} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "পণ্য ক্রয় (BUY)" : "Purchases (BUY)"}</span>
-                  <Switch checked={staffPermPurchases} onCheckedChange={setStaffPermPurchases} />
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-muted/40 border border-border/60">
-                  <span className="text-xs font-medium">{lang === "bn" ? "কাস্টমার বাকি" : "Customer Dues"}</span>
-                  <Switch checked={staffPermParties} onCheckedChange={setStaffPermParties} />
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-border/50">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setAddStaffDialogOpen(false);
-                  setEditStaffDialogOpen(false);
-                  setStaffEditingEmp(null);
-                }}
-                className="rounded-xl text-xs"
-              >
-                {lang === "bn" ? "বাতিল" : "Cancel"}
-              </Button>
-              <Button
-                type="submit"
-                disabled={staffFormSaving || !staffFormName.trim()}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-xs"
-              >
-                {staffFormSaving ? (
-                  <>
-                    <RefreshCw className="size-3.5 animate-spin" />
-                    <span>{lang === "bn" ? "সংরক্ষণ হচ্ছে..." : "Saving..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="size-3.5" />
-                    <span>{lang === "bn" ? "সংরক্ষণ করুন" : "Save Employee"}</span>
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { fmtMoney } from "@/lib/format";
 import type { Product } from "@/lib/queries";
 import { useT } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { BarcodeScannerDialog } from "@/components/barcode-scanner-dialog";
 import { toast } from "sonner";
-import { findProductsByScannedCode } from "@/lib/pos-hardware";
 
 interface ProductSearchProps {
   products: Product[];
@@ -17,12 +17,13 @@ interface ProductSearchProps {
   onChange: (id: string) => void;
   showPrice?: boolean;
   placeholder?: string;
-  showBuyPrice?: boolean;
+  onScanDirect?: (code: string) => void;
 }
 
 /** Searchable product picker for buy/sell dialogs. Inline design avoids modal/keyboard conflicts. */
-export function ProductSearchSelect({ products, value, onChange, showPrice, placeholder, showBuyPrice }: ProductSearchProps) {
+export function ProductSearchSelect({ products, value, onChange, showPrice, placeholder, onScanDirect }: ProductSearchProps) {
   const { t, lang } = useT();
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -72,12 +73,37 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
   };
 
   const handleBarcodeScanned = (code: string) => {
-    const matches = findProductsByScannedCode(products, String(code || ""));
-    if (matches.length > 1) {
-      toast.error(lang === "bn" ? "একই কোড একাধিক পণ্যে আছে" : "This code belongs to multiple products");
+    if (onScanDirect) {
+      onScanDirect(code);
+      setIsOpen(false);
+      setSearchQuery("");
       return;
     }
-    const found = matches[0];
+
+    const rawCode = String(code || "").trim();
+    const cleanCode = rawCode.toLowerCase();
+    const strippedCode = cleanCode.replace(/^0+/, "");
+
+    const found = products.find(p => {
+      const pBarcode = (p.barcode || "").trim().toLowerCase();
+      const pStripped = pBarcode.replace(/^0+/, "");
+      const pQr = ((p as any).qr_code || "").trim().toLowerCase();
+      const pCode = ((p as any).code || "").trim().toLowerCase();
+      const pSku = ((p as any).sku || "").trim().toLowerCase();
+      const pNum = ((p as any).product_number || "").trim().toLowerCase();
+      const pId = String(p.id || "").trim().toLowerCase();
+      const pName = (p.name || "").trim().toLowerCase();
+
+      return (
+        (pBarcode && (pBarcode === cleanCode || cleanCode.includes(pBarcode) || (strippedCode && pStripped === strippedCode))) ||
+        (pQr && (pQr === cleanCode || cleanCode.includes(pQr))) ||
+        (pCode && (pCode === cleanCode || cleanCode.includes(pCode))) ||
+        (pSku && (pSku === cleanCode || cleanCode.includes(pSku))) ||
+        (pNum && (pNum === cleanCode || cleanCode.includes(pNum))) ||
+        (pId && (pId === cleanCode || cleanCode.includes(pId))) ||
+        (pName && pName === cleanCode)
+      );
+    });
     if (found) {
       onChange(found.id);
       setIsOpen(false);
@@ -95,17 +121,9 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
           <div className="flex items-center justify-between p-2 rounded-lg border border-border bg-card/60">
             <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
               <span className="truncate">{selectedProduct.name}</span>
-              <span className="text-[9px] font-mono font-bold text-primary bg-primary/10 px-1 rounded border border-primary/20 shrink-0">
-                #{selectedProduct.id.slice(-6).toUpperCase()}
-              </span>
               {showPrice && (
                 <span className="text-[10px] text-muted-foreground font-normal">
                   ({fmtMoney(selectedProduct.sell_price)} · {selectedProduct.stock} pcs)
-                </span>
-              )}
-              {showBuyPrice && (
-                <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold font-mono bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                  {lang === "bn" ? "ক্রয়" : "Cost"}: {fmtMoney(selectedProduct.buy_price)}
                 </span>
               )}
             </span>
@@ -146,10 +164,41 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
                     setIsOpen(true);
                     setHighlightIndex(prev => Math.max(prev - 1, 0));
                   } else if (e.key === "Enter") {
+                    if (onScanDirect && searchQuery.trim()) {
+                      const q = searchQuery.trim().toLowerCase();
+                      const qNoZero = q.replace(/^0+/, "");
+                      const directMatch = products.find(p => {
+                        const pb = (p.barcode || "").trim().toLowerCase();
+                        const psku = ((p as any).sku || "").trim().toLowerCase();
+                        const pcode = ((p as any).code || "").trim().toLowerCase();
+                        const pnum = ((p as any).product_number || "").trim().toLowerCase();
+                        return (
+                          (pb && (pb === q || pb.replace(/^0+/, "") === qNoZero)) ||
+                          (psku && (psku === q || psku.replace(/^0+/, "") === qNoZero)) ||
+                          (pcode && (pcode === q || pcode.replace(/^0+/, "") === qNoZero)) ||
+                          (pnum && (pnum === q || pnum.replace(/^0+/, "") === qNoZero)) ||
+                          p.name?.toLowerCase() === q
+                        );
+                      });
+                      if (directMatch) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onScanDirect(searchQuery.trim());
+                        setSearchQuery("");
+                        setIsOpen(false);
+                        return;
+                      }
+                    }
                     if (filteredProducts.length > 0 && filteredProducts[highlightIndex]) {
                       e.preventDefault();
                       e.stopPropagation();
-                      handleSelect(filteredProducts[highlightIndex].id);
+                      if (onScanDirect && filteredProducts.length === 1) {
+                        onScanDirect(filteredProducts[highlightIndex].barcode || filteredProducts[highlightIndex].id);
+                        setSearchQuery("");
+                        setIsOpen(false);
+                      } else {
+                        handleSelect(filteredProducts[highlightIndex].id);
+                      }
                     }
                   } else if (e.key === "Escape") {
                     setIsOpen(false);
@@ -187,22 +236,11 @@ export function ProductSearchSelect({ products, value, onChange, showPrice, plac
                           onClick={() => handleSelect(p.id)}
                         >
                           <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="truncate">{p.name}</span>
-                              <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-muted/80 text-muted-foreground shrink-0 border border-border/40">
-                                #{p.id.slice(-6).toUpperCase()}
-                              </span>
-                            </div>
+                            <span className="truncate">{p.name}</span>
                             {p.barcode && <span className="font-mono text-[9px] opacity-75">{p.barcode}</span>}
                           </div>
-                          <span className="shrink-0 text-[10px] opacity-80 text-right">
-                            {showPrice && `${fmtMoney(p.sell_price)} · `}
-                            {showBuyPrice && (
-                              <span className="text-amber-600 dark:text-amber-400 font-semibold font-mono">
-                                ({lang === "bn" ? "ক্রয়" : "Cost"} {fmtMoney(p.buy_price)}) · 
-                              </span>
-                            )}
-                            ({p.stock})
+                          <span className="shrink-0 text-[10px] opacity-80">
+                            {showPrice && `${fmtMoney(p.sell_price)} · `}({p.stock})
                           </span>
                         </button>
                       );

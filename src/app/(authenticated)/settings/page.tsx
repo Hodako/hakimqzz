@@ -65,6 +65,7 @@ import {
   ArrowRightLeft,
   KeyRound,
   Copy,
+  Link2,
   Check,
   Share2,
   Download,
@@ -2445,6 +2446,45 @@ export default function SettingsPage() {
                       placeholder="Enter your SteadFast Secret-Key"
                       className="h-10 rounded-xl font-mono text-xs"
                     />
+                  </div>
+
+                  {/* SteadFast Webhook URL Box */}
+                  <div className="p-3.5 rounded-2xl bg-muted/60 border border-border/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Link2 className="size-3.5 text-emerald-600" />
+                        <span>{lang === "bn" ? "SteadFast ওয়েবহুক (Webhook Callback URL)" : "SteadFast Webhook Callback URL"}</span>
+                      </Label>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                        Live Auto-Sync
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/steadfast` : "https://your-domain.com/api/webhooks/steadfast"}
+                        className="h-9 rounded-xl font-mono text-[11px] bg-background text-foreground flex-1 select-all"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const url = typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/steadfast` : "/api/webhooks/steadfast";
+                          navigator.clipboard.writeText(url);
+                          toast.success(lang === "bn" ? "ওয়েবহুক URL কপি হয়েছে!" : "Webhook URL copied to clipboard!");
+                        }}
+                        className="h-9 px-3 rounded-xl text-xs font-semibold gap-1.5 shrink-0"
+                      >
+                        <Copy className="size-3.5" />
+                        <span>{lang === "bn" ? "কপি" : "Copy"}</span>
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      {lang === "bn"
+                        ? "এই URL-টি আপনার SteadFast মার্চেন্ট প্যানেলের Settings > Webhook অপশনে পেস্ট করুন। পার্সেল ডেলিভার্ড বা রিটার্ন হলে স্বয়ংক্রিয়ভাবে স্ট্যাটাস সিঙ্ক হবে ও ক্যাশবক্সে জমা হবে।"
+                        : "Paste this URL in your SteadFast Merchant Portal > Settings > Webhook. Parcel status will automatically sync and settled COD will deposit to Cashbox upon delivery."}
+                    </p>
                   </div>
 
                   {steadfastBalance !== null && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { getCustomers, getProducts, type Product } from "@/lib/queries";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { createSaleFn, createCustomerFn, steadfastCreateOrderFn, steadfastFraudCheckFn } from "@/lib/rpc";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
-import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap, Eye, ShieldCheck } from "lucide-react";
+import { Plus, Minus, Trash2, Scan, Printer, History, Banknote, Smartphone, CreditCard, DollarSign, ShoppingCart, Truck, PackageCheck, Share2, Split, ChevronDown, ChevronUp, RotateCcw, CheckCircle2, Sparkles, Zap, Eye, ShieldCheck, MapPin } from "lucide-react";
 import Link from "next/link";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
@@ -26,6 +26,13 @@ import { playTapSound, playScanSuccessSound, playSaleSuccessSound, playErrorSoun
 import { getWhatsAppInvoiceUrl } from "@/lib/whatsapp-helper";
 import { sendDesktopWhatsAppIfAuto } from "@/lib/desktop-whatsapp";
 import { createHidScanBuffer, findProductsByScannedCode, getPosHardwareSettings } from "@/lib/pos-hardware";
+import {
+  getDivisions,
+  getDistrictsByDivision,
+  getUpazilasByDistrict,
+  getUnionsByUpazila,
+  buildSteadfastAddress,
+} from "@/lib/bd-geo-data";
 
 type CartLine = { productId: string; qty: string; sellPrice: string; discount: string };
 export type SalePaymentType = "cash" | "bkash" | "bank" | "credit" | "online" | "split";
@@ -81,6 +88,55 @@ export function SaleDialog({
   const [autoSendSteadfast, setAutoSendSteadfast] = useState(true);
   const [sfFraudResult, setSfFraudResult] = useState<any | null>(null);
   const [sfFraudBusy, setSfFraudBusy] = useState(false);
+
+  // BD Geographic Hierarchy for Online Sales & SteadFast Delivery
+  const [division, setDivision] = useState("Dhaka");
+  const [district, setDistrict] = useState("Dhaka");
+  const [upazila, setUpazila] = useState("");
+  const [union, setUnion] = useState("");
+  const [customUnion, setCustomUnion] = useState("");
+  const [addressDetails, setAddressDetails] = useState("");
+  const [manualRecipientName, setManualRecipientName] = useState("");
+  const [manualRecipientPhone, setManualRecipientPhone] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
+
+  const effectiveUnion = customUnion.trim() || union;
+  const builtFullAddress = useMemo(() => {
+    return buildSteadfastAddress({
+      division,
+      district,
+      upazila,
+      union: effectiveUnion,
+      addressDetails,
+    });
+  }, [division, district, upazila, effectiveUnion, addressDetails]);
+
+  const divisions = useMemo(() => getDivisions(), []);
+  const districts = useMemo(() => getDistrictsByDivision(division), [division]);
+  const upazilas = useMemo(() => getUpazilasByDistrict(district), [district]);
+  const unions = useMemo(() => getUnionsByUpazila(district, upazila), [district, upazila]);
+
+  const handleDivisionChange = (newDiv: string) => {
+    setDivision(newDiv);
+    const firstDist = getDistrictsByDivision(newDiv)[0]?.name || "";
+    setDistrict(firstDist);
+    setUpazila("");
+    setUnion("");
+    setCustomUnion("");
+  };
+
+  const handleDistrictChange = (newDist: string) => {
+    setDistrict(newDist);
+    setUpazila("");
+    setUnion("");
+    setCustomUnion("");
+  };
+
+  const handleUpazilaChange = (newUp: string) => {
+    setUpazila(newUp);
+    setUnion("");
+    setCustomUnion("");
+  };
 
   const bizSettings = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const steadfastEnabled = Boolean((bizSettings.data?.business as any)?.steadfast_enabled);
@@ -207,6 +263,18 @@ export function SaleDialog({
       setSplitBkash("");
       setSplitBank("");
       setFinalDiscount("");
+      setCourierName("Steadfast Courier");
+      setTrackingCode("");
+      setManualRecipientName("");
+      setManualRecipientPhone("");
+      setAddressDetails("");
+      setDeliveryNote("");
+      setSfFraudResult(null);
+      setDivision("Dhaka");
+      setDistrict("Dhaka");
+      setUpazila("");
+      setUnion("");
+      setCustomUnion("");
       if (presetCart && presetCart.length > 0) {
         setCart(presetCart.map(x => ({ ...x, discount: x.discount ?? "" })));
       } else if (presetProductId) {
@@ -589,7 +657,10 @@ export function SaleDialog({
             courier_name: type === "online" ? courierName : undefined,
             tracking_code: type === "online" ? trackingCode : undefined,
             courier_status: type === "online" ? "pending" : undefined,
-            note: customerAddress ? `Address: ${customerAddress}` : undefined,
+            note: (builtFullAddress || customerAddress) ? `Address: ${builtFullAddress || customerAddress}${deliveryNote ? ` | Note: ${deliveryNote}` : ""}` : undefined,
+            recipient_name: manualRecipientName || (customers.find((c: any) => c.id === partyId) as any)?.name || undefined,
+            recipient_phone: manualRecipientPhone || (customers.find((c: any) => c.id === partyId) as any)?.phone || undefined,
+            recipient_address: builtFullAddress || customerAddress || (customers.find((c: any) => c.id === partyId) as any)?.address || undefined,
           },
         });
         if (!firstCreatedSaleId && createdSale?.id) {
@@ -599,17 +670,19 @@ export function SaleDialog({
 
       if (type === "online" && steadfastEnabled && autoSendSteadfast && firstCreatedSaleId && courierName.toLowerCase().includes("steadfast")) {
         const cust = customers.find((c: any) => c.id === partyId);
-        const recPhone = String((cust as any)?.phone || "").trim();
-        const recAddr = String(customerAddress || (cust as any)?.address || "").trim();
+        const recName = String(manualRecipientName || cust?.name || "Customer").trim();
+        const recPhone = String(manualRecipientPhone || (cust as any)?.phone || "").trim();
+        const recAddr = String(builtFullAddress || customerAddress || (cust as any)?.address || "").trim();
         if (recPhone && recAddr) {
           try {
             const sfRes = await steadfastCreateOrderFn({
               data: {
                 saleId: firstCreatedSaleId,
-                recipient_name: cust?.name || "Customer",
+                recipient_name: recName,
                 recipient_phone: recPhone,
                 recipient_address: recAddr,
                 cod_amount: Math.max(0, Math.round(sellTotal)),
+                note: deliveryNote || undefined,
               },
             });
             if (sfRes?.consignment?.tracking_code) {
@@ -879,75 +952,107 @@ export function SaleDialog({
               <div className="md:col-span-7 lg:col-span-6 space-y-3.5 min-w-0">
                 {/* Payment Method Selector or Courier Delivery Panel */}
                 {type === "online" ? (
-                  <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                        <Truck className="size-4 text-purple-600" />
-                        {lang === "bn" ? "কুরিয়ার পেমেন্ট (Courier Payment)" : "Courier Payment"}
-                      </span>
+                  <div className="p-3.5 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/30 rounded-2xl space-y-3.5 shadow-2xs">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="size-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                          <Truck className="size-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-purple-950 dark:text-purple-200">
+                            {lang === "bn" ? "অনলাইন কুরিয়ার এন্ট্রি (New Entry)" : "Online Courier New Entry"}
+                          </span>
+                          <p className="text-[10px] text-muted-foreground">
+                            {lang === "bn" ? "কুরিয়ার সার্ভিস: SteadFast Courier (ডিফল্ট)" : "Courier: SteadFast Courier (Default)"}
+                          </p>
+                        </div>
+                      </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                        ⏳ {lang === "bn" ? "পেমেন্ট অপেক্ষমাণ (Pending)" : "Payment: Pending"}
+                        ⏳ {lang === "bn" ? "পেমেন্ট: কুরিয়ারে অপেক্ষমাণ" : "Payment: Pending COD"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-tight">
-                      {lang === "bn"
-                        ? "কুরিয়ার পেমেন্ট পেন্ডিং থাকবে। কুরিয়ার টাকা রিসিভ করার পর সেলস পেজ থেকে 'পেমেন্ট গ্রহণ' করলে ক্যাশবক্সে জমা হবে।"
-                        : "Online sale profit is recorded immediately. Payment will deposit into Cashbox upon courier collection approval."}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      <div className="space-y-1">
-                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "কুরিয়ার সার্ভিস" : "Courier Service"}</Label>
-                        <select
-                          value={courierName}
-                          onChange={(e) => setCourierName(e.target.value)}
-                          className="w-full h-8.5 text-xs rounded-lg border border-input bg-background px-2 font-medium"
-                        >
-                          <option value="Steadfast Courier">Steadfast Courier (স্টেডফাস্ট)</option>
-                          <option value="Pathao Courier">Pathao Courier (পাঠাও)</option>
-                          <option value="RedX Delivery">RedX Delivery (রেডএক্স)</option>
-                          <option value="Sundarban Courier">Sundarban Courier (সুন্দরবন)</option>
-                          <option value="Paperfly">Paperfly (পেপারফ্লাই)</option>
-                          <option value="SA Paribahan">SA Paribahan (এস এ পরিবহন)</option>
-                          <option value="Custom Courier">Other / অন্য কুরিয়ার</option>
-                        </select>
+
+                    {/* Section 1: Customer Selection (Optional) or Direct Recipient Info */}
+                    <div className="p-2.5 bg-background/80 rounded-xl border border-border/80 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <span>{lang === "bn" ? "১. কাস্টমার নির্বাচন (ঐচ্ছিক)" : "1. Customer Selection (Optional)"}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            {lang === "bn" ? "— তালিকা থেকে বা নতুন যোগ করুন" : "— from list or add new"}
+                          </span>
+                        </Label>
+                        {partyId && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPartyId("")}
+                            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-rose-600 cursor-pointer"
+                          >
+                            {lang === "bn" ? "মুছে ফেলুন" : "Clear"}
+                          </Button>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "ট্র্যাকিং কোড / ইনভয়েস" : "Tracking / Consignment ID"}</Label>
-                        <Input
-                          value={trackingCode}
-                          onChange={(e) => setTrackingCode(e.target.value)}
-                          placeholder="e.g. ST-93821"
-                          className="h-8.5 text-xs font-mono"
+
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1">
+                          <CustomerSearchSelect
+                            customers={customers}
+                            value={partyId}
+                            onChange={(id) => {
+                              setPartyId(id);
+                              if (id) {
+                                const c = customers.find((x: any) => x.id === id);
+                                if (c) {
+                                  if (c.name && !manualRecipientName) setManualRecipientName(c.name);
+                                  if ((c as any).phone && !manualRecipientPhone) setManualRecipientPhone((c as any).phone);
+                                  if ((c as any).address && !addressDetails) setAddressDetails((c as any).address);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddCustomerOpen(true)}
+                          className="h-9 px-2.5 text-xs font-semibold rounded-xl border-dashed border-primary/40 text-primary hover:bg-primary/10 gap-1 shrink-0 cursor-pointer"
                         >
-                        </Input>
+                          <Plus className="size-3.5" />
+                          <span>{lang === "bn" ? "নতুন" : "Add"}</span>
+                        </Button>
                       </div>
-                    </div>
-                    {steadfastEnabled && (
-                      <div className="pt-1.5 border-t border-purple-500/20 space-y-2">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <label className="flex items-center gap-2 text-[11px] font-semibold text-purple-800 dark:text-purple-200 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={autoSendSteadfast}
-                              onChange={(e) => setAutoSendSteadfast(e.target.checked)}
-                              className="size-3.5 accent-emerald-600"
-                            />
-                            <span>{lang === "bn" ? "সেল করার সাথে সাথেই SteadFast-এ পাঠান" : "Auto-send to SteadFast on save"}</span>
-                          </label>
-                          {(() => {
-                            const cust = customers.find((c: any) => c.id === partyId);
-                            const p = String((cust as any)?.phone || "").trim();
-                            if (!p) return null;
-                            return (
+
+                      {/* Recipient Name and Phone */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <div className="space-y-1">
+                          <Label className="text-[10.5px] font-semibold text-muted-foreground">
+                            {lang === "bn" ? "প্রাপকের নাম" : "Recipient Name"}
+                          </Label>
+                          <Input
+                            value={manualRecipientName}
+                            onChange={(e) => setManualRecipientName(e.target.value)}
+                            placeholder={lang === "bn" ? "যেমন: তানভীর আহমেদ" : "e.g. Tanvir Ahmed"}
+                            className="h-8 text-xs font-medium"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10.5px] font-semibold text-muted-foreground">
+                              {lang === "bn" ? "মোবাইল নম্বর (১১ ডিজিট)" : "Recipient Phone (11-digit)"}
+                            </Label>
+                            {manualRecipientPhone && (
                               <Button
                                 type="button"
+                                variant="ghost"
                                 size="sm"
-                                variant="outline"
                                 disabled={sfFraudBusy}
                                 onClick={async () => {
                                   setSfFraudBusy(true);
                                   try {
-                                    const r = await steadfastFraudCheckFn({ data: { phone: p } });
+                                    const r = await steadfastFraudCheckFn({ data: { phone: manualRecipientPhone } });
                                     setSfFraudResult(r);
                                   } catch (e: any) {
                                     toast.error(e?.message || "Fraud check failed");
@@ -955,20 +1060,201 @@ export function SaleDialog({
                                     setSfFraudBusy(false);
                                   }
                                 }}
-                                className="h-6.5 px-2 text-[10px] font-bold rounded-lg gap-1"
+                                className="h-5 px-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-500/10 gap-1 cursor-pointer"
                               >
-                                <ShieldCheck className="size-3 text-amber-600" />
+                                <ShieldCheck className="size-3" />
                                 <span>{sfFraudBusy ? "..." : (lang === "bn" ? "ফ্রড চেক" : "Fraud Check")}</span>
                               </Button>
-                            );
-                          })()}
-                        </div>
-                        {sfFraudResult && (
-                          <div className="p-2 rounded-lg bg-background/80 border border-border text-[10.5px] flex items-center justify-between">
-                            <span>Parcels: <b>{sfFraudResult.total_parcels}</b></span>
-                            <span className="text-emerald-600">Delivered: <b>{sfFraudResult.total_delivered}</b></span>
-                            <span className="text-rose-600">Cancelled: <b>{sfFraudResult.total_cancelled}</b></span>
+                            )}
                           </div>
+                          <Input
+                            value={manualRecipientPhone}
+                            onChange={(e) => setManualRecipientPhone(e.target.value)}
+                            placeholder="017XXXXXXXX"
+                            maxLength={14}
+                            className="h-8 text-xs font-mono font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      {sfFraudResult && (
+                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10.5px] flex items-center justify-between">
+                          <span>মোট পার্সেল: <b>{sfFraudResult.total_parcels}</b></span>
+                          <span className="text-emerald-600 font-semibold">ডেলিভার্ড: <b>{sfFraudResult.total_delivered}</b></span>
+                          <span className="text-rose-600 font-semibold">বাতিল: <b>{sfFraudResult.total_cancelled}</b></span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 2: Cascading Geographic Address Selection (Division -> District -> Upazila -> Union -> Details) */}
+                    <div className="p-2.5 bg-background/80 rounded-xl border border-border/80 space-y-2.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <Label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <MapPin className="size-3.5 text-purple-600" />
+                          <span>{lang === "bn" ? "২. ডেলিভারি এলাকা ও ঠিকানা (SteadFast Geography)" : "2. Delivery Location (BD Geography)"}</span>
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {builtFullAddress.length}/250 char
+                        </span>
+                      </div>
+
+                      {/* Division & District */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "বিভাগ (Division)" : "Division"}</Label>
+                          <select
+                            value={division}
+                            onChange={(e) => handleDivisionChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            {divisions.map((d: any) => (
+                              <option key={d.name} value={d.name}>
+                                {lang === "bn" ? d.nameBn : d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "জেলা (District)" : "District"}</Label>
+                          <select
+                            value={district}
+                            onChange={(e) => handleDistrictChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            {districts.map((d: any) => (
+                              <option key={d.name} value={d.name}>
+                                {lang === "bn" ? d.nameBn : d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Upazila / Thana & Union / Area */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "উপজেলা / থানা (Upazila)" : "Upazila / Thana"}</Label>
+                          <select
+                            value={upazila}
+                            onChange={(e) => handleUpazilaChange(e.target.value)}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            <option value="">{lang === "bn" ? "-- উপজেলা নির্বাচন করুন --" : "-- Select Upazila --"}</option>
+                            {upazilas.map((u: any) => (
+                              <option key={u.name} value={u.name}>
+                                {lang === "bn" ? u.nameBn : u.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "ইউনিয়ন / জোন / এলাকা" : "Union / Zone"}</Label>
+                          <select
+                            value={customUnion ? "__custom__" : union}
+                            onChange={(e) => {
+                              if (e.target.value === "__custom__") {
+                                setCustomUnion(" ");
+                                setUnion("");
+                              } else {
+                                setCustomUnion("");
+                                setUnion(e.target.value);
+                              }
+                            }}
+                            className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                          >
+                            <option value="">{lang === "bn" ? "-- ইউনিয়ন / এলাকা --" : "-- Select Union/Area --"}</option>
+                            {unions.map((un: any) => (
+                              <option key={un} value={un}>
+                                {un}
+                              </option>
+                            ))}
+                            <option value="__custom__">{lang === "bn" ? "+ অন্য এলাকা / কাস্টম লিখুন..." : "+ Custom / Other Area..."}</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Custom Union text input if selected */}
+                      {(customUnion !== "" || (upazila && unions.length === 0)) && (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-semibold text-muted-foreground">{lang === "bn" ? "কাস্টম ইউনিয়ন / এলাকার নাম" : "Custom Union / Area"}</Label>
+                          <Input
+                            value={customUnion.trim()}
+                            onChange={(e) => setCustomUnion(e.target.value)}
+                            placeholder={lang === "bn" ? "এলাকার নাম লিখুন" : "Type area/union name"}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      )}
+
+                      {/* Address Details (House / Road / Sector / Village) */}
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                          {lang === "bn" ? "বাড়ি নং, রোড নং, সেক্টর, হোল্ডিং বিস্তারিত ঠিকানা" : "House, Road, Sector, Village & Details"}
+                        </Label>
+                        <Input
+                          value={addressDetails}
+                          onChange={(e) => setAddressDetails(e.target.value)}
+                          placeholder={lang === "bn" ? "যেমন: বাসা ১২, রোড ৪, ব্লক সি" : "e.g. House 12, Road 4, Block C"}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      {/* Live SteadFast Address Preview */}
+                      <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] space-y-0.5">
+                        <div className="text-[9.5px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                          {lang === "bn" ? "SteadFast-এ প্রেরিতব্য ঠিকানা (Preview):" : "SteadFast Address Preview:"}
+                        </div>
+                        <p className="font-medium text-foreground leading-snug break-words">
+                          {builtFullAddress || (lang === "bn" ? "বিভাগ, জেলা, উপজেলা ও ঠিকানা পূরণ করুন..." : "Select division, district, upazila & details...")}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Courier Settings & Auto-dispatch */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "কুরিয়ার সার্ভিস" : "Courier Service"}</Label>
+                        <select
+                          value={courierName}
+                          onChange={(e) => setCourierName(e.target.value)}
+                          className="w-full h-8 text-xs rounded-lg border border-input bg-card px-2 font-medium"
+                        >
+                          <option value="Steadfast Courier">Steadfast Courier (স্টেডফাস্ট)</option>
+                          <option value="Pathao Courier">Pathao Courier (পাঠাও)</option>
+                          <option value="RedX Delivery">RedX Delivery (রেডএক্স)</option>
+                          <option value="Sundarban Courier">Sundarban Courier (সুন্দরবন)</option>
+                          <option value="Other Courier">Other / অন্য কুরিয়ার</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-[10.5px] font-semibold text-muted-foreground">{lang === "bn" ? "ডেলিভারি নোট / নির্দেশনা" : "Delivery Note"}</Label>
+                        <Input
+                          value={deliveryNote}
+                          onChange={(e) => setDeliveryNote(e.target.value)}
+                          placeholder={lang === "bn" ? "যেমন: খুলে চেক করে দিতে হবে" : "e.g. Fragile / Handle with care"}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    {steadfastEnabled && (
+                      <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
+                        <label className="flex items-center gap-2 text-[11px] font-semibold text-purple-900 dark:text-purple-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={autoSendSteadfast}
+                            onChange={(e) => setAutoSendSteadfast(e.target.checked)}
+                            className="size-3.5 accent-purple-600 rounded"
+                          />
+                          <span>{lang === "bn" ? "সেল সেভ করার সাথে সাথে SteadFast-এ স্বয়ংক্রিয় বুকিং দিন" : "Auto-book to SteadFast on save"}</span>
+                        </label>
+                        {trackingCode && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-700 font-bold">
+                            {trackingCode}
+                          </span>
                         )}
                       </div>
                     )}
@@ -1047,39 +1333,41 @@ export function SaleDialog({
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    {lang === "bn" ? "কাস্টমার" : "Customer"} {(type === "credit" || (type === "split" && due > 0)) ? "*" : ""}
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1">
-                      <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                {type !== "online" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      {lang === "bn" ? "কাস্টমার" : "Customer"} {(type === "credit" || (type === "split" && due > 0)) ? "*" : ""}
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex-1">
+                        <CustomerSearchSelect customers={customers} value={partyId} onChange={setPartyId} />
+                      </div>
+                      {partyId && (
+                        <Link href={`/customers/detail?id=${partyId}`} target="_blank">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-9 shrink-0 cursor-pointer text-primary hover:bg-primary/10 hover:border-primary/40"
+                            title={lang === "bn" ? "কাস্টমারের ক্রয়ের ইতিহাস দেখুন" : "View Customer Buying History"}
+                          >
+                            <History className="size-4" />
+                          </Button>
+                        </Link>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-9 shrink-0 cursor-pointer"
+                        onClick={() => setAddCustomerOpen(true)}
+                        title="Add Customer"
+                      >
+                        <Plus className="size-4" />
+                      </Button>
                     </div>
-                    {partyId && (
-                      <Link href={`/customers/detail?id=${partyId}`} target="_blank">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="size-9 shrink-0 cursor-pointer text-primary hover:bg-primary/10 hover:border-primary/40"
-                          title={lang === "bn" ? "কাস্টমারের ক্রয়ের ইতিহাস দেখুন" : "View Customer Buying History"}
-                        >
-                          <History className="size-4" />
-                        </Button>
-                      </Link>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0 cursor-pointer"
-                      onClick={() => setAddCustomerOpen(true)}
-                      title="Add Customer"
-                    >
-                      <Plus className="size-4" />
-                    </Button>
                   </div>
-                </div>
+                )}
 
                 <div className="border border-border/90 bg-card/60 rounded-xl p-3.5 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between gap-2 flex-wrap">

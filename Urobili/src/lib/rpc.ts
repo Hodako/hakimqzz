@@ -939,3 +939,11 @@ export const deletePharmacySupplierFn = makeWriteAction("deletePharmacySupplierF
 export const getPharmacyHoldOrdersFn = makeReadAction("getPharmacyHoldOrdersFn");
 export const upsertPharmacyHoldOrderFn = makeWriteAction("upsertPharmacyHoldOrderFn");
 export const deletePharmacyHoldOrderFn = makeWriteAction("deletePharmacyHoldOrderFn");
+
+// ── SteadFast Courier ────────────────────────────────────────────────────────
+export const steadfastCheckBalanceFn = makeReadAction("steadfastCheckBalanceFn");
+export const steadfastFraudCheckFn = makeReadAction("steadfastFraudCheckFn");
+export const steadfastCreateOrderFn = makeWriteAction("steadfastCreateOrderFn");
+export const steadfastBulkCreateOrderFn = makeWriteAction("steadfastBulkCreateOrderFn");
+export const steadfastCheckStatusFn = makeWriteAction("steadfastCheckStatusFn");
+
