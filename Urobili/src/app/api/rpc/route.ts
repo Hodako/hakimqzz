@@ -99,13 +99,14 @@ export async function POST(req: NextRequest) {
     }
 
     return await requestStore.run({ token: effectiveToken, activeProfile }, async () => {
-      if (effectiveToken) {
+      const isLogoutAction = actionName === "logoutFn";
+      if (effectiveToken && !isLogoutAction) {
         try {
           const cookieStore = await cookies();
           cookieStore.set("token", effectiveToken, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
         } catch (_) {}
       }
-      if (activeProfile) {
+      if (activeProfile && !isLogoutAction) {
         try {
           const cookieStore = await cookies();
           cookieStore.set("active_profile", activeProfile, { maxAge: 365 * 24 * 60 * 60, path: "/" });
@@ -124,9 +125,23 @@ export async function POST(req: NextRequest) {
       const safeActionArgs = args !== undefined && args !== null ? args : { data: {} };
       const result = await action(safeActionArgs);
 
-      return NextResponse.json(result, {
+      const res = NextResponse.json(result, {
         headers: corsHeaders,
       });
+
+      if (isLogoutAction) {
+        try {
+          const cookieStore = await cookies();
+          cookieStore.delete("token");
+          cookieStore.delete("active_profile");
+        } catch (_) {}
+        res.cookies.delete("token");
+        res.cookies.set("token", "", { maxAge: 0, path: "/", expires: new Date(0) });
+        res.cookies.delete("active_profile");
+        res.cookies.set("active_profile", "", { maxAge: 0, path: "/", expires: new Date(0) });
+      }
+
+      return res;
     });
   } catch (error: any) {
     const status = error?.statusCode || (

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RiSparklingLine } from "react-icons/ri";
 import { toast } from "sonner";
 import {
   Building2,
@@ -26,7 +27,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
-  Sparkles,
   Loader2,
 } from "lucide-react";
 
@@ -114,7 +114,7 @@ export function EmployeeInvitationModal() {
         <DialogHeader className="space-y-3 text-center sm:text-left">
           <div className="flex flex-col sm:flex-row items-center gap-3.5">
             <div className="size-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 shrink-0">
-              <Sparkles className="size-7 animate-pulse" />
+              <RiSparklingLine className="size-7 animate-pulse" />
             </div>
             <div>
               <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Layers, BarChart3, Sparkles, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Layers, BarChart3, RotateCcw } from "lucide-react";
+import { RiSparklingLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { updateBusinessSettingsFn } from "@/lib/rpc";
@@ -139,7 +140,7 @@ export function ModuleCustomizerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-2 text-base font-bold">
             <span className="flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" />
+              <RiSparklingLine className="size-4 text-primary" />
               <span>
                 {lang === "bn" ? "মডিউল ও ড্যাশবোর্ড কাস্টমাইজ করুন" : "Customize Modules & KPIs"}
               </span>

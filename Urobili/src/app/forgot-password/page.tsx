@@ -233,17 +233,7 @@ export default function ForgotPasswordPage() {
 
       {/* Footer */}
       <div className="w-full text-center text-xs text-slate-400 dark:text-zinc-600 py-2">
-        <span>
-          © 2026 Urobili · Powered by Uzvi Dev · Developed by{" "}
-          <a
-            href="https://azizul.iam.bd"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline font-bold text-foreground"
-          >
-            Azizul hakim Khan
-          </a>
-        </span>
+        <span>© 2026 Urobili POS Platform. All rights reserved.</span>
       </div>
     </div>
   );

@@ -30,7 +30,6 @@ import {
   Tag,
   TrendingUp,
   Banknote,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient, useQuery } from "@tanstack/react-query";

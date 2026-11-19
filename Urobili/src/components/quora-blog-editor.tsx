@@ -14,7 +14,6 @@ import {
   Link as LinkIcon,
   Image as ImageIcon,
   Minus,
-  Sparkles,
   Send,
   Eye,
   Check,
@@ -31,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RiSparklingLine } from "react-icons/ri";
 import { toast } from "sonner";
 import type { BlogPost, DivisionItem } from "@/lib/firestore-admin-service";
 
@@ -144,7 +144,7 @@ export function QuoraBlogEditor({ initialPost, divisions, onSave, onCancel }: Qu
               postType === "post" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Sparkles className="size-3.5 text-primary" />
+            <RiSparklingLine className="size-3.5 text-primary" />
             <span>ব্লগ / অনুচ্ছেদ (Create Post)</span>
           </button>
           <button

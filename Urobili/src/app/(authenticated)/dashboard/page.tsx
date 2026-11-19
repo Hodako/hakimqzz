@@ -2995,61 +2995,52 @@ export default function Dashboard() {
     const mobileIndustryProfile = getIndustryProfile(user?.industry);
     return (
       <div className="space-y-4">
-        {/* Actions projected directly into AppShell Primary Header on Mobile */}
+        {/* Controls Projected Directly into Primary Header (No Secondary Header) */}
         <PrimaryHeaderSlot>
-          <Button
-            onClick={() => { playTapSound(); setSaleOpen(true); }}
-            size="sm"
-            className="h-7 px-3 gap-1 rounded-full bg-primary text-primary-foreground font-bold text-[11px] shadow-xs hover:bg-primary/90 cursor-pointer"
-          >
-            <ShoppingBag className="size-3.5" />
-            <span>{t("new_sale")}</span>
-          </Button>
-        </PrimaryHeaderSlot>
-
-        {/* Simplicity UI: Clean Minimal Filter Strip (No Secondary Header) */}
-        <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs">
-            <Button
+          <div className="inline-flex items-center gap-0.5 bg-muted/70 p-0.5 rounded-full border border-border/80 text-[11px] font-semibold">
+            <button
               type="button"
-              variant={!dateFilter.from && !dateFilter.to ? "default" : "ghost"}
-              size="sm"
-              className="h-7 text-xs px-2.5 rounded-lg font-bold cursor-pointer"
               onClick={() => clearFilter()}
+              className={`px-2 h-6 rounded-full transition-all cursor-pointer ${
+                !dateFilter.from && !dateFilter.to
+                  ? "bg-background text-primary font-bold shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               {lang === "bn" ? "সব" : "All"}
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer"
               onClick={() => setPresetRange("today")}
+              className={`px-2 h-6 rounded-full transition-all cursor-pointer ${
+                dateFilter.from && dateFilter.from === new Date().toISOString().split("T")[0]
+                  ? "bg-background text-primary font-bold shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               {lang === "bn" ? "আজ" : "Today"}
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer"
               onClick={() => setPresetRange("this_month")}
+              className="px-2 h-6 rounded-full text-muted-foreground hover:text-foreground transition-all cursor-pointer"
             >
               {lang === "bn" ? "মাস" : "Month"}
-            </Button>
+            </button>
           </div>
-          <Button
-            variant={showFilter ? "default" : "outline"}
-            size="icon"
-            className="size-8 shrink-0 rounded-xl"
+          <button
+            type="button"
             onClick={() => setShowFilter(!showFilter)}
-            aria-label="Toggle filter"
+            className={`size-7 rounded-full border flex items-center justify-center cursor-pointer transition-all ${
+              showFilter ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted"
+            }`}
+            title={lang === "bn" ? "ফিল্টার" : "Filter"}
           >
-            <Calendar className="size-3.5 text-primary" />
-          </Button>
-        </div>
+            <Calendar className="size-3.5" />
+          </button>
+        </PrimaryHeaderSlot>
 
-        {/* Date Filter Dropdown on Phone */}
+        {/* Date Filter Dropdown on Phone (Only appears when filter icon in Primary Header is tapped) */}
         {showFilter && (
           <Card className="p-3 bg-card border border-border space-y-2.5 rounded-2xl shadow-sm">
             {/* Quick Preset Pills in Phone Filter Dropdown */}
@@ -3280,26 +3271,65 @@ export default function Dashboard() {
     );
   }
 
-  // ── Desktop Layout (No secondary header card; quick actions integrated into Primary Header) ──
+  // ── Desktop Layout (No secondary header card; controls integrated into Primary Header) ──
   const industryProfile = getIndustryProfile(user?.industry);
   return (
     <div className="space-y-5">
       <PrimaryHeaderSlot>
+        {/* Date Filter Range Presets in Primary Header */}
+        <div className="inline-flex items-center gap-0.5 bg-muted/70 p-0.5 rounded-full border border-border/80 text-[11px] font-semibold">
+          <button
+            type="button"
+            onClick={() => clearFilter()}
+            className={`px-2.5 h-6 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+              !dateFilter.from && !dateFilter.to
+                ? "bg-background text-primary font-bold shadow-2xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {lang === "bn" ? "সব সময়" : "All Time"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPresetRange("today")}
+            className={`px-2.5 h-6 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+              dateFilter.from && dateFilter.from === new Date().toISOString().split("T")[0]
+                ? "bg-background text-primary font-bold shadow-2xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {lang === "bn" ? "আজ" : "Today"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPresetRange("this_month")}
+            className="px-2.5 h-6 rounded-full text-muted-foreground hover:text-foreground transition-all cursor-pointer whitespace-nowrap"
+          >
+            {lang === "bn" ? "এই মাস" : "This Month"}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFilter(!showFilter)}
+          className={`h-7 px-2.5 rounded-full border flex items-center gap-1 text-[11px] font-semibold cursor-pointer transition-all ${
+            showFilter
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-card border-border text-foreground hover:bg-muted"
+          }`}
+          title={lang === "bn" ? "কাস্টম তারিখ ফিল্টার" : "Custom Date Filter"}
+        >
+          <Calendar className="size-3 text-primary" />
+          <span>{lang === "bn" ? "ফিল্টার" : "Filter"}</span>
+        </button>
+
         {industryProfile.quickActions.map((qa) => (
-          <Link key={qa.to + qa.labelEn} href={qa.to} className="hidden sm:inline-flex">
+          <Link key={qa.to + qa.labelEn} href={qa.to} className="hidden lg:inline-flex">
             <Button size="sm" variant="outline" className="h-7 px-2.5 rounded-full text-[11px] font-semibold cursor-pointer">
               {lang === "bn" ? qa.labelBn : qa.labelEn}
             </Button>
           </Link>
         ))}
-        <Button
-          onClick={() => { playTapSound(); setSaleOpen(true); }}
-          size="sm"
-          className="h-7 px-3 gap-1 rounded-full bg-primary text-primary-foreground font-bold text-[11px] shadow-xs hover:bg-primary/90 cursor-pointer"
-        >
-          <ShoppingBag className="size-3.5" />
-          <span>{t("new_sale")}</span>
-        </Button>
         <Button
           type="button"
           size="sm"
@@ -3312,77 +3342,6 @@ export default function Dashboard() {
         </Button>
       </PrimaryHeaderSlot>
       <PcThemeQuickStudio open={uiStudioOpen} onOpenChange={setUiStudioOpen} />
-
-      {/* Simplicity UI: Clean Minimal Date Filter Pills (No Bulky Secondary Header Banner) */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs flex-wrap">
-          <Button
-            variant={showFilter ? "default" : "ghost"}
-            size="sm"
-            className="h-7 px-2.5 gap-1 rounded-lg text-xs font-semibold cursor-pointer"
-            onClick={() => setShowFilter(!showFilter)}
-            title={lang === "bn" ? "কাস্টম তারিখ ফিল্টার" : "Custom Date Filter"}
-          >
-            <Calendar className="size-3.5 text-primary" />
-            <span>{lang === "bn" ? "ফিল্টার" : "Filter"}</span>
-          </Button>
-
-          <Button
-            type="button"
-            variant={!dateFilter.from && !dateFilter.to ? "default" : "ghost"}
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-bold cursor-pointer transition-colors"
-            onClick={() => clearFilter()}
-          >
-            {lang === "bn" ? "সব সময়" : "All Time"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
-            onClick={() => setPresetRange("today")}
-          >
-            {lang === "bn" ? "আজ" : "Today"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
-            onClick={() => setPresetRange("yesterday")}
-          >
-            {lang === "bn" ? "গতকাল" : "Yesterday"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
-            onClick={() => setPresetRange("this_week")}
-          >
-            {lang === "bn" ? "এই সপ্তাহ" : "This Week"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
-            onClick={() => setPresetRange("this_month")}
-          >
-            {lang === "bn" ? "এই মাস" : "This Month"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs px-2.5 rounded-lg font-semibold cursor-pointer hover:bg-muted"
-            onClick={() => setPresetRange("last_month")}
-          >
-            {lang === "bn" ? "গত মাস" : "Last Month"}
-          </Button>
-        </div>
-      </div>
 
       {/* Expandable Custom Date Range Selector on PC */}
       {showFilter && (

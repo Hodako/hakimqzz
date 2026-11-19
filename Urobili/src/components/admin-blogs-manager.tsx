@@ -10,7 +10,6 @@ import {
   Eye,
   ThumbsUp,
   Search,
-  Sparkles,
   RefreshCw,
   FolderTree,
   Calendar,

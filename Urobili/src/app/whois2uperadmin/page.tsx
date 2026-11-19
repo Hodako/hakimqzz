@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { RiSparklingLine } from "react-icons/ri";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,7 +66,6 @@ import {
   Lock,
   MessageSquare,
   MessageCircle,
-  Sparkles,
   PhoneCall,
   Flame,
   AlertTriangle,
@@ -492,7 +492,7 @@ export default function SuperAdminPage() {
 
           <Card className="p-3.5 rounded-2xl bg-card border-border/80 shadow-xs space-y-1">
             <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-              <Sparkles className="size-3.5 text-indigo-500" /> Platform Profit
+              <RiSparklingLine className="size-3.5 text-indigo-500" /> Platform Profit
             </span>
             <p className="text-xl font-bold font-num text-indigo-600 dark:text-indigo-400 truncate">
               ৳{((stats.data?.totalPlatformNetProfit ?? 0) / 1000).toFixed(1)}k
@@ -1471,7 +1471,7 @@ export default function SuperAdminPage() {
           <Card className="w-full max-w-md p-6 rounded-2xl bg-card border border-primary/30 shadow-2xl space-y-4">
             <div className="space-y-1">
               <h3 className="text-base font-bold flex items-center gap-2">
-                <Sparkles className="size-5 text-amber-500" />
+                <RiSparklingLine className="size-5 text-amber-500" />
                 Refill SMS Credits for {refillBiz.name}
               </h3>
               <p className="text-xs text-muted-foreground">

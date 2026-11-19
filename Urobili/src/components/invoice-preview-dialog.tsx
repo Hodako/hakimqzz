@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { RiMagicLine } from "react-icons/ri";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,6 @@ import {
   Eye,
   Scissors,
   FileText,
-  Sparkles,
   Maximize2,
   ZoomIn,
   ZoomOut,
@@ -493,7 +493,7 @@ export function InvoicePreviewDialog({
                 <div className="p-3.5 rounded-xl bg-muted/30 border border-border/70 flex items-center justify-between gap-3">
                   <div className="space-y-0.5">
                     <div className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
-                      <Sparkles className="size-4 text-emerald-500" />
+                      <RiMagicLine className="size-4 text-emerald-500" />
                       <span>{lang === "bn" ? "কাগজে নিখুঁত ফিট" : "Fit Content to Paper Width"}</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">

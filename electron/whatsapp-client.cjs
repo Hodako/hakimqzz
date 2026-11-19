@@ -1,8 +1,8 @@
 /**
  * Native Chromium WhatsApp Web Client for Dream Fashion POS Desktop
  * Runs 100% locally inside Electron's built-in Chromium engine (Client Compute).
- * Zero third-party socket libraries (Baileys/Pino/Qrcode eliminated).
- * Officially supported WhatsApp Web session with persistent partition storage.
+ * Optimized for high speed: Fast in-page SPA navigation (no full page reload).
+ * Never demotes "connected" session back to "connecting" during message delivery.
  */
 
 const { BrowserWindow, session, app } = require("electron");
@@ -17,6 +17,7 @@ let lastError = null;
 let statusListener = null;
 let pollTimer = null;
 let isQuitting = false;
+let isSending = false;
 
 const CHROME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -30,6 +31,7 @@ function getStatusSnapshot() {
     lastError,
     isDesktop: true,
     engine: "chromium",
+    isSending,
   };
 }
 
@@ -138,15 +140,16 @@ function startDomPoller() {
       const state = await waWindow.webContents.executeJavaScript(`
         (function() {
           try {
-            // 1. Check if logged in (Chat list / search bar / side panel)
+            // 1. Check if logged in (Chat list / search bar / side panel / main header)
             const chatList = document.querySelector('#pane-side') ||
                              document.querySelector('[data-testid="chat-list"]') ||
                              document.querySelector('[aria-label="Chat list"]') ||
                              document.querySelector('header [data-icon="chat"]') ||
+                             document.querySelector('#main') ||
+                             document.querySelector('footer div[contenteditable="true"]') ||
                              document.querySelector('div[contenteditable="true"][data-tab="3"]');
             
             if (chatList) {
-              // Attempt to extract display name / profile info if available
               let name = "WhatsApp Connected";
               try {
                 const headerTitle = document.querySelector('header h1') || document.querySelector('header [role="button"] span');
@@ -176,28 +179,41 @@ function startDomPoller() {
               reloadBtn.closest('button')?.click();
             }
 
-            // 4. Loading / connecting state
-            return { status: "connecting" };
+            return { status: "unknown" };
           } catch(e) {
-            return { status: "connecting", error: e.message };
+            return { status: "unknown", error: e.message };
           }
         })()
-      `).catch(() => ({ status: "connecting" }));
+      `).catch(() => ({ status: "unknown" }));
 
       if (state) {
         let changed = false;
-        if (state.status !== status) {
-          status = state.status;
-          changed = true;
+
+        if (state.status === "connected") {
+          if (status !== "connected") {
+            status = "connected";
+            qrCodeDataUrl = null;
+            changed = true;
+          }
+          if (state.name && state.name !== name) {
+            name = state.name;
+            changed = true;
+          }
+        } else if (state.status === "qr_ready") {
+          if (status !== "qr_ready" || (state.qrCodeDataUrl && state.qrCodeDataUrl !== qrCodeDataUrl)) {
+            status = "qr_ready";
+            qrCodeDataUrl = state.qrCodeDataUrl;
+            changed = true;
+          }
+        } else if (status !== "connected") {
+          // CRITICAL: NEVER demote an already "connected" session back to "connecting"!
+          // Only show "connecting" if we were NOT connected previously
+          if (status !== "connecting") {
+            status = "connecting";
+            changed = true;
+          }
         }
-        if (state.qrCodeDataUrl !== undefined && state.qrCodeDataUrl !== qrCodeDataUrl) {
-          qrCodeDataUrl = state.qrCodeDataUrl;
-          changed = true;
-        }
-        if (state.name && state.name !== name) {
-          name = state.name;
-          changed = true;
-        }
+
         if (changed) {
           lastError = null;
           emit();
@@ -278,15 +294,11 @@ async function disconnectWhatsApp(userDataDir) {
 
 /**
  * Sends a WhatsApp message via native Chromium WebContents
+ * Uses rapid in-page SPA navigation to prevent full-page reloads and eliminate "connecting..." delays!
  */
 async function sendMessage(targetPhone, message) {
   if (status !== "connected" || !waWindow || waWindow.isDestroyed()) {
-    // If window is open but status was still checking, trigger a check
-    if (waWindow && !waWindow.isDestroyed()) {
-      await waWindow.webContents.executeJavaScript(`console.log("Triggering send from POS...")`);
-    } else {
-      throw new Error("Desktop WhatsApp is not connected. Please scan the QR code first.");
-    }
+    throw new Error("Desktop WhatsApp is not connected. Please scan the QR code first in Settings.");
   }
 
   const clean = formatInternationalPhone(targetPhone);
@@ -294,82 +306,115 @@ async function sendMessage(targetPhone, message) {
     throw new Error("Invalid recipient phone number: " + targetPhone);
   }
 
-  const encodedMsg = encodeURIComponent(String(message || ""));
-  const targetUrl = `https://web.whatsapp.com/send?phone=${clean}&text=${encodedMsg}`;
+  isSending = true;
+  emit();
 
-  // Load URL in Chromium WhatsApp Web
-  await waWindow.loadURL(targetUrl, { userAgent: CHROME_USER_AGENT });
+  try {
+    const encodedMsg = encodeURIComponent(String(message || ""));
+    const targetUrl = `https://web.whatsapp.com/send?phone=${clean}&text=${encodedMsg}`;
 
-  const startTime = Date.now();
-  const maxTimeoutMs = 25000;
-
-  while (Date.now() - startTime < maxTimeoutMs) {
-    await new Promise((r) => setTimeout(r, 800));
-
-    if (!waWindow || waWindow.isDestroyed()) {
-      throw new Error("Chromium WhatsApp window closed unexpectedly.");
+    // 1. Fast in-page navigation: use window.location inside the already-loaded WhatsApp Web instance
+    // This avoids Electron's blocking did-finish-load wait and reuses the existing active session
+    try {
+      await waWindow.webContents.executeJavaScript(`
+        (function() {
+          const target = "${targetUrl}";
+          // Try history pushState first for instant SPA routing
+          try {
+            window.history.pushState({}, '', target);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          } catch(_) {}
+          
+          if (!window.location.href.includes("${clean}")) {
+            window.location.href = target;
+          }
+        })()
+      `);
+    } catch (_) {
+      // Fallback: non-blocking loadURL
+      waWindow.loadURL(targetUrl, { userAgent: CHROME_USER_AGENT }).catch(() => {});
     }
 
-    const result = await waWindow.webContents.executeJavaScript(`
-      (function() {
-        try {
-          // 1. Detect invalid phone number modal
-          const popup = document.querySelector('[data-testid="popup-contents"]') ||
-                        document.querySelector('[role="dialog"]');
-          if (popup) {
-            const text = popup.innerText || "";
-            if (text.includes("invalid") || text.includes("phone number") || text.includes("URL")) {
-              const okBtn = popup.querySelector('button');
-              if (okBtn) okBtn.click();
-              return { error: "Recipient phone number is not registered on WhatsApp or is invalid." };
+    // 2. High-frequency check (every 300ms) for Send button or message textbox
+    const startTime = Date.now();
+    const maxTimeoutMs = 18000;
+
+    while (Date.now() - startTime < maxTimeoutMs) {
+      await new Promise((r) => setTimeout(r, 300));
+
+      if (!waWindow || waWindow.isDestroyed()) {
+        throw new Error("Chromium WhatsApp window was closed unexpectedly.");
+      }
+
+      const result = await waWindow.webContents.executeJavaScript(`
+        (function() {
+          try {
+            // 1. Detect invalid phone number modal
+            const popup = document.querySelector('[data-testid="popup-contents"]') ||
+                          document.querySelector('[role="dialog"]');
+            if (popup) {
+              const text = (popup.innerText || "").toLowerCase();
+              if (text.includes("invalid") || text.includes("phone number") || text.includes("url")) {
+                const okBtn = popup.querySelector('button');
+                if (okBtn) okBtn.click();
+                return { error: "Recipient phone number is not registered on WhatsApp or is invalid." };
+              }
             }
+
+            // 2. Detect Send button (all known WhatsApp Web selector variants)
+            const sendBtn = document.querySelector('button[data-testid="send"]') ||
+                            document.querySelector('button[aria-label="Send"]') ||
+                            document.querySelector('button[aria-label*="send" i]') ||
+                            document.querySelector('span[data-icon="send"]')?.closest('button') ||
+                            document.querySelector('span[data-icon="send"]')?.parentElement ||
+                            document.querySelector('footer button:has(span[data-icon="send"])');
+
+            if (sendBtn && !sendBtn.disabled) {
+              sendBtn.click();
+              return { sent: true };
+            }
+
+            // 3. Fallback: If text is inside the message input box, dispatch Enter key
+            const textbox = document.querySelector('footer div[contenteditable="true"]') ||
+                            document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
+                            document.querySelector('#main footer div[role="textbox"]');
+
+            if (textbox && textbox.innerText && textbox.innerText.trim().length > 0) {
+              textbox.focus();
+              const enterEvt = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true
+              });
+              textbox.dispatchEvent(enterEvt);
+              return { sent: true };
+            }
+
+            return { waiting: true };
+          } catch(e) {
+            return { waiting: true };
           }
+        })()
+      `).catch(() => ({ waiting: true }));
 
-          // 2. Detect and click Send button
-          const sendBtn = document.querySelector('button[data-testid="send"]') ||
-                          document.querySelector('button span[data-icon="send"]')?.closest('button') ||
-                          document.querySelector('span[data-icon="send"]')?.parentElement ||
-                          document.querySelector('button[aria-label="Send"]');
+      if (result?.error) {
+        throw new Error(result.error);
+      }
 
-          if (sendBtn) {
-            sendBtn.click();
-            return { sent: true };
-          }
-
-          // 3. Fallback: Check if message is pre-filled in textbox and dispatch Enter
-          const textbox = document.querySelector('footer div[contenteditable="true"]') ||
-                          document.querySelector('div[contenteditable="true"][data-tab="10"]');
-          if (textbox && textbox.innerText && textbox.innerText.trim().length > 0) {
-            textbox.focus();
-            const evt = new KeyboardEvent('keydown', {
-              key: 'Enter',
-              code: 'Enter',
-              keyCode: 13,
-              which: 13,
-              bubbles: true
-            });
-            textbox.dispatchEvent(evt);
-            return { sent: true };
-          }
-
-          return { waiting: true };
-        } catch(e) {
-          return { waiting: true };
-        }
-      })()
-    `).catch(() => ({ waiting: true }));
-
-    if (result?.error) {
-      throw new Error(result.error);
+      if (result?.sent) {
+        // Quick 500ms safety wait for transmission to complete
+        await new Promise((r) => setTimeout(r, 500));
+        return { success: true, to: clean };
+      }
     }
 
-    if (result?.sent) {
-      await new Promise((r) => setTimeout(r, 1200));
-      return { success: true, to: clean };
-    }
+    throw new Error("Timed out waiting for WhatsApp message delivery. Ensure recipient number is valid.");
+  } finally {
+    isSending = false;
+    emit();
   }
-
-  throw new Error("Timed out waiting for WhatsApp message delivery. Ensure the recipient number is valid.");
 }
 
 /**
@@ -389,7 +434,7 @@ async function sendBroadcast(recipients, message) {
       if (!p) continue;
       await sendMessage(p, message);
       sent++;
-      await new Promise((res) => setTimeout(res, 1500));
+      await new Promise((res) => setTimeout(res, 1200));
     } catch (_) {
       failed++;
     }

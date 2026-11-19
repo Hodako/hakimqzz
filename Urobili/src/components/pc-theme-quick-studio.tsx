@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Palette, Type, Image as ImageIcon, Sparkles, RotateCcw } from "lucide-react";
+import { Palette, Type, Image as ImageIcon, RotateCcw } from "lucide-react";
+import { RiBrushLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -80,7 +81,7 @@ export function PcThemeQuickStudio({
       <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto rounded-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <Sparkles className="size-4 text-primary" />
+            <RiBrushLine className="size-4 text-primary" />
             <span>
               {lang === "bn"
                 ? "পিসি ড্যাশবোর্ড UI স্টুডিও (ব্যাকগ্রাউন্ড, ফন্ট ও রঙ)"

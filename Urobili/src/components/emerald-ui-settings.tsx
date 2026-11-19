@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { RiSparklingLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -41,7 +42,6 @@ import {
   Layers,
   Monitor,
   RotateCcw,
-  Sparkles,
   Store,
   Trash2,
   Upload,
@@ -354,7 +354,7 @@ export function EmeraldUiSettings() {
           >
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-emerald-500" />
+                <RiSparklingLine className="size-3.5 text-emerald-500" />
                 {lang === "bn" ? "এমেরাল্ড গ্লাস" : "Emerald Mode"}
               </span>
               {emeraldActive && (

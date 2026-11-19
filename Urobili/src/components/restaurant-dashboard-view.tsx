@@ -198,16 +198,42 @@ export function RestaurantDashboardView({
 
   return (
     <div className="space-y-5 pb-10">
-      {/* Actions projected directly into AppShell Primary Header (No Secondary Header Card) */}
+      {/* Primary Header Controls (Single Header for Both Phone & PC - Zero Secondary Headers) */}
       <PrimaryHeaderSlot>
+        {/* Date Filter Range Pills in Primary Header */}
+        <div className="inline-flex items-center gap-0.5 bg-muted/70 p-0.5 rounded-full border border-border/80 text-[11px] font-semibold">
+          {(
+            [
+              { id: "today", en: "Today", bn: "আজ" },
+              { id: "7d", en: "7D", bn: "৭ দিন" },
+              { id: "30d", en: "30D", bn: "৩০ দিন" },
+              { id: "all", en: "All", bn: "সব" },
+            ] as const
+          ).map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setRange(p.id)}
+              className={`px-2 sm:px-2.5 h-6 rounded-full transition-all cursor-pointer whitespace-nowrap text-[11px] ${
+                range === p.id
+                  ? "bg-background text-primary font-bold shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {lang === "bn" ? p.bn : p.en}
+            </button>
+          ))}
+        </div>
+
+        {/* Primary RestroBit Orange POS Button */}
         <Link href="/restaurant">
-          <Button size="sm" className="h-7 px-2.5 rounded-full bg-[#FF6B00] hover:bg-[#E55F00] text-white font-bold text-[11px] gap-1 cursor-pointer">
+          <Button size="sm" className="h-7 px-2.5 rounded-full bg-[#FF6B00] hover:bg-[#E55F00] text-white font-bold text-[11px] gap-1 cursor-pointer shadow-xs">
             <Utensils className="size-3" />
-            <span>{lang === "bn" ? "রেস্তোরাঁ পিওএস" : "Open POS"}</span>
+            <span>{lang === "bn" ? "রেস্তোরাঁ পিওএস" : "POS"}</span>
           </Button>
         </Link>
-        <Link href="/products">
-          <Button size="sm" variant="outline" className="h-7 px-2.5 rounded-full text-[11px] font-semibold gap-1 cursor-pointer">
+        <Link href="/products" className="hidden sm:inline-flex">
+          <Button size="sm" variant="outline" className="h-7 px-2 rounded-full text-[11px] font-semibold gap-1 cursor-pointer">
             <BookOpen className="size-3" />
             <span>{lang === "bn" ? "মেনু" : "Menu"}</span>
           </Button>
@@ -217,56 +243,12 @@ export function RestaurantDashboardView({
           size="sm"
           variant="outline"
           onClick={() => setUiStudioOpen(true)}
-          className="h-7 px-2.5 rounded-full text-[11px] font-semibold gap-1 cursor-pointer"
+          className="h-7 px-2 rounded-full text-[11px] font-semibold gap-1 cursor-pointer hidden md:inline-flex"
         >
           <Palette className="size-3 text-primary" />
-          <span>{lang === "bn" ? "থিম স্টুডিও" : "UI Studio"}</span>
+          <span>{lang === "bn" ? "থিম" : "Theme"}</span>
         </Button>
       </PrimaryHeaderSlot>
-
-      {/* Simplicity UI: Single Clean Filter Bar + Live Register Status */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs">
-          {(
-            [
-              { id: "today", en: "Today", bn: "আজ" },
-              { id: "7d", en: "7 Days", bn: "৭ দিন" },
-              { id: "30d", en: "30 Days", bn: "৩০ দিন" },
-              { id: "all", en: "All Time", bn: "সব সময়" },
-            ] as const
-          ).map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setRange(p.id)}
-              className={`h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                range === p.id
-                  ? "bg-primary text-primary-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {lang === "bn" ? p.bn : p.en}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link href="/restaurant">
-            <span className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
-              openShift
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
-                : "bg-card border-border text-muted-foreground hover:bg-muted"
-            }`}>
-              <Store className="size-3.5" />
-              <span>
-                {openShift
-                  ? `${openShift.register_name} • ${lang === "bn" ? "খোলা" : "Shift Open"}`
-                  : lang === "bn" ? "রেজিস্টার বন্ধ" : "Shift Closed"}
-              </span>
-            </span>
-          </Link>
-        </div>
-      </div>
 
       {/* Focused 4-Card Restaurant KPI Grid (Sales + Delta + AOV, Cashbox, Net, Live Dining) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

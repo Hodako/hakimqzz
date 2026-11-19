@@ -9,7 +9,7 @@ import {
   Home, Package, ShoppingBag, Users, MoreHorizontal,
   LogOut, Languages, Banknote, DollarSign, Settings,
   BarChart3, Receipt, PiggyBank, ShoppingCart, Moon, Sun, FileText,
-  TrendingUp, TrendingDown, Sparkles, Palette, MessageSquare, HelpCircle,
+  TrendingUp, TrendingDown, Palette, MessageSquare, HelpCircle,
   RefreshCw, Lock, KeyRound, ShieldCheck, Wallet, Plus, ChevronDown, Check, Crown, User, Shirt, Store,
   Landmark, CalendarPlus, Calendar, ArrowDownLeft, ArrowUpRight, HandCoins, Barcode, Printer, Layers, Utensils,
 } from "lucide-react";
@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { RiSparklingLine } from "react-icons/ri";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +117,7 @@ const desktopNavGroups: NavGroup[] = [
       { to: "/losses", labelKey: "losses", icon: TrendingDown, perm: "profit_loss" },
       { to: "/trackback", labelKey: "trackback", icon: BarChart3, perm: "reports" },
       { to: "/purchase-reports", labelKey: "products_buy", icon: ShoppingCart, perm: "reports" },
-      { to: "/ai-audits", labelKey: "ai_audits", icon: Sparkles, perm: "reports" },
+      { to: "/ai-audits", labelKey: "ai_audits", icon: RiSparklingLine, perm: "reports" },
       { to: "/settings", labelKey: "settings", icon: Settings, perm: "settings" },
     ],
   },
@@ -608,20 +609,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
-            {!isEmployee && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setModuleCustomizerOpen(true)}
-                  tooltip={lang === "bn" ? "মডিউল ও ড্যাশবোর্ড কাস্টমাইজ" : "Customize Modules & KPIs"}
-                  className="text-primary hover:bg-primary/10 font-semibold cursor-pointer"
-                >
-                  <Sparkles className="icon-sm shrink-0" />
-                  <span className="truncate text-xs">
-                    {lang === "bn" ? "মডিউল কাস্টমাইজ করুন" : "Customize Modules"}
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -662,16 +649,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-3 py-2 border-t border-sidebar-border/60 text-[11px] text-muted-foreground flex items-center justify-between">
             <span className="font-semibold text-foreground/80 flex items-center gap-1.5">
               <img src="/urobili-logo.png" className="size-4 object-contain" alt="Urobili" />
-              Urobili
+              Urobili POS
             </span>
-            <a
-              href="https://azizul.iam.bd"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-semibold text-[10.5px]"
-            >
-              Azizul hakim Khan
-            </a>
+            <span className="text-[10px] text-muted-foreground/60 font-mono font-semibold">v2.5.4</span>
           </div>
         </SidebarFooter>
       </Sidebar>

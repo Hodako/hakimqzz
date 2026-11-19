@@ -22,7 +22,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Sparkles,
   User,
   RefreshCw,
   CheckCircle2,
@@ -95,17 +94,25 @@ export default function AuthPage() {
   useEffect(() => {
     if (mounted && !loading) {
       if (user && !onboardingUser) {
-        if (!user.business_name || user.business_name === "Urobili" || !user.industry) {
-          setOnboardingUser(user);
+        const hasCompletedOnboarding = typeof window !== "undefined" && (
+          localStorage.getItem("cw_onboarding_completed") === "true" ||
+          !!localStorage.getItem("cw_industry")
+        );
+        const effectiveIndustry =
+          user.industry ||
+          (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant");
+
+        if (user.industry || hasCompletedOnboarding) {
+          router.replace(effectiveIndustry === "restaurant" ? "/restaurant" : "/dashboard");
         } else {
-          router.replace(user.industry === "restaurant" ? "/restaurant" : "/dashboard");
+          setOnboardingUser(user);
         }
       }
     }
   }, [user, loading, router, mounted, onboardingUser]);
 
   if ((!mounted || loading) && !onboardingUser) return <SpeedLoader />;
-  if (user && !onboardingUser && user.business_name && user.business_name !== "Urobili") return <SpeedLoader />;
+  if (user && !onboardingUser) return <SpeedLoader />;
 
   function afterAuth(u: AuthUser | null, token?: string) {
     if (!u) {
@@ -116,10 +123,18 @@ export default function AuthPage() {
       sessionStorage.removeItem("app_pin_unlocked");
     }
     login(u, token);
-    if (u.role === "owner" && (!u.business_name || u.business_name === "Urobili" || !u.industry)) {
+    const hasCompletedOnboarding = typeof window !== "undefined" && (
+      localStorage.getItem("cw_onboarding_completed") === "true" ||
+      !!localStorage.getItem("cw_industry")
+    );
+    const effectiveIndustry =
+      u.industry ||
+      (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant");
+
+    if (u.role === "owner" && !u.industry && !hasCompletedOnboarding) {
       setOnboardingUser(u);
     } else {
-      router.replace(u.industry === "restaurant" ? "/restaurant" : "/dashboard");
+      router.replace(effectiveIndustry === "restaurant" ? "/restaurant" : "/dashboard");
     }
   }
 
@@ -131,6 +146,10 @@ export default function AuthPage() {
     }
     setOnboardingBusy(true);
     try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("cw_onboarding_completed", "true");
+        localStorage.setItem("cw_industry", shopIndustry || "restaurant");
+      }
       const payload = {
         name: shopName.trim(),
         business_name: shopName.trim(),
@@ -613,14 +632,7 @@ export default function AuthPage() {
           © 2026 Urobili POS & ERP Platform. All rights reserved.
         </p>
         <div className="flex items-center gap-3 mt-1.5 sm:mt-0 text-[11px]">
-          <a
-            href="https://azizul.iam.bd"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-white underline underline-offset-2 transition-colors drop-shadow-sm"
-          >
-            Developed by Azizul hakim Khan
-          </a>
+          <span>Security Verified</span>
           <span>•</span>
           <a
             href="https://wa.me/8801783501427"

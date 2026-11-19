@@ -17,6 +17,7 @@ export interface AuthProfileCache {
   logo_url: string;
   avatar_url?: string;
   license_key?: string | null;
+  industry?: string;
   updatedAt: number;
 }
 

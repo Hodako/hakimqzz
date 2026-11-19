@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Camera, RefreshCw, Scan, CheckCircle2, AlertTriangle, FlipHorizontal, Zap, Flashlight, ZoomIn, Sparkles } from "lucide-react";
+import { Camera, RefreshCw, Scan, CheckCircle2, AlertTriangle, FlipHorizontal, Zap, Flashlight, ZoomIn } from "lucide-react";
+import { RiSparklingLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 import { toast } from "sonner";
 import {
@@ -635,7 +636,7 @@ export function BarcodeScannerDialog({
             {/* Status indicator pill */}
             {permissionState === "granted" && (
               <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-[10px] font-bold flex items-center gap-1.5 z-20 shadow-md">
-                <Sparkles className="size-3 text-amber-400 animate-spin" />
+                <RiSparklingLine className="size-3 text-amber-400 animate-spin" />
                 <span>{lang === "bn" ? "লাইভ স্ক্যানার সচল 🟢" : "Live Scanner Active 🟢"}</span>
               </div>
             )}

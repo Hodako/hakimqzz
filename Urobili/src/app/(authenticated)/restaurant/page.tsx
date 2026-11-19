@@ -82,18 +82,21 @@ import {
   Send,
 } from "lucide-react";
 
-// Default Restaurant Menu items with rich food photos (and emoji fallback if offline)
+// Default Restaurant Menu items with rich food photos (matching RestroBit POS catalog)
 const DEFAULT_RESTAURANT_MENU = [
+  { id: "fd-rb-1", name: "Shrimp Basil Salad", category: "Salads", sell_price: 320, buy_price: 180, image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=400&q=80", emoji: "🥗" },
+  { id: "fd-rb-2", name: "Golden Onion Rings", category: "Starters & Fast Food", sell_price: 180, buy_price: 90, image: "https://images.unsplash.com/photo-1639024471287-032f66e51147?auto=format&fit=crop&w=400&q=80", emoji: "🧅" },
+  { id: "fd-rb-3", name: "Smoked Bacon Burger", category: "Starters & Fast Food", sell_price: 350, buy_price: 200, image: "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=400&q=80", emoji: "🥓" },
+  { id: "fd-rb-4", name: "Grilled Chicken Burger", category: "Starters & Fast Food", sell_price: 280, buy_price: 160, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80", emoji: "🍔" },
+  { id: "fd-rb-5", name: "Classic Beef Burger", category: "Starters & Fast Food", sell_price: 320, buy_price: 190, image: "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=400&q=80", emoji: "🍔" },
+  { id: "fd-rb-6", name: "Vegetable Garden Pizza", category: "Pizza & Pasta", sell_price: 550, buy_price: 300, image: "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400&q=80", emoji: "🍕" },
+  { id: "fd-rb-7", name: "Crispy Fish & Chips", category: "Starters & Fast Food", sell_price: 380, buy_price: 220, image: "https://images.unsplash.com/photo-1579208575657-c595a05383b7?auto=format&fit=crop&w=400&q=80", emoji: "🐟" },
   { id: "fd-1", name: "Hyderabadi Kacchi Biryani", category: "Biryani & Rice", sell_price: 380, buy_price: 240, image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=400&q=80", emoji: "🍲" },
   { id: "fd-2", name: "Chicken Dum Biryani", category: "Biryani & Rice", sell_price: 280, buy_price: 180, image: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=400&q=80", emoji: "🍗" },
   { id: "fd-3", name: "Beef Tehari", category: "Biryani & Rice", sell_price: 290, buy_price: 190, image: "https://images.unsplash.com/photo-1631515243349-e0cb75fb8d3a?auto=format&fit=crop&w=400&q=80", emoji: "🥩" },
-  { id: "fd-4", name: "Crispy Chicken Wings", category: "Starters & Fast Food", sell_price: 250, buy_price: 130, image: "https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=400&q=80", emoji: "🍗" },
-  { id: "fd-5", name: "Classic Beef Burger", category: "Starters & Fast Food", sell_price: 250, buy_price: 150, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80", emoji: "🍔" },
   { id: "fd-6", name: "BBQ Chicken Pizza (10-inch)", category: "Pizza & Pasta", sell_price: 650, buy_price: 380, image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400&q=80", emoji: "🍕" },
   { id: "fd-7", name: "Creamy White Sauce Pasta", category: "Pizza & Pasta", sell_price: 320, buy_price: 180, image: "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?auto=format&fit=crop&w=400&q=80", emoji: "🍝" },
   { id: "fd-8", name: "Butter Chicken with Naan", category: "Mains & Curries", sell_price: 360, buy_price: 210, image: "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=400&q=80", emoji: "🥘" },
-  { id: "fd-9", name: "Chicken Shank Roast", category: "Mains & Curries", sell_price: 250, buy_price: 145, image: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=400&q=80", emoji: "🍗" },
-  { id: "fd-10", name: "Meat Platter Assortment", category: "Mains & Curries", sell_price: 1000, buy_price: 620, image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80", emoji: "🍖" },
   { id: "fd-11", name: "Fresh Mint Lemonade", category: "Beverages", sell_price: 120, buy_price: 40, image: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80", emoji: "🍹" },
   { id: "fd-12", name: "Cold Brew Iced Coffee", category: "Beverages", sell_price: 160, buy_price: 60, image: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=400&q=80", emoji: "☕" },
   { id: "fd-13", name: "Chocolate Lava Cake", category: "Desserts", sell_price: 220, buy_price: 110, image: "https://images.unsplash.com/photo-1624353365286-3f8d62daad51?auto=format&fit=crop&w=400&q=80", emoji: "🍰" },
@@ -102,9 +105,10 @@ const DEFAULT_RESTAURANT_MENU = [
 const MENU_CATEGORIES = [
   "All Dishes",
   "Biryani & Rice",
-  "Mains & Curries",
+  "Salads",
   "Starters & Fast Food",
   "Pizza & Pasta",
+  "Mains & Curries",
   "Beverages",
   "Desserts",
 ];
@@ -1474,7 +1478,36 @@ export default function RestaurantPosPage() {
 
         {/* PHONE TAB 1: MENU (Food Menu Boxes + Top Categories) */}
         {mobileTab === "menu" && (
-          <div className="p-3.5 space-y-3.5 flex-1">
+          <div className="p-3.5 space-y-3 flex-1 pb-28">
+            {/* Quick Table & Dining Mode Strip for Waiter */}
+            <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-card border border-border/80 text-xs shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setMobileTab("tables")}
+                className="inline-flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/25 cursor-pointer"
+              >
+                <Grid className="size-3.5" />
+                <span>{orderType === "dine_in" ? selectedTable : orderType.toUpperCase()}</span>
+                <span className="text-[9px] opacity-70">▾ {lang === "bn" ? "টেবিল পরিবর্তন" : "Change"}</span>
+              </button>
+              <div className="flex items-center gap-1">
+                {(["dine_in", "takeaway", "delivery"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setOrderType(m)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      orderType === m
+                        ? "bg-[#FF6B00] text-white shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "dine_in" ? (lang === "bn" ? "ডাইন-ইন" : "Dine") : m === "takeaway" ? (lang === "bn" ? "পার্সেল" : "Take") : (lang === "bn" ? "ডেলিভারি" : "Delv")}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Search & Category Dropdown Row */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -1756,6 +1789,34 @@ export default function RestaurantPosPage() {
                 <LogOut className="size-4" />
                 <span>{lang === "bn" ? "লগ আউট" : "Sign Out"}</span>
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Waiter Order Bar (Sticky above bottom nav on Phone) */}
+        {cart.length > 0 && (
+          <div className="fixed bottom-16 inset-x-3 z-50 md:hidden bg-[#FF6B00] text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 animate-in slide-in-from-bottom-3 duration-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="size-9 rounded-xl bg-white/20 flex items-center justify-center font-black text-sm shrink-0">
+                {totalCartCount}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black truncate">{orderType === "dine_in" ? selectedTable : orderType.toUpperCase()} • ৳{grandTotal}</div>
+                <div className="text-[10px] text-white/80 truncate">
+                  {cart.length} {lang === "bn" ? "টি খাবার আইটেম" : "dishes in cart"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileCartOpen(true)}
+                className="h-9 px-3.5 rounded-xl bg-white text-[#FF6B00] font-black text-xs hover:bg-white/90 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center gap-1"
+              >
+                <span>{lang === "bn" ? "অর্ডার ও KOT" : "Review & KOT"}</span>
+                <span className="text-[10px]">→</span>
+              </button>
             </div>
           </div>
         )}
@@ -2282,143 +2343,133 @@ export default function RestaurantPosPage() {
           /* VIEW B: FOOD MENU & LIVE ORDERING                                   */
           /* ══════════════════════════════════════════════════════════════════════ */
           <>
+            {/* RestroBit Top POS Breadcrumb Header & Action Buttons */}
+            <div className="col-span-12 flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border/40">
+              <div>
+                <h1 className="text-xl font-black tracking-tight text-foreground flex items-center gap-2">
+                  <span>{lang === "bn" ? "পয়েন্ট অব সেল (পিওএস)" : "Point of Sale (POS)"}</span>
+                </h1>
+                <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mt-0.5">
+                  <span>{lang === "bn" ? "ড্যাশবোর্ড" : "Dashboard"}</span>
+                  <span>•</span>
+                  <span className="text-[#FF6B00] font-semibold">{lang === "bn" ? "রেস্তোরাঁ পিওএস" : "Pos"}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleNewOrder}
+                  className="h-9 px-3.5 rounded-xl bg-[#FF6B00] hover:bg-[#E55F00] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Plus className="size-4" />
+                  <span>{lang === "bn" ? "+ নতুন" : "+ New"}</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQrModalOpen(true)}
+                  className="h-9 px-3 rounded-xl bg-card border border-border text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:border-[#FF6B00]"
+                >
+                  <QrCode className="size-4 text-[#FF6B00]" />
+                  <span>{lang === "bn" ? "কিউআর মেনু" : "QR Menu Orders"}</span>
+                  {qrOrders.filter((q) => q.status === "incoming").length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-[#FF6B00] text-white text-[10px] font-bold">
+                      {qrOrders.filter((q) => q.status === "incoming").length}
+                    </span>
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDraftsModalOpen(true)}
+                  className="h-9 px-3 rounded-xl bg-card border border-border text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:border-[#FF6B00]"
+                >
+                  <FileText className="size-4 text-muted-foreground" />
+                  <span>{lang === "bn" ? "ড্রাফট তালিকা" : "Draft List"}</span>
+                  {draftOrders.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold">
+                      {draftOrders.length}
+                    </span>
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveView("tables")}
+                  className="h-9 px-3 rounded-xl bg-card border border-border text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:border-[#FF6B00]"
+                >
+                  <Grid className="size-4 text-emerald-600" />
+                  <span>{lang === "bn" ? "টেবিল অর্ডার" : "Table Order"}</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-bold">
+                    {restaurantStats.occupiedTables}/{restaurantStats.totalTables}
+                  </span>
+                </Button>
+              </div>
+            </div>
+
             {/* Left 7-8 Cols: Menu Grid */}
-            <div className="col-span-12 lg:col-span-7 xl:col-span-8 space-y-4">
-              {/* Search & Table Info Pill */}
-              <div className="bg-white dark:bg-zinc-900 p-3 sm:p-4 rounded-3xl border border-[#E8DFD3] dark:border-zinc-800 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div className="col-span-12 lg:col-span-7 xl:col-span-8 space-y-3.5">
+              {/* Unified Clean Search & Filters Bar */}
+              <div className="bg-card p-3 rounded-2xl border border-border/80 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="size-4 text-[#A4988E] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Search className="size-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={lang === "bn" ? "খাবারের নাম বা কোড লিখুন..." : "Search menu items..."}
-                    className="w-full h-10 pl-10 pr-4 rounded-2xl bg-[#F8F6F0] dark:bg-zinc-800 border-none text-xs sm:text-sm text-[#2C241E] dark:text-zinc-100 placeholder:text-[#A4988E] focus:outline-none focus:ring-2 focus:ring-[#55A61D]"
+                    placeholder={lang === "bn" ? "খাবারের নাম বা কোড লিখুন..." : "Search in products..."}
+                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-muted/50 border border-border/60 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#FF6B00]"
                   />
                 </div>
 
-                {orderType === "dine_in" && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-[#65594F] dark:text-zinc-400">
-                      {lang === "bn" ? "টেবিল:" : "Table:"}
-                    </span>
-                    <select
-                      value={selectedTable}
-                      onChange={(e) => setSelectedTable(e.target.value)}
-                      className="h-10 px-3 rounded-xl bg-[#F2ECE4] dark:bg-zinc-800 font-bold text-[#2C241E] dark:text-zinc-100 border border-[#E8DFD3] text-xs focus:outline-none"
-                    >
-                      {Object.keys(tables).map((tKey) => (
-                        <option key={tKey} value={tKey}>
-                          {tKey} {tables[tKey].status === "occupied" ? "• (Dining)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="h-9 px-2.5 rounded-xl bg-muted/50 border border-border/60 text-xs font-semibold text-foreground cursor-pointer focus:outline-none"
+                >
+                  <option value="All Dishes">{lang === "bn" ? "সকল ক্যাটাগরি" : "All Category"}</option>
+                  {MENU_CATEGORIES.filter((c) => c !== "All Dishes").map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={kitchenFilter}
+                  onChange={(e) => setKitchenFilter(e.target.value as any)}
+                  className="h-9 px-2.5 rounded-xl bg-muted/50 border border-border/60 text-xs font-semibold text-foreground cursor-pointer focus:outline-none"
+                >
+                  <option value="all">{lang === "bn" ? "সব মেনু আইটেম" : "All Types"}</option>
+                  <option value="kitchen">{lang === "bn" ? "রান্নাঘর (তাজা)" : "Kitchen Food"}</option>
+                  <option value="tracked_drinks">{lang === "bn" ? "পানীয় (স্টকসহ)" : "Drinks (Stock)"}</option>
+                </select>
               </div>
 
-              {/* Category Pills */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {/* Category Pills (Show All, Rice, Beverages, Salads, Soup, Pizza) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 {MENU_CATEGORIES.map((cat) => {
                   const isActive = selectedCategory === cat;
+                  const label = cat === "All Dishes" ? (lang === "bn" ? "সব খাবার" : "Show All") : cat;
                   return (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3.5 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                         isActive
-                          ? "bg-[#FF6B00] text-white shadow-sm font-bold"
-                          : "bg-white dark:bg-zinc-900 border border-[#E8DFD3] dark:border-zinc-800 text-[#65594F] dark:text-zinc-400 hover:border-[#55A61D]"
+                          ? "bg-[#FF6B00] text-white shadow-2xs font-bold"
+                          : "bg-card border border-border/80 text-muted-foreground hover:text-foreground hover:border-[#FF6B00]/40"
                       }`}
                     >
-                      {cat}
+                      {label}
                     </button>
                   );
                 })}
-              </div>
-
-              {/* RestroBit Action Bar & Stock Filter */}
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleNewOrder}
-                    className="h-8 px-3 rounded-xl bg-[#FF6B00] hover:bg-[#E55F00] text-white text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
-                  >
-                    <Plus className="size-3.5" />
-                    <span>{lang === "bn" ? "নতুন অর্ডার" : "New"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQrModalOpen(true)}
-                    className="h-8 px-3 rounded-xl bg-slate-50 dark:bg-zinc-800 hover:bg-orange-50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <QrCode className="size-3.5 text-[#FF6B00]" />
-                    <span>{lang === "bn" ? "কিউআর অর্ডার" : "QR Menu Orders"}</span>
-                    {qrOrders.filter((q) => q.status === "incoming").length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-[#FF6B00] text-white text-[10px] font-bold">
-                        {qrOrders.filter((q) => q.status === "incoming").length}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraftsModalOpen(true)}
-                    className="h-8 px-3 rounded-xl bg-slate-50 dark:bg-zinc-800 hover:bg-orange-50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <FileText className="size-3.5 text-slate-500" />
-                    <span>{lang === "bn" ? "ড্রাফট তালিকা" : "Draft List"}</span>
-                    {draftOrders.length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold">
-                        {draftOrders.length}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReservationsModalOpen(true)}
-                    className="h-8 px-3 rounded-xl bg-slate-50 dark:bg-zinc-800 hover:bg-orange-50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Calendar className="size-3.5 text-emerald-600" />
-                    <span>{lang === "bn" ? "রিজার্ভেশন" : "Reservations"}</span>
-                    {reservations.filter((r) => r.status === "reserved").length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">
-                        {reservations.filter((r) => r.status === "reserved").length}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickItemOpen(true)}
-                    className="h-8 px-3 rounded-xl bg-slate-50 dark:bg-zinc-800 hover:bg-orange-50 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Zap className="size-3.5 text-amber-500" />
-                    <span>{lang === "bn" ? "দ্রুত আইটেম" : "Quick Item"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShiftModalOpen(true)}
-                    className={`h-8 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
-                      openShift
-                        ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-700 dark:text-emerald-300"
-                        : "bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200"
-                    }`}
-                  >
-                    <Store className="size-3.5" />
-                    <span>{openShift ? (lang === "bn" ? "শিফট চালু" : "Register Open") : (lang === "bn" ? "শিফট খুলুন" : "Register")}</span>
-                  </button>
-                </div>
-
-                <select
-                  value={kitchenFilter}
-                  onChange={(e) => setKitchenFilter(e.target.value as any)}
-                  className="h-8 px-2.5 rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-700 dark:text-zinc-200 cursor-pointer"
-                >
-                  <option value="all">{lang === "bn" ? "সব আইটেম" : "All Menu Items"}</option>
-                  <option value="kitchen">{lang === "bn" ? "তাজা খাবার (স্টকবিহীন)" : "Fresh Kitchen Dishes"}</option>
-                  <option value="tracked_drinks">{lang === "bn" ? "প্যাকেট পানীয় (স্টকসহ)" : "Stock-Tracked Drinks"}</option>
-                </select>
               </div>
 
               {/* Menu Item Cards Grid (RestroBit 4-Col Crisp Card Layout) */}

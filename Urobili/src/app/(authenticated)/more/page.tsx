@@ -1321,19 +1321,11 @@ export default function MorePage() {
 
       <div className="pt-3 pb-1 text-center text-xs text-muted-foreground border-t border-border/40 mt-3">
         <p className="font-semibold text-foreground/90 flex items-center justify-center gap-1.5 text-xs">
-          <img src="/uzvi-logo.png" className="size-4 object-contain inline-block" alt="Uzvi Dev" />
-          <span>Uzvi Dev</span>
+          <img src="/urobili-logo.png" className="size-4 object-contain inline-block" alt="Urobili" />
+          <span>Urobili POS</span>
         </p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Developed by{" "}
-          <a
-            href="https://azizul.iam.bd"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline font-semibold"
-          >
-            Azizul hakim Khan
-          </a>
+          Enterprise Multi-Industry Point of Sale System
         </p>
       </div>
     </div>

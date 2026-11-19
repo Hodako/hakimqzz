@@ -13,6 +13,8 @@ export interface DesktopWhatsAppStatus {
   name: string | null;
   lastError?: string | null;
   isDesktop: boolean;
+  isSending?: boolean;
+  engine?: string;
 }
 
 const MODE_KEY = "df_wa_mode";

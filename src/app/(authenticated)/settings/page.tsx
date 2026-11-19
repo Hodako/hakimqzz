@@ -2716,8 +2716,17 @@ export default function SettingsPage() {
                       }}
                       className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5 shrink-0"
                     >
-                      <Send className="size-3.5" />
-                      <span>Send</span>
+                      {waBusy ? (
+                        <>
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          <span>Sending...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="size-3.5" />
+                          <span>Send</span>
+                        </>
+                      )}
                     </Button>
                   </div>
                   <Input

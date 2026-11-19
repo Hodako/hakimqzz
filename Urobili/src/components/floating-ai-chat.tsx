@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Sparkles, Send, X, MessageSquare, Bot, AlertTriangle, HelpCircle } from "lucide-react";
+import { Send, X, MessageSquare, Bot, AlertTriangle, HelpCircle } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";

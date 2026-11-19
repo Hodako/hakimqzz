@@ -11,7 +11,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Info, AlertTriangle, Flame, Sparkles, Check } from "lucide-react";
+import { Info, AlertTriangle, Flame, Check } from "lucide-react";
+import { RiSparklingLine } from "react-icons/ri";
 import { useT } from "@/lib/i18n";
 
 export function AdminPopupDialog() {
@@ -76,7 +77,7 @@ export function AdminPopupDialog() {
       border: "border-red-500/20",
     },
     promo: {
-      icon: Sparkles,
+      icon: RiSparklingLine,
       color: "text-purple-500",
       bg: "bg-purple-500/10",
       border: "border-purple-500/20",

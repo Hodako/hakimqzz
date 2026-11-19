@@ -9,7 +9,6 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
-  Sparkles,
   RefreshCw,
   Folder,
   ShoppingBag,
@@ -20,6 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { RiSparklingLine } from "react-icons/ri";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,7 @@ const ICON_OPTIONS = [
   { name: "Folder", icon: Folder },
   { name: "Shirt", icon: Shirt },
   { name: "ShoppingBag", icon: ShoppingBag },
-  { name: "Sparkles", icon: Sparkles },
+  { name: "Sparkles", icon: RiSparklingLine },
   { name: "Smile", icon: Smile },
   { name: "BookOpen", icon: BookOpen },
   { name: "MessageSquare", icon: MessageSquare },

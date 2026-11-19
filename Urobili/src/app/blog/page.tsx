@@ -11,7 +11,6 @@ import {
   Share2,
   Calendar,
   User,
-  Sparkles,
   ArrowRight,
   Plus,
   BookOpen,
@@ -26,6 +25,7 @@ import {
   Flame,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { RiSparklingLine } from "react-icons/ri";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +138,7 @@ export default function BlogPage() {
 
           <div className="space-y-2 text-center sm:text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold tracking-wide">
-              <Sparkles className="size-3.5" />
+              <RiSparklingLine className="size-3.5" />
               <span>{lang === "bn" ? "ক্লাসিক ওয়ার্ল্ড ফ্যাশন ফোরাম ও স্পেস" : "Urobili Knowledge & Style Space"}</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground">

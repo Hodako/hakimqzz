@@ -21,7 +21,6 @@ import {
   Save,
   Check,
   Trash2,
-  Sparkles,
   Sliders,
   DollarSign,
   User,

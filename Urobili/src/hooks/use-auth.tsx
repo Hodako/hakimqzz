@@ -71,6 +71,13 @@ function cacheUser(u: AuthUser | null) {
     clearAuthProfile();
     return;
   }
+  const resolvedIndustry =
+    u.industry ||
+    (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "" : "");
+  if (typeof window !== "undefined" && resolvedIndustry) {
+    localStorage.setItem("cw_industry", resolvedIndustry);
+    localStorage.setItem("cw_onboarding_completed", "true");
+  }
   writeAuthProfile({
     id: u.id,
     email: u.email,
@@ -90,6 +97,7 @@ function cacheUser(u: AuthUser | null) {
     invoice_line_spacing: u.invoice_line_spacing,
     invoice_terms: u.invoice_terms,
     logo_url: u.logo_url || "/logo.png",
+    industry: resolvedIndustry || undefined,
     avatar_url: u.avatar_url,
     permissions: u.permissions,
     profiles: u.profiles,
@@ -105,6 +113,10 @@ function cacheUser(u: AuthUser | null) {
 function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
   if (!p) return null;
   const anyP = p as any;
+  const resolvedIndustry =
+    anyP.industry ||
+    p.industry ||
+    (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "" : "");
   return {
     id: p.id,
     email: p.email,
@@ -124,6 +136,7 @@ function profileToUser(p: ReturnType<typeof readAuthProfile>): AuthUser | null {
     invoice_line_spacing: anyP.invoice_line_spacing,
     invoice_terms: anyP.invoice_terms,
     logo_url: p.logo_url || "/logo.png",
+    industry: resolvedIndustry || undefined,
     avatar_url: p.avatar_url,
     permissions: anyP.permissions,
     profiles: anyP.profiles,
@@ -150,6 +163,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await getMeFn();
       const next = data?.user as AuthUser | null;
       if (next) {
+        if (!next.industry && typeof window !== "undefined") {
+          next.industry = localStorage.getItem("cw_industry") || "restaurant";
+        }
+        if (next.industry && typeof window !== "undefined") {
+          localStorage.setItem("cw_industry", next.industry);
+          localStorage.setItem("cw_onboarding_completed", "true");
+        }
         if (next.role !== "employee" && typeof window !== "undefined") {
           window.localStorage.removeItem("cw_active_employee_session");
           window.localStorage.removeItem("cw_active_session_role");
@@ -226,6 +246,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newUser: AuthUser, token?: string) => {
     if (token && typeof window !== "undefined") {
       window.localStorage.setItem("auth_token", token);
+    }
+    if (!newUser.industry && typeof window !== "undefined") {
+      newUser.industry = localStorage.getItem("cw_industry") || "restaurant";
+    }
+    if (newUser.industry && typeof window !== "undefined") {
+      localStorage.setItem("cw_industry", newUser.industry);
+      localStorage.setItem("cw_onboarding_completed", "true");
     }
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem("app_pin_unlocked");
@@ -339,6 +366,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => {
       if (!prev) return prev;
       const next = { ...prev, ...patch };
+      if (patch.industry && typeof window !== "undefined") {
+        localStorage.setItem("cw_industry", patch.industry);
+        localStorage.setItem("cw_onboarding_completed", "true");
+      }
       cacheUser(next);
       if (patch.logo_url || patch.business_name) {
         writeBrand({ name: next.business_name, logo_url: next.logo_url });

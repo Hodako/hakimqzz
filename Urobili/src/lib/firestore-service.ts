@@ -2826,12 +2826,16 @@ export function fsGetCurrentUser() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (isEmpSession) parsed.role = "employee";
+      if (!parsed.industry && typeof window !== "undefined") {
+        parsed.industry = localStorage.getItem("cw_industry") || "restaurant";
+      }
       return parsed;
     }
   } catch (_) {}
   const authUser = auth.currentUser;
   if (authUser && !authUser.isAnonymous) {
     const isRootDefault = authUser.email?.toLowerCase().trim() === "urobili@gmail.com";
+    const ind = typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant";
     return {
       id: authUser.uid,
       owner_id: authUser.uid,
@@ -2839,6 +2843,7 @@ export function fsGetCurrentUser() {
       full_name: authUser.displayName || "Store Owner",
       role: "owner",
       activated: true,
+      industry: ind,
       is_isolated_tenant: !isRootDefault,
       business_id: isRootDefault ? "urobili-default" : `biz_${authUser.uid}`,
       business_name: isRootDefault ? "Urobili" : (authUser.displayName ? `${authUser.displayName}'s Shop` : "My Business"),

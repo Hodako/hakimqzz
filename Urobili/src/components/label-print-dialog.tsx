@@ -8,6 +8,7 @@ import React, {
   useRef,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { RiSparklingLine } from "react-icons/ri";
 import {
   Dialog,
   DialogContent,
@@ -85,7 +86,6 @@ import {
   X,
   BookmarkCheck,
   Bookmark,
-  Sparkles,
   Clock,
   CheckCheck,
   FileCode,
@@ -2495,7 +2495,7 @@ export function LabelPrintingStudio({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Sparkles className="size-3.5" />
+                    <RiSparklingLine className="size-3.5" />
                     <span>{isBn ? "স্মার্ট টেমপ্লেট বিল্ডার" : "Smart Template"}</span>
                   </button>
                   <button
@@ -2702,7 +2702,7 @@ export function LabelPrintingStudio({
                         onClick={handleAutoGenerateLayout}
                         className="w-full h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-2 cursor-pointer shadow-sm"
                       >
-                        <Sparkles className="size-4" />
+                        <RiSparklingLine className="size-4" />
                         <span>{isBn ? "স্বয়ংক্রিয় লেবেল তৈরি করুন" : "Auto-Generate Label Layout"}</span>
                       </Button>
 
@@ -4139,7 +4139,7 @@ export function LabelPrintingStudio({
           {/* Built-in System Templates Section */}
           <div className="space-y-2.5">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-indigo-500" />
+              <RiSparklingLine className="size-4 text-indigo-500" />
               <h4 className="text-xs font-extrabold text-foreground">
                 {isBn ? "রেডিমেড প্রফেশনাল টেমপ্লেটসমূহ (Built-in Templates)" : "Ready-Made Professional Templates"}
               </h4>
