@@ -591,11 +591,17 @@ export async function updateBusinessSettingsFn(input: {
     }
   }
 
-  // Lock industry / business_type once selected (owner cannot change industry after initial setup)
+  // Allow setting industry during onboarding or initial setup
   const updatePayload = { ...data };
-  if (business?.business_type && session.role !== "superadmin") {
+  const isInitialSetup = !business?.industry || business?.business_type === "unconfigured" || business?.onboarding_completed === false;
+  if (!isInitialSetup && session.role !== "superadmin") {
     delete updatePayload.business_type;
     delete updatePayload.industry;
+  } else if (data.industry || data.business_type) {
+    const selectedInd = data.industry || data.business_type;
+    updatePayload.industry = selectedInd;
+    updatePayload.business_type = selectedInd;
+    updatePayload.onboarding_completed = true;
   }
 
   await db.collection("businesses").updateOne({ _id: business._id as any }, { $set: updatePayload });
@@ -618,6 +624,10 @@ export async function updateBusinessSettingsFn(input: {
     const userUpdates: Record<string, any> = {};
     if (data.name) userUpdates.business_name = data.name;
     if (data.logo_url !== undefined) userUpdates.logo_url = data.logo_url;
+    if (data.industry || data.business_type) {
+      userUpdates.industry = data.industry || data.business_type;
+      userUpdates.onboarding_completed = true;
+    }
     if (Object.keys(userUpdates).length > 0) {
       await db.collection("users").updateOne(
         { _id: session.userId as any },
@@ -631,7 +641,7 @@ export async function updateBusinessSettingsFn(input: {
       }
     }
   }
-  return { success: true, business: { ...business, ...data } };
+  return { success: true, business: { ...business, ...updatePayload } };
 }
 
 export async function createEmployeeLicenseFn(input: { data: { permissions?: PermissionSet } }) {

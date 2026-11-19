@@ -177,8 +177,8 @@ function groupSales(sales: Sale[]): GroupedSale[] {
         split_bank: splitBank > 0 ? splitBank : undefined,
         payment_status: (s as any).payment_status || ((s as any).payment_accepted ? "accepted" : undefined),
         payment_accepted: Boolean((s as any).payment_accepted || (s as any).payment_status === "accepted"),
-        courier_status: (s as any).courier_status || (s.type === "online" ? "pending" : null),
-        courier_name: (s as any).courier_name || (s.type === "online" ? "Courier" : null),
+        courier_status: s.type === "online" ? ((s as any).courier_status || "pending") : null,
+        courier_name: s.type === "online" ? ((s as any).courier_name || "Courier") : null,
         tracking_code: trackingCode,
         returned: (s as any).returned || false,
         created_at: s.created_at,
@@ -224,12 +224,13 @@ function groupSales(sales: Sale[]): GroupedSale[] {
     const foundTracking = (firstItem as any).tracking_code ||
       items.find(x => (x as any).tracking_code || (x as any).tracking_id || (x as any).consignment_id)?.tracking_code ||
       null;
-    const foundCourierStatus = (firstItem as any).courier_status ||
-      items.find(x => (x as any).courier_status)?.courier_status ||
-      (items.some(x => x.type === "online") ? "pending" : null);
-    const foundCourierName = (firstItem as any).courier_name ||
-      items.find(x => (x as any).courier_name)?.courier_name ||
-      (items.some(x => x.type === "online") ? "Courier" : null);
+    const isOnlineGroup = items.some(x => x.type === "online");
+    const foundCourierStatus = isOnlineGroup
+      ? ((firstItem as any).courier_status || items.find(x => (x as any).courier_status)?.courier_status || "pending")
+      : null;
+    const foundCourierName = isOnlineGroup
+      ? ((firstItem as any).courier_name || items.find(x => (x as any).courier_name)?.courier_name || "Courier")
+      : null;
 
     grouped.push({
       id: cartId ? `cart-${cartId}` : firstItem.id,

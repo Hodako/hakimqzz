@@ -164,7 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const next = data?.user as AuthUser | null;
       if (next) {
         if (!next.industry && typeof window !== "undefined") {
-          next.industry = localStorage.getItem("cw_industry") || "restaurant";
+          const savedInd = localStorage.getItem("cw_industry");
+          if (savedInd) next.industry = savedInd;
         }
         if (next.industry && typeof window !== "undefined") {
           localStorage.setItem("cw_industry", next.industry);
@@ -278,24 +279,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try { qc.clear(); } catch (_) {}
-    try { await logoutFn(); } catch { /* ignore */ }
-    try {
-      const { auth } = await import("@/lib/firebase");
-      const { signOut } = await import("firebase/auth");
-      await signOut(auth);
-    } catch (_) {}
+    // 1. Immediately wipe local auth state and cookies so UI reflects logout instantly
     setUser(null);
     clearAuthProfile();
     setLoading(false);
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("auth_token");
-      window.localStorage.removeItem("cw_active_employee_session");
-      window.localStorage.removeItem("cw_active_session_role");
-      window.localStorage.removeItem("cw_owner_backup_profile");
-      window.localStorage.removeItem("cw_owner_backup_token");
-      window.sessionStorage.removeItem("app_pin_unlocked");
-      window.location.href = "/auth";
+      try {
+        window.localStorage.removeItem("auth_token");
+        window.localStorage.removeItem("active_profile");
+        window.localStorage.removeItem("urobili_active_profile");
+        window.localStorage.removeItem("cw_active_employee_session");
+        window.localStorage.removeItem("cw_active_session_role");
+        window.localStorage.removeItem("cw_owner_backup_profile");
+        window.localStorage.removeItem("cw_owner_backup_token");
+        window.localStorage.removeItem("cw_employee_device_link_id");
+        window.sessionStorage.clear();
+        document.cookie = "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;";
+        document.cookie = "active_profile=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;";
+      } catch (_) {}
+    }
+
+    try { qc.clear(); } catch (_) {}
+
+    // 2. Clear server cookie and Firebase session in parallel with a 2-second safeguard timeout
+    try {
+      await Promise.race([
+        Promise.allSettled([
+          logoutFn(),
+          (async () => {
+            try {
+              const { auth } = await import("@/lib/firebase");
+              const { signOut } = await import("firebase/auth");
+              await signOut(auth);
+            } catch (_) {}
+          })(),
+        ]),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    } catch (_) {}
+
+    // 3. Hard redirect to /auth
+    if (typeof window !== "undefined") {
+      window.location.replace("/auth");
     }
   };
 

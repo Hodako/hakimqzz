@@ -91,19 +91,25 @@ export function OrderInfoDialog({
     order.tracking_code ||
     null;
 
-  // Courier details
+  // Courier & Payment details
+  const isOnline = currentItem.type === "online" || order.type === "online";
+  const isCash = !isOnline && (currentItem.type === "cash" || order.type === "cash" || currentItem.type === "pos" || !currentItem.type);
+  const totalDueAmount = Number(currentItem.due_amount ?? order.due_amount ?? 0);
+  const isPaidInFull = totalDueAmount <= 0;
+
   const courierName =
-    currentItem.courier_name || order.courier_name || "Courier Delivery";
+    isOnline ? (currentItem.courier_name || order.courier_name || "Courier Delivery") : null;
   const courierStatus =
-    currentItem.courier_status || order.courier_status || "pending";
+    isOnline ? (currentItem.courier_status || order.courier_status || "pending") : null;
   const isPending =
+    isOnline &&
     courierStatus !== "collected" &&
     courierStatus !== "cancelled" &&
     !currentItem.returned &&
     !order.returned;
-  const isCollected = courierStatus === "collected";
+  const isCollected = isOnline && courierStatus === "collected";
   const isCancelled =
-    courierStatus === "cancelled" || currentItem.returned || order.returned;
+    currentItem.returned || order.returned || (isOnline && courierStatus === "cancelled");
 
   // Customer details
   const customer =
@@ -252,20 +258,31 @@ export function OrderInfoDialog({
             </div>
 
             <div className="flex items-center gap-1">
-              {isPending ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40 uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 animate-pulse flex items-center gap-1">
-                  <Clock className="size-3" />
-                  <span>{lang === "bn" ? "পেন্ডিং কুরিয়ার" : "Pending"}</span>
-                </span>
-              ) : isCollected ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/40 uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+              {isOnline ? (
+                isPending ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40 uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 animate-pulse flex items-center gap-1">
+                    <Clock className="size-3" />
+                    <span>{lang === "bn" ? "পেন্ডিং কুরিয়ার" : "Pending Courier"}</span>
+                  </span>
+                ) : isCollected ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/40 uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="size-3" />
+                    <span>{lang === "bn" ? "ক্যাশবক্সে জমা" : "Paid & Collected"}</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/40 uppercase bg-rose-500/15 text-rose-800 dark:text-rose-300 line-through flex items-center gap-1">
+                    <XCircle className="size-3" />
+                    <span>{lang === "bn" ? "বাতিলকৃত" : "Cancelled"}</span>
+                  </span>
+                )
+              ) : isPaidInFull ? (
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/40 uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
                   <CheckCircle2 className="size-3" />
-                  <span>{lang === "bn" ? "ক্যাশবক্সে জমা" : "Paid & Collected"}</span>
+                  <span>{lang === "bn" ? "পরিশোধিত (নগদ)" : "Paid in Full"}</span>
                 </span>
               ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/40 uppercase bg-rose-500/15 text-rose-800 dark:text-rose-300 line-through flex items-center gap-1">
-                  <XCircle className="size-3" />
-                  <span>{lang === "bn" ? "বাতিলকৃত" : "Cancelled"}</span>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-500/40 uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                  <span>{lang === "bn" ? `বকেয়া: ৳${totalDueAmount}` : `Due: ৳${totalDueAmount}`}</span>
                 </span>
               )}
             </div>
@@ -411,37 +428,67 @@ export function OrderInfoDialog({
             </div>
           </div>
 
-          {/* Courier & Delivery Method Details */}
-          <div className="p-3 bg-card rounded-xl border border-border/80 space-y-2">
-            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
-              <Truck className="size-3 text-primary" />
-              <span>{lang === "bn" ? "কুরিয়ার ও ডেলিভারি বিবরণ" : "Courier & Delivery Details"}</span>
-            </span>
+          {/* Courier & Delivery Method Details (Online) or Direct POS Payment Details */}
+          {isOnline ? (
+            <div className="p-3 bg-card rounded-xl border border-border/80 space-y-2">
+              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                <Truck className="size-3 text-primary" />
+                <span>{lang === "bn" ? "কুরিয়ার ও ডেলিভারি বিবরণ" : "Courier & Delivery Details"}</span>
+              </span>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "কুরিয়ার সার্ভিস:" : "Courier Service:"}</span>
-                <span className="font-bold text-foreground">{courierName}</span>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "কুরিয়ার সার্ভিস:" : "Courier Service:"}</span>
+                  <span className="font-bold text-foreground">{courierName}</span>
+                </div>
+
+                <div>
+                  <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "ডেলিভারি অবস্থা:" : "Delivery Status:"}</span>
+                  <span className={`font-bold ${
+                    isCollected ? "text-emerald-600" : isCancelled ? "text-rose-600" : "text-amber-600"
+                  }`}>
+                    {isCollected ? (lang === "bn" ? "কালেক্টেড (ক্যাশবক্সে জমা)" : "Collected") :
+                     isCancelled ? (lang === "bn" ? "বাতিলকৃত" : "Cancelled") :
+                     (lang === "bn" ? "কুরিয়ার অপেক্ষমাণ" : "Pending Courier")}
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "ডেলিভারি অবস্থা:" : "Delivery Status:"}</span>
-                <span className={`font-bold ${
-                  isCollected ? "text-emerald-600" : isCancelled ? "text-rose-600" : "text-amber-600"
-                }`}>
-                  {isCollected ? (lang === "bn" ? "কালেক্টেড (ক্যাশবক্সে জমা)" : "Collected") :
-                   isCancelled ? (lang === "bn" ? "বাতিলকৃত" : "Cancelled") :
-                   (lang === "bn" ? "কুরিয়ার অপেক্ষমাণ" : "Pending Courier")}
-                </span>
-              </div>
+              {orderNote && (
+                <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground italic">
+                  <strong>{lang === "bn" ? "নোট / ডেলিভারি ঠিকানা:" : "Note / Address:"}</strong> {orderNote}
+                </div>
+              )}
             </div>
+          ) : (
+            <div className="p-3 bg-card rounded-xl border border-border/80 space-y-2">
+              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="size-3 text-emerald-600" />
+                <span>{lang === "bn" ? "পেমেন্ট ও ক্যাশ বিবরণ" : "Payment & Settlement Details"}</span>
+              </span>
 
-            {orderNote && (
-              <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground italic">
-                <strong>{lang === "bn" ? "নোট / ডেলিভারি ঠিকানা:" : "Note / Address:"}</strong> {orderNote}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "পেমেন্ট মাধ্যম:" : "Payment Method:"}</span>
+                  <span className="font-bold text-foreground uppercase">{currentItem.type || order.type || "CASH"}</span>
+                </div>
+
+                <div>
+                  <span className="text-[10.5px] text-muted-foreground block">{lang === "bn" ? "পেমেন্ট স্ট্যাটাস:" : "Payment Status:"}</span>
+                  <span className="font-bold text-emerald-600">
+                    {isPaidInFull ? (lang === "bn" ? "✓ সম্পূর্ণ পরিশোধিত (ক্যাশবক্সে জমা)" : "✓ Paid in Full (Deposited in Cashbox)") :
+                     (lang === "bn" ? `বকেয়া: ৳${totalDueAmount}` : `Due: ৳${totalDueAmount}`)}
+                  </span>
+                </div>
               </div>
-            )}
-          </div>
+
+              {orderNote && (
+                <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground italic">
+                  <strong>{lang === "bn" ? "নোট:" : "Note:"}</strong> {orderNote}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Direct Action Buttons Footer */}

@@ -7,10 +7,10 @@ import * as adminActions from "@/lib/rpc-admin-actions";
 
 export const dynamic = "force-dynamic";
 
-// Merge user actions and admin actions
+// Merge user actions and admin actions (user actions take precedence)
 const allActions: Record<string, Function> = {
-  ...actions,
   ...adminActions,
+  ...actions,
 };
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10MB payload limit

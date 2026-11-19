@@ -175,6 +175,15 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string, ov
   const rawBizLogo = (business?.logo_url as string) || "";
   const resolvedLogoUrl = rawBizLogo && rawBizLogo !== "/logo.png" ? rawBizLogo : (isDefaultBrandName ? "/logo.png" : "");
 
+  const resolvedIndustry =
+    (business?.industry as string) ||
+    (business?.business_type && !["retail", "unconfigured"].includes(business.business_type) ? (business.business_type as string) : "") ||
+    (user?.industry as string) ||
+    "";
+  const isOnboardingDone = business?.onboarding_completed !== undefined
+    ? Boolean(business.onboarding_completed)
+    : Boolean(resolvedIndustry);
+
   return {
     id: user._id as any as string,
     email: user.email as string,
@@ -199,7 +208,8 @@ async function mapUser(db: Awaited<ReturnType<typeof getDb>>, userId: string, ov
     subscription_expires_at: (business?.subscription_expires_at as string) || "",
     sms_credits: Number(business?.sms_credits ?? 0),
     admin_whatsapp: adminWhatsapp,
-    industry: (business?.business_type as string) || (business?.industry as string) || (user?.industry as string) || "retail",
+    industry: resolvedIndustry,
+    onboarding_completed: isOnboardingDone,
     module_config: (business?.module_config as any) || null,
   };
 }
@@ -408,7 +418,9 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     owner_id: userId,
     name: shopName,
     logo_url: "/logo.png",
-    business_type: "retail",
+    business_type: "unconfigured",
+    industry: null,
+    onboarding_completed: false,
     theme: "green",
     status: "active",
     sms_credits: 0,
@@ -431,6 +443,8 @@ export async function registerFn(input: { data: { email?: string; phone?: string
     owner_id: userId,
     activated: true,
     status: "active",
+    industry: null,
+    onboarding_completed: false,
     created_at: now,
     updated_at: now,
   });
@@ -503,7 +517,9 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       owner_id: userId,
       name: shopName,
       logo_url: data.photoUrl || "/logo.png",
-      business_type: "retail",
+      business_type: "unconfigured",
+      industry: null,
+      onboarding_completed: false,
       theme: "green",
       status: "active",
       sms_credits: 0,
@@ -523,6 +539,8 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
       business_id: businessId,
       status: "active",
       activated: true,
+      industry: null,
+      onboarding_completed: false,
       created_at: now,
       updated_at: now,
     } as any);
@@ -536,9 +554,66 @@ export async function firebaseAuthSyncFn(input: { data: { email: string; fullNam
 }
 
 export async function logoutFn() {
-  const cookieStore = await cookies();
-  cookieStore.delete("token");
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete("token");
+    cookieStore.delete("active_profile");
+  } catch (_) {}
   return { success: true };
+}
+
+export async function updateBusinessSettingsFn(input: { data: any }) {
+  const session = await requireSession();
+  const db = await getDb();
+  const { data = {} }: any = input ?? {};
+  const updatePayload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.name !== undefined) updatePayload.name = sanitizeInput(data.name);
+  if (data.business_name !== undefined) updatePayload.name = sanitizeInput(data.business_name);
+  if (data.logo_url !== undefined) updatePayload.logo_url = data.logo_url;
+  if (data.tagline !== undefined) updatePayload.tagline = sanitizeInput(data.tagline);
+  if (data.industry !== undefined) {
+    updatePayload.industry = data.industry;
+    updatePayload.business_type = data.industry;
+  }
+  if (data.business_type !== undefined) {
+    updatePayload.business_type = data.business_type;
+    updatePayload.industry = data.business_type;
+  }
+  if (data.address !== undefined) updatePayload.address = sanitizeInput(data.address);
+  if (data.phone_numbers !== undefined) updatePayload.phone_numbers = data.phone_numbers;
+  if (data.emails !== undefined) updatePayload.emails = data.emails;
+  if (data.invoice_page_size !== undefined) updatePayload.invoice_page_size = data.invoice_page_size;
+  if (data.invoice_terms !== undefined) updatePayload.invoice_terms = data.invoice_terms;
+  if (data.module_config !== undefined) updatePayload.module_config = data.module_config;
+
+  updatePayload.onboarding_completed = true;
+
+  await db.collection("businesses").updateOne(
+    { $or: [{ _id: session.businessId as any }, { owner_id: session.ownerId }, { owner_id: session.userId }] },
+    { $set: updatePayload }
+  );
+
+  if (data.industry) {
+    await db.collection("users").updateOne(
+      { _id: session.userId as any },
+      { $set: { industry: data.industry, onboarding_completed: true, updated_at: new Date().toISOString() } }
+    );
+  }
+
+  const mapped = await mapUser(db, session.userId);
+  return { success: true, user: mapped };
+}
+
+export async function getBusinessSettingsFn() {
+  const session = await requireSession();
+  const db = await getDb();
+  const business = await db.collection("businesses").findOne({
+    $or: [{ _id: session.businessId as any }, { owner_id: session.ownerId }, { owner_id: session.userId }],
+  });
+  return business ? { ...business, id: business._id as any as string } : null;
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

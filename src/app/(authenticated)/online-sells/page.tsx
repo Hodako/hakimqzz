@@ -86,9 +86,9 @@ export default function OnlineSellsPage() {
     }
   }, []);
 
-  // Filter for online sales only (includes sales with courier status or tracking code)
+  // Filter for online sales only (strictly online courier orders)
   const onlineSales = useMemo(() => {
-    return (data ?? []).filter((s) => s.type === "online" || Boolean((s as any).tracking_code) || Boolean((s as any).courier_status));
+    return (data ?? []).filter((s) => s.type === "online");
   }, [data]);
 
   // Group by cart_id if multi-item cart

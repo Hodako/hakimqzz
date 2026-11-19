@@ -93,19 +93,24 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (mounted && !loading) {
-      if (user && !onboardingUser) {
-        const hasCompletedOnboarding = typeof window !== "undefined" && (
-          localStorage.getItem("cw_onboarding_completed") === "true" ||
-          !!localStorage.getItem("cw_industry")
-        );
+      if (onboardingUser) {
+        return;
+      }
+      if (user) {
         const effectiveIndustry =
           user.industry ||
-          (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant");
+          (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "" : "");
+        const hasCompletedOnboarding = typeof window !== "undefined" && (
+          localStorage.getItem("cw_onboarding_completed") === "true"
+        );
+        const isConfigured = Boolean(effectiveIndustry && hasCompletedOnboarding && (user as any).onboarding_completed !== false);
 
-        if (user.industry || hasCompletedOnboarding) {
+        if (isConfigured) {
           router.replace(effectiveIndustry === "restaurant" ? "/restaurant" : "/dashboard");
-        } else {
+        } else if (user.role === "owner") {
           setOnboardingUser(user);
+        } else {
+          router.replace("/dashboard");
         }
       }
     }
@@ -123,15 +128,16 @@ export default function AuthPage() {
       sessionStorage.removeItem("app_pin_unlocked");
     }
     login(u, token);
-    const hasCompletedOnboarding = typeof window !== "undefined" && (
-      localStorage.getItem("cw_onboarding_completed") === "true" ||
-      !!localStorage.getItem("cw_industry")
-    );
+
     const effectiveIndustry =
       u.industry ||
-      (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant");
+      (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "" : "");
+    const hasCompletedOnboarding = typeof window !== "undefined" && (
+      localStorage.getItem("cw_onboarding_completed") === "true"
+    );
+    const isConfigured = Boolean(effectiveIndustry && hasCompletedOnboarding && (u as any).onboarding_completed !== false);
 
-    if (u.role === "owner" && !u.industry && !hasCompletedOnboarding) {
+    if (u.role === "owner" && !isConfigured) {
       setOnboardingUser(u);
     } else {
       router.replace(effectiveIndustry === "restaurant" ? "/restaurant" : "/dashboard");
@@ -146,21 +152,24 @@ export default function AuthPage() {
     }
     setOnboardingBusy(true);
     try {
+      const selectedInd = shopIndustry || "restaurant";
       if (typeof window !== "undefined") {
         localStorage.setItem("cw_onboarding_completed", "true");
-        localStorage.setItem("cw_industry", shopIndustry || "restaurant");
+        localStorage.setItem("cw_industry", selectedInd);
       }
       const payload = {
         name: shopName.trim(),
         business_name: shopName.trim(),
         logo_url: shopLogo.trim() || "/urobili-logo.png",
         tagline: shopTagline.trim() || undefined,
-        industry: shopIndustry || "restaurant",
+        industry: selectedInd,
+        business_type: selectedInd,
         address: shopAddress.trim() || undefined,
+        onboarding_completed: true,
       };
 
       await updateBusinessSettingsFn({ data: payload });
-      updateUser(payload);
+      updateUser({ ...payload, industry: selectedInd, onboarding_completed: true } as any);
 
       toast.success(
         lang === "bn"
@@ -168,11 +177,11 @@ export default function AuthPage() {
           : `${shopName.trim()} profile configured successfully!`
       );
       setOnboardingUser(null);
-      router.replace(shopIndustry === "restaurant" ? "/restaurant" : "/dashboard");
+      router.replace(selectedInd === "restaurant" ? "/restaurant" : "/dashboard");
     } catch (err: any) {
       toast.error(err?.message || "Profile update failed");
       setOnboardingUser(null);
-      router.replace("/dashboard");
+      router.replace(shopIndustry === "restaurant" ? "/restaurant" : "/dashboard");
     } finally {
       setOnboardingBusy(false);
     }
@@ -255,8 +264,12 @@ export default function AuthPage() {
 
       toast.success(lang === "bn" ? "দোকান মালিক অ্যাকাউন্ট তৈরি হয়েছে!" : "Shop Owner account created successfully!");
       const u = data.user as AuthUser;
-      login(u, data.token);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("cw_onboarding_completed");
+        localStorage.removeItem("cw_industry");
+      }
       setOnboardingUser(u);
+      login(u, data.token);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Registration failed");
     } finally {

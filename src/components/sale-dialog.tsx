@@ -636,13 +636,25 @@ export function SaleDialog({
             return `${p?.name || "Item"} ×${l.qty}`;
           })
           .join(", ");
+
+        const isCashSale = type === "cash" || !type;
+        const paidNum = isCashSale
+          ? Math.round(sellTotal)
+          : type === "credit"
+          ? Math.round(Number(paid) || 0)
+          : Math.round(sellTotal);
+        const dueNum = isCashSale ? 0 : Math.max(0, Math.round(sellTotal - paidNum));
+
         void sendDesktopWhatsAppIfAuto(type === "online" ? "online" : "sale", {
           phone: waPhone,
           shopName: user?.business_name,
           customerName: waCust?.name || "Customer",
           itemsSummary,
           amount: Math.round(sellTotal),
-          trackingCode: trackingCode || null,
+          paidAmount: paidNum,
+          dueAmount: dueNum,
+          paymentType: type,
+          trackingCode: type === "online" ? (trackingCode || null) : null,
         });
       }
 
@@ -778,14 +790,14 @@ export function SaleDialog({
           <DialogHeader className="px-5 pt-4 pb-3 shrink-0 border-b border-border/80 bg-card flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                {presetType === "online" || type === "online" ? <Truck className="size-4" /> : <ShoppingCart className="size-4" />}
+                {type === "online" ? <Truck className="size-4" /> : <ShoppingCart className="size-4" />}
               </div>
               <div>
                 <DialogTitle className="text-base font-bold">
-                  {presetType === "online" || type === "online" ? (lang === "bn" ? "নতুন অনলাইন কুরিয়ার অর্ডার" : "New Online Courier Order") : t("new_sale")}
+                  {type === "online" ? (lang === "bn" ? "নতুন অনলাইন কুরিয়ার অর্ডার" : "New Online Courier Order") : t("new_sale")}
                 </DialogTitle>
                 <p className="text-[11px] text-muted-foreground hidden sm:block">
-                  {presetType === "online" || type === "online"
+                  {type === "online"
                     ? (lang === "bn" ? "কুরিয়ার ক্যাশ অন ডেলিভারি সেলস এন্ট্রি" : "Courier Cash on Delivery Order")
                     : (lang === "bn" ? "দ্রুত বিক্রয় ও ইনভয়েস জেনারেশন" : "Fast POS Checkout & Invoice Generation")}
                 </p>
@@ -866,7 +878,7 @@ export function SaleDialog({
             >
               <div className="md:col-span-7 lg:col-span-6 space-y-3.5 min-w-0">
                 {/* Payment Method Selector or Courier Delivery Panel */}
-                {presetType === "online" || type === "online" ? (
+                {type === "online" ? (
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">

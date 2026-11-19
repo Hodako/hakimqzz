@@ -14,8 +14,14 @@ export default function IndexPage() {
     if (!loading && user) {
       const industry =
         user.industry ||
-        (typeof window !== "undefined" ? localStorage.getItem("cw_industry") || "restaurant" : "restaurant");
-      router.replace(industry === "restaurant" ? "/restaurant" : "/dashboard");
+        (typeof window !== "undefined" ? localStorage.getItem("cw_industry") : "");
+      const isConfigured = Boolean(industry && (user as any).onboarding_completed !== false);
+
+      if (isConfigured) {
+        router.replace(industry === "restaurant" ? "/restaurant" : "/dashboard");
+      } else {
+        router.replace("/auth");
+      }
     }
   }, [user, loading, router]);
 

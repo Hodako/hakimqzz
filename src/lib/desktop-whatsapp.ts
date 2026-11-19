@@ -76,15 +76,19 @@ export function buildOrderWhatsAppMessage(params: {
   customerName?: string;
   itemsSummary?: string;
   amount?: number;
+  paidAmount?: number;
+  dueAmount?: number;
+  paymentType?: string;
   trackingCode?: string | null;
   status?: string;
   type?: "sale" | "online" | "tracking";
 }): string {
   const shop = params.shopName || "Dream Fashion";
   const cust = params.customerName || "Customer";
+
   if (params.type === "tracking") {
     return [
-      `*${shop}* — Order Update`,
+      `*${shop}* — Order Tracking Update`,
       `Hello ${cust},`,
       params.trackingCode ? `Tracking Code: *${params.trackingCode}*` : "",
       params.status ? `Courier Status: *${params.status}*` : "",
@@ -93,13 +97,34 @@ export function buildOrderWhatsAppMessage(params: {
     ].filter(Boolean).join("\n");
   }
 
+  if (params.type === "online") {
+    return [
+      `*${shop}* — Online Order Confirmed`,
+      `Hello ${cust},`,
+      params.itemsSummary ? `Items: ${params.itemsSummary}` : "",
+      params.amount !== undefined ? `Total Bill: *৳${params.amount}*` : "",
+      `Payment: *Cash on Delivery (COD)*`,
+      params.trackingCode ? `Courier Tracking: *${params.trackingCode}*` : "",
+      `Thank you for shopping with ${shop}!`,
+    ].filter(Boolean).join("\n");
+  }
+
+  // Direct In-Store Sale (Cash / POS / Split / Due)
+  const isCash = !params.paymentType || params.paymentType === "cash" || params.paymentType === "pos";
+  const due = Number(params.dueAmount || 0);
+  const paid = params.paidAmount !== undefined ? params.paidAmount : (due <= 0 ? params.amount : (params.amount ? params.amount - due : 0));
+  const isPaidInFull = due <= 0;
+
   return [
-    `*${shop}* — Order Confirmed`,
+    `*${shop}* — Sales Receipt`,
     `Hello ${cust},`,
-    params.itemsSummary ? `Items: ${params.itemsSummary}` : "",
-    params.amount !== undefined ? `Total: *৳${params.amount}*` : "",
-    params.trackingCode ? `SteadFast Tracking: *${params.trackingCode}*` : "",
-    `Thank you for shopping with ${shop}!`,
+    params.itemsSummary ? `Purchased: ${params.itemsSummary}` : "",
+    params.amount !== undefined ? `Total Bill: *৳${params.amount}*` : "",
+    isPaidInFull
+      ? `Payment Status: *✓ PAID IN FULL (${isCash ? "CASH" : (params.paymentType || "PAID").toUpperCase()})*`
+      : `Payment Status: *PARTIAL (Due: ৳${due})*`,
+    isPaidInFull ? `Amount Paid: *৳${paid || params.amount || 0}*` : `Paid: ৳${paid} · Due: ৳${due}`,
+    `Thank you for your purchase at ${shop}!`,
   ].filter(Boolean).join("\n");
 }
 
@@ -134,6 +159,9 @@ export async function sendDesktopWhatsAppIfAuto(
     customerName?: string;
     itemsSummary?: string;
     amount?: number;
+    paidAmount?: number;
+    dueAmount?: number;
+    paymentType?: string;
     trackingCode?: string | null;
     status?: string;
   }
