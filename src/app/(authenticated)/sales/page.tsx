@@ -47,6 +47,8 @@ import {
   RefreshCw,
   Split,
   Info,
+  MapPin,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn, approveCourierPaymentFn, cancelCourierOrderFn, acceptDigitalPaymentFn, toggleGoogleSheetsSyncFn, bulkExportToGoogleSheetsFn } from "@/lib/rpc";
@@ -1607,12 +1609,87 @@ function SalesTab({
             {/* Revealable Action & Details Drawer */}
             {expanded && (
               <div className="px-3 pb-3 pt-1 border-t-[0.5px] border-black/40 dark:border-white/20 space-y-2.5 bg-muted/10 rounded-b-xl animate-in fade-in-50 duration-150 font-balooda">
-                {/* Note / Remarks if any */}
-                {(s as any).note && (
+                {/* Note / Remarks if any (skip if address note is parsed below) */}
+                {(s as any).note && !(s as any).note.startsWith("Address:") && !(s as any).recipient_address && (
                   <p className="text-[11px] text-muted-foreground bg-muted/40 px-2.5 py-1 rounded border-[0.5px] border-black/20 dark:border-white/20">
                     <strong className="text-foreground">{lang === "bn" ? "নোট:" : "Note:"}</strong> {(s as any).note}
                   </p>
                 )}
+
+                {/* Customer Location & Delivery Details Card (Unfolded View) */}
+                {(() => {
+                  const recName = (s as any).recipient_name || s.parties?.name;
+                  const recPhone = (s as any).recipient_phone || (s.parties as any)?.phone;
+                  let recAddr = (s as any).recipient_address || (s.parties as any)?.address || "";
+                  let deliveryNote = "";
+                  if ((s as any).note && typeof (s as any).note === "string") {
+                    if ((s as any).note.includes("Address:") && !recAddr) {
+                      const match = (s as any).note.match(/Address:\s*([^|]+)/);
+                      if (match) recAddr = match[1].trim();
+                    }
+                    if ((s as any).note.includes("Note:")) {
+                      const match = (s as any).note.match(/Note:\s*(.+)/);
+                      if (match) deliveryNote = match[1].trim();
+                    } else if (!(s as any).note.startsWith("Address:")) {
+                      deliveryNote = (s as any).note;
+                    }
+                  }
+
+                  if (!recName && !recPhone && !recAddr && !deliveryNote && s.type !== "online") return null;
+                  if (!recName && !recPhone && !recAddr && !deliveryNote) return null;
+
+                  return (
+                    <div className="p-2 sm:p-2.5 bg-background/90 rounded-xl border border-border/80 space-y-1.5 shadow-2xs font-balooda">
+                      <div className="flex items-center justify-between text-xs font-bold pb-1 border-b border-border/50">
+                        <span className="flex items-center gap-1.5 text-foreground">
+                          <MapPin className="size-3.5 text-purple-600" />
+                          <span>{lang === "bn" ? "ডেলিভারি লোকেশন ও গ্রাহক তথ্য:" : "Customer Location & Delivery Details:"}</span>
+                        </span>
+                        {recPhone && (
+                          <a
+                            href={`tel:${recPhone.replace(/[^0-9+]/g, "")}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[11px] font-mono text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <Phone className="size-3" />
+                            <span>{recPhone}</span>
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                        {recName && (
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "প্রাপকের নাম:" : "Recipient Name:"}</span>
+                            <span className="font-semibold text-foreground">{recName}</span>
+                          </div>
+                        )}
+                        {recPhone && (
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ফোন নম্বর:" : "Phone:"}</span>
+                            <span className="font-mono font-medium text-foreground">{recPhone}</span>
+                          </div>
+                        )}
+                        {recAddr && (
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "সম্পূর্ণ ডেলিভারি ঠিকানা:" : "Full Delivery Address:"}</span>
+                            <span className="font-medium text-foreground bg-muted/40 p-1.5 rounded-lg block border border-border/40 text-[11px] leading-relaxed">
+                              {recAddr}
+                            </span>
+                          </div>
+                        )}
+                        {deliveryNote && (
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ডেলিভারি নোট / নির্দেশনা:" : "Delivery Note:"}</span>
+                            <span className="font-medium text-amber-700 dark:text-amber-300 text-[11px] italic">
+                              {deliveryNote}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Inline Courier Delivery Info & Approval Actions if Online Sale */}
                 {s.type === "online" && (

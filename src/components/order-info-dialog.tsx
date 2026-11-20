@@ -118,14 +118,41 @@ export function OrderInfoDialog({
     currentItem.customer ||
     order.customer ||
     null;
-  const custName =
-    customer?.name || (lang === "bn" ? "সাধারণ কাস্টমার" : "Online Customer");
-  const custPhone = customer?.phone || currentItem.phone || order.phone || "";
-  const custAddress =
-    customer?.address || currentItem.address || order.address || "";
-
   // Note
   const orderNote = currentItem.note || order.note || "";
+  let custAddress =
+    currentItem.recipient_address ||
+    order.recipient_address ||
+    customer?.address ||
+    currentItem.address ||
+    order.address ||
+    "";
+  let deliveryNote = "";
+  if (orderNote && typeof orderNote === "string") {
+    if (orderNote.includes("Address:") && !custAddress) {
+      const match = orderNote.match(/Address:\s*([^|]+)/);
+      if (match) custAddress = match[1].trim();
+    }
+    if (orderNote.includes("Note:")) {
+      const match = orderNote.match(/Note:\s*(.+)/);
+      if (match) deliveryNote = match[1].trim();
+    } else if (!orderNote.startsWith("Address:")) {
+      deliveryNote = orderNote;
+    }
+  }
+
+  const custName =
+    currentItem.recipient_name ||
+    order.recipient_name ||
+    customer?.name ||
+    (lang === "bn" ? "সাধারণ কাস্টমার" : "Online Customer");
+  const custPhone =
+    currentItem.recipient_phone ||
+    order.recipient_phone ||
+    customer?.phone ||
+    currentItem.phone ||
+    order.phone ||
+    "";
 
   // Financial calculations for current selected custom order
   const itemQty = Number(currentItem.qty) || 1;
@@ -454,11 +481,15 @@ export function OrderInfoDialog({
                 </div>
               </div>
 
-              {orderNote && (
+              {deliveryNote ? (
                 <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground italic">
-                  <strong>{lang === "bn" ? "নোট / ডেলিভারি ঠিকানা:" : "Note / Address:"}</strong> {orderNote}
+                  <strong>{lang === "bn" ? "ডেলিভারি নোট:" : "Delivery Note:"}</strong> {deliveryNote}
                 </div>
-              )}
+              ) : orderNote ? (
+                <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground italic">
+                  <strong>{lang === "bn" ? "নোট:" : "Note:"}</strong> {orderNote}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="p-3 bg-card rounded-xl border border-border/80 space-y-2">

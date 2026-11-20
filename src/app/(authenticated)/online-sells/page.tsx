@@ -33,6 +33,8 @@ import {
   RefreshCw,
   ShieldCheck,
   Send,
+  MapPin,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -700,7 +702,7 @@ export default function OnlineSellsPage() {
                           <Truck className="size-3.5 text-purple-600 shrink-0" />
                           <span className="font-bold text-purple-900 dark:text-purple-200">{item.courier_name || "Courier Delivery"}</span>
                           {item.tracking_code && (
-                            <span className="font-mono text-[10px] bg-background text-foreground px-1.5 py-0.2 rounded border-[0.5px] border-black/30 dark:border-white/30">
+                            <span className="font-mono text-[10px] bg-background text-foreground px-1.5 py-0.2 rounded border-[0.5px] border-black/30 dark:border-white/30 font-bold">
                               ID: {item.tracking_code}
                             </span>
                           )}
@@ -712,11 +714,85 @@ export default function OnlineSellsPage() {
                         </div>
 
                         {item.note && (
-                          <span className="text-[10.5px] text-muted-foreground italic">
+                          <span className="text-[10.5px] text-muted-foreground italic truncate max-w-xs">
                             {item.note}
                           </span>
                         )}
                       </div>
+
+                      {/* Customer Location & Delivery Details Card (Unfolded View) */}
+                      {(() => {
+                        const recName = (item as any).recipient_name || item.parties?.name;
+                        const recPhone = (item as any).recipient_phone || (item.parties as any)?.phone;
+                        let recAddr = (item as any).recipient_address || (item.parties as any)?.address || "";
+                        let deliveryNote = "";
+                        if (item.note && typeof item.note === "string") {
+                          if (item.note.includes("Address:") && !recAddr) {
+                            const match = item.note.match(/Address:\s*([^|]+)/);
+                            if (match) recAddr = match[1].trim();
+                          }
+                          if (item.note.includes("Note:")) {
+                            const match = item.note.match(/Note:\s*(.+)/);
+                            if (match) deliveryNote = match[1].trim();
+                          } else if (!item.note.startsWith("Address:")) {
+                            deliveryNote = item.note;
+                          }
+                        }
+
+                        if (!recName && !recPhone && !recAddr && !deliveryNote) return null;
+
+                        return (
+                          <div className="p-2 sm:p-2.5 bg-background/90 rounded-xl border border-border/80 space-y-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between text-xs font-bold pb-1 border-b border-border/50">
+                              <span className="flex items-center gap-1.5 text-foreground font-hind">
+                                <MapPin className="size-3.5 text-purple-600" />
+                                <span>{lang === "bn" ? "ডেলিভারি লোকেশন ও গ্রাহক তথ্য:" : "Customer Location & Delivery Details:"}</span>
+                              </span>
+                              {recPhone && (
+                                <a
+                                  href={`tel:${recPhone.replace(/[^0-9+]/g, "")}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[11px] font-mono text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                                >
+                                  <Phone className="size-3" />
+                                  <span>{recPhone}</span>
+                                </a>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                              {recName && (
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "প্রাপকের নাম:" : "Recipient Name:"}</span>
+                                  <span className="font-semibold text-foreground">{recName}</span>
+                                </div>
+                              )}
+                              {recPhone && (
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ফোন নম্বর:" : "Phone:"}</span>
+                                  <span className="font-mono font-medium text-foreground">{recPhone}</span>
+                                </div>
+                              )}
+                              {recAddr && (
+                                <div className="sm:col-span-2">
+                                  <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "সম্পূর্ণ ডেলিভারি ঠিকানা:" : "Full Delivery Address:"}</span>
+                                  <span className="font-medium text-foreground bg-muted/40 p-1.5 rounded-lg block border border-border/40 text-[11px] leading-relaxed">
+                                    {recAddr}
+                                  </span>
+                                </div>
+                              )}
+                              {deliveryNote && (
+                                <div className="sm:col-span-2">
+                                  <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ডেলিভারি নোট / নির্দেশনা:" : "Delivery Note:"}</span>
+                                  <span className="font-medium text-amber-700 dark:text-amber-300 text-[11px] italic">
+                                    {deliveryNote}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Multi-Item Breakdown List if Group */}
                       {item.items.length > 1 && (

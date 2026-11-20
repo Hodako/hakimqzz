@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { FAB } from "@/components/ui/fab";
 import { SaleDialog } from "@/components/sale-dialog";
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
-import { getActiveEmployeeSession } from "@/lib/employee-session";
+import { OrderInfoDialog } from "@/components/order-info-dialog";
 import {
   RotateCcw,
   Search,
@@ -46,12 +46,16 @@ import {
   CloudUpload,
   RefreshCw,
   Split,
+  Info,
+  MapPin,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createReturnFn, deleteSaleFn, approveCourierPaymentFn, cancelCourierOrderFn, acceptDigitalPaymentFn, toggleGoogleSheetsSyncFn, bulkExportToGoogleSheetsFn } from "@/lib/rpc";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
 import { executeDirectSilentPrint } from "@/lib/pos-print";
+import { playScanSuccessSound, playErrorSound } from "@/lib/audio";
 import { useAuth } from "@/hooks/use-auth";
 import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import {
@@ -82,6 +86,7 @@ interface GroupedSale {
   tracking_code?: string | null;
   returned?: boolean;
   created_at: string;
+  _ts: number;
   parties?: { name: string } | null;
   items: Sale[];
 }
@@ -122,6 +127,15 @@ function isPartialOrSplitSale(s: Sale | GroupedSale): boolean {
   return false;
 }
 
+function parseSaleTimestamp(dateInput: any): number {
+  if (!dateInput) return 0;
+  if (typeof dateInput === "number") return dateInput;
+  if (typeof dateInput?.toDate === "function") return dateInput.toDate().getTime();
+  if (dateInput?.seconds !== undefined) return dateInput.seconds * 1000;
+  const t = typeof dateInput === "string" ? Date.parse(dateInput) : new Date(dateInput).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
 function groupSales(sales: Sale[]): GroupedSale[] {
   const grouped: GroupedSale[] = [];
   const cartGroups: Record<string, Sale[]> = {};
@@ -145,8 +159,9 @@ function groupSales(sales: Sale[]): GroupedSale[] {
       const splitCash = Number((s as any).split_cash) || 0;
       const splitBkash = Number((s as any).split_bkash) || 0;
       const splitBank = Number((s as any).split_bank) || 0;
-      const isOnlineSale = s.type === "online" || Boolean((s as any).courier_name) || Boolean((s as any).courier_status);
-      const isSplitNonCart = !isOnlineSale && (s.type === "split" || (s.type as string) === "partial" || (splitCash > 0 || splitBkash > 0 || splitBank > 0));
+      const isSplitNonCart = s.type === "split" || (s.type as string) === "partial" || (splitCash > 0 || splitBkash > 0 || splitBank > 0);
+
+      const trackingCode = (s as any).tracking_code || (s as any).tracking_id || (s as any).consignment_id || null;
 
       grouped.push({
         id: s.id,
@@ -158,17 +173,18 @@ function groupSales(sales: Sale[]): GroupedSale[] {
         profit: profit,
         due_amount: Number(s.due_amount) || 0,
         paid_amount: Number(s.paid_amount) || 0,
-        type: isOnlineSale ? "online" : (isSplitNonCart ? "split" : (s.type || "cash")),
+        type: isSplitNonCart ? "split" : (s.type || "cash"),
         split_cash: splitCash > 0 ? splitCash : undefined,
         split_bkash: splitBkash > 0 ? splitBkash : undefined,
         split_bank: splitBank > 0 ? splitBank : undefined,
         payment_status: (s as any).payment_status || ((s as any).payment_accepted ? "accepted" : undefined),
         payment_accepted: Boolean((s as any).payment_accepted || (s as any).payment_status === "accepted"),
-        courier_status: (s as any).courier_status || (s.type === "online" ? "pending" : null),
-        courier_name: (s as any).courier_name || (s.type === "online" ? "Courier" : null),
-        tracking_code: (s as any).tracking_code || null,
+        courier_status: s.type === "online" ? ((s as any).courier_status || "pending") : null,
+        courier_name: s.type === "online" ? ((s as any).courier_name || "Courier") : null,
+        tracking_code: trackingCode,
         returned: (s as any).returned || false,
         created_at: s.created_at,
+        _ts: parseSaleTimestamp(s.created_at),
         parties: s.parties,
         items: [s],
       });
@@ -204,12 +220,22 @@ function groupSales(sales: Sale[]): GroupedSale[] {
     const paymentStatus = isAnyAccepted ? "accepted" : (firstItem as any).payment_status;
 
     const names = items.map(x => `${x.product_name} (×${x.qty})`).join(", ");
-    const isOnlineGroup = items.some(x => x.type === "online" || Boolean((x as any).courier_name) || Boolean((x as any).courier_status));
-    const isSplitGroup = !isOnlineGroup && ((totalSplitCash > 0 || totalSplitBkash > 0 || totalSplitBank > 0) ||
-      items.some(x => x.type === "split" || (x.type as string) === "partial"));
+    const isSplitGroup = (totalSplitCash > 0 || totalSplitBkash > 0 || totalSplitBank > 0) ||
+      items.some(x => x.type === "split" || (x.type as string) === "partial");
+
+    const foundTracking = (firstItem as any).tracking_code ||
+      items.find(x => (x as any).tracking_code || (x as any).tracking_id || (x as any).consignment_id)?.tracking_code ||
+      null;
+    const isOnlineGroup = items.some(x => x.type === "online");
+    const foundCourierStatus = isOnlineGroup
+      ? ((firstItem as any).courier_status || items.find(x => (x as any).courier_status)?.courier_status || "pending")
+      : null;
+    const foundCourierName = isOnlineGroup
+      ? ((firstItem as any).courier_name || items.find(x => (x as any).courier_name)?.courier_name || "Courier")
+      : null;
 
     grouped.push({
-      id: firstItem.id,
+      id: cartId ? `cart-${cartId}` : firstItem.id,
       isGroup: true,
       cart_id: cartId,
       product_name: names,
@@ -218,39 +244,29 @@ function groupSales(sales: Sale[]): GroupedSale[] {
       profit: totalProfit,
       due_amount: totalDue,
       paid_amount: totalPaid,
-      type: isOnlineGroup ? "online" : (isSplitGroup ? "split" : (firstItem.type || "cash")),
+      type: isSplitGroup ? "split" : (firstItem.type || "cash"),
       split_cash: totalSplitCash > 0 ? totalSplitCash : undefined,
       split_bkash: totalSplitBkash > 0 ? totalSplitBkash : undefined,
       split_bank: totalSplitBank > 0 ? totalSplitBank : undefined,
       payment_status: paymentStatus,
       payment_accepted: isAnyAccepted,
-      courier_status: (firstItem as any).courier_status || (isOnlineGroup ? "pending" : null),
-      courier_name: (firstItem as any).courier_name || (isOnlineGroup ? "Courier" : null),
-      tracking_code: (firstItem as any).tracking_code || null,
+      courier_status: foundCourierStatus,
+      courier_name: foundCourierName,
+      tracking_code: foundTracking,
       returned: (firstItem as any).returned || false,
       created_at: firstItem.created_at,
+      _ts: parseSaleTimestamp(firstItem.created_at),
       parties: firstItem.parties,
       items: items,
     });
   });
 
-  function parseSaleDate(dateInput: any): Date {
-    if (!dateInput) return new Date(0);
-    if (typeof dateInput?.toDate === "function") return dateInput.toDate();
-    if (dateInput?.seconds !== undefined) return new Date(dateInput.seconds * 1000);
-    const d = new Date(dateInput);
-    return !isNaN(d.getTime()) ? d : new Date(0);
-  }
-
-  grouped.sort((a, b) => parseSaleDate(b.created_at).getTime() - parseSaleDate(a.created_at).getTime());
+  grouped.sort((a, b) => b._ts - a._ts);
   return grouped;
 }
 
 export default function SalesPage() {
   const { lang, t } = useT();
-  const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
-  const isEmployee = isEmployeeRole;
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { data: rawSales = [] } = useCachedQuery(["sales"], getSales);
@@ -258,18 +274,137 @@ export default function SalesPage() {
   const { data: biz, refetch: refetchBiz } = useCachedQuery(["business-settings"], getBusinessSettingsFn);
 
   const [open, setOpen] = useState(false);
+  const [scannedPresetProductId, setScannedPresetProductId] = useState<string | undefined>(undefined);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [activeTab, setActiveTab] = useState("all");
-  const [dateRange, setDateRange] = useState<"today" | "yesterday" | "week" | "month" | "all" | "custom">("all");
+  const [dateRange, setDateRange] = useState<"today" | "yesterday" | "week" | "month" | "all" | "custom">("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [page, setPage] = useState(1);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const pageSize = isMobile ? 12 : 20;
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const q = p.get("search") || p.get("tracking") || p.get("q");
+      if (q) {
+        setSearch(q);
+        setPage(1);
+      }
+    }
+  }, []);
+
+  // Hardware Barcode Scanner listener on Sales page:
+  // If user scans a product barcode while SaleDialog is closed, auto-open SaleDialog and add the product!
+  useEffect(() => {
+    if (open) return; // Handled by SaleDialog when open
+
+    let scanBuffer = "";
+    let lastKeyTime = 0;
+    let burstStartTime = 0;
+    let scanTimeout: any = null;
+
+    const processScannedCode = (scannedCode: string) => {
+      const cleanCode = (scannedCode || "").trim().toLowerCase();
+      if (!cleanCode || cleanCode.length < 2) return;
+      const cleanNoZero = cleanCode.replace(/^0+/, "");
+      const prod = products.find((p: any) => {
+        const pb = (p.barcode || "").trim().toLowerCase();
+        const psku = ((p as any).sku || "").trim().toLowerCase();
+        const pcode = ((p as any).code || "").trim().toLowerCase();
+        const pnum = ((p as any).product_number || "").trim().toLowerCase();
+        const pid = String(p.id || "").trim().toLowerCase();
+        return (
+          (pb && (pb === cleanCode || (cleanNoZero && pb.replace(/^0+/, "") === cleanNoZero))) ||
+          (psku && (psku === cleanCode || (cleanNoZero && psku.replace(/^0+/, "") === cleanNoZero))) ||
+          (pcode && (pcode === cleanCode || (cleanNoZero && pcode.replace(/^0+/, "") === cleanNoZero))) ||
+          (pnum && (pnum === cleanCode || (cleanNoZero && pnum.replace(/^0+/, "") === cleanNoZero))) ||
+          (pid && (pid === cleanCode || (cleanCode.length >= 6 && pid.endsWith(cleanCode))))
+        );
+      });
+
+      if (prod) {
+        playScanSuccessSound();
+        setScannedPresetProductId(prod.id);
+        setOpen(true);
+        toast.success(
+          lang === "bn"
+            ? `বারকোড স্ক্যান হয়েছে: ${prod.name}`
+            : `Scanned product: ${prod.name}`
+        );
+      } else {
+        playErrorSound();
+        toast.error(
+          lang === "bn"
+            ? `বারকোড (${cleanCode}) দ্বারা পণ্য পাওয়া যায়নি`
+            : `No product found for Barcode: ${cleanCode}`
+        );
+      }
+    };
+
+    const handleGlobalScanKeyDown = (e: KeyboardEvent) => {
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+
+      const now = Date.now();
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || (target as any).isContentEditable);
+      const delta = now - lastKeyTime;
+      lastKeyTime = now;
+
+      if (delta > 240) {
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          scanBuffer = e.key;
+          burstStartTime = now;
+        } else {
+          scanBuffer = "";
+        }
+        return;
+      }
+
+      if (e.key === "Enter" || e.key === "Tab") {
+        clearTimeout(scanTimeout);
+        const totalDuration = now - burstStartTime;
+        const avgCharInterval = scanBuffer.length > 0 ? totalDuration / scanBuffer.length : 999;
+        const isBurst = (!isInput && scanBuffer.length >= 2) || (scanBuffer.length >= 2 && avgCharInterval <= 180);
+
+        if (isBurst) {
+          e.preventDefault();
+          e.stopPropagation();
+          const code = scanBuffer;
+          scanBuffer = "";
+          processScannedCode(code);
+          return;
+        }
+        scanBuffer = "";
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
+
+        clearTimeout(scanTimeout);
+        scanTimeout = setTimeout(() => {
+          if (scanBuffer.length >= 3) {
+            const avg = (Date.now() - burstStartTime) / scanBuffer.length;
+            if (!isInput || avg <= 180) {
+              const code = scanBuffer;
+              scanBuffer = "";
+              processScannedCode(code);
+            }
+          }
+        }, 220);
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalScanKeyDown, true);
+    return () => {
+      clearTimeout(scanTimeout);
+      window.removeEventListener("keydown", handleGlobalScanKeyDown, true);
+    };
+  }, [open, products, lang]);
 
   const handleSyncGoogleSheets = async () => {
     setIsSyncingSheets(true);
@@ -327,85 +462,72 @@ export default function SalesPage() {
     return groupSales(rawSales);
   }, [rawSales]);
 
-  const onlineCount = useMemo(() => {
-    return allSalesGrouped.filter(s => s.type === "online" || Boolean(s.courier_name)).length;
-  }, [allSalesGrouped]);
-
-  const courierPendingCount = useMemo(() => {
-    return allSalesGrouped.filter(s => 
-      (s.type === "online" || Boolean(s.courier_name)) && 
-      s.courier_status !== "collected" && s.courier_status !== "delivered" && s.courier_status !== "cancelled" && !s.returned
-    ).length;
-  }, [allSalesGrouped]);
-
-  // Date Filtering Logic
-  const inDateRange = (dateInput: any) => {
-    if (!dateInput) return false;
-    let d: Date;
-    if (typeof dateInput?.toDate === "function") {
-      d = dateInput.toDate();
-    } else if (dateInput?.seconds !== undefined) {
-      d = new Date(dateInput.seconds * 1000);
-    } else {
-      d = new Date(dateInput);
-    }
-    if (isNaN(d.getTime())) return false;
+  // Precomputed Date Range Boundaries (computed once, not inside the hot filter loop)
+  const dateBounds = useMemo(() => {
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const customFromTs = customFrom ? new Date(customFrom).getTime() : 0;
+    let customToTs = 0;
+    if (customTo) {
+      const toDate = new Date(customTo);
+      toDate.setHours(23, 59, 59, 999);
+      customToTs = toDate.getTime();
+    }
+    return { todayStart, yesterdayStart, weekStart, monthStart, customFromTs, customToTs };
+  }, [customFrom, customTo]);
 
-    if (dateRange === "today") {
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return d >= today;
-    }
-    if (dateRange === "yesterday") {
-      const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return d >= yesterdayStart && d < yesterdayEnd;
-    }
-    if (dateRange === "week") {
-      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-      return d >= weekStart;
-    }
-    if (dateRange === "month") {
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return d >= monthStart;
-    }
-    if (dateRange === "custom") {
-      if (customFrom) {
-        const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(customFrom)
-          ? new Date(`${customFrom}T00:00:00`)
-          : new Date(customFrom);
-        if (d < fromDate) return false;
-      }
-      if (customTo) {
-        const toDate = /^\d{4}-\d{2}-\d{2}$/.test(customTo)
-          ? new Date(`${customTo}T23:59:59.999`)
-          : new Date(customTo);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(customTo)) toDate.setHours(23, 59, 59, 999);
-        if (d > toDate) return false;
-      }
-      return true;
-    }
-    return true; // "all"
-  };
+  // Master Filter: Online Tracking Code Search Across All Records + Date + Category + Payment Method Tab
+  const isSearchActive = Boolean(deferredSearch.trim());
 
-  // Master Filter: Search + Date + Category + Payment Method Tab
   const filteredSales = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
+    const cleanQ = q.replace(/[^a-zA-Z0-9]/g, "");
+    const { todayStart, yesterdayStart, weekStart, monthStart, customFromTs, customToTs } = dateBounds;
 
     return allSalesGrouped.filter(s => {
-      // 1. Date filter
-      const isOnline = s.type === "online" || Boolean(s.courier_name);
-      const isPending = isOnline && 
-        s.courier_status !== "collected" && s.courier_status !== "delivered" && s.courier_status !== "cancelled" && !s.returned;
+      // 1. Online Tracking Code & Search Query Matching
+      if (q) {
+        const itemTrack = (s.tracking_code || "").toLowerCase();
+        const cleanTrack = itemTrack.replace(/[^a-zA-Z0-9]/g, "");
+        const matchTracking = (itemTrack && (itemTrack.includes(q) || (cleanQ && cleanTrack.includes(cleanQ)))) ||
+                              s.items.some(it => {
+                                const itTrack = ((it as any).tracking_code || (it as any).tracking_id || (it as any).consignment_id || "").toLowerCase();
+                                return itTrack && (itTrack.includes(q) || (cleanQ && itTrack.replace(/[^a-zA-Z0-9]/g, "").includes(cleanQ)));
+                              });
 
-      if (activeTab === "courier_pending") {
-        if (!isPending) return false;
-      } else {
-        if (!inDateRange(s.created_at)) return false;
+        // Online tracking code search ALWAYS works through ALL records and tabs!
+        if (matchTracking) return true;
+
+        const matchName = s.product_name.toLowerCase().includes(q);
+        const matchCustomer = (s.parties?.name ?? "").toLowerCase().includes(q) ||
+                              ((s as any).parties?.phone ?? "").includes(q) ||
+                              ((s as any).customer?.phone ?? "").includes(q);
+        const matchNote = s.items.some(it => (it.note || "").toLowerCase().includes(q));
+        const matchId = (s.id || "").toLowerCase().includes(q) ||
+                        `inv-${(s.id || "").slice(-6)}`.toLowerCase().includes(q);
+
+        if (!matchName && !matchCustomer && !matchNote && !matchId) return false;
       }
 
-      // 2. Tab / Payment Method Filter
-      if (activeTab !== "all" && activeTab !== "courier_pending") {
+      // 2. Date Filter
+      // When searching, bypass the date filter so that searches work properly across ALL records!
+      if (!q) {
+        const ts = s._ts;
+        if (dateRange === "today" && ts < todayStart) return false;
+        if (dateRange === "yesterday" && (ts < yesterdayStart || ts >= todayStart)) return false;
+        if (dateRange === "week" && ts < weekStart) return false;
+        if (dateRange === "month" && ts < monthStart) return false;
+        if (dateRange === "custom") {
+          if (customFromTs && ts < customFromTs) return false;
+          if (customToTs && ts > customToTs) return false;
+        }
+      }
+
+      // 3. Tab / Payment Method Filter
+      if (activeTab !== "all") {
         if (activeTab === "cash" && s.type !== "cash" && !(s.type === "split" && (Number(s.split_cash) > 0))) return false;
         if (activeTab === "bkash") {
           const isBkashDirect = s.type === "bkash";
@@ -416,10 +538,11 @@ export default function SalesPage() {
         if (activeTab === "bank" && s.type !== "bank" && !(s.type === "split" && (Number(s.split_bank) > 0))) return false;
         if (activeTab === "partial" && !isPartialOrSplitSale(s)) return false;
         if (activeTab === "credit" && s.type !== "credit" && s.due_amount <= 0) return false;
-        if (activeTab === "online" && !isOnline) return false;
+        if (activeTab === "courier_pending" && (s.type !== "online" || s.courier_status === "collected" || s.courier_status === "cancelled" || s.returned)) return false;
+        if (activeTab === "online" && s.type !== "online") return false;
       }
 
-      // 3. Category Filter
+      // 4. Category Filter
       if (selectedCategory !== "all") {
         const matchesCategory = s.items.some(it => {
           const cat = (it.product_id ? productCategoryMap.get(it.product_id) : null) ||
@@ -429,54 +552,47 @@ export default function SalesPage() {
         if (!matchesCategory) return false;
       }
 
-      // 4. Search Query
-      if (q) {
-        const matchName = s.product_name.toLowerCase().includes(q);
-        const matchCustomer = (s.parties?.name ?? "").toLowerCase().includes(q);
-        const matchNote = s.items.some(it => (it.note || "").toLowerCase().includes(q));
-        if (!matchName && !matchCustomer && !matchNote) return false;
-      }
-
       return true;
     });
-  }, [allSalesGrouped, dateRange, customFrom, customTo, activeTab, selectedCategory, search, productCategoryMap]);
+  }, [allSalesGrouped, dateRange, dateBounds, activeTab, selectedCategory, deferredSearch, productCategoryMap]);
 
-  // Financial KPIs for filtered set
-  const filteredTotalSales = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.sell_price), 0);
-  }, [filteredSales]);
-
-  const filteredTotalProfit = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.profit), 0);
-  }, [filteredSales]);
-
-  const filteredTotalDue = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.returned ? 0 : s.due_amount), 0);
-  }, [filteredSales]);
-
-  const bkashPendingDueTotal = useMemo(() => {
-    return filteredSales.reduce((acc, s) => {
-      if (s.returned) return acc;
-      const hasBkash = s.type === "bkash" || (s.type === "split" && Number(s.split_bkash) > 0);
-      if (hasBkash && s.due_amount > 0) return acc + s.due_amount;
-      return acc;
-    }, 0);
-  }, [filteredSales]);
-
-  // Partial / Split sales summary
-  const partialSummary = useMemo(() => {
-    let count = 0;
+  // Fast single-pass financial counters for filtered set
+  const { filteredTotalSales, filteredTotalProfit, filteredTotalDue, bkashPendingDueTotal, partialSummary } = useMemo(() => {
     let totalSales = 0;
-    let totalPaid = 0;
+    let totalProfit = 0;
     let totalDue = 0;
-    for (const s of filteredSales) {
-      if (s.returned) continue;
-      count++;
-      totalSales += Number(s.sell_price || 0);
-      totalPaid += Number(s.paid_amount || 0);
-      totalDue += Number(s.due_amount || 0);
+    let bkashDue = 0;
+    let pCount = 0;
+    let pSales = 0;
+    let pPaid = 0;
+    let pDue = 0;
+
+    for (let i = 0; i < filteredSales.length; i++) {
+      const s = filteredSales[i];
+      if (!s.returned) {
+        totalSales += s.sell_price;
+        totalProfit += s.profit;
+        totalDue += s.due_amount;
+
+        const hasBkash = s.type === "bkash" || (s.type === "split" && Number(s.split_bkash) > 0);
+        if (hasBkash && s.due_amount > 0) {
+          bkashDue += s.due_amount;
+        }
+
+        pCount++;
+        pSales += Number(s.sell_price || 0);
+        pPaid += Number(s.paid_amount || 0);
+        pDue += Number(s.due_amount || 0);
+      }
     }
-    return { count, totalSales, totalPaid, totalDue };
+
+    return {
+      filteredTotalSales: totalSales,
+      filteredTotalProfit: totalProfit,
+      filteredTotalDue: totalDue,
+      bkashPendingDueTotal: bkashDue,
+      partialSummary: { count: pCount, totalSales: pSales, totalPaid: pPaid, totalDue: pDue },
+    };
   }, [filteredSales]);
 
   const allTimePartialCount = useMemo(() => {
@@ -601,7 +717,7 @@ export default function SalesPage() {
         <body>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:2px solid #0f172a;padding-bottom:8px;">
             <div>
-              <h1>${biz?.shop_name || biz?.name || "Urobili"}</h1>
+              <h1>${biz?.shop_name || biz?.name || "DreamFashion"}</h1>
               <div class="meta">${title} • ${dateRangeStr} • ${isBn ? "প্রিন্টের সময়" : "Generated"}: ${new Date().toLocaleString("en-GB")}</div>
             </div>
             <button class="no-print" onclick="window.print()" style="padding:6px 14px;background:#0284c7;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;">
@@ -685,16 +801,6 @@ export default function SalesPage() {
             </div>
           </div>
 
-          <Link href="/sales/today">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 sm:h-8.5 px-2.5 sm:px-3 text-xs font-bold font-balooda rounded-xl gap-1.5 border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary shrink-0"
-            >
-              <ShoppingBag className="size-3.5" />
-              <span>{lang === "bn" ? "আজকের বিবরণ" : "Today's Sale"}</span>
-            </Button>
-          </Link>
           <Button
             onClick={() => setOpen(true)}
             size="sm"
@@ -709,11 +815,21 @@ export default function SalesPage() {
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
-              className="pl-8 h-8.5 text-xs rounded-xl font-balooda"
-              placeholder={lang === "bn" ? "পণ্য বা ক্রেতার নাম দিয়ে খুঁজুন..." : "Search product or customer..."}
+              className="pl-8 pr-7 h-8.5 text-xs rounded-xl font-balooda"
+              placeholder={lang === "bn" ? "পণ্য, ক্রেতা বা ট্র্যাকিং নম্বর..." : "Search product, customer, tracking..."}
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setPage(1); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1 cursor-pointer"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Unified Download & Export Dropdown */}
@@ -798,17 +914,17 @@ export default function SalesPage() {
       </div>
 
       <Card className="p-3 rounded-2xl border-[0.5px] border-black/75 dark:border-white/30 bg-card/60 backdrop-blur-sm space-y-2.5">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none flex-nowrap py-0.5 max-w-full">
-          <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-foreground shrink-0 pr-0.5">
-            <Calendar className="size-3.5 text-primary shrink-0" />
-            <span className="font-balooda text-[11px] sm:text-xs whitespace-nowrap">{lang === "bn" ? "তারিখ:" : "Date:"}</span>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+            <Calendar className="size-4 text-primary" />
+            <span className="font-balooda font-bold text-xs sm:text-sm">{lang === "bn" ? "তারিখ ফিল্টার:" : "Date Filter:"}</span>
           </div>
 
-          <div className="flex items-center gap-1 flex-nowrap font-balooda shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap font-balooda">
             <button
               type="button"
               onClick={() => { setDateRange("today"); setPage(1); }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 dateRange === "today" ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               }`}
             >
@@ -817,7 +933,7 @@ export default function SalesPage() {
             <button
               type="button"
               onClick={() => { setDateRange("yesterday"); setPage(1); }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 dateRange === "yesterday" ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               }`}
             >
@@ -826,29 +942,29 @@ export default function SalesPage() {
             <button
               type="button"
               onClick={() => { setDateRange("week"); setPage(1); }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 dateRange === "week" ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               }`}
             >
-              {lang === "bn" ? "৭ দিন" : "7 Days"}
+              {lang === "bn" ? "গত ৭ দিন" : "Last 7 Days"}
             </button>
             <button
               type="button"
               onClick={() => { setDateRange("month"); setPage(1); }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 dateRange === "month" ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               }`}
             >
-              {lang === "bn" ? "চলতি মাস" : "Month"}
+              {lang === "bn" ? "চলতি মাস" : "This Month"}
             </button>
             <button
               type="button"
               onClick={() => { setDateRange("all"); setPage(1); }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 dateRange === "all" ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted hover:bg-muted/80 text-muted-foreground"
               }`}
             >
-              {lang === "bn" ? "সকল সময়" : "All"}
+              {lang === "bn" ? "সকল সময়" : "All Time"}
             </button>
 
             <button
@@ -858,14 +974,14 @@ export default function SalesPage() {
                 setPage(1);
               }}
               title={lang === "bn" ? "কাস্টম তারিখ নির্বাচন" : "Custom Date Picker"}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border shrink-0 whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
                 dateRange === "custom"
                   ? "bg-primary text-primary-foreground border-primary shadow-xs"
                   : "bg-muted hover:bg-muted/80 text-muted-foreground border-border/70"
               }`}
             >
-              <Calendar className="size-2.5 sm:size-3" />
-              <span>{lang === "bn" ? "কাস্টম" : "Custom"}</span>
+              <Calendar className="size-3.5" />
+              <span>{lang === "bn" ? "কাস্টম তারিখ" : "Custom"}</span>
             </button>
           </div>
         </div>
@@ -873,21 +989,21 @@ export default function SalesPage() {
         {dateRange === "custom" && (
           <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-border/50 font-balooda">
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground font-semibold">{lang === "bn" ? "হতে" : "From"}</Label>
+              <Label className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "হতে" : "From"}</Label>
               <Input
                 type="date"
                 value={customFrom}
                 onChange={e => { setCustomFrom(e.target.value); setPage(1); }}
-                className="h-7.5 text-xs rounded-lg"
+                className="h-8 text-xs rounded-xl"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground font-semibold">{lang === "bn" ? "পর্যন্ত" : "To"}</Label>
+              <Label className="text-[11px] text-muted-foreground font-semibold">{lang === "bn" ? "পর্যন্ত" : "To"}</Label>
               <Input
                 type="date"
                 value={customTo}
                 onChange={e => { setCustomTo(e.target.value); setPage(1); }}
-                className="h-7.5 text-xs rounded-lg"
+                className="h-8 text-xs rounded-xl"
               />
             </div>
           </div>
@@ -952,102 +1068,48 @@ export default function SalesPage() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setPage(1); }}>
-        {/* Mobile Horizontal Filter Pill Bar */}
-        <div className="sm:hidden flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar font-balooda">
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "all" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 cursor-pointer"
-            onClick={() => { setActiveTab("all"); setPage(1); }}
-          >
-            {lang === "bn" ? "সব বিক্রি" : "All"} ({allSalesGrouped.length})
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "courier_pending" ? "default" : "outline"}
-            className={`h-8 px-3 rounded-full text-xs font-bold shrink-0 cursor-pointer ${
-              courierPendingCount > 0 ? "border-amber-500 bg-amber-500/15 text-amber-800 dark:text-amber-200 font-extrabold ring-1 ring-amber-500/40" : ""
-            }`}
-            onClick={() => { setActiveTab("courier_pending"); setPage(1); }}
-          >
-            ⏳ {lang === "bn" ? "কুরিয়ার পেন্ডিং" : "Courier Pending"}
-            {courierPendingCount > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
-                {courierPendingCount}
-              </span>
-            )}
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "online" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 text-sky-600 dark:text-sky-400 cursor-pointer"
-            onClick={() => { setActiveTab("online"); setPage(1); }}
-          >
-            🚚 {lang === "bn" ? "অনলাইন সব" : "All Online"} ({onlineCount})
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "cash" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 cursor-pointer"
-            onClick={() => { setActiveTab("cash"); setPage(1); }}
-          >
-            💵 {lang === "bn" ? "নগদ" : "Cash"}
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "bkash" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 text-[#E2136E] cursor-pointer"
-            onClick={() => { setActiveTab("bkash"); setPage(1); }}
-          >
-            বিকাশ
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "partial" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 text-purple-600 cursor-pointer"
-            onClick={() => { setActiveTab("partial"); setPage(1); }}
-          >
-            ⚡ {lang === "bn" ? "স্প্লিট" : "Split"}
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant={activeTab === "credit" ? "default" : "outline"}
-            className="h-8 px-3 rounded-full text-xs font-bold shrink-0 text-amber-600 cursor-pointer"
-            onClick={() => { setActiveTab("credit"); setPage(1); }}
-          >
-            📋 {lang === "bn" ? "বাকী" : "Credit"}
-          </Button>
-        </div>
-
-        {/* Courier Pending Alert Banner for Mobile & Desktop */}
-        {courierPendingCount > 0 && activeTab !== "courier_pending" && (
-          <div 
-            onClick={() => { setActiveTab("courier_pending"); setPage(1); }}
-            className="my-2 p-2.5 sm:p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs font-bold text-amber-800 dark:text-amber-200 cursor-pointer hover:bg-amber-500/15 transition-all shadow-xs"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex size-2 rounded-full bg-amber-500 animate-ping" />
-              <span>🚚 {lang === "bn" ? `${courierPendingCount} টি অনলাইন/কুরিয়ার অর্ডার ডেলিভারি বা টাকা আদায়ের অপেক্ষায় রয়েছে!` : `${courierPendingCount} online/courier orders pending collection!`}</span>
-            </div>
-            <span className="text-[11px] underline font-extrabold text-amber-700 dark:text-amber-300 shrink-0">
-              {lang === "bn" ? "দেখুন ➔" : "View ➔"}
+      {/* Search notice when searching all records */}
+      {isSearchActive && (
+        <div className="flex items-center justify-between p-2 px-3 rounded-xl bg-primary/10 border border-primary/20 text-xs font-balooda">
+          <div className="flex items-center gap-1.5 text-foreground font-medium truncate">
+            <Search className="size-3.5 text-primary shrink-0" />
+            <span className="truncate">
+              {lang === "bn"
+                ? `সকল রেকর্ডে খোঁজা হচ্ছে: "${search}" (${filteredSales.length}টি বিক্রি পাওয়া গেছে)`
+                : `Searching all records for: "${search}" (${filteredSales.length} records found)`}
             </span>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => { setSearch(""); setPage(1); }}
+            className="text-xs text-primary hover:underline font-bold shrink-0 ml-2 cursor-pointer"
+          >
+            {lang === "bn" ? "রিসেট করুন" : "Reset"}
+          </button>
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setPage(1); }}>
+        {/* Mobile Category Dropdown Selector */}
+        <div className="sm:hidden flex items-center justify-between gap-2 p-2 bg-card rounded-xl border-[0.5px] border-black/75 dark:border-white/30 shadow-2xs font-balooda">
+          <span className="text-xs font-bold text-muted-foreground whitespace-nowrap pl-1">
+            {lang === "bn" ? "বিক্রয় ফিল্টার:" : "Sales Filter:"}
+          </span>
+          <select
+            value={activeTab}
+            onChange={(e) => { setActiveTab(e.target.value); setPage(1); }}
+            className="flex-1 h-8.5 rounded-lg border-[0.5px] border-black/60 dark:border-white/30 bg-background px-2.5 text-xs font-bold font-balooda text-foreground shadow-xs cursor-pointer focus:ring-1 focus:ring-primary"
+          >
+            <option value="all">{lang === "bn" ? "সব বিক্রি" : "All Sales"}</option>
+            <option value="cash">{lang === "bn" ? "নগদ" : "Cash"}</option>
+            <option value="bkash">{lang === "bn" ? "বিকাশ (আংশিক ও পেন্ডিং সহ)" : "bKash (Inc. Partial & Due)"}</option>
+            <option value="bank">{lang === "bn" ? "ব্যাংক" : "Bank"}</option>
+            <option value="partial">{lang === "bn" ? "স্প্লিট" : "Split"}</option>
+            <option value="credit">{lang === "bn" ? "বাকী" : "Credit"}</option>
+            <option value="courier_pending">{lang === "bn" ? "⏳ কুরিয়ার পেন্ডিং" : "⏳ Pending Courier"}</option>
+            <option value="online">{lang === "bn" ? "অনলাইন সব" : "All Online"}</option>
+          </select>
+        </div>
 
         {/* Desktop Tabs List */}
         <TabsList className="hidden sm:grid sm:grid-cols-8 w-full text-xs font-bold font-balooda p-1 bg-muted/80 rounded-xl gap-1">
@@ -1148,12 +1210,20 @@ export default function SalesPage() {
             onEdit={setEditSale}
             productCategoryMap={productCategoryMap}
             onResetDateRange={dateRange !== "all" ? () => { setDateRange("all"); setPage(1); } : undefined}
+            searchQuery={deferredSearch}
           />
         </div>
       </Tabs>
 
       <FAB onClick={() => setOpen(true)} />
-      <SaleDialog open={open} onOpenChange={setOpen} />
+      <SaleDialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setScannedPresetProductId(undefined);
+        }}
+        presetProductId={scannedPresetProductId}
+      />
       {editSale && (
         <EditSaleDialog sale={editSale} open={!!editSale} onOpenChange={v => { if (!v) setEditSale(null); }} />
       )}
@@ -1172,6 +1242,7 @@ function SalesTab({
   onEdit,
   productCategoryMap,
   onResetDateRange,
+  searchQuery,
 }: {
   items: GroupedSale[];
   page: number;
@@ -1180,15 +1251,15 @@ function SalesTab({
   onEdit: (sale: Sale) => void;
   productCategoryMap: Map<string, string>;
   onResetDateRange?: () => void;
+  searchQuery?: string;
 }) {
   const { lang, t } = useT();
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
-  const isEmployee = isEmployeeRole;
   const { items: paged, totalPages, safePage } = paginate(items, page, pageSize);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [infoOrder, setInfoOrder] = useState<any | null>(null);
+  const [infoItemId, setInfoItemId] = useState<string | null>(null);
 
   const toggleGroup = (id: string) => {
     setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
@@ -1249,16 +1320,9 @@ function SalesTab({
       await acceptDigitalPaymentFn({ data: { id } });
       toast.success(lang === "bn" ? "ডিজিটাল পেমেন্ট গ্রহণ করা হয়েছে এবং ক্যাশবক্সে যোগ হয়েছে!" : "Digital payment accepted and deposited into Cashbox!");
     } catch (err: any) {
-      console.warn("acceptDigitalPaymentFn failed, attempting direct Firestore fallback:", err);
-      try {
-        const { fsAcceptDigitalPayment } = await import("@/lib/firestore-service");
-        await fsAcceptDigitalPayment(id);
-        toast.success(lang === "bn" ? "ডিজিটাল পেমেন্ট গ্রহণ করা হয়েছে এবং ক্যাশবক্সে যোগ হয়েছে!" : "Digital payment accepted and deposited into Cashbox!");
-      } catch (fsErr: any) {
-        toast.error(err.message || fsErr.message || String(err));
-        qc.invalidateQueries({ queryKey: ["sales"] });
-        return;
-      }
+      toast.error(err.message || String(err));
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      return;
     } finally {
       setActionBusyId(null);
       qc.invalidateQueries({ queryKey: ["sales"] });
@@ -1288,13 +1352,10 @@ function SalesTab({
   }
 
   function handleDeleteClick(id: string) {
-    if (isEmployeeRole) {
-      toast.error(lang === "bn" ? "কর্মচারীরা কোনো রেকর্ড মুছতে পারবেন না।" : "Employees cannot delete records.");
-      return;
-    }
     setSaleToDelete(id);
   }
 
+  const { user } = useAuth();
   const { data: bizData } = useQuery({ queryKey: ["business-settings"], queryFn: getBusinessSettingsFn });
   const biz = bizData?.business;
 
@@ -1314,7 +1375,7 @@ function SalesTab({
 
     try {
       await printPwaInvoice({
-        businessName: user?.business_name || biz?.name || "Urobili",
+        businessName: user?.business_name || biz?.name || "Dream Fashion",
         userEmail: biz?.emails || user?.business_emails || user?.email || "",
         shopAddress: biz?.address || user?.business_address || "",
         shopPhoneNumbers: biz?.phone_numbers || user?.business_phone_numbers || "",
@@ -1481,6 +1542,12 @@ function SalesTab({
                       {lang === "bn" ? "বাকী:" : "Due:"} ৳{s.due_amount}
                     </span>
                   )}
+                  {s.tracking_code && (
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                      <Truck className="size-2.5 shrink-0" />
+                      <span>ID: {s.tracking_code}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1515,6 +1582,23 @@ function SalesTab({
                       {isCancelled ? (lang === "bn" ? "বাতিল" : "Cancelled") : (s.type ? s.type.toUpperCase() : "PAID")}
                     </span>
                   )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInfoOrder(s);
+                      setInfoItemId(s.items[0]?.id || null);
+                    }}
+                    className="h-6 px-1.5 text-[10px] font-bold rounded-md bg-background hover:bg-muted text-foreground border border-black/30 dark:border-white/20 gap-1 cursor-pointer shrink-0 font-balooda"
+                    title={lang === "bn" ? "অর্ডারের পূর্ণ বিবরণ দেখুন" : "View Order Info"}
+                  >
+                    <Info className="size-3 text-primary" />
+                    <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                  </Button>
+
                   <span className="p-0.5 rounded text-muted-foreground/70 hover:text-foreground">
                     {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                   </span>
@@ -1525,12 +1609,87 @@ function SalesTab({
             {/* Revealable Action & Details Drawer */}
             {expanded && (
               <div className="px-3 pb-3 pt-1 border-t-[0.5px] border-black/40 dark:border-white/20 space-y-2.5 bg-muted/10 rounded-b-xl animate-in fade-in-50 duration-150 font-balooda">
-                {/* Note / Remarks if any */}
-                {(s as any).note && (
+                {/* Note / Remarks if any (skip if address note is parsed below) */}
+                {(s as any).note && !(s as any).note.startsWith("Address:") && !(s as any).recipient_address && (
                   <p className="text-[11px] text-muted-foreground bg-muted/40 px-2.5 py-1 rounded border-[0.5px] border-black/20 dark:border-white/20">
                     <strong className="text-foreground">{lang === "bn" ? "নোট:" : "Note:"}</strong> {(s as any).note}
                   </p>
                 )}
+
+                {/* Customer Location & Delivery Details Card (Unfolded View) */}
+                {(() => {
+                  const recName = (s as any).recipient_name || s.parties?.name;
+                  const recPhone = (s as any).recipient_phone || (s.parties as any)?.phone;
+                  let recAddr = (s as any).recipient_address || (s.parties as any)?.address || "";
+                  let deliveryNote = "";
+                  if ((s as any).note && typeof (s as any).note === "string") {
+                    if ((s as any).note.includes("Address:") && !recAddr) {
+                      const match = (s as any).note.match(/Address:\s*([^|]+)/);
+                      if (match) recAddr = match[1].trim();
+                    }
+                    if ((s as any).note.includes("Note:")) {
+                      const match = (s as any).note.match(/Note:\s*(.+)/);
+                      if (match) deliveryNote = match[1].trim();
+                    } else if (!(s as any).note.startsWith("Address:")) {
+                      deliveryNote = (s as any).note;
+                    }
+                  }
+
+                  if (!recName && !recPhone && !recAddr && !deliveryNote && s.type !== "online") return null;
+                  if (!recName && !recPhone && !recAddr && !deliveryNote) return null;
+
+                  return (
+                    <div className="p-2 sm:p-2.5 bg-background/90 rounded-xl border border-border/80 space-y-1.5 shadow-2xs font-balooda">
+                      <div className="flex items-center justify-between text-xs font-bold pb-1 border-b border-border/50">
+                        <span className="flex items-center gap-1.5 text-foreground">
+                          <MapPin className="size-3.5 text-purple-600" />
+                          <span>{lang === "bn" ? "ডেলিভারি লোকেশন ও গ্রাহক তথ্য:" : "Customer Location & Delivery Details:"}</span>
+                        </span>
+                        {recPhone && (
+                          <a
+                            href={`tel:${recPhone.replace(/[^0-9+]/g, "")}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[11px] font-mono text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <Phone className="size-3" />
+                            <span>{recPhone}</span>
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                        {recName && (
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "প্রাপকের নাম:" : "Recipient Name:"}</span>
+                            <span className="font-semibold text-foreground">{recName}</span>
+                          </div>
+                        )}
+                        {recPhone && (
+                          <div>
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ফোন নম্বর:" : "Phone:"}</span>
+                            <span className="font-mono font-medium text-foreground">{recPhone}</span>
+                          </div>
+                        )}
+                        {recAddr && (
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "সম্পূর্ণ ডেলিভারি ঠিকানা:" : "Full Delivery Address:"}</span>
+                            <span className="font-medium text-foreground bg-muted/40 p-1.5 rounded-lg block border border-border/40 text-[11px] leading-relaxed">
+                              {recAddr}
+                            </span>
+                          </div>
+                        )}
+                        {deliveryNote && (
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] text-muted-foreground block">{lang === "bn" ? "ডেলিভারি নোট / নির্দেশনা:" : "Delivery Note:"}</span>
+                            <span className="font-medium text-amber-700 dark:text-amber-300 text-[11px] italic">
+                              {deliveryNote}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Inline Courier Delivery Info & Approval Actions if Online Sale */}
                 {s.type === "online" && (
@@ -1559,8 +1718,8 @@ function SalesTab({
                       <div className="flex items-center gap-1.5 w-full sm:w-auto">
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleApproveCourier(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleApproveCourier(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2 text-[11px] font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs flex-1 sm:flex-initial cursor-pointer"
                         >
                           <PackageCheck className="size-3" />
@@ -1570,8 +1729,8 @@ function SalesTab({
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={(e) => { e.stopPropagation(); handleCancelCourier(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleCancelCourier(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2 text-[11px] font-semibold rounded-md gap-1 flex-1 sm:flex-initial cursor-pointer"
                         >
                           <RotateCcw className="size-3" />
@@ -1607,8 +1766,8 @@ function SalesTab({
                         </span>
                         <Button
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleAcceptDigitalPayment(s.id); }}
-                          disabled={actionBusyId === s.id}
+                          onClick={(e) => { e.stopPropagation(); handleAcceptDigitalPayment(s.items[0]?.id || s.id); }}
+                          disabled={actionBusyId === s.id || (s.items[0] && actionBusyId === s.items[0].id)}
                           className="h-6.5 px-2.5 text-[11px] font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs cursor-pointer font-balooda"
                         >
                           <CheckCircle2 className="size-3" />
@@ -1663,30 +1822,83 @@ function SalesTab({
 
                 {/* Multi-Item Breakdown List if Group */}
                 {isGroup && (
-                  <div className="space-y-1 bg-background/80 p-2 rounded-lg border-[0.5px] border-black/20 dark:border-white/20">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider block font-balooda">
-                      {lang === "bn" ? "কার্ট আইটেম তালিকা" : "Cart Items"}
-                    </span>
+                  <div className="space-y-1 bg-background/90 p-2 rounded-xl border border-border/70">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider block font-balooda">
+                        {lang === "bn" ? "কার্ট আইটেম তালিকা (ক্লিক করে বিবরণ দেখুন):" : "Cart Items (Click to view info):"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {s.items.length} {lang === "bn" ? "টি আইটেম" : "items"}
+                      </span>
+                    </div>
                     {s.items.map((item, idx) => {
                       const itemProfit = item.profit !== undefined
                         ? Number(item.profit)
                         : (Number(item.sell_price) - Number(item.buy_price || 0)) * (Number(item.qty) || 1);
+                      const itTrack = (item as any).tracking_code || (item as any).tracking_id || (item as any).consignment_id;
+                      const q = (searchQuery || "").trim().toLowerCase();
+                      const matchesSearch = Boolean(q) && (
+                        (itTrack && itTrack.toLowerCase().includes(q)) ||
+                        (item.product_name && item.product_name.toLowerCase().includes(q))
+                      );
+
                       return (
-                        <div key={item.id} className="flex justify-between items-center text-xs py-1 border-b border-border/30 last:border-0 font-balooda">
-                          <div className="truncate mr-2">
-                            <span className="font-bold text-foreground">{idx + 1}. {item.product_name}</span>
-                            <span className="text-muted-foreground font-mono ml-1">×{item.qty}</span>
+                        <div
+                          key={item.id || idx}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInfoOrder(s);
+                            setInfoItemId(item.id);
+                          }}
+                          className={`flex justify-between items-center text-xs p-1.5 rounded-lg border transition-all cursor-pointer hover:bg-primary/5 active:scale-[0.99] font-balooda ${
+                            matchesSearch
+                              ? "bg-purple-500/10 border-purple-500/40"
+                              : "bg-card border-border/50 hover:border-primary/40"
+                          }`}
+                        >
+                          <div className="truncate mr-2 flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-foreground truncate">{idx + 1}. {item.product_name}</span>
+                            <span className="text-muted-foreground font-mono text-[10px] shrink-0 font-bold">×{item.qty}</span>
+                            {itTrack && (
+                              <span className="font-mono text-[9px] bg-purple-500/15 text-purple-700 dark:text-purple-300 px-1 py-0.2 rounded shrink-0">
+                                {itTrack}
+                              </span>
+                            )}
+                            {matchesSearch && (
+                              <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1 py-0.2 rounded shrink-0">
+                                ✓ মিলছে
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold font-serif bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                               {lang === "bn" ? "লাভ" : "Profit"}: {fmtMoney(itemProfit)}
                             </span>
                             <span className="font-mono font-bold text-foreground">{fmtMoney(Number(item.sell_price) * (Number(item.qty) || 1))}</span>
+                            
                             <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInfoOrder(s);
+                                setInfoItemId(item.id);
+                              }}
+                              className="h-6 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md gap-0.5 cursor-pointer"
+                              title={lang === "bn" ? "এই কাস্টম আইটেমের বিবরণ দেখুন" : "View Item Info"}
+                            >
+                              <Info className="size-3" />
+                              <span>{lang === "bn" ? "বিবরণ" : "Info"}</span>
+                            </Button>
+
+                            <Button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); onEdit(item); }}
                               variant="ghost"
                               size="icon"
-                              className="size-5 text-muted-foreground hover:text-foreground cursor-pointer"
+                              className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                              title={lang === "bn" ? "এই আইটেম এডিট করুন" : "Edit Item"}
                             >
                               <Pencil className="size-3" />
                             </Button>
@@ -1721,17 +1933,15 @@ function SalesTab({
                         <span>{lang === "bn" ? "এডিট" : "Edit"}</span>
                       </Button>
                     )}
-                    {!isEmployeeRole && (
-                      <Button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(s.items[0].id); }}
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 gap-1 rounded-lg border-[0.5px] border-rose-500/30"
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span>{lang === "bn" ? "ডিলিট" : "Delete"}</span>
-                      </Button>
-                    )}
+                    <Button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(s.items[0]?.id || s.id); }}
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 gap-1 rounded-lg border-[0.5px] border-rose-500/30"
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span>{lang === "bn" ? "ডিলিট" : "Delete"}</span>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1750,6 +1960,14 @@ function SalesTab({
         title={lang === "bn" ? "বিক্রি রেকর্ড মুছে ফেলবেন?" : "Delete Sale Record?"}
         description={lang === "bn" ? "এই বিক্রয়টি মুছে ফেললে পণ্যের স্টক এবং ক্যাশবক্স স্বয়ংক্রিয়ভাবে সমন্বয় করা হবে।" : "Deleting this sale will adjust product stock and cashbox ledger."}
       />
+
+      <OrderInfoDialog
+        order={infoOrder}
+        open={!!infoOrder}
+        onOpenChange={v => { if (!v) setInfoOrder(null); }}
+        onEdit={onEdit}
+        initialSelectedItemId={infoItemId}
+      />
     </div>
   );
 }
@@ -1765,9 +1983,6 @@ function ReturnDialog({
 }) {
   const { lang, t } = useT();
   const qc = useQueryClient();
-  const { user } = useAuth();
-  const isEmployeeRole = user?.role === "employee" || (user?.role !== "owner" && user?.role !== "superadmin" && Boolean(getActiveEmployeeSession()));
-  const isEmployee = isEmployeeRole;
   const [returnQty, setReturnQty] = useState("1");
   const [busy, setBusy] = useState(false);
 
@@ -1775,26 +1990,18 @@ function ReturnDialog({
     e.preventDefault();
     setBusy(true);
     try {
-      const q = Math.max(1, Math.min(Number(returnQty) || 1, Number(sale.qty) || 1));
-      const unitSell = Number(sale.sell_price) || 0;
-      const refund = unitSell * q;
       await createReturnFn({
         data: {
           sale_id: sale.id,
           product_id: sale.product_id,
-          product_name: sale.product_name,
-          qty: q,
-          return_price: unitSell,
-          refund_amount: refund,
-          buy_price: Number(sale.buy_price) || 0,
-          deduct_cashbox: sale.type === "cash" || sale.type === "pos" || sale.type === "split",
+          qty: Number(returnQty) || 1,
+          refund_amount: (Number(sale.sell_price) || 0) * (Number(returnQty) || 1),
         },
       });
       toast.success(lang === "bn" ? "পণ্য রিটার্ন সফল হয়েছে" : "Return processed successfully");
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["cashbox"] });
-      qc.invalidateQueries({ queryKey: ["returns"] });
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err?.message || "Return failed");
