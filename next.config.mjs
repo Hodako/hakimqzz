@@ -18,9 +18,7 @@ const nextConfig = {
     "0.0.0.0:3141",
     "127.0.0.1:3141",
   ],
-  // Completely disable separate build worker processes to prevent OOM SIGKILL on 1GB VPS
   experimental: {
-    webpackBuildWorker: false,
     parallelServerCompiles: false,
     parallelServerBuildTraces: false,
   },

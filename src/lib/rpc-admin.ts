@@ -1,14 +1,18 @@
-// Detect if we are running inside the Capacitor Android/iOS native app
-const isCapacitor = typeof window !== "undefined" && (
+// Detect if we are running inside Capacitor Android/iOS native app or static packaging
+const isStaticOrNative = typeof window !== "undefined" && (
   !!(window as any).Capacitor ||
-  window.location.hostname === "localhost" ||
-  window.location.origin.includes("localhost") ||
   window.location.origin.startsWith("capacitor:") ||
-  window.location.origin.startsWith("file:")
+  window.location.origin.startsWith("file:") ||
+  window.location.hostname.includes("firebaseapp.com") ||
+  window.location.hostname.includes("web.app")
 );
 
-// Point to hosted endpoint when in Capacitor or during SSR to prevent ERR_INVALID_URL, otherwise use relative path
-const API_BASE = (typeof window === "undefined" || isCapacitor) ? "https://hakim.qzz.io" : "";
+// In browser on regular web domain (Next.js SSR/CSR), use relative "" so it always routes to the current origin
+const API_BASE = (
+  typeof window !== "undefined" && !isStaticOrNative
+    ? ""
+    : (process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://hakim.qzz.io"))
+).replace(/\/$/, "");
 
 async function callRemoteRpc(actionName: string, args: any) {
   const url = `${API_BASE}/api/rpc`;
