@@ -51,6 +51,7 @@ downloads/
 software/
 dist-electron/
 Classic-World/
+serve-*.cjs
 *.exe
 *.zip
 *.dmg

@@ -144,7 +144,7 @@ function groupAllDataByDay(sales: any[], expenses: any[], days: number, ownerWal
 function KPICard({
   label, value, sub, icon: Icon, imageUrl, trend, trendUp, color, onClick, className, imageClassName,
   align = "left", size = "small", variant = "glass", shadowStyle = "glow", borderStyle = "subtle", curve = "none", isBentoHero = false, isDesktop = false,
-  isPrivacyProtected = false, isRevealed = true,
+  isPrivacyProtected = false, isRevealed = true, onTogglePrivacy,
 }: {
   label: string; value: string; sub?: string;
   icon?: React.ElementType; imageUrl?: string; trend?: string; trendUp?: boolean; color: string;
@@ -159,6 +159,7 @@ function KPICard({
   isDesktop?: boolean;
   isPrivacyProtected?: boolean;
   isRevealed?: boolean;
+  onTogglePrivacy?: (e: React.MouseEvent) => void;
 }) {
   const { lang } = useT();
   const alignClass = align === "center" ? "text-center items-center" : align === "right" ? "text-right items-end" : "text-left items-start";
@@ -334,6 +335,23 @@ function KPICard({
       <div className={`flex items-center justify-between w-full ${align === "right" ? "flex-row-reverse" : ""}`}>
         <div className="flex items-center gap-1.5 min-w-0 mr-2">
           <span className={`${labelSize} font-bold text-muted-foreground truncate tracking-tight`}>{label}</span>
+          {onTogglePrivacy && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePrivacy(e);
+              }}
+              className="p-1 rounded-full hover:bg-muted text-muted-foreground/70 hover:text-foreground transition-all cursor-pointer inline-flex items-center justify-center shrink-0"
+              title={isRevealed ? (lang === "bn" ? "লুকান" : "Hide") : (lang === "bn" ? "দেখান" : "Show")}
+            >
+              {isRevealed ? (
+                <Eye className="size-3.5 text-muted-foreground hover:text-primary transition-colors" />
+              ) : (
+                <EyeOff className="size-3.5 text-rose-500 animate-pulse" />
+              )}
+            </button>
+          )}
         </div>
         {imageUrl && !imgFailed ? (
           <div className="flex items-center justify-center shrink-0">
@@ -355,18 +373,40 @@ function KPICard({
         {isPrivacyProtected && !isRevealed ? (
           <div className="flex items-center gap-1.5 select-none py-0.5 animate-in fade-in duration-200">
             <span className="font-mono tracking-widest text-foreground/80 font-black text-sm sm:text-base">••••••</span>
-            <span className="p-1 rounded-full bg-primary/10 text-primary flex items-center justify-center border border-primary/25 shadow-2xs">
+            <button
+              type="button"
+              onClick={(e) => {
+                if (onTogglePrivacy) {
+                  e.stopPropagation();
+                  onTogglePrivacy(e);
+                }
+              }}
+              className="p-1 rounded-full bg-primary/10 text-primary flex items-center justify-center border border-primary/25 shadow-2xs hover:bg-primary/20 transition-colors cursor-pointer"
+              title={lang === "bn" ? "দেখান" : "Show"}
+            >
               <Eye className="size-3.5 text-primary animate-pulse" />
-            </span>
+            </button>
           </div>
         ) : (
           <div className={`${valSize} font-bold tracking-tight text-foreground flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200`} title={value}>
             <span>{value}</span>
-            {isPrivacyProtected && (
+            {onTogglePrivacy ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePrivacy(e);
+                }}
+                className="inline-flex items-center p-1 rounded-full hover:bg-muted text-muted-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+                title={lang === "bn" ? "লুকান" : "Hide"}
+              >
+                <Eye className="size-3.5 text-muted-foreground hover:text-primary transition-colors" />
+              </button>
+            ) : isPrivacyProtected ? (
               <span className="inline-flex items-center p-1 rounded-full bg-muted/60 text-muted-foreground/80">
                 <Eye className="size-3.5 text-emerald-600 dark:text-emerald-400" />
               </span>
-            )}
+            ) : null}
           </div>
         )}
         {sub && <div className={`${subSize} text-muted-foreground mt-0.5 truncate w-full`} title={sub}>{sub}</div>}
@@ -468,6 +508,31 @@ export default function Dashboard() {
     } else if (fallbackPath) {
       playTapSound();
       router.push(fallbackPath);
+    }
+  };
+
+  const toggleKpiPrivacy = (key: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    playTapSound();
+    const normalizedKey = key === "bkash_bank" ? "sell_kpi" : key === "owners_wallet" ? "owner_wallet" : key;
+    const currentHidden = kpiConfig.hiddenKpis || [];
+    const isCurrentlyHidden = currentHidden.includes(normalizedKey) || currentHidden.includes(key);
+    const isCurrentlyRevealed = revealedKpis[normalizedKey] ?? !isCurrentlyHidden;
+
+    if (isCurrentlyRevealed) {
+      // Hide / Mask value and persist to hiddenKpis
+      setRevealedKpis(prev => ({ ...prev, [normalizedKey]: false }));
+      if (!currentHidden.includes(normalizedKey)) {
+        updateKpiConfig({ hiddenKpis: [...currentHidden, normalizedKey] });
+      }
+      toast.info(lang === "bn" ? "কেপিআই লুকানো হয়েছে" : "KPI hidden", { duration: 900 });
+    } else {
+      // Reveal value
+      setRevealedKpis(prev => ({ ...prev, [normalizedKey]: true }));
+      toast.info(lang === "bn" ? "কেপিআই দৃশ্যমান করা হয়েছে" : "KPI revealed", { duration: 900 });
     }
   };
 
@@ -1838,6 +1903,7 @@ export default function Dashboard() {
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
             {...privacyProps}
+            onTogglePrivacy={(e) => toggleKpiPrivacy("stock_qty", e)}
             onClick={(e) => handlePrivacyKpiClick(e, "stock_qty", "/products")}
           />
         );
@@ -1855,6 +1921,7 @@ export default function Dashboard() {
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
             {...privacyProps}
+            onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_cost", e)}
             onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
           />
         );
@@ -1872,6 +1939,7 @@ export default function Dashboard() {
             align={kpiConfig.align as any}
             size={kpiConfig.size as any}
             {...privacyProps}
+            onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_sale", e)}
             onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
           />
         );
@@ -2144,56 +2212,65 @@ const renderWidget = (widgetId: string) => {
               );
             case "stock_qty":
               const totalStockUnitsDesktop = (products.data ?? []).filter(p => !p.archived).reduce((sum, p) => sum + Math.max(0, Number(p.stock) || 0), 0);
+              const isStockQtyHidden = (kpiConfig.hiddenKpis || []).includes("stock_qty");
+              const isStockQtyRevealed = revealedKpis["stock_qty"] ?? !isStockQtyHidden;
               return (
                 <KPICard
                   key="stock_qty"
                   label={lang === "bn" ? "মোট স্টক সংখ্যা" : "Total Stock Units"}
                   value={`${totalStockUnitsDesktop.toLocaleString()} ${lang === "bn" ? "টি" : "items"}`}
-                  sub={lang === "bn" ? `${(products.data ?? []).filter(p => !p.archived).length} প্রকার পণ্য` : `${(products.data ?? []).filter(p => !p.archived).length} items in catalog`}
+                  sub={isStockQtyHidden && !isStockQtyRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? `${(products.data ?? []).filter(p => !p.archived).length} প্রকার পণ্য` : `${(products.data ?? []).filter(p => !p.archived).length} items in catalog`)}
                   icon={Package}
                   color="bg-teal-600"
                   isDesktop={true}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_qty")}
-                  isRevealed={revealedKpis["stock_qty"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_qty")}
+                  isPrivacyProtected={isStockQtyHidden}
+                  isRevealed={isStockQtyRevealed}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_qty", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_qty", "/products")}
                 />
               );
             case "stock_valuation_cost":
+              const isCostHidden = (kpiConfig.hiddenKpis || []).includes("stock_valuation_cost");
+              const isCostRevealed = revealedKpis["stock_valuation_cost"] ?? !isCostHidden;
               return (
                 <KPICard
                   key="stock_valuation_cost"
                   label={lang === "bn" ? "স্টক কেনা মূল্য" : "Stock Cost Worth"}
                   value={fmtMoney(totalStockCostValuation)}
-                  sub={lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock"}
+                  sub={isCostHidden && !isCostRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "কেনা মূল্যের হিসাব" : "Cost Worth of Stock")}
                   icon={Package}
                   color="bg-cyan-600"
                   isDesktop={true}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
-                  isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  isPrivacyProtected={isCostHidden}
+                  isRevealed={isCostRevealed}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_cost", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
                 />
               );
             case "stock_valuation_sale":
+              const isSaleHidden = (kpiConfig.hiddenKpis || []).includes("stock_valuation_sale");
+              const isSaleRevealed = revealedKpis["stock_valuation_sale"] ?? !isSaleHidden;
               return (
                 <KPICard
                   key="stock_valuation_sale"
                   label={lang === "bn" ? "স্টক সম্ভাব্য বিক্রি" : "Stock Sale Worth"}
                   value={fmtMoney(totalStockSaleValuation)}
-                  sub={lang === "bn" ? "সম্ভাব্য বিক্রি মূল্য" : "Selling Worth of Stock"}
+                  sub={isSaleHidden && !isSaleRevealed ? (lang === "bn" ? "ট্যাপ করে দেখুন" : "Tap to reveal") : (lang === "bn" ? "সম্ভাব্য বিক্রি মূল্য" : "Selling Worth of Stock")}
                   icon={ShoppingBag}
                   color="bg-pink-600"
                   isDesktop={true}
                   className="h-full cursor-pointer"
                   align={kpiConfig.align as any}
                   size={kpiConfig.size as any}
-                  isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
-                  isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  isPrivacyProtected={isSaleHidden}
+                  isRevealed={isSaleRevealed}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_sale", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
                 />
               );
@@ -2225,6 +2302,7 @@ const renderWidget = (widgetId: string) => {
                   size={kpiConfig.size as any}
                   isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
                   isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_cost", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
                 />
                 <KPICard
@@ -2238,6 +2316,7 @@ const renderWidget = (widgetId: string) => {
                   size={kpiConfig.size as any}
                   isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
                   isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_sale", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
                 />
               </div>
@@ -2575,6 +2654,7 @@ const renderWidget = (widgetId: string) => {
                   size={kpiConfig.size as any}
                   isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
                   isRevealed={revealedKpis["stock_valuation_cost"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_cost")}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_cost", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_cost", "/products")}
                 />
                 <KPICard
@@ -2588,6 +2668,7 @@ const renderWidget = (widgetId: string) => {
                   size={kpiConfig.size as any}
                   isPrivacyProtected={(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
                   isRevealed={revealedKpis["stock_valuation_sale"] ?? !(kpiConfig.hiddenKpis || []).includes("stock_valuation_sale")}
+                  onTogglePrivacy={(e) => toggleKpiPrivacy("stock_valuation_sale", e)}
                   onClick={(e) => handlePrivacyKpiClick(e, "stock_valuation_sale", "/products")}
                 />
               </div>
