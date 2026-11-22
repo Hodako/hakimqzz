@@ -26,6 +26,15 @@ import {
   sendWhatsAppCampaign,
 } from "@/lib/whatsapp-baileys";
 import {
+  sendOpenWaMessage,
+  getOpenWaSessionStatus,
+  getOpenWaQrCode,
+  startOpenWaSession,
+  stopOpenWaSession,
+  testOpenWaConnection,
+  type OpenWaConfig,
+} from "@/lib/openwa-client";
+import {
   getOwnerGatewayStatus,
   getOrCreatePairingCode,
   enqueueSmsToGateway,
@@ -5138,20 +5147,171 @@ export async function respondToEmployeeInvitationFn(input: {
   }
 }
 
-// ── WhatsApp Web Integration Server Actions ─────────────────────────
+// ── WhatsApp & OpenWA Gateway Integration Server Actions ───────────────────
+
+export async function getOpenWaConfigForSession(session: AppSession): Promise<OpenWaConfig & { enabled: boolean; useGateway: boolean }> {
+  try {
+    const db = await getDb();
+    const biz = await db.collection("businesses").findOne({ owner_id: session.ownerId });
+    const gatewayUrl = (biz?.openwa_gateway_url as string) || process.env.OPENWA_GATEWAY_URL || "http://127.0.0.1:2785";
+    const sessionId = (biz?.openwa_session_id as string) || process.env.OPENWA_SESSION_ID || "dreamfashion";
+    const apiKey = (biz?.openwa_api_key as string) || process.env.OPENWA_API_KEY || "";
+    const enabled = biz?.openwa_enabled !== undefined ? Boolean(biz.openwa_enabled) : true;
+    return {
+      gatewayUrl,
+      sessionId,
+      apiKey,
+      enabled,
+      useGateway: enabled && Boolean(gatewayUrl),
+    };
+  } catch {
+    return {
+      gatewayUrl: "http://127.0.0.1:2785",
+      sessionId: "dreamfashion",
+      apiKey: "",
+      enabled: true,
+      useGateway: true,
+    };
+  }
+}
+
+export async function getOpenWaConfigFn() {
+  const session = await requireSession();
+  const cfg = await getOpenWaConfigForSession(session);
+  return {
+    gatewayUrl: cfg.gatewayUrl,
+    sessionId: cfg.sessionId,
+    apiKey: cfg.apiKey,
+    enabled: cfg.enabled,
+  };
+}
+
+export async function saveOpenWaConfigFn(input: {
+  data: {
+    gatewayUrl: string;
+    sessionId?: string;
+    apiKey?: string;
+    enabled?: boolean;
+  };
+}) {
+  const session = await requireSession();
+  const { data = {} }: any = input ?? {};
+  const db = await getDb();
+
+  const updateFields: Record<string, any> = {
+    openwa_gateway_url: (data.gatewayUrl || "http://127.0.0.1:2785").trim(),
+    openwa_session_id: (data.sessionId || "dreamfashion").trim(),
+    openwa_api_key: (data.apiKey || "").trim(),
+    openwa_enabled: data.enabled !== undefined ? Boolean(data.enabled) : true,
+    updated_at: new Date().toISOString(),
+  };
+
+  await db.collection("businesses").updateOne(
+    { owner_id: session.ownerId },
+    { $set: updateFields },
+    { upsert: false }
+  );
+
+  return { success: true, ...updateFields };
+}
+
+export async function testOpenWaGatewayFn(input?: {
+  data?: {
+    gatewayUrl?: string;
+    apiKey?: string;
+  };
+}) {
+  const session = await requireSession();
+  const { data = {} }: any = input ?? {};
+  const cfg = await getOpenWaConfigForSession(session);
+
+  const targetUrl = data.gatewayUrl ? data.gatewayUrl.trim() : cfg.gatewayUrl;
+  const targetKey = data.apiKey !== undefined ? data.apiKey.trim() : cfg.apiKey;
+
+  return await testOpenWaConnection({
+    gatewayUrl: targetUrl,
+    apiKey: targetKey,
+  });
+}
 
 export async function getWhatsAppStatusFn() {
   const session = await requireSession();
+  const openWaCfg = await getOpenWaConfigForSession(session);
+
+  // If OpenWA is enabled, query OpenWA gateway
+  if (openWaCfg.useGateway) {
+    try {
+      const openWaStatus = await getOpenWaSessionStatus(openWaCfg);
+      if (openWaStatus.status === "connected") {
+        return {
+          status: "connected" as const,
+          qrCodeDataUrl: null,
+          phone: openWaStatus.phone || null,
+          name: openWaStatus.name || "OpenWA Business",
+          gateway: "openwa",
+          engine: "OpenWA Lightning Gateway",
+        };
+      }
+      if (openWaStatus.status === "qr_ready") {
+        const qrRes = await getOpenWaQrCode(openWaCfg);
+        return {
+          status: "qr_ready" as const,
+          qrCodeDataUrl: qrRes.qrCode,
+          phone: null,
+          name: null,
+          gateway: "openwa",
+          engine: "OpenWA Lightning Gateway",
+        };
+      }
+    } catch {
+      // Fallback to internal Baileys
+    }
+  }
+
+  // Fallback to Baileys engine
   return await getWhatsAppStatus(session.ownerId);
 }
 
 export async function startWhatsAppSessionFn() {
   const session = await requireSession();
+  const openWaCfg = await getOpenWaConfigForSession(session);
+
+  if (openWaCfg.useGateway) {
+    try {
+      const startRes = await startOpenWaSession(openWaCfg);
+      if (startRes.success) {
+        const status = await getOpenWaSessionStatus(openWaCfg);
+        let qrCodeDataUrl: string | null = null;
+        if (status.status === "qr_ready") {
+          const qr = await getOpenWaQrCode(openWaCfg);
+          qrCodeDataUrl = qr.qrCode;
+        }
+        return {
+          status: status.status,
+          qrCodeDataUrl,
+          phone: status.phone || null,
+          name: status.name || null,
+          gateway: "openwa",
+        };
+      }
+    } catch (err: any) {
+      console.warn("[WhatsApp] OpenWA start session failed, falling back to Baileys:", err?.message);
+    }
+  }
+
   return await startWhatsAppSession(session.ownerId);
 }
 
 export async function disconnectWhatsAppSessionFn() {
   const session = await requireSession();
+  const openWaCfg = await getOpenWaConfigForSession(session);
+
+  if (openWaCfg.useGateway) {
+    try {
+      await stopOpenWaSession(openWaCfg);
+    } catch (_) {}
+  }
+
   return await disconnectWhatsAppSession(session.ownerId);
 }
 
@@ -5168,6 +5328,54 @@ export async function sendWhatsAppMessageFn(input: {
     throw new Error("Recipient phone and message text are required");
   }
 
+  const openWaCfg = await getOpenWaConfigForSession(session);
+  const db = await getDb();
+
+  // Try OpenWA Gateway first for sub-second / lightning-fast delivery!
+  if (openWaCfg.useGateway) {
+    try {
+      const openWaRes = await sendOpenWaMessage(
+        { to: data.phone, text: data.message },
+        openWaCfg
+      );
+
+      if (openWaRes.success) {
+        // Log to db
+        try {
+          await db.collection("sms_logs").insertOne({
+            business_id: session.ownerId,
+            user_id: session.userId || session.ownerId,
+            recipient: data.phone,
+            recipient_name: data.recipientName || "WhatsApp Contact",
+            message: data.message,
+            channel: "whatsapp",
+            gateway: "OpenWA Lightning Gateway",
+            message_id: openWaRes.messageId || `openwa_${Date.now()}`,
+            status: "Delivered",
+            is_success: true,
+            sms_count: 1,
+            latency_ms: openWaRes.latencyMs,
+            created_at: new Date(),
+          });
+        } catch (dbErr) {
+          console.warn("Failed to write WhatsApp log to database:", dbErr);
+        }
+
+        return {
+          isSuccess: true,
+          messageId: openWaRes.messageId,
+          gateway: "openwa",
+          latencyMs: openWaRes.latencyMs,
+        };
+      } else {
+        console.warn(`[WhatsApp] OpenWA dispatch returned error: ${openWaRes.error}, attempting Baileys fallback...`);
+      }
+    } catch (openWaErr: any) {
+      console.warn("[WhatsApp] OpenWA connection failed, attempting Baileys fallback:", openWaErr?.message);
+    }
+  }
+
+  // Graceful fallback to Baileys engine
   const res = await sendWhatsAppMessage(
     session.ownerId,
     data.phone,
@@ -5258,6 +5466,62 @@ export async function sendWhatsAppCampaignFn(input: {
 
   if (recipients.length === 0) {
     throw new Error("No recipients with valid phone numbers were found for this WhatsApp campaign.");
+  }
+
+  const openWaCfg = await getOpenWaConfigForSession(session);
+
+  // If OpenWA Gateway is active, dispatch ultra-fast campaign via REST API!
+  if (openWaCfg.useGateway) {
+    const status = await getOpenWaSessionStatus(openWaCfg);
+    if (status.status === "connected") {
+      let sentCount = 0;
+      let failedCount = 0;
+
+      for (let i = 0; i < recipients.length; i++) {
+        const item = recipients[i];
+        let textToSend = data.message;
+        if (data.isPersonalized && item.name) {
+          textToSend = textToSend.replace(/{name}/gi, item.name);
+        }
+
+        const res = await sendOpenWaMessage({ to: item.phone, text: textToSend }, openWaCfg);
+        if (res.success) {
+          sentCount++;
+          try {
+            await db.collection("sms_logs").insertOne({
+              business_id: session.ownerId,
+              user_id: session.userId || session.ownerId,
+              recipient: item.phone,
+              recipient_name: item.name || "WhatsApp Contact",
+              message: textToSend,
+              channel: "whatsapp",
+              gateway: "OpenWA Lightning Gateway",
+              message_id: res.messageId || `openwa_${Date.now()}`,
+              status: "Delivered",
+              is_success: true,
+              sms_count: 1,
+              latency_ms: res.latencyMs,
+              created_at: new Date(),
+            });
+          } catch (_) {}
+        } else {
+          failedCount++;
+        }
+
+        // Small 60ms delay to prevent flood rate-limiting
+        if (i < recipients.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        }
+      }
+
+      return {
+        success: true,
+        total: recipients.length,
+        sentCount,
+        failedCount,
+        gateway: "openwa",
+      };
+    }
   }
 
   return await sendWhatsAppCampaign(

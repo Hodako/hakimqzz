@@ -15,6 +15,14 @@ export interface DesktopWhatsAppStatus {
   isDesktop: boolean;
   isSending?: boolean;
   engine?: string;
+  openWaOnline?: boolean;
+}
+
+export function setDesktopOpenWaConfig(cfg: { gatewayUrl: string; sessionId?: string; apiKey?: string; enabled?: boolean }) {
+  const bridge = getDesktopWhatsAppBridge();
+  if (bridge && typeof bridge.setOpenWaConfig === "function") {
+    bridge.setOpenWaConfig(cfg);
+  }
 }
 
 const MODE_KEY = "df_wa_mode";

@@ -908,6 +908,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("wa:send-broadcast", async (_event, payload) => {
     return await desktopWhatsApp.sendBroadcast(payload?.recipients, payload?.message);
   });
+  ipcMain.handle("wa:set-openwa-config", (_event, cfg) => {
+    desktopWhatsApp.setOpenWaConfig(cfg);
+    return { success: true };
+  });
 
   // Start local bridge on port 9123 so even external browsers (Chrome/Edge) get 1-click silent print & Windows printer preferences!
   startBridgeServer((html, printerName, options) => performSilentPrint(html, printerName, options));

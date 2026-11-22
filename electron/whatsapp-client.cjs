@@ -7,6 +7,8 @@
 
 const { BrowserWindow, session, app } = require("electron");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 
 let waWindow = null;
 let status = "disconnected"; // disconnected | connecting | qr_ready | connected
@@ -19,6 +21,113 @@ let pollTimer = null;
 let isQuitting = false;
 let isSending = false;
 
+// OpenWA Gateway Configuration
+let openWaConfig = {
+  gatewayUrl: process.env.OPENWA_GATEWAY_URL || "http://127.0.0.1:2785",
+  sessionId: process.env.OPENWA_SESSION_ID || "dreamfashion",
+  apiKey: process.env.OPENWA_API_KEY || "",
+  enabled: true,
+};
+let openWaOnline = false;
+
+function setOpenWaConfig(cfg) {
+  if (!cfg) return;
+  openWaConfig = {
+    gatewayUrl: (cfg.gatewayUrl || openWaConfig.gatewayUrl || "http://127.0.0.1:2785").trim(),
+    sessionId: (cfg.sessionId || openWaConfig.sessionId || "dreamfashion").trim(),
+    apiKey: (cfg.apiKey !== undefined ? cfg.apiKey : openWaConfig.apiKey).trim(),
+    enabled: cfg.enabled !== undefined ? Boolean(cfg.enabled) : true,
+  };
+}
+
+/**
+ * Rapid HTTP request to OpenWA REST API Gateway
+ */
+function requestOpenWa(endpointPath, method, data, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    try {
+      const baseUrl = openWaConfig.gatewayUrl.replace(/\/+$/, "");
+      const fullUrl = new URL(baseUrl + endpointPath);
+      const isHttps = fullUrl.protocol === "https:";
+      const lib = isHttps ? https : http;
+
+      const bodyBuffer = data ? Buffer.from(JSON.stringify(data), "utf8") : null;
+      const headers = {
+        Accept: "application/json",
+      };
+      if (bodyBuffer) {
+        headers["Content-Type"] = "application/json";
+        headers["Content-Length"] = String(bodyBuffer.length);
+      }
+      if (openWaConfig.apiKey) {
+        headers["X-API-Key"] = openWaConfig.apiKey;
+        headers["Authorization"] = `Bearer ${openWaConfig.apiKey}`;
+      }
+
+      const req = lib.request(
+        fullUrl,
+        {
+          method: method || "GET",
+          headers,
+          timeout: timeoutMs,
+        },
+        (res) => {
+          let chunks = "";
+          res.on("data", (chunk) => {
+            chunks += chunk;
+          });
+          res.on("end", () => {
+            let parsed = null;
+            try {
+              parsed = JSON.parse(chunks);
+            } catch (_) {
+              parsed = chunks;
+            }
+            resolve({
+              ok: res.statusCode >= 200 && res.statusCode < 300,
+              status: res.statusCode,
+              data: parsed,
+            });
+          });
+        }
+      );
+
+      req.on("error", (err) => resolve({ ok: false, error: err.message }));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve({ ok: false, error: "OpenWA request timed out" });
+      });
+
+      if (bodyBuffer) {
+        req.write(bodyBuffer);
+      }
+      req.end();
+    } catch (err) {
+      resolve({ ok: false, error: err.message });
+    }
+  });
+}
+
+/**
+ * Tries sending a WhatsApp message via OpenWA Gateway in ~50ms
+ */
+async function trySendViaOpenWa(cleanPhone, message) {
+  if (!openWaConfig.enabled) return null;
+  const chatId = `${cleanPhone}@c.us`;
+  const endpoint = `/api/sessions/${encodeURIComponent(openWaConfig.sessionId)}/messages/send-text`;
+
+  const res = await requestOpenWa(endpoint, "POST", { chatId, text: message }, 8000);
+  if (res && res.ok) {
+    openWaOnline = true;
+    return {
+      success: true,
+      via: "openwa",
+      messageId: res.data?.id || res.data?.messageId,
+    };
+  }
+  return null;
+}
+
 const CHROME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -30,7 +139,13 @@ function getStatusSnapshot() {
     name,
     lastError,
     isDesktop: true,
-    engine: "chromium",
+    engine: openWaOnline ? "openwa" : "chromium",
+    openWaOnline,
+    openWaConfig: {
+      gatewayUrl: openWaConfig.gatewayUrl,
+      sessionId: openWaConfig.sessionId,
+      enabled: openWaConfig.enabled,
+    },
     isSending,
   };
 }
@@ -297,10 +412,6 @@ async function disconnectWhatsApp(userDataDir) {
  * Uses rapid in-page SPA navigation to prevent full-page reloads and eliminate "connecting..." delays!
  */
 async function sendMessage(targetPhone, message) {
-  if (status !== "connected" || !waWindow || waWindow.isDestroyed()) {
-    throw new Error("Desktop WhatsApp is not connected. Please scan the QR code first in Settings.");
-  }
-
   const clean = formatInternationalPhone(targetPhone);
   if (clean.length < 10) {
     throw new Error("Invalid recipient phone number: " + targetPhone);
@@ -310,6 +421,15 @@ async function sendMessage(targetPhone, message) {
   emit();
 
   try {
+    // 1. Try Lightning-Fast OpenWA REST API Gateway first (~50-100ms instant delivery!)
+    const openWaResult = await trySendViaOpenWa(clean, message);
+    if (openWaResult && openWaResult.success) {
+      return { success: true, via: "openwa", to: clean, messageId: openWaResult.messageId };
+    }
+
+    if (status !== "connected" || !waWindow || waWindow.isDestroyed()) {
+      throw new Error("WhatsApp is not connected. Connect via OpenWA Gateway or scan the QR code in Settings.");
+    }
     const encodedMsg = encodeURIComponent(String(message || ""));
     const targetUrl = `https://web.whatsapp.com/send?phone=${clean}&text=${encodedMsg}`;
 
@@ -451,4 +571,6 @@ module.exports = {
   sendMessage,
   sendBroadcast,
   prepareQuit,
+  setOpenWaConfig,
+  requestOpenWa,
 };

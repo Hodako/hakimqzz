@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("electronPOS", {
     disconnect: () => ipcRenderer.invoke("wa:disconnect"),
     sendMessage: (payload) => ipcRenderer.invoke("wa:send-message", payload),
     sendBroadcast: (payload) => ipcRenderer.invoke("wa:send-broadcast", payload),
+    setOpenWaConfig: (cfg) => ipcRenderer.invoke("wa:set-openwa-config", cfg),
     onStatusUpdate: (callback) => {
       const listener = (_event, snapshot) => callback(snapshot);
       ipcRenderer.on("wa:status-update", listener);

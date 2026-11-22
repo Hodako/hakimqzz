@@ -86,6 +86,10 @@ import {
   Truck,
   MessageCircle,
   QrCode,
+  Zap,
+  Server,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import {
   isDesktopWhatsAppAvailable,
@@ -95,6 +99,7 @@ import {
   setWhatsAppMode,
   getWhatsAppAutoRules,
   setWhatsAppAutoRules,
+  setDesktopOpenWaConfig,
   type WhatsAppMode,
   type WhatsAppAutoRules,
   type DesktopWhatsAppStatus,
@@ -123,6 +128,13 @@ import {
   listEmployeeInvitationsFn,
   cancelEmployeeInvitationFn,
   steadfastCheckBalanceFn,
+  getWhatsAppStatusFn,
+  startWhatsAppSessionFn,
+  disconnectWhatsAppSessionFn,
+  sendWhatsAppMessageFn,
+  saveOpenWaConfigFn,
+  testOpenWaGatewayFn,
+  getOpenWaConfigFn,
 } from "@/lib/rpc";
 import { auth } from "@/lib/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
@@ -623,8 +635,23 @@ export default function SettingsPage() {
   const [waMode, setWaModeState] = useState<WhatsAppMode>("manual");
   const [waRules, setWaRulesState] = useState<WhatsAppAutoRules>({ onSale: true, onOnlineOrder: true, onTracking: true });
   const [waTestPhone, setWaTestPhone] = useState("");
-  const [waTestMsg, setWaTestMsg] = useState("Hello from Dream Fashion Desktop POS!");
+  const [waTestMsg, setWaTestMsg] = useState("Hello from Dream Fashion POS!");
   const [waBusy, setWaBusy] = useState(false);
+
+  // OpenWA High-Speed Gateway State (Sub-Second REST API)
+  const [openWaGatewayUrl, setOpenWaGatewayUrl] = useState("http://127.0.0.1:2785");
+  const [openWaSessionId, setOpenWaSessionId] = useState("dreamfashion");
+  const [openWaApiKey, setOpenWaApiKey] = useState("");
+  const [openWaEnabled, setOpenWaEnabled] = useState(true);
+  const [openWaBusy, setOpenWaBusy] = useState(false);
+  const [openWaTesting, setOpenWaTesting] = useState(false);
+  const [openWaLatency, setOpenWaLatency] = useState<number | null>(null);
+  const [openWaTestStatus, setOpenWaTestStatus] = useState<string | null>(null);
+  const [openWaQrCode, setOpenWaQrCode] = useState<string | null>(null);
+  const [openWaSessionStatus, setOpenWaSessionStatus] = useState<string>("disconnected");
+  const [openWaPhone, setOpenWaPhone] = useState<string | null>(null);
+  const [openWaEngine, setOpenWaEngine] = useState<string>("OpenWA Lightning Gateway");
+  const [lastMsgLatency, setLastMsgLatency] = useState<number | null>(null);
 
   useEffect(() => {
     setWaAvailable(isDesktopWhatsAppAvailable());
@@ -660,8 +687,143 @@ export default function SettingsPage() {
       setSteadfastEnabled(Boolean((biz as any).steadfast_enabled));
       setSteadfastApiKey(String((biz as any).steadfast_api_key || ""));
       setSteadfastSecretKey(String((biz as any).steadfast_secret_key || ""));
+      if ((biz as any).openwa_gateway_url) {
+        setOpenWaGatewayUrl(String((biz as any).openwa_gateway_url));
+      }
+      if ((biz as any).openwa_session_id) {
+        setOpenWaSessionId(String((biz as any).openwa_session_id));
+      }
+      if ((biz as any).openwa_api_key) {
+        setOpenWaApiKey(String((biz as any).openwa_api_key));
+      }
+      if ((biz as any).openwa_enabled !== undefined) {
+        setOpenWaEnabled(Boolean((biz as any).openwa_enabled));
+      }
     }
-  }, [biz?.logo_url, biz?.invoice_font_size, biz?.invoice_scale, biz?.invoice_line_spacing, (biz as any)?.steadfast_enabled, (biz as any)?.steadfast_api_key, (biz as any)?.steadfast_secret_key]);
+  }, [
+    biz?.logo_url,
+    biz?.invoice_font_size,
+    biz?.invoice_scale,
+    biz?.invoice_line_spacing,
+    (biz as any)?.steadfast_enabled,
+    (biz as any)?.steadfast_api_key,
+    (biz as any)?.steadfast_secret_key,
+    (biz as any)?.openwa_gateway_url,
+    (biz as any)?.openwa_session_id,
+    (biz as any)?.openwa_api_key,
+    (biz as any)?.openwa_enabled,
+  ]);
+
+  useEffect(() => {
+    // Initial fetch of server WhatsApp / OpenWA status
+    getWhatsAppStatusFn()
+      .then((st: any) => {
+        if (st) {
+          if (st.status) setOpenWaSessionStatus(st.status);
+          if (st.phone) setOpenWaPhone(st.phone);
+          if (st.qrCodeDataUrl) setOpenWaQrCode(st.qrCodeDataUrl);
+          if (st.engine) setOpenWaEngine(st.engine);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleTestOpenWa() {
+    setOpenWaTesting(true);
+    setOpenWaLatency(null);
+    setOpenWaTestStatus(null);
+    try {
+      const res = await testOpenWaGatewayFn({
+        data: {
+          gatewayUrl: openWaGatewayUrl.trim(),
+          apiKey: openWaApiKey.trim(),
+        },
+      });
+      if (res?.reachable) {
+        setOpenWaLatency(res.latencyMs);
+        setOpenWaTestStatus("connected");
+        toast.success(
+          lang === "bn"
+            ? `⚡ OpenWA গেটওয়ে সংযুক্ত (${res.latencyMs}ms)!`
+            : `⚡ OpenWA Gateway reached in ${res.latencyMs}ms!`
+        );
+      } else {
+        setOpenWaTestStatus("error");
+        toast.error(res?.error || "OpenWA Gateway unreachable");
+      }
+    } catch (err: any) {
+      setOpenWaTestStatus("error");
+      toast.error(err?.message || "Failed to reach OpenWA gateway");
+    } finally {
+      setOpenWaTesting(false);
+    }
+  }
+
+  async function handleSaveOpenWa() {
+    setOpenWaBusy(true);
+    try {
+      await saveOpenWaConfigFn({
+        data: {
+          gatewayUrl: openWaGatewayUrl.trim(),
+          sessionId: openWaSessionId.trim(),
+          apiKey: openWaApiKey.trim(),
+          enabled: openWaEnabled,
+        },
+      });
+      setDesktopOpenWaConfig({
+        gatewayUrl: openWaGatewayUrl.trim(),
+        sessionId: openWaSessionId.trim(),
+        apiKey: openWaApiKey.trim(),
+        enabled: openWaEnabled,
+      });
+      settings.refetch();
+      toast.success(
+        lang === "bn"
+          ? "OpenWA কনফিগারেশন সফলভাবে সংরক্ষিত হয়েছে"
+          : "OpenWA Gateway configuration saved"
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save OpenWA config");
+    } finally {
+      setOpenWaBusy(false);
+    }
+  }
+
+  async function handleStartOpenWaSession() {
+    setOpenWaBusy(true);
+    try {
+      const res: any = await startWhatsAppSessionFn();
+      if (res?.status) {
+        setOpenWaSessionStatus(res.status);
+        if (res.qrCodeDataUrl) setOpenWaQrCode(res.qrCodeDataUrl);
+        if (res.phone) setOpenWaPhone(res.phone);
+        toast.success(
+          res.status === "connected"
+            ? "WhatsApp Connected!"
+            : "QR Code Ready — Please Scan with Phone"
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to start WhatsApp session");
+    } finally {
+      setOpenWaBusy(false);
+    }
+  }
+
+  async function handleDisconnectOpenWaSession() {
+    setOpenWaBusy(true);
+    try {
+      await disconnectWhatsAppSessionFn();
+      setOpenWaSessionStatus("disconnected");
+      setOpenWaQrCode(null);
+      setOpenWaPhone(null);
+      toast.success("WhatsApp session disconnected");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to disconnect WhatsApp");
+    } finally {
+      setOpenWaBusy(false);
+    }
+  }
 
   async function handleTestSteadfast() {
     if (!steadfastApiKey.trim() || !steadfastSecretKey.trim()) {
@@ -2535,141 +2697,235 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* ── TAB: DESKTOP WHATSAPP (CLIENT COMPUTE QR + AUTO/MANUAL) ────── */}
+          {/* ── TAB: OPENWA HIGH-SPEED WHATSAPP GATEWAY & AUTOMATION ────── */}
           {settingsTab === "whatsapp" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
-                <div className="flex items-center justify-between border-b border-border/60 pb-3">
-                  <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
-                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                      <QrCode className="size-5" />
+              {/* Left / Main Card: OpenWA REST API Gateway Settings */}
+              <Card className="lg:col-span-7 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
+                  <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                    <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600">
+                      <Zap className="size-5" />
                     </div>
                     <div>
-                      <h2 className="text-base font-bold text-foreground">
-                        {lang === "bn" ? "ডেস্কটপ হোয়াটসঅ্যাপ QR (লোকাল কম্পিউট)" : "Desktop WhatsApp QR (Client Compute)"}
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-foreground">
+                          {lang === "bn" ? "OpenWA হাই-স্পিড গেটওয়ে" : "OpenWA Lightning Gateway"}
+                        </h2>
+                        <Badge className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 text-[10px] font-mono px-2">
+                          ⚡ Sub-Second REST API
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {lang === "bn"
-                          ? "সম্পূর্ণ আপনার নিজের কম্পিউটারে চলে — কোনো ক্লাউড সার্ভারে সেশন যায় না।"
-                          : "Runs 100% locally inside your Desktop App using your own computer."}
+                          ? "হেডলেস REST API দিয়ে ব্রাউজার লোড ছাড়াই মিলিসেকেন্ডে মেসেজ পাঠায়।"
+                          : "Direct REST API gateway via OpenWA (https://github.com/rmyndharis/OpenWA.git)."}
                       </p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={waStatus.status === "connected" ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" : "bg-muted text-muted-foreground"}>
-                    {waStatus.status === "connected" ? "Connected" : waStatus.status === "qr_ready" ? "Scan QR" : waStatus.status === "connecting" ? "Connecting..." : "Disconnected"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {openWaLatency !== null && (
+                      <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 text-[11px] font-mono bg-emerald-500/10">
+                        ⚡ {openWaLatency}ms
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={
+                        openWaSessionStatus === "connected" || waStatus.status === "connected"
+                          ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30 font-bold"
+                          : openWaSessionStatus === "qr_ready" || waStatus.status === "qr_ready"
+                          ? "bg-amber-500/15 text-amber-600 border-amber-500/30 font-bold"
+                          : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {openWaSessionStatus === "connected" || waStatus.status === "connected"
+                        ? "Connected ⚡"
+                        : openWaSessionStatus === "qr_ready" || waStatus.status === "qr_ready"
+                        ? "Scan QR"
+                        : "Disconnected"}
+                    </Badge>
+                  </div>
                 </div>
 
-                {!waAvailable ? (
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-200 space-y-1.5">
-                    <div className="font-bold">{lang === "bn" ? "ডেস্কটপ অ্যাপ প্রয়োজন" : "Desktop App Required for Local Compute"}</div>
-                    <p>
-                      {lang === "bn"
-                        ? "ক্লায়েন্ট কম্পিউটে WhatsApp QR এবং অটো মেসেজ চালাতে Dream Fashion Windows Desktop অ্যাপটি ব্যবহার করুন।"
-                        : "Open Dream Fashion Windows Desktop App to link your WhatsApp via QR code and send automated messages from your own PC."}
-                    </p>
+                {/* Gateway Configuration Form */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Server className="size-3.5 text-muted-foreground" />
+                        {lang === "bn" ? "গেটওয়ে URL (Gateway URL)" : "OpenWA Gateway URL"}
+                      </Label>
+                      <Input
+                        value={openWaGatewayUrl}
+                        onChange={(e) => setOpenWaGatewayUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:2785"
+                        className="h-10 rounded-xl text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Default: http://127.0.0.1:2785 (OpenWA Port)</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-foreground">
+                        {lang === "bn" ? "সেশন নাম (Session ID)" : "Session ID"}
+                      </Label>
+                      <Input
+                        value={openWaSessionId}
+                        onChange={(e) => setOpenWaSessionId(e.target.value)}
+                        placeholder="dreamfashion"
+                        className="h-10 rounded-xl text-xs font-mono"
+                      />
+                      <p className="text-[10px] text-muted-foreground">e.g. dreamfashion</p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {waStatus.status === "qr_ready" && waStatus.qrCodeDataUrl && (
-                      <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white border border-border">
-                        <img src={waStatus.qrCodeDataUrl} alt="WhatsApp QR Code" className="w-56 h-56 rounded-xl" />
-                        <p className="text-xs font-semibold text-slate-700 text-center">
-                          {lang === "bn" ? "ফোনের WhatsApp > Linked Devices থেকে এই QR স্ক্যান করুন" : "Open WhatsApp > Linked Devices on your phone and scan this QR"}
-                        </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 items-end">
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <KeyRound className="size-3.5 text-muted-foreground" />
+                        {lang === "bn" ? "API কি (ঐচ্ছিক / X-API-Key)" : "Gateway API Key (Optional)"}
+                      </Label>
+                      <Input
+                        type="password"
+                        value={openWaApiKey}
+                        onChange={(e) => setOpenWaApiKey(e.target.value)}
+                        placeholder="Optional X-API-Key token"
+                        className="h-10 rounded-xl text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs font-bold text-foreground">Enable OpenWA</Label>
+                        <p className="text-[10px] text-muted-foreground">Use Fast Gateway</p>
                       </div>
-                    )}
+                      <Switch checked={openWaEnabled} onCheckedChange={setOpenWaEnabled} />
+                    </div>
+                  </div>
 
-                    {waStatus.status === "connected" && (
-                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                            {waStatus.name || "WhatsApp Linked"}
-                          </div>
-                          {waStatus.phone && (
-                            <div className="text-xs font-mono text-muted-foreground">+{waStatus.phone}</div>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={waBusy}
-                          onClick={async () => {
-                            setWaBusy(true);
-                            try {
-                              const bridge = getDesktopWhatsAppBridge();
-                              if (bridge) setWaStatus(await bridge.disconnect());
-                              toast.success("WhatsApp disconnected");
-                            } finally {
-                              setWaBusy(false);
-                            }
-                          }}
-                          className="h-9 rounded-xl text-xs font-bold"
-                        >
-                          Disconnect
-                        </Button>
-                      </div>
-                    )}
-
-                    {waStatus.status !== "connected" && (
-                      <Button
-                        type="button"
-                        disabled={waBusy}
-                        onClick={async () => {
-                          setWaBusy(true);
-                          try {
-                            const bridge = getDesktopWhatsAppBridge();
-                            if (bridge) setWaStatus(await bridge.start());
-                          } catch (err: any) {
-                            toast.error(err?.message || "Failed to start WhatsApp");
-                          } finally {
-                            setWaBusy(false);
-                          }
-                        }}
-                        className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2"
-                      >
-                        <QrCode className="size-4" />
-                        <span>{waStatus.status === "qr_ready" ? "Refresh QR Code" : (lang === "bn" ? "QR কোড জেনারেট করুন" : "Connect & Show QR Code")}</span>
-                      </Button>
-                    )}
-
+                  {/* Action Buttons: Test, Save, Connect/QR, Disconnect */}
+                  <div className="flex flex-wrap gap-2.5 pt-1">
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={openWaTesting || openWaBusy}
+                      onClick={handleTestOpenWa}
+                      className="h-9.5 rounded-xl text-xs font-bold gap-1.5 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
+                    >
+                      <RefreshCw className={`size-3.5 ${openWaTesting ? "animate-spin" : ""}`} />
+                      <span>{lang === "bn" ? "গেটওয়ে পিং টেস্ট" : "Test Connection"}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      disabled={openWaBusy || !isOwner}
+                      onClick={handleSaveOpenWa}
+                      className="h-9.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5"
+                    >
+                      <Check className="size-3.5" />
+                      <span>{lang === "bn" ? "সেটিংস সেভ করুন" : "Save Settings"}</span>
+                    </Button>
+
+                    {openWaSessionStatus !== "connected" && waStatus.status !== "connected" ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={openWaBusy}
+                        onClick={handleStartOpenWaSession}
+                        className="h-9.5 rounded-xl text-xs font-bold gap-1.5"
+                      >
+                        <QrCode className="size-3.5" />
+                        <span>{lang === "bn" ? "QR কোড দেখুন / পেয়ার করুন" : "Connect & Show QR"}</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={openWaBusy}
+                        onClick={handleDisconnectOpenWaSession}
+                        className="h-9.5 rounded-xl text-xs font-bold gap-1.5"
+                      >
+                        Disconnect
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* QR Code / Connection Status Box */}
+                {(openWaQrCode || waStatus.qrCodeDataUrl) && (openWaSessionStatus === "qr_ready" || waStatus.status === "qr_ready") && (
+                  <div className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-500/30 shadow-sm animate-in fade-in duration-300">
+                    <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                      <QrCode className="size-4 text-emerald-600" />
+                      <span>{lang === "bn" ? "WhatsApp দিয়ে এই QR স্ক্যান করুন" : "Scan QR code with your WhatsApp"}</span>
+                    </div>
+                    <img
+                      src={openWaQrCode || waStatus.qrCodeDataUrl || ""}
+                      alt="WhatsApp QR Code"
+                      className="w-56 h-56 rounded-xl border border-slate-200 dark:border-slate-800 bg-white p-2"
+                    />
+                    <p className="text-[11px] text-muted-foreground text-center max-w-sm">
+                      {lang === "bn"
+                        ? "ফোনে WhatsApp চালু করুন > সেটিংস বা ৩ ডট মেনু > Linked Devices > 'Link a Device' ক্লিক করে এই QR স্ক্যান করুন।"
+                        : "Open WhatsApp on your phone > Settings / Menu > Linked Devices > Link a Device, then scan this code."}
+                    </p>
+                  </div>
+                )}
+
+                {(openWaSessionStatus === "connected" || waStatus.status === "connected") && (
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                        <CheckCircle className="size-4 text-emerald-600" />
+                        <span>{openWaPhone || waStatus.phone ? `+${openWaPhone || waStatus.phone}` : "WhatsApp Active"}</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Engine: <span className="font-semibold text-foreground">{openWaEngine}</span> · Sub-second dispatch ready ⚡
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 text-xs font-bold">
+                      Ready to Send
+                    </Badge>
+                  </div>
+                )}
+
+                {/* Desktop Native Chromium Fallback option */}
+                {waAvailable && (
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Desktop Chromium Client:</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={async () => {
                         try {
                           await openDesktopWhatsAppWindow();
-                          toast.success(lang === "bn" ? "হোয়াটসঅ্যাপ ক্রোমিয়াম উইন্ডো খোলা হয়েছে" : "Opened Chromium WhatsApp Web Window");
+                          toast.success(lang === "bn" ? "ক্রোমিয়াম উইন্ডো খোলা হয়েছে" : "Opened Chromium Window");
                         } catch (err: any) {
                           toast.error(err?.message || "Failed to open window");
                         }
                       }}
-                      className="w-full h-9 rounded-xl border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 text-xs font-bold gap-2"
+                      className="h-8 text-xs font-semibold gap-1.5"
                     >
                       <ExternalLink className="size-3.5" />
-                      <span>{lang === "bn" ? "হোয়াটসঅ্যাপ উইন্ডো দেখুন (Chromium)" : "Open WhatsApp Web Window (Chromium)"}</span>
+                      <span>Open Chromium Webview</span>
                     </Button>
-
-                    {waStatus.lastError && (
-                      <p className="text-xs text-rose-500">{waStatus.lastError}</p>
-                    )}
                   </div>
                 )}
               </Card>
 
-              <Card className="lg:col-span-6 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
+              {/* Right Card: Message Automation & Instant Live Dispatcher */}
+              <Card className="lg:col-span-5 p-5 sm:p-6 rounded-3xl bg-card border-border/80 shadow-xs space-y-5">
                 <div className="border-b border-border/60 pb-3">
                   <h3 className="text-base font-bold text-foreground">
-                    {lang === "bn" ? "মেসেজ মোড (Auto / Manual)" : "Automation Mode (Auto / Manual)"}
+                    {lang === "bn" ? "মেসেজ অটোমেশন মোড" : "Message Automation Mode"}
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     {lang === "bn"
-                      ? "অটো মোডে সেল বা অনলাইন অর্ডার হলেই কাস্টমারকে অটোমেটিক মেসেজ যাবে।"
-                      : "Switch between Auto Mode (instant customer notifications) and Manual Mode (send on click)."}
+                      ? "অটো মোডে সেল বা অনলাইন অর্ডার হলেই কাস্টমারকে তাৎক্ষণিক মেসেজ যাবে।"
+                      : "Choose between automatic instant dispatch or manual approval."}
                   </p>
                 </div>
 
+                {/* Auto vs Manual Mode */}
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -2684,9 +2940,13 @@ export default function SettingsPage() {
                         : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50"
                     }`}
                   >
-                    <div className="text-sm font-bold">Auto Mode</div>
-                    <div className="text-[11px] opacity-80 mt-0.5">Send automatically on new orders & tracking updates</div>
+                    <div className="text-sm font-bold flex items-center gap-1.5">
+                      <Zap className="size-3.5 text-emerald-600" />
+                      <span>Auto Mode</span>
+                    </div>
+                    <div className="text-[11px] opacity-80 mt-1">Instant notification on orders & tracking</div>
                   </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -2701,7 +2961,7 @@ export default function SettingsPage() {
                     }`}
                   >
                     <div className="text-sm font-bold">Manual Mode</div>
-                    <div className="text-[11px] opacity-80 mt-0.5">Send only when you click the WhatsApp button</div>
+                    <div className="text-[11px] opacity-80 mt-1">Send only when you click Send WhatsApp</div>
                   </button>
                 </div>
 
@@ -2730,51 +2990,75 @@ export default function SettingsPage() {
                   </div>
                 )}
 
-                <div className="pt-2 border-t border-border/60 space-y-2.5">
-                  <div className="text-xs font-bold text-foreground">Manual / Test Message</div>
-                  <div className="flex gap-2">
+                {/* Instant Live Test Dispatcher */}
+                <div className="pt-2 border-t border-border/60 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Zap className="size-3.5 text-emerald-600" />
+                      <span>{lang === "bn" ? "লাইভ টেস্ট মেসেজ (সাব-সেকেন্ড)" : "Instant Live Test (Sub-Second)"}</span>
+                    </div>
+                    {lastMsgLatency !== null && (
+                      <Badge variant="outline" className="text-[10px] font-mono text-emerald-600 border-emerald-500/30">
+                        ⚡ Delivered in {lastMsgLatency}ms
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
                     <Input
                       value={waTestPhone}
                       onChange={(e) => setWaTestPhone(e.target.value)}
                       placeholder="017XXXXXXXX"
-                      className="h-9 rounded-xl text-xs font-mono"
+                      className="h-9.5 rounded-xl text-xs font-mono"
                     />
-                    <Button
-                      type="button"
-                      disabled={!waAvailable || waStatus.status !== "connected" || waBusy}
-                      onClick={async () => {
-                        setWaBusy(true);
-                        try {
-                          const bridge = getDesktopWhatsAppBridge();
-                          await bridge.sendMessage({ phone: waTestPhone, message: waTestMsg });
-                          toast.success("WhatsApp message sent from your computer!");
-                        } catch (err: any) {
-                          toast.error(err?.message || "Failed to send");
-                        } finally {
-                          setWaBusy(false);
-                        }
-                      }}
-                      className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-1.5 shrink-0"
-                    >
-                      {waBusy ? (
-                        <>
-                          <RefreshCw className="size-3.5 animate-spin" />
-                          <span>Sending...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="size-3.5" />
-                          <span>Send</span>
-                        </>
-                      )}
-                    </Button>
+                    <Input
+                      value={waTestMsg}
+                      onChange={(e) => setWaTestMsg(e.target.value)}
+                      placeholder="Message text..."
+                      className="h-9.5 rounded-xl text-xs"
+                    />
                   </div>
-                  <Input
-                    value={waTestMsg}
-                    onChange={(e) => setWaTestMsg(e.target.value)}
-                    placeholder="Message text..."
-                    className="h-9 rounded-xl text-xs"
-                  />
+
+                  <Button
+                    type="button"
+                    disabled={waBusy || !waTestPhone.trim()}
+                    onClick={async () => {
+                      setWaBusy(true);
+                      const t0 = Date.now();
+                      try {
+                        const res: any = await sendWhatsAppMessageFn({
+                          data: {
+                            phone: waTestPhone.trim(),
+                            message: waTestMsg.trim(),
+                          },
+                        });
+                        const dur = res?.latencyMs || (Date.now() - t0);
+                        setLastMsgLatency(dur);
+                        toast.success(
+                          lang === "bn"
+                            ? `⚡ মাত্র ${dur}ms এ মেসেজ পৌঁছেছে!`
+                            : `⚡ Message delivered in ${dur}ms via ${res?.gateway || "OpenWA"}!`
+                        );
+                      } catch (err: any) {
+                        toast.error(err?.message || "Failed to send WhatsApp message");
+                      } finally {
+                        setWaBusy(false);
+                      }
+                    }}
+                    className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold gap-2"
+                  >
+                    {waBusy ? (
+                      <>
+                        <RefreshCw className="size-3.5 animate-spin" />
+                        <span>Sending via OpenWA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="size-3.5" />
+                        <span>{lang === "bn" ? "তাৎক্ষণিক মেসেজ পাঠান (⚡ OpenWA)" : "Send Instant WhatsApp (⚡ OpenWA)"}</span>
+                      </>
+                    )}
+                  </Button>
                 </div>
               </Card>
             </div>
