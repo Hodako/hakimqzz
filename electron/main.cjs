@@ -306,8 +306,25 @@ async function createWindow() {
     }
   });
 
+  // Prevent any top-level navigation inside mainWindow away from POS application
+  mainWindow.webContents.on("will-navigate", (event, navUrl) => {
+    const u = String(navUrl || "");
+    if (u.startsWith(CLOUD_URL) || u.startsWith(LOCAL_URL) || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(u)) {
+      return;
+    }
+    event.preventDefault();
+    if (/^https?:\/\//i.test(u)) {
+      shell.openExternal(u).catch(() => {});
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
+    // When main POS screen is closed, cleanly shut down the entire application
+    try {
+      if (serverProcess) serverProcess.kill();
+    } catch (_) {}
+    app.quit();
   });
 }
 
@@ -825,30 +842,26 @@ ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
 
 if (process.platform === "win32") {
   try {
-    app.setAppUserModelId("com.dreamfashion.pos");
+    app.setAppUserModelId("com.dreamfashion.pos.v26");
+  } catch (_) {}
+
+  // Cleanly terminate any orphan zombie DreamFashion-POS background processes from older runs
+  try {
+    const curPid = process.pid;
+    exec(`powershell -NoProfile -Command "Get-Process -Name 'DreamFashion-POS' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${curPid} } | Stop-Process -Force"`, () => {});
   } catch (_) {}
 }
 
 let isCreatingWindow = false;
 async function ensureSingleMainWindow() {
-  const waWin = desktopWhatsApp.getWaWindow ? desktopWhatsApp.getWaWindow() : null;
-  const existing = (mainWindow && !mainWindow.isDestroyed())
-    ? mainWindow
-    : BrowserWindow.getAllWindows().find((w) => {
-        if (w.isDestroyed()) return false;
-        if (waWin && w === waWin) return false;
-        const title = w.getTitle() || "";
-        if (title.startsWith("POS Receipt Print") || title.startsWith("POS Label Print")) return false;
-        if (title.toLowerCase().includes("whatsapp")) return false;
-        return true;
-      });
-
-  if (existing) {
-    if (existing.isMinimized()) existing.restore();
-    if (!existing.isVisible()) existing.show();
-    existing.focus();
+  // STRICT POS MAIN WINDOW FOCUS ONLY - NEVER hijack or reuse background/WhatsApp windows!
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
     return;
   }
+
   if (isCreatingWindow) return;
   isCreatingWindow = true;
   try {

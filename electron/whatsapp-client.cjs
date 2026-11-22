@@ -223,6 +223,8 @@ async function ensureWaWindow(show = false) {
     show: Boolean(show),
     skipTaskbar: !show,
     autoHideMenuBar: true,
+    fullscreenable: false,
+    focusable: Boolean(show),
     backgroundColor: "#111b21",
     webPreferences: {
       session: waSession,
@@ -235,14 +237,13 @@ async function ensureWaWindow(show = false) {
 
   waWindow.setMenuBarVisibility(false);
 
-  waWindow.on("close", (event) => {
-    if (!isQuitting) {
-      event.preventDefault();
-      waWindow.hide();
-      try {
-        waWindow.setSkipTaskbar(true);
-      } catch (_) {}
+  waWindow.on("close", () => {
+    // Cleanly allow window to destroy on close - NEVER prevent default or create zombie background processes!
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
     }
+    waWindow = null;
   });
 
   // Inject script to detect QR code & login status continuously
@@ -382,6 +383,7 @@ async function openWindow() {
   const win = await ensureWaWindow(true);
   if (win && !win.isDestroyed()) {
     try {
+      win.setFocusable(true);
       win.setSkipTaskbar(false);
       if (win.isMinimized()) win.restore();
       win.show();
