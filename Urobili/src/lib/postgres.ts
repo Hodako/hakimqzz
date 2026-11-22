@@ -106,6 +106,7 @@ export async function ensurePostgresSchema(): Promise<void> {
   if (schemaInitialized) return;
   const p = getPostgresPool();
   try {
+    // 1. Core documents table (legacy / general)
     await p.query(`
       CREATE TABLE IF NOT EXISTS app_documents (
         id TEXT NOT NULL,
@@ -121,11 +122,117 @@ export async function ensurePostgresSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_app_docs_coll_created ON app_documents (collection, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_app_docs_data ON app_documents USING gin (data);
     `);
+
+    // 2. Dedicated typed schema for users (app_users)
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS app_users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE,
+        phone TEXT,
+        password TEXT,
+        full_name TEXT,
+        role TEXT DEFAULT 'owner',
+        business_id TEXT,
+        business_name TEXT,
+        industry TEXT,
+        status TEXT DEFAULT 'active',
+        owner_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        data JSONB NOT NULL DEFAULT '{}'::jsonb
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_app_users_email ON app_users (LOWER(email));
+      CREATE INDEX IF NOT EXISTS idx_app_users_phone ON app_users (phone);
+      CREATE INDEX IF NOT EXISTS idx_app_users_role ON app_users (role);
+      CREATE INDEX IF NOT EXISTS idx_app_users_business ON app_users (business_id);
+      CREATE INDEX IF NOT EXISTS idx_app_users_owner ON app_users (owner_id);
+      CREATE INDEX IF NOT EXISTS idx_app_users_data ON app_users USING gin (data);
+    `);
+
+    // 3. Auto-migrate existing users from app_documents into app_users
+    try {
+      const existingUserDocs = await p.query(
+        `SELECT id, created_at, updated_at, data FROM app_documents WHERE collection = 'users'`
+      );
+      for (const row of existingUserDocs.rows) {
+        const d = typeof row.data === "string" ? JSON.parse(row.data) : (row.data || {});
+        const email = (d.email || "").toLowerCase().trim() || null;
+        const phone = d.phone || null;
+        const password = d.password || "";
+        const fullName = d.full_name || d.name || "";
+        const role = d.role || "owner";
+        const businessId = d.business_id || null;
+        const businessName = d.business_name || "Urobili";
+        const industry = d.industry || null;
+        const status = d.status || "active";
+        const ownerId = d.owner_id || row.id;
+
+        await p.query(`
+          INSERT INTO app_users (
+            id, email, phone, password, full_name, role, business_id, business_name, industry, status, owner_id, created_at, updated_at, data
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (id) DO UPDATE SET
+            email = EXCLUDED.email,
+            phone = EXCLUDED.phone,
+            password = COALESCE(NULLIF(EXCLUDED.password, ''), app_users.password),
+            full_name = EXCLUDED.full_name,
+            role = EXCLUDED.role,
+            business_id = EXCLUDED.business_id,
+            business_name = EXCLUDED.business_name,
+            industry = COALESCE(EXCLUDED.industry, app_users.industry),
+            status = EXCLUDED.status,
+            owner_id = EXCLUDED.owner_id,
+            updated_at = NOW(),
+            data = EXCLUDED.data;
+        `, [
+          row.id, email, phone, password, fullName, role, businessId, businessName, industry, status, ownerId,
+          row.created_at || new Date(), row.updated_at || new Date(), JSON.stringify(d)
+        ]);
+      }
+    } catch (migErr: any) {
+      console.warn("[PostgreSQL Users Migration Notice]:", migErr.message);
+    }
+
     schemaInitialized = true;
-    console.log("[PostgreSQL] Core schema initialized successfully");
+    console.log("[PostgreSQL] Core schema and app_users initialized successfully");
   } catch (err: any) {
     console.warn("[PostgreSQL Schema Notice]:", err.message);
   }
+}
+
+/**
+ * Pre-provisions all isolated tenant tables in t_{ownerId} for an owner.
+ * Ensures every owner has their own dedicated schema and tables.
+ */
+export async function ensureOwnerAllTables(ownerId: string): Promise<string> {
+  const schema = getTenantSchemaName(ownerId);
+  const p = getPostgresPool();
+  await ensurePostgresSchema();
+  await p.query(`CREATE SCHEMA IF NOT EXISTS "${schema}";`);
+
+  // Initialize all collections for this tenant
+  for (const coll of Array.from(TENANT_COLLECTIONS)) {
+    const table = sanitizeSqlIdent(coll);
+    const fqtn = `"${schema}"."${table}"`;
+    try {
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS ${fqtn} (
+          id TEXT PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          data JSONB NOT NULL
+        );
+      `);
+      await p.query(`CREATE INDEX IF NOT EXISTS "idx_${table}_created" ON ${fqtn} (created_at DESC);`).catch(() => {});
+      await p.query(`CREATE INDEX IF NOT EXISTS "idx_${table}_status" ON ${fqtn} ((data->>'status'));`).catch(() => {});
+      await p.query(`CREATE INDEX IF NOT EXISTS "idx_${table}_data" ON ${fqtn} USING gin (data);`).catch(() => {});
+      initializedTenantTables.add(`${schema}.${table}`);
+    } catch (_) {}
+  }
+
+  return schema;
 }
 
 /**

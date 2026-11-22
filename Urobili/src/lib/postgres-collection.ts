@@ -248,6 +248,54 @@ export class PostgresCollection {
       return { insertedId: id, acknowledged: true };
     }
 
+    // Dedicated relational schema for users
+    if (this.collectionName === "users") {
+      const email = (normalized.email || "").toLowerCase().trim() || null;
+      const phone = normalized.phone || null;
+      const password = normalized.password || "";
+      const fullName = normalized.full_name || normalized.name || "";
+      const role = normalized.role || "owner";
+      const businessId = normalized.business_id || null;
+      const businessName = normalized.business_name || "Urobili";
+      const industry = normalized.industry || null;
+      const status = normalized.status || "active";
+      const ownerId = normalized.owner_id || id;
+
+      await pool.query(`
+        INSERT INTO app_users (
+          id, email, phone, password, full_name, role, business_id, business_name, industry, status, owner_id, created_at, updated_at, data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13)
+        ON CONFLICT (id) DO UPDATE SET
+          email = COALESCE(EXCLUDED.email, app_users.email),
+          phone = COALESCE(EXCLUDED.phone, app_users.phone),
+          password = CASE WHEN EXCLUDED.password != '' THEN EXCLUDED.password ELSE app_users.password END,
+          full_name = EXCLUDED.full_name,
+          role = EXCLUDED.role,
+          business_id = EXCLUDED.business_id,
+          business_name = EXCLUDED.business_name,
+          industry = COALESCE(EXCLUDED.industry, app_users.industry),
+          status = EXCLUDED.status,
+          owner_id = EXCLUDED.owner_id,
+          updated_at = NOW(),
+          data = EXCLUDED.data;
+      `, [id, email, phone, password, fullName, role, businessId, businessName, industry, status, ownerId, createdAt, JSON.stringify(normalized)]);
+
+      // Dual-write to app_documents for backward compatibility
+      await pool.query(`
+        INSERT INTO app_documents (id, collection, owner_id, created_at, data)
+        VALUES ($1, 'users', $2, $3, $4)
+        ON CONFLICT (collection, id) DO UPDATE
+        SET data = $4, owner_id = $2, updated_at = NOW();
+      `, [id, ownerId, createdAt, JSON.stringify(normalized)]);
+
+      // Auto-provision tenant tables if owner
+      if (role === "owner" && ownerId) {
+        ensureTenantTable(ownerId, "restaurant_tables").catch(() => {});
+      }
+
+      return { insertedId: id, acknowledged: true };
+    }
+
     const ownerId = normalized.owner_id ? String(normalized.owner_id) : null;
     const sql = `
       INSERT INTO app_documents (id, collection, owner_id, created_at, data)
@@ -301,6 +349,41 @@ export class PostgresCollection {
         `UPDATE ${fqtn} SET data = $1, owner_id = $2, updated_at = NOW() WHERE id = $3;`,
         [JSON.stringify(updated), ownerId, id]
       );
+      return { matchedCount: 1, modifiedCount: 1 };
+    }
+
+    if (this.collectionName === "users") {
+      const email = updated.email ? String(updated.email).toLowerCase().trim() : undefined;
+      const fullName = updated.full_name || updated.name;
+      const role = updated.role;
+      const businessId = updated.business_id;
+      const businessName = updated.business_name;
+      const industry = updated.industry;
+      const status = updated.status;
+      const ownerId = updated.owner_id || id;
+
+      await pool.query(`
+        UPDATE app_users
+        SET
+          email = COALESCE($1, email),
+          full_name = COALESCE($2, full_name),
+          role = COALESCE($3, role),
+          business_id = COALESCE($4, business_id),
+          business_name = COALESCE($5, business_name),
+          industry = COALESCE($6, industry),
+          status = COALESCE($7, status),
+          owner_id = COALESCE($8, owner_id),
+          data = $9,
+          updated_at = NOW()
+        WHERE id = $10;
+      `, [email, fullName, role, businessId, businessName, industry, status, ownerId, JSON.stringify(updated), id]);
+
+      await pool.query(`
+        UPDATE app_documents
+        SET data = $1, owner_id = $2, updated_at = NOW()
+        WHERE collection = 'users' AND id = $3;
+      `, [JSON.stringify(updated), ownerId, id]);
+
       return { matchedCount: 1, modifiedCount: 1 };
     }
 
@@ -360,6 +443,12 @@ export class PostgresCollection {
       }
       const { fqtn } = await ensureTenantTable(ownerId, this.collectionName);
       await pool.query(`DELETE FROM ${fqtn} WHERE id = $1;`, [id]);
+      return { deletedCount: 1 };
+    }
+
+    if (this.collectionName === "users") {
+      await pool.query(`DELETE FROM app_users WHERE id = $1;`, [id]);
+      await pool.query(`DELETE FROM app_documents WHERE collection = 'users' AND id = $1;`, [id]);
       return { deletedCount: 1 };
     }
 
@@ -473,6 +562,42 @@ export class PostgresCursor {
         const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
         const id = d.id || d._id;
         return { ...d, id, _id: id };
+      });
+    } else if (this.collectionName === "users") {
+      let sql = `SELECT id, email, phone, full_name, role, business_id, business_name, industry, status, owner_id, created_at, updated_at, data FROM app_users`;
+      const params: any[] = [];
+      const targetId = this.filter._id || this.filter.id;
+      const targetEmail = this.filter.email;
+      if (typeof targetId === "string" && !targetId.startsWith("$")) {
+        sql += ` WHERE id = $1`;
+        params.push(targetId);
+      } else if (typeof targetEmail === "string") {
+        sql += ` WHERE LOWER(email) = LOWER($1)`;
+        params.push(targetEmail.trim());
+      } else if (typeof this.filter.owner_id === "string") {
+        sql += ` WHERE owner_id = $1`;
+        params.push(this.filter.owner_id);
+      }
+      sql += ` ORDER BY created_at DESC;`;
+
+      const res = await pool.query(sql, params);
+      docs = res.rows.map((r: any) => {
+        const d = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+        const id = r.id || d.id || d._id;
+        return {
+          ...d,
+          id,
+          _id: id,
+          email: r.email || d.email,
+          phone: r.phone || d.phone,
+          full_name: r.full_name || d.full_name,
+          role: r.role || d.role,
+          business_id: r.business_id || d.business_id,
+          business_name: r.business_name || d.business_name,
+          industry: r.industry || d.industry,
+          status: r.status || d.status,
+          owner_id: r.owner_id || d.owner_id,
+        };
       });
     } else {
       // Global collection query optimized by collection and owner_id if available
