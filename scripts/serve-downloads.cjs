@@ -17,16 +17,19 @@ const server = http.createServer((req, res) => {
   const urlPath = decodeURIComponent(req.url.split("?")[0]);
   
   if (urlPath === "/" || urlPath === "/index.html") {
-    // Render modern HTML landing page
-    const files = fs.readdirSync(DOWNLOADS_DIR).map((name) => {
-      const stat = fs.statSync(path.join(DOWNLOADS_DIR, name));
-      return {
-        name,
-        size: formatBytes(stat.size),
-        isZip: name.endsWith(".zip"),
-        isExe: name.endsWith(".exe"),
-      };
-    });
+    // Render modern HTML landing page - ONLY latest DreamFashion software ZIP
+    const files = fs
+      .readdirSync(DOWNLOADS_DIR)
+      .filter((name) => name.toLowerCase().startsWith("dreamfashion") && name.toLowerCase().endsWith(".zip"))
+      .map((name) => {
+        const stat = fs.statSync(path.join(DOWNLOADS_DIR, name));
+        return {
+          name,
+          size: formatBytes(stat.size),
+          isZip: true,
+          isExe: false,
+        };
+      });
 
     const html = `<!DOCTYPE html>
 <html lang="en">

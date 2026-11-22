@@ -188,6 +188,10 @@ function formatInternationalPhone(rawPhone) {
   return clean;
 }
 
+function getWaWindow() {
+  return waWindow;
+}
+
 /**
  * Creates or retrieves the background Chromium WhatsApp Web window
  */
@@ -195,6 +199,7 @@ async function ensureWaWindow(show = false) {
   if (waWindow && !waWindow.isDestroyed()) {
     if (show) {
       if (waWindow.isMinimized()) waWindow.restore();
+      waWindow.setSkipTaskbar(false);
       waWindow.show();
       waWindow.focus();
     }
@@ -215,7 +220,9 @@ async function ensureWaWindow(show = false) {
     minHeight: 480,
     title: "WhatsApp Web — Dream Fashion POS (Chromium)",
     icon: appIcon,
-    show: show,
+    show: Boolean(show),
+    skipTaskbar: !show,
+    autoHideMenuBar: true,
     backgroundColor: "#111b21",
     webPreferences: {
       session: waSession,
@@ -232,6 +239,9 @@ async function ensureWaWindow(show = false) {
     if (!isQuitting) {
       event.preventDefault();
       waWindow.hide();
+      try {
+        waWindow.setSkipTaskbar(true);
+      } catch (_) {}
     }
   });
 
@@ -369,7 +379,15 @@ async function startWhatsApp(userDataDir, onStatusUpdate) {
  * Opens or restores the Chromium WhatsApp window on screen
  */
 async function openWindow() {
-  await ensureWaWindow(true);
+  const win = await ensureWaWindow(true);
+  if (win && !win.isDestroyed()) {
+    try {
+      win.setSkipTaskbar(false);
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+    } catch (_) {}
+  }
   return getStatusSnapshot();
 }
 
@@ -565,6 +583,7 @@ async function sendBroadcast(recipients, message) {
 
 module.exports = {
   getStatusSnapshot,
+  getWaWindow,
   startWhatsApp,
   openWindow,
   disconnectWhatsApp,

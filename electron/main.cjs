@@ -831,9 +831,17 @@ if (process.platform === "win32") {
 
 let isCreatingWindow = false;
 async function ensureSingleMainWindow() {
+  const waWin = desktopWhatsApp.getWaWindow ? desktopWhatsApp.getWaWindow() : null;
   const existing = (mainWindow && !mainWindow.isDestroyed())
     ? mainWindow
-    : BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w.getTitle() !== "POS Receipt Print" && w.getTitle() !== "POS Label Print");
+    : BrowserWindow.getAllWindows().find((w) => {
+        if (w.isDestroyed()) return false;
+        if (waWin && w === waWin) return false;
+        const title = w.getTitle() || "";
+        if (title.startsWith("POS Receipt Print") || title.startsWith("POS Label Print")) return false;
+        if (title.toLowerCase().includes("whatsapp")) return false;
+        return true;
+      });
 
   if (existing) {
     if (existing.isMinimized()) existing.restore();
