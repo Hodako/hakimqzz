@@ -80,7 +80,17 @@ import {
   Settings2,
   ListOrdered,
   Send,
+  FileDown,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  CheckCheck,
+  Check,
+  Filter,
 } from "lucide-react";
+import { downloadPwaInvoicePdf } from "@/lib/invoice-printer";
+import { playTapSound, playSaleSuccessSound } from "@/lib/audio";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 
 // Default Restaurant Menu items with rich food photos (matching RestroBit POS catalog)
 const DEFAULT_RESTAURANT_MENU = [
@@ -152,16 +162,22 @@ export default function RestaurantPosPage() {
   const { data: dbProducts = [] } = useCachedQuery<Product[]>(["products"], getProducts);
   const { data: dbSales = [] } = useCachedQuery<any[]>(["sales"], getSales);
 
-  const isOwner = user?.role === "owner" || user?.role === "superadmin";
+  const isOwner =
+    user?.role === "owner" ||
+    user?.role === "admin" ||
+    user?.role === "superadmin" ||
+    (!getActiveEmployeeSession() && user?.role !== "employee");
 
   // Active view: "owner" (Owner ERP Dashboard) vs "tables" (floor plan) vs "order" (menu & billing) vs "kds" (Kitchen Display System) vs "queue" (Cashier Billing Queue)
   const [activeView, setActiveView] = useState<"order" | "tables" | "kds" | "owner" | "queue">("order");
   // Mobile Waiter Phone UI State
-  const [mobileTab, setMobileTab] = useState<"menu" | "tables" | "profile">("menu");
+  const [mobileTab, setMobileTab] = useState<"menu" | "tables" | "queue" | "profile">("menu");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileCatOpen, setMobileCatOpen] = useState(false);
   const [kdsOrders, setKdsOrders] = useState<any[]>([]);
   const [billingQueue, setBillingQueue] = useState<any[]>([]);
+  const [queueTab, setQueueTab] = useState<"pending" | "passed" | "all">("pending");
+  const [queueSearch, setQueueSearch] = useState("");
   const [floors, setFloors] = useState<FloorItem[]>([
     { id: "floor_ground", name: "Ground Floor", sort_order: 1 },
     { id: "floor_1st", name: "1st Floor", sort_order: 2 },
@@ -377,6 +393,33 @@ export default function RestaurantPosPage() {
     })();
     return () => { active = false; };
   }, []);
+
+  // Real-time Auto-Sync Polling for the Cashier Billing Queue
+  useEffect(() => {
+    let active = true;
+    const pollQueue = async () => {
+      try {
+        const q = await getBillingQueueFn();
+        if (active && Array.isArray(q)) {
+          setBillingQueue((prev) => {
+            const prevIds = new Set(prev.map((b) => b.id));
+            const hasNew = q.some((item) => !prevIds.has(item.id) && item.status === "queued");
+            if (hasNew && prev.length > 0) {
+              try { playTapSound(); } catch (_) {}
+              toast.info(lang === "bn" ? "নতুন বিল কিউতে এসেছে!" : "New bill received in queue!");
+            }
+            return q;
+          });
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(pollQueue, 3500);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [lang]);
 
   // Sync Cart with Selected Table
   useEffect(() => {
@@ -1159,15 +1202,66 @@ export default function RestaurantPosPage() {
       });
       if (queued?.id) {
         setBillingQueue((prev) => [queued, ...prev]);
+        try { playSaleSuccessSound(); } catch (_) {}
         toast.success(
           lang === "bn"
             ? `ক্যাশিয়ার বিলের কিউতে পাঠানো হয়েছে (${queued.queue_no})`
             : `Sent to Cashier Bill Queue (${queued.queue_no})!`
         );
+
+        // Mark table occupied if dine-in
+        if (orderType === "dine_in" && tables[selectedTable]) {
+          const updatedTable: TableState = {
+            ...tables[selectedTable],
+            status: "occupied",
+            items: cart,
+            waiter: waiterName,
+            guests: guestCount,
+            startTime: tables[selectedTable].startTime || new Date().toISOString(),
+          };
+          setTables((prev) => ({ ...prev, [selectedTable]: updatedTable }));
+          void upsertRestaurantTableFn({ data: updatedTable }).catch(() => {});
+        }
+
+        // Clear cart for next order
+        setCart([]);
+        setMobileCartOpen(false);
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to enqueue bill");
     }
+  }
+
+  function handleDownloadQueuedBillPdf(qBill: any) {
+    try {
+      const qItems = Array.isArray(qBill.items) ? qBill.items : [];
+      downloadPwaInvoicePdf({
+        saleId: qBill.queue_no ? `${qBill.queue_no} (${qBill.id})` : qBill.id,
+        date: qBill.created_at || new Date().toISOString(),
+        items: qItems.map((it: any) => ({
+          name: it.name,
+          qty: Number(it.qty) || 1,
+          sellPrice: Number(it.price) || 0,
+          discount: 0,
+        })),
+        subtotal: Number(qBill.subtotal) || 0,
+        discount: Number(qBill.discount) || 0,
+        grandTotal: Number(qBill.grandTotal) || 0,
+        paidAmount: Number(qBill.grandTotal) || 0,
+        dueAmount: 0,
+        paymentType: (qBill.paymentMethod || "cash").toUpperCase(),
+        notes: `Table: ${qBill.table}, Waiter: ${qBill.waiter || "Staff"}`,
+      });
+      toast.success(lang === "bn" ? "ইনভয়েস পিডিএফ ডাউনলোড শুরু হয়েছে" : "Invoice PDF download started");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to download PDF");
+    }
+  }
+
+  function handleUpdateQueuePaymentMethod(qBillId: string, method: string) {
+    setBillingQueue((prev) =>
+      prev.map((b) => (b.id === qBillId ? { ...b, paymentMethod: method } : b))
+    );
   }
 
   async function handlePrintQueuedBill(qBill: any) {
@@ -1222,10 +1316,21 @@ export default function RestaurantPosPage() {
 
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["cashbox"] });
+
+      try { playSaleSuccessSound(); } catch (_) {}
+
+      // Immediately open receipt & invoice modal for the cash guy
+      setSettledSale({
+        ...qBill,
+        items: qItems,
+        type: qBill.paymentMethod || "cash",
+      });
+      setReceiptModalOpen(true);
+
       toast.success(
         lang === "bn"
-          ? `বিল ${qBill.queue_no || qBill.id} পাস ও সম্পন্ন হয়েছে!`
-          : `Bill ${qBill.queue_no || qBill.id} passed & settled!`
+          ? `বিল ${qBill.queue_no || qBill.id} কনফার্ম ও ইনভয়েস সংরক্ষিত হয়েছে!`
+          : `Bill ${qBill.queue_no || qBill.id} confirmed & invoice saved!`
       );
     } catch (err: any) {
       toast.error(err?.message || "Failed to pass bill");
@@ -1444,11 +1549,11 @@ export default function RestaurantPosPage() {
       <div className="md:hidden flex flex-col flex-1 w-full">
         {/* Simplicity UI: Minimal Segmented Control for Phone View (No Bulky Secondary Header) */}
         <div className="px-3.5 pt-2">
-          <div className="grid grid-cols-3 p-1 rounded-xl bg-card border border-border/80 shadow-2xs">
+          <div className="grid grid-cols-4 p-1 rounded-xl bg-card border border-border/80 shadow-2xs">
             <button
               type="button"
               onClick={() => setMobileTab("menu")}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                 mobileTab === "menu"
                   ? "bg-[#FF6B00] text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -1460,7 +1565,7 @@ export default function RestaurantPosPage() {
             <button
               type="button"
               onClick={() => setMobileTab("tables")}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                 mobileTab === "tables"
                   ? "bg-[#FF6B00] text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -1471,8 +1576,27 @@ export default function RestaurantPosPage() {
             </button>
             <button
               type="button"
+              onClick={() => setMobileTab("queue")}
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 relative ${
+                mobileTab === "queue"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ListOrdered className="size-3.5" />
+              <span>{lang === "bn" ? "কিউ" : "Queue"}</span>
+              {pendingQueueCount > 0 && (
+                <span className={`px-1 rounded-full text-[9px] font-black ${
+                  mobileTab === "queue" ? "bg-white text-indigo-700" : "bg-rose-500 text-white"
+                }`}>
+                  {pendingQueueCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setMobileTab("profile")}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                 mobileTab === "profile"
                   ? "bg-[#FF6B00] text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -1746,7 +1870,238 @@ export default function RestaurantPosPage() {
           </div>
         )}
 
-        {/* PHONE TAB 3: WAITER PROFILE */}
+        {/* PHONE TAB 3: CASHIER / WAITER BILLING QUEUE */}
+        {mobileTab === "queue" && (
+          <div className="p-3.5 space-y-3 flex-1 pb-24">
+            {/* Filter Pills & Search */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-1 p-1 rounded-xl bg-card border border-border shadow-2xs text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setQueueTab("pending")}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                    queueTab === "pending"
+                      ? "bg-indigo-600 text-white shadow-2xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {lang === "bn" ? `পেন্ডিং (${pendingQueueCount})` : `Pending (${pendingQueueCount})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQueueTab("passed")}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                    queueTab === "passed"
+                      ? "bg-emerald-600 text-white shadow-2xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {lang === "bn"
+                    ? `সম্পন্ন (${billingQueue.filter((b) => b.status === "passed").length})`
+                    : `Passed (${billingQueue.filter((b) => b.status === "passed").length})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQueueTab("all")}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer text-center ${
+                    queueTab === "all"
+                      ? "bg-slate-900 text-white dark:bg-zinc-700 shadow-2xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {lang === "bn" ? `সব (${billingQueue.length})` : `All (${billingQueue.length})`}
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={queueSearch}
+                  onChange={(e) => setQueueSearch(e.target.value)}
+                  placeholder={lang === "bn" ? "টেবিল বা কিউ নম্বর খুঁজুন..." : "Search table or ticket..."}
+                  className="w-full h-10 pl-8 pr-3 text-xs rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <Search className="size-3.5 text-muted-foreground absolute left-2.5 top-3.5" />
+              </div>
+            </div>
+
+            {/* Mobile Queue List */}
+            {billingQueue.length === 0 ? (
+              <Card className="p-8 text-center rounded-2xl border border-border bg-card text-xs text-muted-foreground">
+                <ListOrdered className="size-8 text-muted-foreground/40 mx-auto mb-2" />
+                {lang === "bn"
+                  ? "এখনো কোনো বিল কিউতে নেই।"
+                  : "No bills in queue yet."}
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {billingQueue
+                  .filter((qb) => {
+                    if (queueTab === "pending" && qb.status !== "queued" && qb.status !== "printed") return false;
+                    if (queueTab === "passed" && qb.status !== "passed") return false;
+                    if (!queueSearch.trim()) return true;
+                    const s = queueSearch.toLowerCase();
+                    return (
+                      (qb.table || "").toLowerCase().includes(s) ||
+                      (qb.queue_no || "").toLowerCase().includes(s) ||
+                      (qb.id || "").toLowerCase().includes(s) ||
+                      (qb.waiter || "").toLowerCase().includes(s)
+                    );
+                  })
+                  .map((qb) => {
+                    const isDone = qb.status === "passed" || qb.status === "cancelled";
+                    const isPassed = qb.status === "passed";
+                    const payment = qb.paymentMethod || "cash";
+
+                    return (
+                      <Card
+                        key={qb.id}
+                        className={`p-3.5 rounded-2xl border space-y-3 shadow-2xs ${
+                          isPassed
+                            ? "border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10"
+                            : "border-indigo-100 dark:border-zinc-800 bg-card"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between border-b border-border/80 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white font-black text-xs">
+                              {qb.queue_no || "Q"}
+                            </span>
+                            <div>
+                              <div className="font-bold text-xs text-foreground">
+                                {qb.table} {qb.floor ? `• ${qb.floor}` : ""}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {qb.waiter || "Staff"}
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              isPassed
+                                ? "bg-emerald-500/15 text-emerald-600"
+                                : "bg-indigo-500/15 text-indigo-600 animate-pulse"
+                            }`}
+                          >
+                            {isPassed ? (lang === "bn" ? "পরিশোধিত" : "PAID") : qb.status}
+                          </span>
+                        </div>
+
+                        {/* Items */}
+                        <div className="space-y-1 text-xs max-h-28 overflow-y-auto pr-1">
+                          {(qb.items || []).map((it: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center py-0.5">
+                              <span className="text-foreground">
+                                <span className="font-bold text-indigo-600 mr-1">{it.qty}x</span>
+                                {it.name}
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                ৳{Number(it.price) * Number(it.qty)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Payment Selector on Mobile */}
+                        {!isDone && (
+                          <div className="pt-2 border-t border-dashed border-border/80">
+                            <div className="grid grid-cols-4 gap-1">
+                              {(["cash", "card", "bkash", "nagad"] as const).map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => handleUpdateQueuePaymentMethod(qb.id, m)}
+                                  className={`py-1 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                                    payment === m
+                                      ? "bg-slate-900 text-white dark:bg-white dark:text-zinc-900 shadow-2xs"
+                                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                  }`}
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Grand Total */}
+                        <div className="pt-2 border-t border-dashed border-border/80 flex items-center justify-between text-xs font-bold">
+                          <span className="text-muted-foreground">{lang === "bn" ? "সর্বমোট" : "Total"}</span>
+                          <span className="text-base font-black text-[#16A34A]">৳{Number(qb.grandTotal || 0).toFixed(0)}</span>
+                        </div>
+
+                        {/* Mobile Actions */}
+                        {!isDone ? (
+                          <div className="space-y-1.5 pt-1">
+                            <Button
+                              type="button"
+                              onClick={() => handlePassQueuedBill(qb)}
+                              className="w-full h-10 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-extrabold text-xs gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <CheckCheck className="size-4" />
+                              <span>{lang === "bn" ? "কনফার্ম ও ইনভয়েস সংরক্ষণ" : "Confirm & Save Invoice"}</span>
+                            </Button>
+
+                            <div className="grid grid-cols-3 gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePrintQueuedBill(qb)}
+                                className="h-8 text-[11px] rounded-lg font-bold gap-1"
+                              >
+                                <Printer className="size-3" />
+                                <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadQueuedBillPdf(qb)}
+                                className="h-8 text-[11px] rounded-lg font-bold border-indigo-200 text-indigo-700 gap-1"
+                              >
+                                <FileDown className="size-3" />
+                                <span>{lang === "bn" ? "পিডিএফ" : "PDF"}</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleCancelQueuedBill(qb.id)}
+                                className="h-8 text-[11px] rounded-lg text-rose-600 hover:bg-rose-50"
+                              >
+                                {lang === "bn" ? "বাতিল" : "Cancel"}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : isPassed ? (
+                          <div className="grid grid-cols-2 gap-1.5 pt-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrintQueuedBill(qb)}
+                              className="h-8 text-[11px] rounded-lg font-bold gap-1"
+                            >
+                              <Printer className="size-3" />
+                              <span>{lang === "bn" ? "রি-প্রিন্ট" : "Reprint"}</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadQueuedBillPdf(qb)}
+                              className="h-8 text-[11px] rounded-lg font-bold border-indigo-200 text-indigo-700 gap-1"
+                            >
+                              <FileDown className="size-3" />
+                              <span>{lang === "bn" ? "পিডিএফ সেভ" : "Save PDF"}</span>
+                            </Button>
+                          </div>
+                        ) : null}
+                      </Card>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PHONE TAB 4: WAITER PROFILE */}
         {mobileTab === "profile" && (
           <div className="p-4 space-y-4 flex-1">
             <Card className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3">
@@ -2069,107 +2424,265 @@ export default function RestaurantPosPage() {
           </div>
         ) : activeView === "queue" ? (
           <div className="col-span-12 space-y-4">
+            {/* Cashier Queue Header Controls */}
+            <div className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="size-10 rounded-2xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <ListOrdered className="size-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                    <span>{lang === "bn" ? "ক্যাশিয়ার বিলিং কিউ" : "Cashier Billing Queue"}</span>
+                    {pendingQueueCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs font-black animate-pulse">
+                        {pendingQueueCount} {lang === "bn" ? "পেন্ডিং" : "Pending"}
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {lang === "bn"
+                      ? "ওয়েটারদের পাঠানো খাবারের বিল এখানে আসে — ক্যাশিয়ার বিল কনফার্ম, রসিদ প্রিন্ট ও পিডিএফ সেভ করবেন।"
+                      : "Orders sent by waiters arrive here — cashier confirms bill, prints receipt, and saves invoice PDF."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-zinc-800 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setQueueTab("pending")}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      queueTab === "pending"
+                        ? "bg-white dark:bg-zinc-900 text-indigo-600 shadow-2xs"
+                        : "text-slate-600 dark:text-zinc-400"
+                    }`}
+                  >
+                    {lang === "bn" ? `পেন্ডিং (${pendingQueueCount})` : `Pending (${pendingQueueCount})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQueueTab("passed")}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      queueTab === "passed"
+                        ? "bg-white dark:bg-zinc-900 text-emerald-600 shadow-2xs"
+                        : "text-slate-600 dark:text-zinc-400"
+                    }`}
+                  >
+                    {lang === "bn"
+                      ? `সম্পন্ন (${billingQueue.filter((b) => b.status === "passed").length})`
+                      : `Passed (${billingQueue.filter((b) => b.status === "passed").length})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQueueTab("all")}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      queueTab === "all"
+                        ? "bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-2xs"
+                        : "text-slate-600 dark:text-zinc-400"
+                    }`}
+                  >
+                    {lang === "bn" ? `সব (${billingQueue.length})` : `All (${billingQueue.length})`}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={queueSearch}
+                    onChange={(e) => setQueueSearch(e.target.value)}
+                    placeholder={lang === "bn" ? "টেবিল / কিউ খুঁজুন..." : "Search table / queue..."}
+                    className="h-9 pl-8 pr-3 text-xs rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44"
+                  />
+                  <Search className="size-3.5 text-slate-400 absolute left-2.5 top-3" />
+                </div>
+              </div>
+            </div>
+
+            {/* Queue Cards Grid */}
             {billingQueue.length === 0 ? (
-              <Card className="p-12 text-center rounded-3xl border-[#E8DFD3] bg-white dark:bg-zinc-900 text-xs text-muted-foreground">
+              <Card className="p-12 text-center rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-muted-foreground">
+                <ListOrdered className="size-10 text-slate-300 dark:text-zinc-700 mx-auto mb-2" />
                 {lang === "bn"
-                  ? "এখনো কোনো বিল কিউতে পাঠানো হয়নি। অর্ডার থেকে 'বিল কিউতে পাঠান' বাটনে ক্লিক করুন।"
-                  : "No bills in queue yet. Click 'Send to Queue' on any order to queue it for the cashier."}
+                  ? "এখনো কোনো বিল কিউতে পাঠানো হয়নি। মেনু থেকে অর্ডার নিয়ে 'বিলের কিউতে পাঠান' চাপুন।"
+                  : "No bills in queue yet. Take an order and click 'Send to Cashier Queue'."}
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {billingQueue.map((qb) => {
-                  const isDone = qb.status === "passed" || qb.status === "cancelled";
-                  return (
-                    <Card
-                      key={qb.id}
-                      className={`p-4 rounded-3xl border space-y-3 flex flex-col justify-between shadow-sm ${
-                        qb.status === "passed"
-                          ? "border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/10 opacity-75"
-                          : qb.status === "cancelled"
-                            ? "border-zinc-200 bg-zinc-50 dark:bg-zinc-900 opacity-60"
-                            : "border-[#E8DFD3] bg-white dark:bg-zinc-900"
-                      }`}
-                    >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between border-b border-[#EFE7DE] pb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-1 rounded-xl bg-indigo-600 text-white font-extrabold text-xs">
-                              {qb.queue_no || "Q"}
+                {billingQueue
+                  .filter((qb) => {
+                    if (queueTab === "pending" && qb.status !== "queued" && qb.status !== "printed") return false;
+                    if (queueTab === "passed" && qb.status !== "passed") return false;
+                    if (!queueSearch.trim()) return true;
+                    const s = queueSearch.toLowerCase();
+                    return (
+                      (qb.table || "").toLowerCase().includes(s) ||
+                      (qb.queue_no || "").toLowerCase().includes(s) ||
+                      (qb.id || "").toLowerCase().includes(s) ||
+                      (qb.waiter || "").toLowerCase().includes(s)
+                    );
+                  })
+                  .map((qb) => {
+                    const isDone = qb.status === "passed" || qb.status === "cancelled";
+                    const isPassed = qb.status === "passed";
+                    const payment = qb.paymentMethod || "cash";
+
+                    return (
+                      <Card
+                        key={qb.id}
+                        className={`p-4 rounded-3xl border space-y-3.5 flex flex-col justify-between shadow-xs transition-all ${
+                          isPassed
+                            ? "border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10"
+                            : qb.status === "cancelled"
+                              ? "border-zinc-200 bg-zinc-50 dark:bg-zinc-900 opacity-60"
+                              : "border-indigo-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 ring-1 ring-indigo-500/10"
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* Ticket Header */}
+                          <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-xl bg-indigo-600 text-white font-black text-xs shadow-2xs">
+                                {qb.queue_no || "Q"}
+                              </span>
+                              <div>
+                                <div className="font-bold text-sm text-slate-900 dark:text-zinc-100">
+                                  {qb.table} {qb.floor ? `• ${qb.floor}` : ""}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  {qb.waiter || "Staff"} • {qb.created_at ? new Date(qb.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                                </div>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                isPassed
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                  : qb.status === "printed"
+                                    ? "bg-amber-500/15 text-amber-700"
+                                    : qb.status === "cancelled"
+                                      ? "bg-zinc-200 text-zinc-600"
+                                      : "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 animate-pulse"
+                              }`}
+                            >
+                              {isPassed ? (lang === "bn" ? "পরিশোধিত" : "PAID") : qb.status}
                             </span>
-                            <div>
-                              <div className="font-bold text-sm text-[#2C241E] dark:text-zinc-100">
-                                {qb.table} {qb.floor ? `• ${qb.floor}` : ""}
+                          </div>
+
+                          {/* Food Items List */}
+                          <div className="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
+                            {(qb.items || []).map((it: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center py-0.5">
+                                <span className="text-slate-800 dark:text-zinc-200">
+                                  <span className="font-bold text-indigo-600 dark:text-indigo-400 mr-1.5">{it.qty}x</span>
+                                  {it.name}
+                                </span>
+                                <span className="font-semibold text-slate-900 dark:text-zinc-100">
+                                  ৳{Number(it.price) * Number(it.qty)}
+                                </span>
                               </div>
-                              <div className="text-[10px] text-[#8C8074]">
-                                {qb.id} • {qb.waiter || "Staff"}
+                            ))}
+                          </div>
+
+                          {/* Payment Method Selector (for pending bills) */}
+                          {!isDone && (
+                            <div className="pt-2 border-t border-dashed border-slate-200 dark:border-zinc-800">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                                {lang === "bn" ? "পেমেন্ট মাধ্যম:" : "Payment Method:"}
                               </div>
+                              <div className="grid grid-cols-4 gap-1">
+                                {(["cash", "card", "bkash", "nagad"] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => handleUpdateQueuePaymentMethod(qb.id, m)}
+                                    className={`py-1 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                                      payment === m
+                                        ? "bg-slate-900 text-white shadow-2xs"
+                                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {m}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Grand Total */}
+                          <div className="pt-2 border-t border-dashed border-slate-200 dark:border-zinc-800 flex items-center justify-between text-xs font-bold">
+                            <span className="text-slate-600 dark:text-zinc-400">{lang === "bn" ? "সর্বমোট বিল" : "Grand Total"}</span>
+                            <span className="text-lg font-black text-[#16A34A]">৳{Number(qb.grandTotal || 0).toFixed(0)}</span>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        {!isDone ? (
+                          <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                            {/* Cashier Confirm Button */}
+                            <Button
+                              type="button"
+                              onClick={() => handlePassQueuedBill(qb)}
+                              className="w-full h-11 rounded-2xl bg-[#16A34A] hover:bg-[#15803D] text-white font-extrabold text-xs gap-1.5 shadow-sm cursor-pointer transition-transform active:scale-[0.99]"
+                            >
+                              <CheckCheck className="size-4" />
+                              <span>{lang === "bn" ? "কনফার্ম ও ইনভয়েস সংরক্ষণ" : "Confirm & Save Invoice"}</span>
+                            </Button>
+
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePrintQueuedBill(qb)}
+                                className="h-9 text-[11px] rounded-xl font-bold gap-1 cursor-pointer"
+                              >
+                                <Printer className="size-3.5" />
+                                <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadQueuedBillPdf(qb)}
+                                className="h-9 text-[11px] rounded-xl font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 gap-1 cursor-pointer"
+                              >
+                                <FileDown className="size-3.5" />
+                                <span>{lang === "bn" ? "পিডিএফ" : "PDF"}</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleCancelQueuedBill(qb.id)}
+                                className="h-9 text-[11px] rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                              >
+                                {lang === "bn" ? "বাতিল" : "Cancel"}
+                              </Button>
                             </div>
                           </div>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              qb.status === "passed"
-                                ? "bg-emerald-500/15 text-emerald-700"
-                                : qb.status === "printed"
-                                  ? "bg-amber-500/15 text-amber-700"
-                                  : qb.status === "cancelled"
-                                    ? "bg-zinc-200 text-zinc-600"
-                                    : "bg-indigo-500/15 text-indigo-700"
-                            }`}
-                          >
-                            {qb.status}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1 text-xs max-h-32 overflow-y-auto">
-                          {(qb.items || []).map((it: any, idx: number) => (
-                            <div key={idx} className="flex justify-between">
-                              <span>
-                                <span className="font-bold mr-1">{it.qty}x</span>
-                                {it.name}
-                              </span>
-                              <span className="font-semibold">৳{Number(it.price) * Number(it.qty)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="pt-2 border-t border-dashed border-[#E8DFD3] flex items-center justify-between text-xs font-bold">
-                          <span>{lang === "bn" ? "সর্বমোট বিল" : "Grand Total"}</span>
-                          <span className="text-base text-[#55A61D]">৳{Number(qb.grandTotal || 0).toFixed(0)}</span>
-                        </div>
-                      </div>
-
-                      {!isDone && (
-                        <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-[#EFE7DE]">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePrintQueuedBill(qb)}
-                            className="h-9 text-[11px] rounded-xl font-bold gap-1 cursor-pointer"
-                          >
-                            <Printer className="size-3.5" />
-                            <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handlePassQueuedBill(qb)}
-                            className="h-9 text-[11px] rounded-xl font-bold bg-[#55A61D] hover:bg-[#489117] text-white gap-1 cursor-pointer"
-                          >
-                            <CheckCircle2 className="size-3.5" />
-                            <span>{lang === "bn" ? "পাস ও বিল" : "Pass Bill"}</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleCancelQueuedBill(qb.id)}
-                            className="h-9 text-[11px] rounded-xl text-rose-600 hover:bg-rose-50 cursor-pointer"
-                          >
-                            {lang === "bn" ? "বাতিল" : "Cancel"}
-                          </Button>
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
+                        ) : isPassed ? (
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrintQueuedBill(qb)}
+                              className="h-9 text-[11px] rounded-xl font-bold gap-1 cursor-pointer"
+                            >
+                              <Printer className="size-3.5" />
+                              <span>{lang === "bn" ? "রসিদ রি-প্রিন্ট" : "Reprint Bill"}</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadQueuedBillPdf(qb)}
+                              className="h-9 text-[11px] rounded-xl font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50 gap-1 cursor-pointer"
+                            >
+                              <FileDown className="size-3.5" />
+                              <span>{lang === "bn" ? "পিডিএফ সেভ" : "Save PDF"}</span>
+                            </Button>
+                          </div>
+                        ) : null}
+                      </Card>
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -2836,9 +3349,19 @@ export default function RestaurantPosPage() {
                   </div>
                 )}
 
-                {/* Bottom Action Buttons (RestroBit 4-Button Workflow: KOT & Print, Draft, Bill & Queue, Bill & Print) */}
+                {/* Bottom Action Buttons: Simplified Waiter/Cashier Queue Flow */}
                 <div className="space-y-2 pt-2">
-                  <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleSendToCashierQueue}
+                    disabled={cart.length === 0}
+                    className="w-full h-12 rounded-2xl bg-[#FF6B00] hover:bg-[#E55F00] text-white font-extrabold text-sm gap-2 shadow-md cursor-pointer transition-transform active:scale-[0.99]"
+                  >
+                    <Send className="size-4" />
+                    <span>{lang === "bn" ? `বিলের কিউতে পাঠান • ৳${grandTotal}` : `Send to Cashier Queue • ৳${grandTotal}`}</span>
+                  </Button>
+
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
                       onClick={() => {
@@ -2853,43 +3376,21 @@ export default function RestaurantPosPage() {
                         }
                       }}
                       disabled={cart.length === 0}
-                      className="col-span-2 h-10 rounded-xl bg-[#111827] hover:bg-slate-800 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+                      variant="outline"
+                      className="h-10 rounded-xl border-slate-200 dark:border-zinc-700 font-bold text-xs gap-1.5 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-700 dark:text-amber-400"
                     >
                       <ChefHat className="size-4" />
-                      <span>{lang === "bn" ? "কেওটি ও প্রিন্ট" : "KOT & Print"}</span>
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleSaveDraft}
-                      disabled={cart.length === 0}
-                      className="col-span-1 h-10 rounded-xl border-slate-200 dark:border-zinc-700 font-bold text-xs gap-1 cursor-pointer"
-                    >
-                      <FileText className="size-3.5" />
-                      <span>{lang === "bn" ? "ড্রাফট" : "Draft"}</span>
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      onClick={handleSendToCashierQueue}
-                      disabled={cart.length === 0}
-                      className="h-10 rounded-xl bg-[#FF6B00] hover:bg-[#E55F00] text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Send className="size-3.5" />
-                      <span>{lang === "bn" ? "বিল ও কিউ" : "Bill & Queue"}</span>
+                      <span>{lang === "bn" ? "কিচেন কেওটি (KOT)" : "Kitchen KOT"}</span>
                     </Button>
 
                     <Button
                       type="button"
                       onClick={() => setPayModalOpen(true)}
                       disabled={cart.length === 0 || settlingBusy}
-                      className="h-11 rounded-xl bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer"
+                      className="h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs gap-1.5 shadow-xs cursor-pointer"
                     >
-                      {settlingBusy ? <RefreshCw className="size-4 animate-spin" /> : <Printer className="size-4" />}
-                      <span>{lang === "bn" ? "পে ও প্রিন্ট" : "Pay & Print"}</span>
+                      <Banknote className="size-3.5" />
+                      <span>{lang === "bn" ? "সরাসরি ক্যাশ পে" : "Direct Pay"}</span>
                     </Button>
                   </div>
                 </div>
@@ -2941,7 +3442,7 @@ export default function RestaurantPosPage() {
               <div className="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t"><span>Total</span><span className="text-[#FF9100]">৳ {grandTotal}</span></div>
             </div>
           )}
-          <DialogFooter className="grid grid-cols-3 gap-2 pt-2">
+          <DialogFooter className="grid grid-cols-2 gap-2 pt-2">
             <Button
               type="button"
               disabled={cart.length === 0}
@@ -2949,10 +3450,11 @@ export default function RestaurantPosPage() {
                 setMobileCartOpen(false);
                 void handleSendKOT();
               }}
-              className="h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-2"
+              variant="outline"
+              className="h-11 rounded-xl border-amber-300 text-amber-700 dark:text-amber-400 font-bold text-xs"
             >
-              <ChefHat className="size-3.5 mr-1" />
-              {lang === "bn" ? "কেওটি" : "KOT"}
+              <ChefHat className="size-4 mr-1.5" />
+              {lang === "bn" ? "কিচেন কেওটি" : "Kitchen KOT"}
             </Button>
             <Button
               type="button"
@@ -2961,22 +3463,10 @@ export default function RestaurantPosPage() {
                 setMobileCartOpen(false);
                 void handleSendToCashierQueue();
               }}
-              className="h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-2"
+              className="h-11 rounded-xl bg-[#FF6B00] hover:bg-[#E55F00] text-white font-extrabold text-xs"
             >
-              <Send className="size-3.5 mr-1" />
-              {lang === "bn" ? "কিউতে দিন" : "To Queue"}
-            </Button>
-            <Button
-              type="button"
-              disabled={cart.length === 0 || settlingBusy}
-              onClick={() => {
-                setMobileCartOpen(false);
-                void handleSettleBill();
-              }}
-              className="h-10 rounded-xl bg-[#FF9100] hover:bg-[#E67E00] text-white font-bold text-xs px-2"
-            >
-              <CheckCircle2 className="size-3.5 mr-1" />
-              {lang === "bn" ? "বিল করুন" : "Settle"}
+              <Send className="size-4 mr-1.5" />
+              {lang === "bn" ? `কিউতে দিন • ৳${grandTotal}` : `To Queue • ৳${grandTotal}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3095,14 +3585,27 @@ export default function RestaurantPosPage() {
             </div>
           )}
 
-          <DialogFooter className="flex flex-row gap-2 pt-2">
+          <DialogFooter className="grid grid-cols-3 gap-2 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => setReceiptModalOpen(false)}
-              className="flex-1 rounded-xl text-xs"
+              className="h-10 rounded-xl text-xs font-semibold cursor-pointer"
             >
-              Done
+              {lang === "bn" ? "বন্ধ" : "Done"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (settledSale) {
+                  handleDownloadQueuedBillPdf(settledSale);
+                }
+              }}
+              className="h-10 rounded-xl text-xs font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 gap-1 cursor-pointer"
+            >
+              <FileDown className="size-3.5" />
+              <span>{lang === "bn" ? "পিডিএফ সেভ" : "Save PDF"}</span>
             </Button>
             <Button
               type="button"
@@ -3115,10 +3618,10 @@ export default function RestaurantPosPage() {
                 }
                 setReceiptModalOpen(false);
               }}
-              className="flex-1 rounded-xl text-xs font-bold bg-[#55A61D] hover:bg-[#489117] text-white cursor-pointer"
+              className="h-10 rounded-xl text-xs font-bold bg-[#16A34A] hover:bg-[#15803D] text-white gap-1 cursor-pointer"
             >
-              <Printer className="size-4 mr-1" />
-              <span>{lang === "bn" ? "বিল প্রিন্ট" : "Print Bill"}</span>
+              <Printer className="size-3.5" />
+              <span>{lang === "bn" ? "প্রিন্ট" : "Print"}</span>
             </Button>
           </DialogFooter>
         </DialogContent>

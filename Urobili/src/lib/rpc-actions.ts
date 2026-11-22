@@ -639,7 +639,25 @@ export async function getBusinessSettingsFn() {
   const business = await db.collection("businesses").findOne({
     $or: [{ _id: session.businessId as any }, { owner_id: session.ownerId }, { owner_id: session.userId }],
   });
-  return business ? { ...business, id: business._id as any as string } : null;
+  const bizObj = business ? { ...business, id: business._id as any as string } : null;
+  const isOwnerSession = session.role === "owner" || session.role === "superadmin" || session.ownerId === session.userId;
+  return {
+    ...(bizObj || {}),
+    business: bizObj,
+    role: isOwnerSession ? "owner" : (session.role || "employee"),
+    permissions: session.permissions || {
+      dashboard: true,
+      products: true,
+      sales: true,
+      parties: true,
+      purchases: true,
+      expenses: true,
+      cashbox: true,
+      settings: true,
+      reports: true,
+      danger_zone: true,
+    },
+  };
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ import {
   deleteTransferKeyFn,
 } from "@/lib/rpc";
 import Link from "next/link";
+import { getActiveEmployeeSession } from "@/lib/employee-session";
 import { EmeraldUiSettings } from "@/components/emerald-ui-settings";
 import {
   Trash2,
@@ -588,9 +589,36 @@ export default function SettingsPage() {
 
   const [pwBusy, setPwBusy] = useState(false);
 
-  const biz = settings.data?.business;
-  const isOwner = settings.data?.role === "owner";
-  const hasDangerZoneAccess = isOwner || settings.data?.permissions?.danger_zone === true;
+  const activeEmpSession = typeof window !== "undefined" ? getActiveEmployeeSession() : null;
+  const isOwner =
+    user?.role === "owner" ||
+    user?.role === "admin" ||
+    user?.role === "superadmin" ||
+    settings.data?.role === "owner" ||
+    settings.data?.role === "admin" ||
+    settings.data?.role === "superadmin" ||
+    (!activeEmpSession && user?.role !== "employee");
+
+  const hasDangerZoneAccess =
+    isOwner ||
+    settings.data?.permissions?.danger_zone === true ||
+    user?.permissions?.danger_zone === true;
+
+  const rawBiz = settings.data?.business || (settings.data?.name ? settings.data : null);
+  const biz = rawBiz || {
+    id: user?.business_id || "biz_default",
+    name: user?.business_name || "Urobili",
+    shop_name: user?.business_name || "Urobili",
+    address: user?.business_address || "",
+    phone_numbers: user?.business_phone_numbers || "",
+    emails: user?.email || "",
+    currency: "৳",
+    invoice_page_size: "80mm",
+    invoice_font_size: "22px",
+    invoice_scale: "100%",
+    invoice_line_spacing: "6px",
+    status: "active",
+  };
   const isGoogleUser = Boolean(
     settings.data?.provider === "google" ||
     settings.data?.auth_provider === "google" ||
@@ -3817,7 +3845,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {!isOwner && !hasDangerZoneAccess && (
+      {!isOwner && !hasDangerZoneAccess && (user?.role === "employee" || Boolean(activeEmpSession)) && (
         <Card className="p-6 rounded-3xl bg-card border border-border/80 shadow-xs text-sm text-muted-foreground max-w-xl">
           {lang === "bn"
             ? "কর্মচারী একাউন্ট — সেটিংস পরিবর্তনের জন্য আপনার দোকান মালিকের সাথে যোগাযোগ করুন।"
