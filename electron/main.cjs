@@ -465,10 +465,12 @@ async function performSilentPrint(html, printerName, options = {}) {
           *, body, div, span, p, td, th, tr, table, strong, b, h1, h2, h3, h4, small {
             color: #000000 !important;
             margin-top: 0;
-            word-break: normal !important;
-            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
             box-sizing: border-box !important;
-            font-family: 'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', 'Segoe UI', 'Nirmala UI', Arial, sans-serif !important;
+          }
+          body {
+            font-family: 'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', 'Segoe UI', 'Nirmala UI', Arial, sans-serif;
           }
           .receipt-wrap {
             padding-top: ${topMm}mm !important;
@@ -697,66 +699,40 @@ async function performSilentPrint(html, printerName, options = {}) {
             (function() {
               const wrap = document.querySelector('.receipt-wrap') || document.body;
               const r = wrap.getBoundingClientRect();
-              const w = Math.ceil(r.width || wrap.offsetWidth || 280);
-              const h = Math.ceil(r.height || wrap.scrollHeight || wrap.offsetHeight || 360);
-              return {
-                x: Math.max(0, Math.floor(r.left)),
-                y: Math.max(0, Math.floor(r.top)),
-                width: Math.max(60, w),
-                height: Math.max(40, h),
-              };
+              const h = Math.ceil(r.height || wrap.scrollHeight || wrap.offsetHeight || 200);
+              return { height: Math.max(40, h) };
             })()
           `);
-          if (dims && dims.width > 0 && dims.height > 0) {
-            printWin.setContentSize(Math.max(dims.width + 30, 360), Math.max(dims.height + 30, 480));
-            await new Promise((r) => setTimeout(r, 80));
-            const img = await printWin.webContents.capturePage({
-              x: dims.x,
-              y: dims.y,
-              width: dims.width,
-              height: dims.height,
-            });
-            const imgDataUrl = img.toDataURL();
-            measuredReceiptHeightMm = Math.max(30, Math.ceil(dims.height * 0.264583) + 4);
+          if (dims && dims.height > 0) {
+            measuredReceiptHeightMm = Math.max(25, Math.ceil(dims.height * 0.264583) + 2);
             const rollH = userHeightMm ? `${userHeightMm}mm` : `${measuredReceiptHeightMm}mm`;
-            const rasterHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    @page { size: ${widthMm}mm ${rollH} !important; margin: 0mm !important; }
-    html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; width: ${printableWidthMm}mm !important; max-width: ${printableWidthMm}mm !important; overflow: hidden !important; }
-    img { width: ${printableWidthMm}mm !important; max-width: 100% !important; height: auto !important; display: block !important; margin: 0 !important; image-rendering: -webkit-optimize-contrast; }
-  </style>
-</head>
-<body>
-  <img src="${imgDataUrl}" />
-</body>
-</html>`;
-            fs.writeFileSync(tempFilePath, rasterHtml, "utf8");
-            await printWin.loadFile(tempFilePath);
-            await new Promise((r) => setTimeout(r, 80));
+            await printWin.webContents.executeJavaScript(`
+              (function() {
+                var st = document.getElementById('pos-exact-page-size');
+                if (!st) {
+                  st = document.createElement('style');
+                  st.id = 'pos-exact-page-size';
+                  document.head.appendChild(st);
+                }
+                st.textContent = '@page { size: ${widthMm}mm ${rollH} !important; margin: 0mm !important; padding: 0mm !important; }';
+              })()
+            `);
+            await new Promise((r) => setTimeout(r, 40));
           }
-        } catch (rasterErr) {
-          console.warn("[Windows POS] Raster image conversion error:", rasterErr);
-          try { printWin.webContents.setZoomFactor(1.0); } catch (_) {}
+        } catch (measureErr) {
+          console.warn("[Windows POS] Receipt height measure notice:", measureErr);
         }
       }
 
+      const hasCustomMargins = topMm > 0 || bottomMm > 0 || leftMm > 0 || rightMm > 0;
       const printConfig = {
         silent: useSilent,
         printBackground: true,
         copies,
-        scaleFactor: 100,
         landscape: false,
-        margins: {
-          marginType: "none",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          right: 0,
-        },
-        headerFooter: false,
+        margins: hasCustomMargins
+          ? { marginType: "custom", top: topMm, bottom: bottomMm, left: leftMm, right: rightMm }
+          : { marginType: "none" },
       };
 
       if (isA4) {
@@ -781,30 +757,55 @@ async function performSilentPrint(html, printerName, options = {}) {
         printConfig.deviceName = targetPrinter;
       }
 
-      const runPrintWithFallback = (cfg, allowSizeFallback) => {
+      const runPrintWithFallback = (cfg, stage = 0) => {
+        if (!printWin || printWin.isDestroyed()) {
+          finishOnce({ success: false, error: "Print window destroyed" });
+          return;
+        }
         printWin.webContents.print(cfg, (success, failureReason) => {
           try {
             if (success) {
               console.log(
-                `[Windows POS] ${isLabel ? "Labels" : "Receipt"} printed (${useSilent ? "SILENT" : "DIALOG"}) to: ${targetPrinter || "Windows Printer"} [Size: ${widthMm}mm x ${heightLabel}]`
+                `[Windows POS] ${isLabel ? "Labels" : "Receipt"} printed (${cfg.silent ? "SILENT" : "DIALOG"}) to: ${cfg.deviceName || "Windows Printer"} [Size: ${widthMm}mm x ${heightLabel}]`
               );
-              finishOnce({ success: true, printer: targetPrinter, silent: useSilent });
+              finishOnce({ success: true, printer: cfg.deviceName || targetPrinter, silent: cfg.silent });
               return;
             }
             const reasonStr = String(failureReason || "");
-            if (
-              allowSizeFallback &&
-              cfg.pageSize &&
-              typeof cfg.pageSize === "object" &&
-              /size|page|invalid|parameter/i.test(reasonStr)
-            ) {
-              console.warn(`[Windows POS] Custom sticker pageSize rejected by driver (${reasonStr}); retrying with CSS @page size...`);
+            console.warn(`[Windows POS] Print stage ${stage} failed (${reasonStr})`);
+
+            // Stage 0 -> 1: Retry without custom pageSize object (many Windows drivers reject custom micron sizes)
+            if (stage === 0 && cfg.pageSize && typeof cfg.pageSize === "object") {
               const retryCfg = { ...cfg };
               delete retryCfg.pageSize;
-              runPrintWithFallback(retryCfg, false);
+              runPrintWithFallback(retryCfg, 1);
               return;
             }
-            console.warn(`[Windows POS] Print cancelled or failed: ${failureReason}`);
+
+            // Stage <= 1 -> 2: If silent print with specific deviceName failed, retry on Windows default printer
+            if (stage <= 1 && cfg.silent && cfg.deviceName) {
+              const retryCfg = { ...cfg };
+              delete retryCfg.deviceName;
+              delete retryCfg.pageSize;
+              runPrintWithFallback(retryCfg, 2);
+              return;
+            }
+
+            // Stage <= 2 -> 3: If silent print still failed (e.g. no default printer / driver rejected), open Windows Print Dialog
+            if (stage <= 2 && cfg.silent) {
+              try {
+                if (printWin && !printWin.isDestroyed()) {
+                  printWin.center();
+                  printWin.show();
+                }
+              } catch (_) {}
+              const dialogCfg = { ...cfg, silent: false };
+              delete dialogCfg.deviceName;
+              delete dialogCfg.pageSize;
+              runPrintWithFallback(dialogCfg, 3);
+              return;
+            }
+
             finishOnce({ success: false, error: failureReason || "Print cancelled" });
           } catch (cbErr) {
             console.error("[Windows POS] Print callback warning:", cbErr);
@@ -813,7 +814,7 @@ async function performSilentPrint(html, printerName, options = {}) {
         });
       };
 
-      runPrintWithFallback(printConfig, isThermalLabel);
+      runPrintWithFallback(printConfig, 0);
     } catch (e) {
       finishOnce({ success: false, error: e.message });
     }
@@ -843,12 +844,6 @@ ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
 if (process.platform === "win32") {
   try {
     app.setAppUserModelId("com.dreamfashion.pos.v26");
-  } catch (_) {}
-
-  // Cleanly terminate any orphan zombie DreamFashion-POS background processes from older runs
-  try {
-    const curPid = process.pid;
-    exec(`powershell -NoProfile -Command "Get-Process -Name 'DreamFashion-POS' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne ${curPid} } | Stop-Process -Force"`, () => {});
   } catch (_) {}
 }
 

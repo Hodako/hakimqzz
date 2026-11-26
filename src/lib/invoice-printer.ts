@@ -5,6 +5,7 @@ import {
   getPosHardwareSettings,
   DEFAULT_VISIBILITY_SETTINGS,
   DEFAULT_POLICY_NOTE,
+  DEFAULT_POLICY_NOTE_EN,
   DEFAULT_INVOICE_SECTION_ORDER,
   type InvoiceSectionId,
   type PosHardwareSettings,
@@ -63,17 +64,40 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
+function translatePaymentMode(mode: string | undefined, isDue: boolean, isEn: boolean): string {
+  const raw = String(mode || "").trim();
+  if (!raw) return isEn ? (isDue ? "Credit" : "Cash") : (isDue ? "বাকী" : "নগদ");
+  const lower = raw.toLowerCase();
+  if (lower.includes("split") || raw.includes("স্প্লিট")) return isEn ? "Split" : "স্প্লিট";
+  if (lower.includes("bkash") || raw.includes("বিকাশ")) return isEn ? "bKash" : "বিকাশ";
+  if (lower.includes("bank") || raw.includes("ব্যাংক")) return isEn ? "Bank" : "ব্যাংক";
+  if (lower.includes("credit") || lower === "due" || raw.includes("বাকী") || raw.includes("বাকি")) return isEn ? "Credit" : "বাকী";
+  if (lower.includes("cash") || raw.includes("নগদ")) return isEn ? "Cash" : "নগদ";
+  if (lower.startsWith("courier") && !isEn) return raw.replace(/^COURIER/i, "কুরিয়ার");
+  return raw;
+}
+
+function translateCustomerName(name: string | undefined, isEn: boolean): string {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  if (isEn && (raw === "সাধারণ কাস্টমার" || raw === "সাধারণ ক্রেতা")) return "Walk-in Customer";
+  if (!isEn && raw.toLowerCase() === "walk-in customer") return "সাধারণ কাস্টমার";
+  return raw;
+}
+
 /**
  * Clean Thermal POS Receipt Print Engine (Optimized for 20mm/50mm/58mm/70mm/80mm Thermal Printers & A4)
  * All texts are rendered BOLD & pure black (#000000) for crisp thermal printing.
- * Respects per-device default printer, automated printing toggle, custom width, margins, font sizes, and custom lines.
+ * Respects per-device default printer, automated printing toggle, custom width, margins, font sizes, print language, and custom lines.
  */
 export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Partial<PosHardwareSettings>): string {
   const hw = { ...getPosHardwareSettings(), ...(settingsOverride || {}) };
   const vis = { ...DEFAULT_VISIBILITY_SETTINGS, ...(hw.visibility || {}) };
+  const pLang: "bn" | "en" = hw.printLanguage === "en" ? "en" : "bn";
+  const isEn = pLang === "en";
 
-  const isExplicitA4 = String(data.pageSize || "").toLowerCase() === "a4" && !settingsOverride?.paperWidthMm && hw.paperWidthMm === 80;
-  const widthMm = isExplicitA4 ? 210 : (Number(hw.paperWidthMm) || (data.pageSize === "58mm" ? 58 : 80));
+  const isA4 = hw.paperWidthMm >= 180 || (String(data.pageSize || "").toLowerCase() === "a4" && !hw.paperWidthMm);
+  const widthMm = isA4 ? 210 : (Number(hw.paperWidthMm) || (data.pageSize === "58mm" ? 58 : 80));
 
   const printableWidthMm = getPrintableWidthMm(widthMm);
   // Reflow larger text inside the same physical head width.
@@ -97,19 +121,19 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
 
   // Respect user font adjustments while preventing physical roll overflow when fitToWidth is enabled
   const maxSafeBasePt =
-    widthMm <= 25 ? 5.2 :
-    widthMm <= 50 ? 6.2 :
-    widthMm <= 58 ? 6.8 :
-    widthMm <= 72 ? 7.5 :
-    widthMm < 148 ? 8.5 :
+    widthMm <= 25 ? 5.5 :
+    widthMm <= 50 ? 6.8 :
+    widthMm <= 58 ? 7.6 :
+    widthMm <= 72 ? 8.2 :
+    widthMm < 148 ? 9.0 :
     11.0;
 
   const maxSafeTitlePt =
-    widthMm <= 25 ? 6.5 :
-    widthMm <= 50 ? 7.8 :
-    widthMm <= 58 ? 8.8 :
-    widthMm <= 72 ? 10.0 :
-    widthMm < 148 ? 12.0 :
+    widthMm <= 25 ? 7.0 :
+    widthMm <= 50 ? 8.5 :
+    widthMm <= 58 ? 10.0 :
+    widthMm <= 72 ? 11.0 :
+    widthMm < 148 ? 12.5 :
     15.0;
 
   const baseFontPt = hw.fitToWidth !== false ? Math.min(userBasePt, maxSafeBasePt) : userBasePt;
@@ -123,8 +147,14 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
   const smallFontPt = Math.max(4.5, Number((baseFontPt - 1.0).toFixed(1)));
   const largeFontPt = Number((baseFontPt + 1.0).toFixed(1));
 
+  const currencySymbol = hw.showCurrencySymbol
+    ? (hw.currencySymbol || "৳")
+    : "";
+  const curPrefix = currencySymbol ? `${currencySymbol} ` : "";
+  const effectiveCashier = (data.cashierName || hw.customCashierName || "").trim();
+
   // Choose columns from usable space at the requested text scale, not roll size alone.
-  const amountChars = Math.max(6, ...data.items.map(item => ("৳" + (item.qty * item.sellPrice).toLocaleString()).length));
+  const amountChars = Math.max(6, ...data.items.map(item => (curPrefix + (item.qty * item.sellPrice).toLocaleString()).length));
   const qtyChars = Math.max(3, ...data.items.map(item => String(item.qty).length));
   const charWidthMm = baseFontPt * 25.4 / 72 * 0.62;
   const isNarrow = contentWidthMm < 52 || amountChars * charWidthMm > contentWidthMm * 0.30
@@ -134,11 +164,13 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
   const tagline = escapeHtml(hw.customSubtitle !== undefined ? hw.customSubtitle : (data.tagline || ""));
   const address = escapeHtml(hw.customAddress !== undefined ? hw.customAddress : (data.shopAddress || ""));
   const phone = escapeHtml(hw.customPhone !== undefined ? hw.customPhone : (data.shopPhoneNumbers || ""));
-  const terms = hw.customFooterNote !== undefined ? hw.customFooterNote : data.terms;
-  const rawPolicyNote = (hw.customPolicyNote !== undefined ? hw.customPolicyNote : DEFAULT_POLICY_NOTE).trim();
+  const termsRaw = hw.customFooterNote !== undefined ? hw.customFooterNote : "";
+  const effectiveTerms = String(termsRaw ?? "").trim();
+
+  const rawPolicyNote = String(hw.customPolicyNote !== undefined ? hw.customPolicyNote : "").trim();
   const policyNote = escapeHtml(rawPolicyNote);
   const normalizeLine = (s: string) => s.replace(/[*\s]/g, "");
-  const termLines = (terms !== undefined && terms !== null ? String(terms) : "আমাদের সাথে কেনাকাটা করার জন্য ধন্যবাদ!")
+  const termLines = effectiveTerms
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
@@ -168,13 +200,13 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
     ? data.items
         .map(
           (item, idx) => `
-      <div class="receipt-item" style="padding: 1.5px 0; border-bottom: 1px dotted #000000;">
-        <div style="font-weight: 600; font-size: ${baseFontPt}pt; word-break: break-word; line-height: 1.18;">
+      <div class="receipt-item" style="padding: 2.5px 0; border-bottom: 1px dotted #000000;">
+        <div style="font-weight: 700; font-size: ${baseFontPt}pt; word-break: break-word; line-height: 1.25;">
           ${idx + 1}. ${escapeHtml(item.product.name)}
         </div>
-        <div class="receipt-row" style="display: flex; justify-content: space-between; font-size: ${smallFontPt}pt; font-family: monospace; margin-top: 1px;">
-          <span>${item.qty} × ৳${Number(item.sellPrice || 0).toLocaleString()}</span>
-          <span style="font-weight: 700;">৳${(Number(item.qty || 0) * Number(item.sellPrice || 0)).toLocaleString()}</span>
+        <div class="receipt-row" style="display: flex; justify-content: space-between; font-size: ${smallFontPt}pt; font-family: Consolas, 'Courier New', monospace; margin-top: 1.5px;">
+          <span>${item.qty} × ${curPrefix}${Number(item.sellPrice || 0).toLocaleString()}</span>
+          <span style="font-weight: 700;">${curPrefix}${(Number(item.qty || 0) * Number(item.sellPrice || 0)).toLocaleString()}</span>
         </div>
       </div>`
         )
@@ -190,9 +222,9 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
           showItemsHeader
             ? `<thead>
                 <tr style="border-bottom: 1px dashed #000000;">
-                  <th style="text-align: left; font-size: ${smallFontPt}pt; width: 52%; word-break: break-word;">বিবরণ</th>
-                  <th style="text-align: center; font-size: ${smallFontPt}pt; width: 20%;">পরিমাণ</th>
-                  <th style="text-align: right; font-size: ${smallFontPt}pt; width: 28%;">মূল্য</th>
+                  <th style="text-align: left; font-size: ${smallFontPt}pt; width: 54%; word-break: break-word;">${isEn ? "Item" : "পণ্য"}</th>
+                  <th style="text-align: center; font-size: ${smallFontPt}pt; width: 18%;">${isEn ? "Qty" : "পরি."}</th>
+                  <th style="text-align: right; font-size: ${smallFontPt}pt; width: 28%;">${isEn ? "Amount" : "টাকা"}</th>
                 </tr>
               </thead>`
             : ""
@@ -202,21 +234,16 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
             .map(
               (item, idx) => `
             <tr>
-              <td style="padding: 1.5px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 52%; word-break: break-word; overflow-wrap: break-word; line-height: 1.18;">
+              <td style="padding: 1px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 54%; word-break: break-word; overflow-wrap: break-word; line-height: 1.15;">
                 ${idx + 1}. ${escapeHtml(item.product.name)}
               </td>
-              <td style="padding: 1.5px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseFontPt}pt; font-weight: 600; color: #000000; width: 20%;">
+              <td style="padding: 1px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseFontPt}pt; font-weight: 600; color: #000000; width: 18%;">
                 ${item.qty}
               </td>
-              <td style="padding: 1.5px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 28%; white-space: nowrap;">
-                ৳${(Number(item.qty || 0) * Number(item.sellPrice || 0)).toLocaleString()}
+              <td style="padding: 1px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 28%; white-space: nowrap;">
+                ${curPrefix}${(Number(item.qty || 0) * Number(item.sellPrice || 0)).toLocaleString()}
               </td>
-            </tr>
-            ${
-              idx < data.items.length - 1
-                ? `<tr><td colspan="3" style="border-top: 1px dotted #000000; height: 1px; padding: 0; margin: 0;"></td></tr>`
-                : ""
-            }`
+            </tr>`
             )
             .join("")}
         </tbody>
@@ -233,9 +260,9 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       ? `<div style="font-size: ${smallFontPt}pt; font-weight: 600; color: #000000; margin-top: 1px;">${address}</div>`
       : "",
     vis.showShopPhone !== false && phone
-      ? `<div style="font-size: ${smallFontPt}pt; font-family: monospace; font-weight: 700; color: #000000; margin-top: 1px;">মোবাইল: ${phone}</div>`
+      ? `<div style="font-size: ${smallFontPt}pt; font-family: monospace; font-weight: 700; color: #000000; margin-top: 1px;">${isEn ? "Mobile:" : "মোবাইল:"} ${phone}</div>`
       : "",
-    data.userEmail
+    vis.showShopEmail !== false && vis.showEmail !== false && data.userEmail
       ? `<div style="font-size: ${smallFontPt}pt; font-weight: 600; color: #000000; margin-top: 1px;">${escapeHtml(data.userEmail)}</div>`
       : "",
     renderCustomLines("header"),
@@ -243,79 +270,78 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
     .filter(Boolean)
     .join("");
 
+  const cleanShortInv = String(data.invoiceNo || "").replace(/^INV-?/i, "").slice(-8);
+  const displayCustomerName = translateCustomerName(data.customerName, isEn);
+  const displayPaymentMode = translatePaymentMode(data.paymentMode, data.due > 0, isEn);
+
   const metaInner = [
     vis.showInvoiceNo !== false || vis.showDateTime !== false
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-weight: 600;">
-          ${vis.showInvoiceNo !== false ? `<span style="font-weight: 700;">ইনভয়েস: ${escapeHtml(data.invoiceNo)}</span>` : "<span></span>"}
+          ${vis.showInvoiceNo !== false ? `<span style="font-weight: 700;">${isEn ? "Bill:" : "বিল:"} #${escapeHtml(cleanShortInv || data.invoiceNo)}</span>` : "<span></span>"}
           ${vis.showDateTime !== false ? `<span style="font-weight: 600;">${dateStr}</span>` : ""}
         </div>`
       : "",
-    showCustomerInfo && data.customerName
+    showCustomerInfo && displayCustomerName
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; align-items: baseline; gap: 4px; margin-top: 1px; font-weight: 600;">
-          <span style="font-weight: 600;">ক্রেতা: <strong style="font-weight: 700;">${escapeHtml(data.customerName)}</strong></span>
+          <span style="font-weight: 600;">${isEn ? "Customer:" : "ক্রেতা:"} <strong style="font-weight: 700;">${escapeHtml(displayCustomerName)}</strong></span>
           <span style="font-family: monospace; font-weight: 600;">${escapeHtml(data.customerPhone || "")}</span>
         </div>`
       : "",
-    showCashierInfo && data.cashierName
-      ? `<div style="font-size: ${smallFontPt}pt; font-weight: 600; color: #000000; margin-top: 1px;">ক্যাশিয়ার: ${escapeHtml(data.cashierName)}</div>`
+    showCashierInfo && effectiveCashier
+      ? `<div style="font-size: ${smallFontPt}pt; font-weight: 600; color: #000000; margin-top: 1px;">${isEn ? "Cashier:" : "ক্যাশিয়ার:"} ${escapeHtml(effectiveCashier)}</div>`
       : "",
   ]
     .filter(Boolean)
     .join("");
 
   const totalsInner = [
-    vis.showSubtotal !== false
+    vis.showSubtotal !== false && data.discountAmount > 0
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;">
-          <span>মোট মূল্য:</span>
-          <span style="font-family: monospace; font-weight: 600;">৳${data.subtotal.toLocaleString()}</span>
+          <span>${isEn ? "Subtotal:" : "মোট:"}</span>
+          <span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.subtotal.toLocaleString()}</span>
         </div>`
       : "",
     vis.showDiscount !== false && data.discountAmount > 0
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600; color: #000000;">
-          <span>বিশেষ ছাড়:</span>
-          <span style="font-family: monospace; font-weight: 600;">-৳${data.discountAmount.toLocaleString()}</span>
+          <span>${isEn ? "Discount:" : "ছাড়:"}</span>
+          <span style="font-family: monospace; font-weight: 600;">-${curPrefix}${data.discountAmount.toLocaleString()}</span>
         </div>`
       : "",
     vis.showTotal !== false
-      ? `<div class="receipt-row" style="border-top: 1px solid #000000; border-bottom: 1px solid #000000; padding: 1.5px 0; margin: 1.5px 0; display: flex; justify-content: space-between; font-size: ${largeFontPt}pt; font-weight: 700;">
-          <span style="font-weight: 700;">সর্বমোট:</span>
-          <span style="font-family: monospace; font-weight: 700;">৳${data.total.toLocaleString()}</span>
+      ? `<div class="receipt-row" style="border-top: 1px dashed #000000; padding: 1.5px 0; margin-top: 1.5px; display: flex; justify-content: space-between; font-size: ${largeFontPt}pt; font-weight: 700;">
+          <span style="font-weight: 700;">${isEn ? "Total:" : "সর্বমোট:"}</span>
+          <span style="font-family: monospace; font-weight: 700;">${curPrefix}${data.total.toLocaleString()}</span>
         </div>`
       : "",
     vis.showPaid !== false
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600; color: #000000;">
-          <span>পরিশোধ:</span>
-          <span style="font-family: monospace; font-weight: 600;">৳${data.paidAmount.toLocaleString()}</span>
+          <span>${isEn ? "Paid:" : "জমা:"}</span>
+          <span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.paidAmount.toLocaleString()}</span>
         </div>`
       : "",
     vis.showPaid !== false && data.splitCash !== undefined && (data.splitCash > 0 || (data.splitBkash && data.splitBkash > 0) || (data.splitBank && data.splitBank > 0))
       ? `<div style="background: #ffffff; border: 1px dashed #000000; padding: 2px 4px; border-radius: 3px; margin: 1.5px 0; font-size: ${smallFontPt}pt; font-weight: 600; color: #000000;">
-          ${data.splitCash > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>• নগদ:</span><span style="font-family: monospace; font-weight: 600;">৳${data.splitCash.toLocaleString()}</span></div>` : ""}
-          ${data.splitBkash && data.splitBkash > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>• বিকাশ:</span><span style="font-family: monospace; font-weight: 600;">৳${data.splitBkash.toLocaleString()}</span></div>` : ""}
-          ${data.splitBank && data.splitBank > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>• ব্যাংক:</span><span style="font-family: monospace; font-weight: 600;">৳${data.splitBank.toLocaleString()}</span></div>` : ""}
+          ${data.splitCash > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>${isEn ? "• Cash:" : "• নগদ:"}</span><span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.splitCash.toLocaleString()}</span></div>` : ""}
+          ${data.splitBkash && data.splitBkash > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>${isEn ? "• bKash:" : "• বিকাশ:"}</span><span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.splitBkash.toLocaleString()}</span></div>` : ""}
+          ${data.splitBank && data.splitBank > 0 ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;"><span>${isEn ? "• Bank:" : "• ব্যাংক:"}</span><span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.splitBank.toLocaleString()}</span></div>` : ""}
         </div>`
       : "",
-    vis.showDue !== false
-      ? data.due > 0
-        ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 700; color: #000000;">
-            <span>বকেয়া:</span>
-            <span style="font-family: monospace; font-weight: 700;">৳${data.due.toLocaleString()}</span>
-          </div>`
-        : `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;">
-            <span>বকেয়া:</span>
-            <span style="font-family: monospace; font-weight: 600;">৳0</span>
-          </div>`
+    vis.showDue !== false && data.due > 0
+      ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 700; color: #000000;">
+          <span>${isEn ? "Due:" : "বকেয়া:"}</span>
+          <span style="font-family: monospace; font-weight: 700;">${curPrefix}${data.due.toLocaleString()}</span>
+        </div>`
       : "",
     vis.showChangeReturn !== false && (data.changeAmount || 0) > 0
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-weight: 600;">
-          <span>ফেরত:</span>
-          <span style="font-family: monospace; font-weight: 600;">৳${data.changeAmount?.toLocaleString()}</span>
+          <span>${isEn ? "Change:" : "ফেরত:"}</span>
+          <span style="font-family: monospace; font-weight: 600;">${curPrefix}${data.changeAmount?.toLocaleString()}</span>
         </div>`
       : "",
     vis.showPaymentMode !== false
       ? `<div class="receipt-row" style="display: flex; justify-content: space-between; font-size: ${smallFontPt}pt; font-weight: 600; color: #000000; margin-top: 1px;">
-          <span>পেমেন্ট মাধ্যম:</span>
-          <span style="font-weight: 700; color: #000000;">${escapeHtml(data.paymentMode || (data.due > 0 ? "বাকী" : "নগদ"))}</span>
+          <span>${isEn ? "Payment:" : "মাধ্যম:"}</span>
+          <span style="font-weight: 700; color: #000000;">${escapeHtml(displayPaymentMode)}</span>
         </div>`
       : "",
   ]
@@ -342,6 +368,7 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
   const sectionBlocks: Record<InvoiceSectionId, string> = {
     header: headerInner ? `<div style="text-align: center; margin: 0 0 2px 0; padding-top: 0;">${headerInner}</div>` : "",
     meta: metaInner ? `<div style="font-size: ${smallFontPt}pt; line-height: 1.25; font-weight: 600; color: #000000;">${metaInner}</div>` : "",
+    customer: "",
     before_items: renderCustomLines("before_items"),
     items: itemsHtml,
     after_items: renderCustomLines("after_items"),
@@ -363,7 +390,7 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
     .join('\n    <div class="dashed-line"></div>\n    ');
 
   return `<!DOCTYPE html>
-<html lang="bn" style="color-scheme: light !important;">
+<html lang="${pLang}" style="color-scheme: light !important;">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -379,15 +406,15 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       box-sizing: border-box !important; 
       margin: 0; 
       padding: 0; 
-      font-family: 'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', 'Segoe UI', 'Nirmala UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif !important; 
       color: #000000 !important;
-      word-break: normal !important;
-      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+      overflow-wrap: break-word !important;
       -webkit-print-color-adjust: exact !important; 
       print-color-adjust: exact !important; 
       color-scheme: light !important; 
     }
     html, body { 
+      font-family: 'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', 'Segoe UI', 'Nirmala UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
       background: #ffffff !important; 
       color: #000000 !important; 
       font-weight: 600;
@@ -397,15 +424,15 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       margin: 0 !important; 
       padding: 0 !important; 
       font-size: ${baseFontPt}pt; 
-      line-height: 1.18; 
+      line-height: 1.24; 
       vertical-align: top !important;
       writing-mode: horizontal-tb !important;
       direction: ltr !important;
     }
     @media print {
       html, body {
-        width: auto !important;
-        max-width: none !important;
+        width: ${targetWidth} !important;
+        max-width: 100% !important;
       }
     }
     html { zoom: 1 !important; }

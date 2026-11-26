@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog";
+import { InvoiceTemplateDialog } from "@/components/invoice-template-dialog";
 import { LabelPrintDialog } from "@/components/label-print-dialog";
 import { toast } from "sonner";
 
@@ -63,6 +64,7 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
   const [testingDrawer, setTestingDrawer] = useState(false);
   const [settingOsDefault, setSettingOsDefault] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
 
   const [hwConfig, setHwConfig] = useState<PosHwConfig>(DEFAULT_HARDWARE_SETTINGS);
@@ -471,6 +473,15 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
           <Button
             type="button"
             size="sm"
+            onClick={() => setTemplateDialogOpen(true)}
+            className="rounded-xl h-8 text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-500 text-white cursor-pointer shadow-xs"
+          >
+            <FileText className="size-3.5" />
+            {lang === "bn" ? "ইনভয়েস টেমপ্লেট" : "Invoice Templates"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             onClick={() => setLabelDialogOpen(true)}
             className="rounded-xl h-8 text-xs font-bold gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shadow-xs"
           >
@@ -487,6 +498,45 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
             {lang === "bn" ? "প্রিন্টার রিফ্রেশ" : "Refresh Printers"}
           </Button>
+        </div>
+      </div>
+
+      {/* Print Language Toggle (Bangla / English) */}
+      <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+            <span className="inline-flex items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 text-[10px] font-black tracking-wide">
+              বাং / EN
+            </span>
+            <span>Print Language / প্রিন্টিং ভাষা</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Choose the language for printed receipts and invoices (ইনভয়েস ও রসিদ প্রিন্টের ভাষা নির্বাচন করুন)।
+          </p>
+        </div>
+        <div className="inline-flex items-center rounded-xl border border-border bg-background p-1 shrink-0 self-start sm:self-center">
+          <button
+            type="button"
+            onClick={() => updateHw({ printLanguage: "bn" })}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              (hwConfig.printLanguage ?? "bn") === "bn"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            বাংলা (Bangla)
+          </button>
+          <button
+            type="button"
+            onClick={() => updateHw({ printLanguage: "en" })}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              hwConfig.printLanguage === "en"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            English
+          </button>
         </div>
       </div>
 
@@ -976,6 +1026,14 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
               </label>
 
               <label className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border/60 cursor-pointer">
+                <span className="font-semibold">{lang === "bn" ? "ইমেইল ঠিকানা" : "Shop Email"}</span>
+                <Switch
+                  checked={vis.showShopEmail !== false}
+                  onCheckedChange={(c) => updateVisibility({ showShopEmail: c, showEmail: c })}
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border/60 cursor-pointer">
                 <span className="font-semibold">{lang === "bn" ? "ইনভয়েস নম্বর" : "Invoice No"}</span>
                 <Switch
                   checked={vis.showInvoiceNo !== false}
@@ -1289,6 +1347,14 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
       <InvoicePreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
+        lang={lang}
+      />
+
+      {/* Invoice Saved & Builtin Templates Modal Dialog */}
+      <InvoiceTemplateDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        shopName={hwConfig.customHeaderTitle || "DREAM FASHION"}
         lang={lang}
       />
 

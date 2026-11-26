@@ -128,20 +128,21 @@ export function InvoicePreviewDialog({
   // Sample data fallback if no live invoice is supplied
   const effectiveInvoiceData: PrintInvoiceParams = useMemo(() => {
     if (invoiceData) return invoiceData;
+    const isEn = settings.printLanguage === "en";
     return {
       businessName: settings.customHeaderTitle || "DREAM FASHION",
-      tagline: settings.customSubtitle || "এক্সক্লুসিভ কালেকশন",
-      shopAddress: settings.customAddress || "দোকান নং #১২, নিউ মার্কেট",
+      tagline: settings.customSubtitle || (isEn ? "Exclusive Collection" : "এক্সক্লুসিভ কালেকশন"),
+      shopAddress: settings.customAddress || (isEn ? "Shop #12, New Market" : "দোকান নং #১২, নিউ মার্কেট"),
       shopPhoneNumbers: settings.customPhone || "01712-345678",
       invoiceNo: "INV-SAMPLE-01",
       invoiceDate: new Date().toLocaleDateString("en-GB") + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      cashierName: "ক্যাশিয়ার",
-      customerName: "জনাব রহিম",
+      cashierName: isEn ? "Cashier" : "ক্যাশিয়ার",
+      customerName: isEn ? "Mr. Rahim" : "জনাব রহিম",
       customerPhone: "01898-765432",
-      paymentMode: "নগদ",
+      paymentMode: isEn ? "Cash" : "নগদ",
       items: [
-        { product: { name: "প্রিমিয়াম ফরমাল শার্ট" }, qty: 1, sellPrice: 1250 },
-        { product: { name: "ডেনিম জিন্স প্যান্ট" }, qty: 1, sellPrice: 1450 },
+        { product: { name: isEn ? "Premium Formal Shirt" : "প্রিমিয়াম ফরমাল শার্ট" }, qty: 1, sellPrice: 1250 },
+        { product: { name: isEn ? "Denim Jeans Pant" : "ডেনিম জিন্স প্যান্ট" }, qty: 1, sellPrice: 1450 },
       ],
       subtotal: 2700,
       discountAmount: 200,
@@ -149,7 +150,7 @@ export function InvoicePreviewDialog({
       paidAmount: 2500,
       due: 0,
       changeAmount: 0,
-      terms: settings.customFooterNote || "আমাদের সাথে কেনাকাটা করার জন্য ধন্যবাদ!\n৭ দিনের মধ্যে ইনভয়েস সহ পণ্য পরিবর্তন প্রযোজ্য",
+      terms: settings.customFooterNote || "",
     };
   }, [invoiceData, settings]);
 
@@ -295,6 +296,36 @@ export function InvoicePreviewDialog({
           </div>
 
           <div className="flex items-center gap-2 pr-6">
+            <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5 mr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  updateSettings({ printLanguage: "bn" });
+                  savePosHardwareSettings({ printLanguage: "bn" });
+                }}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  (settings.printLanguage ?? "bn") === "bn"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                বাংলা
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateSettings({ printLanguage: "en" });
+                  savePosHardwareSettings({ printLanguage: "en" });
+                }}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  settings.printLanguage === "en"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                EN
+              </button>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -794,7 +825,7 @@ export function InvoicePreviewDialog({
                     labelBn: "ফুটার নোট বা ধন্যবাদ বার্তা",
                     labelEn: "Footer Note / Thank You Note",
                     value: settings.customFooterNote ?? (effectiveInvoiceData.terms || ""),
-                    placeholder: "আমাদের সাথে কেনাকাটা করার জন্য ধন্যবাদ!",
+                    placeholder: lang === "bn" ? "খালি রাখলে প্রিন্ট হবে না" : "Leave empty for no footer note",
                     onChange: (v: string) => updateSettings({ customFooterNote: v }),
                   },
                   {
@@ -802,8 +833,8 @@ export function InvoicePreviewDialog({
                     visKey: "showPolicyNote" as keyof InvoiceVisibilitySettings,
                     labelBn: "পণ্য পরিবর্তন সংক্রান্ত পলিসি টেক্সট",
                     labelEn: "Exchange Policy Note",
-                    value: settings.customPolicyNote ?? DEFAULT_POLICY_NOTE,
-                    placeholder: DEFAULT_POLICY_NOTE,
+                    value: settings.customPolicyNote ?? "",
+                    placeholder: lang === "bn" ? "খালি রাখলে প্রিন্ট হবে না" : "Leave empty for no policy note",
                     onChange: (v: string) => updateSettings({ customPolicyNote: v }),
                   },
                 ].map((field) => {
@@ -892,7 +923,8 @@ export function InvoicePreviewDialog({
                       ];
                       const labels: Record<InvoiceSectionId, { bn: string; en: string }> = {
                         header: { bn: "দোকানের হেডার ও ঠিকানা", en: "Shop Header & Address" },
-                        meta: { bn: "ইনভয়েস নম্বর, তারিখ ও ক্রেতা", en: "Invoice No, Date & Customer" },
+                        meta: { bn: "ইনভয়েস নম্বর ও তারিখ", en: "Invoice No & Date" },
+                        customer: { bn: "ক্রেতার তথ্য", en: "Customer Details" },
                         before_items: { bn: "আইটেমের পূর্বের কাস্টম টেক্সট", en: "Custom Texts (Before Items)" },
                         items: { bn: "পণ্যের তালিকা টেবিল (Items)", en: "Purchased Items Table" },
                         after_items: { bn: "আইটেমের পরের কাস্টম টেক্সট", en: "Custom Texts (After Items)" },
@@ -1087,6 +1119,13 @@ export function InvoicePreviewDialog({
                       <Switch
                         checked={vis.showShopPhone !== false}
                         onCheckedChange={(c) => updateVisibility({ showShopPhone: c })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">
+                      <span>{lang === "bn" ? "দোকানের ইমেইল" : "Shop Email"}</span>
+                      <Switch
+                        checked={vis.showShopEmail !== false}
+                        onCheckedChange={(c) => updateVisibility({ showShopEmail: c, showEmail: c })}
                       />
                     </label>
                     <label className="flex items-center justify-between p-2 rounded-lg bg-background border border-border/50 cursor-pointer">

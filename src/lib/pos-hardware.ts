@@ -5,6 +5,7 @@ export type ReceiptPrintMode = "manual" | "automatic";
 export type InvoiceSectionId =
   | "header"
   | "meta"
+  | "customer"
   | "before_items"
   | "items"
   | "after_items"
@@ -34,6 +35,8 @@ export interface InvoiceVisibilitySettings {
   showShopName?: boolean;
   showShopAddress?: boolean;
   showShopPhone?: boolean;
+  showShopEmail?: boolean;
+  showEmail?: boolean;
   showTagline?: boolean;
   showInvoiceNo?: boolean;
   showDateTime?: boolean;
@@ -101,12 +104,228 @@ export interface LabelElement {
 export interface LabelSavedTemplate {
   id: string;
   name: string;
+  description?: string;
   widthMm: number;
   heightMm: number;
   cornerRadiusMm?: number;
   elements: LabelElement[];
   updatedAt: string;
 }
+
+export interface InvoiceSavedTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  paperWidthMm: number;
+  fontSizePt: number;
+  titleFontSizePt: number;
+  printLanguage?: "bn" | "en";
+  showCurrencySymbol?: boolean;
+  currencySymbol?: string;
+  customCashierName?: string;
+  customHeaderTitle?: string;
+  customSubtitle?: string;
+  customAddress?: string;
+  customPhone?: string;
+  customFooterNote?: string;
+  customPolicyNote?: string;
+  visibility: InvoiceVisibilitySettings;
+  customLines: CustomInvoiceLine[];
+  invoiceSectionOrder?: InvoiceSectionId[];
+  tableStyle?: "compact" | "bordered" | "clean" | "minimal";
+  updatedAt: string;
+}
+
+export const BUILTIN_INVOICE_TEMPLATES: InvoiceSavedTemplate[] = [
+  {
+    id: "inv_tpl_80mm_standard",
+    name: "80mm Standard POS Thermal (স্ট্যান্ডার্ড থার্মাল)",
+    description: "Standard 80mm thermal receipt with clean layout, cashier name and policy terms",
+    paperWidthMm: 80,
+    fontSizePt: 6.8,
+    titleFontSizePt: 9.5,
+    printLanguage: "bn",
+    showCurrencySymbol: false,
+    currencySymbol: "",
+    customCashierName: "Cashier Counter 1",
+    visibility: {
+      showShopName: true,
+      showShopAddress: true,
+      showShopPhone: true,
+      showShopEmail: true,
+      showTagline: true,
+      showInvoiceNo: true,
+      showDateTime: true,
+      showCashier: true,
+      showCashierName: true,
+      showCustomer: true,
+      showCustomerDetails: true,
+      showPaymentMode: true,
+      showChangeReturn: true,
+      showTerms: true,
+      showPolicyNote: true,
+      showItemsHeader: true,
+      showItemHeader: true,
+      showDiscount: true,
+      showSubtotal: true,
+      showTotal: true,
+      showPaid: true,
+      showDue: true,
+    },
+    customLines: [],
+    invoiceSectionOrder: [
+      "header",
+      "meta",
+      "customer",
+      "items",
+      "totals",
+      "footer",
+    ],
+    tableStyle: "compact",
+    updatedAt: "2026-11-16T00:00:00.000Z",
+  },
+  {
+    id: "inv_tpl_58mm_mini",
+    name: "58mm Mini POS Thermal (মিনি থার্মাল রসিদ)",
+    description: "Ultra-compact 58mm thermal receipt layout optimized for small roll printers",
+    paperWidthMm: 58,
+    fontSizePt: 6.0,
+    titleFontSizePt: 8.5,
+    printLanguage: "bn",
+    showCurrencySymbol: false,
+    currencySymbol: "",
+    customCashierName: "ক্যাশ কাউন্টার",
+    visibility: {
+      showShopName: true,
+      showShopAddress: true,
+      showShopPhone: true,
+      showShopEmail: false,
+      showTagline: false,
+      showInvoiceNo: true,
+      showDateTime: true,
+      showCashier: true,
+      showCashierName: true,
+      showCustomer: true,
+      showCustomerDetails: true,
+      showPaymentMode: true,
+      showChangeReturn: true,
+      showTerms: true,
+      showPolicyNote: true,
+      showItemsHeader: true,
+      showItemHeader: true,
+      showDiscount: true,
+      showSubtotal: true,
+      showTotal: true,
+      showPaid: true,
+      showDue: true,
+    },
+    customLines: [],
+    invoiceSectionOrder: [
+      "header",
+      "meta",
+      "customer",
+      "items",
+      "totals",
+      "footer",
+    ],
+    tableStyle: "compact",
+    updatedAt: "2026-11-16T00:00:00.000Z",
+  },
+  {
+    id: "inv_tpl_clean_no_taka",
+    name: "Clean No-Taka Invoice (টাকা চিহ্ন ছাড়া ফ্রেশ ইনভয়েস)",
+    description: "Modern professional invoice showing prices as pure numbers without taka/currency sign",
+    paperWidthMm: 80,
+    fontSizePt: 7.0,
+    titleFontSizePt: 10.0,
+    printLanguage: "bn",
+    showCurrencySymbol: false,
+    currencySymbol: "",
+    customCashierName: "অপারেটর",
+    visibility: {
+      showShopName: true,
+      showShopAddress: true,
+      showShopPhone: true,
+      showShopEmail: true,
+      showTagline: true,
+      showInvoiceNo: true,
+      showDateTime: true,
+      showCashier: true,
+      showCashierName: true,
+      showCustomer: true,
+      showCustomerDetails: true,
+      showPaymentMode: true,
+      showChangeReturn: true,
+      showTerms: true,
+      showPolicyNote: true,
+      showItemsHeader: true,
+      showItemHeader: true,
+      showDiscount: true,
+      showSubtotal: true,
+      showTotal: true,
+      showPaid: true,
+      showDue: true,
+    },
+    customLines: [],
+    invoiceSectionOrder: [
+      "header",
+      "meta",
+      "customer",
+      "items",
+      "totals",
+      "footer",
+    ],
+    tableStyle: "clean",
+    updatedAt: "2026-11-16T00:00:00.000Z",
+  },
+  {
+    id: "inv_tpl_a4_retail",
+    name: "A4 / Full Sheet Retail Invoice (পূর্ণাঙ্গ রিটেইল চালান)",
+    description: "Full-page invoice with detailed customer info, cashier header, table borders & terms",
+    paperWidthMm: 210,
+    fontSizePt: 9.5,
+    titleFontSizePt: 14.0,
+    printLanguage: "bn",
+    showCurrencySymbol: false,
+    currencySymbol: "",
+    customCashierName: "ক্যাশিয়ার",
+    visibility: {
+      showShopName: true,
+      showShopAddress: true,
+      showShopPhone: true,
+      showShopEmail: true,
+      showTagline: true,
+      showInvoiceNo: true,
+      showDateTime: true,
+      showCashier: true,
+      showCashierName: true,
+      showCustomer: true,
+      showCustomerDetails: true,
+      showPaymentMode: true,
+      showChangeReturn: true,
+      showTerms: true,
+      showPolicyNote: true,
+      showItemsHeader: true,
+      showItemHeader: true,
+      showDiscount: true,
+      showSubtotal: true,
+      showTotal: true,
+      showPaid: true,
+      showDue: true,
+    },
+    customLines: [],
+    invoiceSectionOrder: [
+      "header",
+      "meta",
+      "customer",
+      "items",
+      "totals",
+      "footer",
+    ],
+    tableStyle: "bordered",
+    updatedAt: "2026-11-16T00:00:00.000Z",
+  },
+];
 
 export interface PosLabelSettings {
   mode: LabelPrintMode;
@@ -135,7 +354,6 @@ export interface PosLabelSettings {
   showCategory: boolean;
   showVariant: boolean;
   showBorder: boolean;
-  customFooterText: string;
   currencyPrefix: string;
   silentPrint: boolean;
   snapToGrid: boolean;
@@ -174,7 +392,6 @@ export const DEFAULT_LABEL_SETTINGS: PosLabelSettings = {
   showCategory: false,
   showVariant: false,
   showBorder: false,
-  customFooterText: "",
   currencyPrefix: "৳",
   silentPrint: true,
   snapToGrid: true,
@@ -186,6 +403,8 @@ export const DEFAULT_LABEL_SETTINGS: PosLabelSettings = {
 
 export interface PosHardwareSettings {
   printMode: ReceiptPrintMode;
+  /** Receipt / invoice printing language ("bn" = Bangla, "en" = English) */
+  printLanguage?: "bn" | "en";
   scannerSuffix: "Enter" | "Tab";
   /** When true, prints directly in 1-click without showing Windows print dialog. When false, opens Windows Print Preferences dialog. */
   automatePrinting: boolean;
@@ -226,6 +445,16 @@ export interface PosHardwareSettings {
   customFooterNote?: string;
   /** Exchange / return policy line printed at the very bottom (empty string hides it) */
   customPolicyNote?: string;
+  /** Custom cashier name override (e.g. "Cashier: Counter 1" or staff name) */
+  customCashierName?: string;
+  /** Whether to show currency symbol (default false: removes taka symbol from prices) */
+  showCurrencySymbol?: boolean;
+  /** Currency symbol to show if showCurrencySymbol is true (e.g. "৳", "$", "BDT") */
+  currencySymbol?: string;
+  /** Saved custom & builtin invoice templates */
+  savedInvoiceTemplates?: InvoiceSavedTemplate[];
+  /** Currently active invoice template id */
+  activeInvoiceTemplateId?: string | null;
   /** Toggle visibility of standard invoice lines */
   visibility: InvoiceVisibilitySettings;
   /** Drag-and-drop section order for invoice blocks */
@@ -242,6 +471,7 @@ export const DEFAULT_VISIBILITY_SETTINGS: InvoiceVisibilitySettings = {
   showShopName: true,
   showShopAddress: true,
   showShopPhone: true,
+  showShopEmail: true,
   showTagline: true,
   showInvoiceNo: true,
   showDateTime: true,
@@ -262,11 +492,13 @@ export const DEFAULT_VISIBILITY_SETTINGS: InvoiceVisibilitySettings = {
   showDue: true,
 };
 
-/** Default exchange / return policy line shown at the bottom of the receipt */
-export const DEFAULT_POLICY_NOTE = "* ৭ দিনের মধ্যে ইনভয়েস সহ পণ্য পরিবর্তন প্রযোজ্য *";
+/** Default exchange / return policy line (empty by default — user can add custom lines or policy text) */
+export const DEFAULT_POLICY_NOTE = "";
+export const DEFAULT_POLICY_NOTE_EN = "";
 
 export const DEFAULT_HARDWARE_SETTINGS: PosHardwareSettings = {
   printMode: "manual",
+  printLanguage: "bn",
   scannerSuffix: "Enter",
   automatePrinting: true,
   devicePrinterName: "",
@@ -283,6 +515,11 @@ export const DEFAULT_HARDWARE_SETTINGS: PosHardwareSettings = {
   titleFontSizePt: 8.8,
   typographyV3Migrated: true,
   typographyV4Migrated: true,
+  customCashierName: "ক্যাশিয়ার",
+  showCurrencySymbol: false,
+  currencySymbol: "",
+  savedInvoiceTemplates: BUILTIN_INVOICE_TEMPLATES,
+  activeInvoiceTemplateId: "inv_tpl_80mm_standard",
   visibility: DEFAULT_VISIBILITY_SETTINGS,
   invoiceSectionOrder: DEFAULT_INVOICE_SECTION_ORDER,
   customLines: [],
@@ -387,6 +624,7 @@ export function getPosHardwareSettings(): PosHardwareSettings {
 
     const resolved: PosHardwareSettings = {
       printMode: saved?.printMode === "automatic" ? "automatic" : "manual",
+      printLanguage: saved?.printLanguage === "en" ? "en" : "bn",
       scannerSuffix: saved?.scannerSuffix === "Tab" ? "Tab" : "Enter",
       automatePrinting: saved?.automatePrinting !== undefined ? Boolean(saved.automatePrinting) : true,
       devicePrinterName: typeof saved?.devicePrinterName === "string" ? saved.devicePrinterName : "",
@@ -410,6 +648,13 @@ export function getPosHardwareSettings(): PosHardwareSettings {
       customPhone: typeof saved?.customPhone === "string" ? saved.customPhone : undefined,
       customFooterNote: typeof saved?.customFooterNote === "string" ? saved.customFooterNote : undefined,
       customPolicyNote: typeof saved?.customPolicyNote === "string" ? saved.customPolicyNote : undefined,
+      customCashierName: typeof saved?.customCashierName === "string" ? saved.customCashierName : "ক্যাশিয়ার",
+      showCurrencySymbol: saved?.showCurrencySymbol !== undefined ? Boolean(saved.showCurrencySymbol) : false,
+      currencySymbol: typeof saved?.currencySymbol === "string" ? saved.currencySymbol : "",
+      savedInvoiceTemplates: Array.isArray(saved?.savedInvoiceTemplates) && saved.savedInvoiceTemplates.length > 0
+        ? saved.savedInvoiceTemplates
+        : BUILTIN_INVOICE_TEMPLATES,
+      activeInvoiceTemplateId: typeof saved?.activeInvoiceTemplateId === "string" ? saved.activeInvoiceTemplateId : "inv_tpl_80mm_standard",
       visibility: {
         ...DEFAULT_VISIBILITY_SETTINGS,
         ...(saved?.visibility || {}),
@@ -421,6 +666,7 @@ export function getPosHardwareSettings(): PosHardwareSettings {
       labelSettings: {
         ...DEFAULT_LABEL_SETTINGS,
         ...savedLabel,
+        currencyPrefix: (savedLabel?.currencyPrefix || "").replace(/[৳Tk.\s]+/gi, "").trim(),
         mode: savedLabel?.mode === "a4_sheet" ? "a4_sheet" : "thermal",
         unit: savedLabel?.unit === "cm" || savedLabel?.unit === "in" ? savedLabel.unit : "mm",
         widthMm: Number(savedLabel?.widthMm) >= 10 ? Math.min(300, Number(savedLabel.widthMm)) : DEFAULT_LABEL_SETTINGS.widthMm,
@@ -445,8 +691,78 @@ export function getPosHardwareSettings(): PosHardwareSettings {
   }
 }
 
+export function saveCustomInvoiceTemplate(template: InvoiceSavedTemplate): PosHardwareSettings {
+  const hw = getPosHardwareSettings();
+  const currentTemplates = Array.isArray(hw.savedInvoiceTemplates) && hw.savedInvoiceTemplates.length > 0
+    ? [...hw.savedInvoiceTemplates]
+    : [...BUILTIN_INVOICE_TEMPLATES];
+
+  const existingIdx = currentTemplates.findIndex((t) => t.id === template.id);
+  if (existingIdx >= 0) {
+    currentTemplates[existingIdx] = { ...template, updatedAt: new Date().toISOString() };
+  } else {
+    currentTemplates.push({ ...template, updatedAt: new Date().toISOString() });
+  }
+
+  return savePosHardwareSettings({
+    savedInvoiceTemplates: currentTemplates,
+    activeInvoiceTemplateId: template.id,
+  });
+}
+
+export function deleteCustomInvoiceTemplate(templateId: string): PosHardwareSettings {
+  const hw = getPosHardwareSettings();
+  const currentTemplates = Array.isArray(hw.savedInvoiceTemplates)
+    ? hw.savedInvoiceTemplates.filter((t) => t.id !== templateId)
+    : [];
+
+  return savePosHardwareSettings({
+    savedInvoiceTemplates: currentTemplates.length > 0 ? currentTemplates : BUILTIN_INVOICE_TEMPLATES,
+    activeInvoiceTemplateId: hw.activeInvoiceTemplateId === templateId ? (BUILTIN_INVOICE_TEMPLATES[0]?.id || null) : hw.activeInvoiceTemplateId,
+  });
+}
+
+export function applyInvoiceTemplate(template: InvoiceSavedTemplate): PosHardwareSettings {
+  return savePosHardwareSettings({
+    paperWidthMm: template.paperWidthMm || 80,
+    fontSizePt: template.fontSizePt || 6.5,
+    titleFontSizePt: template.titleFontSizePt || 8.8,
+    printLanguage: template.printLanguage || "bn",
+    showCurrencySymbol: Boolean(template.showCurrencySymbol),
+    currencySymbol: template.currencySymbol || "",
+    customCashierName: template.customCashierName || "",
+    customHeaderTitle: template.customHeaderTitle,
+    customSubtitle: template.customSubtitle,
+    customAddress: template.customAddress,
+    customPhone: template.customPhone,
+    customFooterNote: template.customFooterNote,
+    customPolicyNote: template.customPolicyNote,
+    visibility: { ...DEFAULT_VISIBILITY_SETTINGS, ...(template.visibility || {}) },
+    customLines: template.customLines || [],
+    invoiceSectionOrder: template.invoiceSectionOrder || DEFAULT_INVOICE_SECTION_ORDER,
+    activeInvoiceTemplateId: template.id,
+  });
+}
+
 export function savePosHardwareSettings(settings: Partial<PosHardwareSettings>): PosHardwareSettings {
-  const updated = { ...getPosHardwareSettings(), ...settings };
+  const current = getPosHardwareSettings();
+  const nextLabelSettings = settings.labelSettings
+    ? {
+        ...current.labelSettings,
+        ...settings.labelSettings,
+        currencyPrefix: (settings.labelSettings.currencyPrefix !== undefined
+          ? settings.labelSettings.currencyPrefix
+          : current.labelSettings.currencyPrefix || ""
+        )
+          .replace(/[৳Tk.\s]+/gi, "")
+          .trim(),
+      }
+    : current.labelSettings;
+  const updated: PosHardwareSettings = {
+    ...current,
+    ...settings,
+    ...(settings.labelSettings ? { labelSettings: nextLabelSettings } : {}),
+  };
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("pos-hardware-settings-changed"));
