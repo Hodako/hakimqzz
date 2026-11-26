@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { getProducts, getCustomers, type Product, type Customer } from "@/lib/queries";
@@ -38,7 +38,7 @@ import { getBusinessSettingsFn } from "@/lib/rpc-admin";
 import { createSaleFn } from "@/lib/rpc";
 import { safeUUID } from "@/lib/utils";
 import { printPwaInvoice, downloadPwaInvoicePdf } from "@/lib/invoice-printer";
-import { getPosHardwareSettings, DEFAULT_POLICY_NOTE } from "@/lib/pos-hardware";
+import { getPosHardwareSettings, savePosHardwareSettings, DEFAULT_POLICY_NOTE } from "@/lib/pos-hardware";
 import { InvoicePreviewDialog } from "@/components/invoice-preview-dialog";
 
 type InvoiceItem = {
@@ -144,7 +144,7 @@ function InvoiceDocumentView({
         {/* Invoice Meta Section */}
         <div className="text-[11px] leading-snug space-y-0.5 text-black">
           <div className="flex justify-between items-center font-mono">
-            <span className="font-bold">ইনভয়েস: {invoiceNo || "#INV-928174"}</span>
+            <span className="font-bold">ইনভয়েস: #{invoiceNo || "5SBH4"}</span>
             <span className="text-[10.5px]">{invoiceDate}</span>
           </div>
           {customerName && (
@@ -247,14 +247,17 @@ function InvoiceDocumentView({
           </p>
         ) : (
           <div className="space-y-0.5">
-            <p className="text-[11px] font-black text-black">
-              {getPosHardwareSettings().customFooterNote || "আমাদের সাথে কেনাকাটা করার জন্য ধন্যবাদ!"}
-            </p>
-            {(getPosHardwareSettings().visibility?.showPolicyNote !== false) && (
-              <p className="text-[9.5px] text-zinc-600 font-medium">
-                {getPosHardwareSettings().customPolicyNote ?? DEFAULT_POLICY_NOTE}
+            {getPosHardwareSettings().customFooterNote?.trim() && (
+              <p className="text-[11px] font-black text-black">
+                {getPosHardwareSettings().customFooterNote}
               </p>
             )}
+            {(getPosHardwareSettings().visibility?.showPolicyNote !== false) &&
+              getPosHardwareSettings().customPolicyNote?.trim() && (
+                <p className="text-[9.5px] text-zinc-600 font-medium">
+                  {getPosHardwareSettings().customPolicyNote}
+                </p>
+              )}
           </div>
         )}
       </div>
@@ -299,6 +302,16 @@ export default function InvoicePage() {
   const qc = useQueryClient();
   const savedInvoiceSigRef = useRef<string | null>(null);
   const [previewCustomizerOpen, setPreviewCustomizerOpen] = useState(false);
+  const [printLanguage, setPrintLanguage] = useState<"bn" | "en">("bn");
+
+  useEffect(() => {
+    setPrintLanguage(getPosHardwareSettings().printLanguage === "en" ? "en" : "bn");
+    const onChanged = () => {
+      setPrintLanguage(getPosHardwareSettings().printLanguage === "en" ? "en" : "bn");
+    };
+    window.addEventListener("pos-hardware-settings-changed", onChanged);
+    return () => window.removeEventListener("pos-hardware-settings-changed", onChanged);
+  }, []);
 
   // Auto-fill sell price when selecting a product
   function handleProductChange(prodId: string) {
@@ -437,7 +450,7 @@ export default function InvoicePage() {
   }, [selectedCustomerId, customPhone, customers]);
 
   const invoiceNo = useMemo(() => {
-    return `INV-${Date.now().toString().slice(-6)}`;
+    return Date.now().toString(36).toUpperCase().slice(-5);
   }, [invoiceItems.length === 0]);
 
   const businessName = biz?.shop_name || biz?.name || user?.business_name || "Dream Fashion";
@@ -715,6 +728,37 @@ export default function InvoicePage() {
               )}
               {isDownloadingPdf ? (lang === "bn" ? "ডাউনলোড..." : "Downloading...") : (lang === "bn" ? "PDF ডাউনলোড" : "Download PDF")}
             </Button>
+
+            <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  savePosHardwareSettings({ printLanguage: "bn" });
+                  setPrintLanguage("bn");
+                }}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  printLanguage === "bn"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                বাংলা
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  savePosHardwareSettings({ printLanguage: "en" });
+                  setPrintLanguage("en");
+                }}
+                className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  printLanguage === "en"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                EN
+              </button>
+            </div>
 
             <Button
               variant="outline"

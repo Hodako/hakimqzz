@@ -294,7 +294,7 @@ export function InvoiceTemplateDialog({
         shopAddress: customAddress || "Mirpur-10, Dhaka-1216",
         shopPhoneNumbers: customPhone || "01700-000000",
         tagline: customSubtitle || "Quality Fashion & Lifestyle",
-        invoiceNo: "INV-TEST-001",
+        invoiceNo: "5SBH4",
         invoiceDate: new Date().toLocaleString("en-GB", { hour12: true }),
         cashierName: customCashierName,
         customerName: isBn ? "নগদ ক্রেতা" : "Walk-in Customer",
@@ -1042,7 +1042,7 @@ export function InvoiceTemplateDialog({
               <div className="space-y-0.5 text-zinc-900 leading-tight">
                 {visibility.showInvoiceNo !== false && (
                   <div className="flex justify-between items-center font-mono font-bold">
-                    <span>{printLanguage === "en" ? "Bill: #001234" : "বিল: #০০১২৩৪"}</span>
+                    <span>{printLanguage === "en" ? "Bill: #5SBH4" : "বিল: #5SBH4"}</span>
                     <span className="text-[9px] font-normal">
                       {new Date().toLocaleDateString("en-GB")}
                     </span>

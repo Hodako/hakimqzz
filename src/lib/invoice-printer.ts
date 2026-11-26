@@ -7,6 +7,7 @@ import {
   DEFAULT_POLICY_NOTE,
   DEFAULT_POLICY_NOTE_EN,
   DEFAULT_INVOICE_SECTION_ORDER,
+  formatShortInvoiceNo,
   type InvoiceSectionId,
   type PosHardwareSettings,
 } from "@/lib/pos-hardware";
@@ -119,33 +120,17 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
   const userBasePt = Number(hw.fontSizePt) || 6.5;
   const userTitlePt = Number(hw.titleFontSizePt) || 8.8;
 
-  // Respect user font adjustments while preventing physical roll overflow when fitToWidth is enabled
-  const maxSafeBasePt =
-    widthMm <= 25 ? 5.5 :
-    widthMm <= 50 ? 6.8 :
-    widthMm <= 58 ? 7.6 :
-    widthMm <= 72 ? 8.2 :
-    widthMm < 148 ? 9.0 :
-    11.0;
-
-  const maxSafeTitlePt =
-    widthMm <= 25 ? 7.0 :
-    widthMm <= 50 ? 8.5 :
-    widthMm <= 58 ? 10.0 :
-    widthMm <= 72 ? 11.0 :
-    widthMm < 148 ? 12.5 :
-    15.0;
-
-  const baseFontPt = hw.fitToWidth !== false ? Math.min(userBasePt, maxSafeBasePt) : userBasePt;
-  const rawTitlePt = hw.fitToWidth !== false ? Math.min(userTitlePt, maxSafeTitlePt) : userTitlePt;
+  // Respect user's explicit font size adjustments while preventing a single huge title word from overflowing
+  const baseFontPt = Math.max(4.5, Math.min(20, userBasePt));
+  const rawTitlePt = Math.max(6, Math.min(28, userTitlePt));
   const shopNameRaw = String(hw.customHeaderTitle || data.businessName || "DREAM FASHION");
   const longestTitleWord = Math.max(1, ...shopNameRaw.split(/\s+/).map((w) => w.length));
   const autoTitleCapPt = hw.fitToWidth !== false
-    ? Math.max(baseFontPt + 1, Math.floor((contentWidthMm / (longestTitleWord * 0.62)) * (72 / 25.4) * 10) / 10)
+    ? Math.max(baseFontPt + 1, Math.floor((contentWidthMm / (longestTitleWord * 0.56)) * (72 / 25.4) * 10) / 10)
     : rawTitlePt;
   const titleFontPt = Math.min(rawTitlePt, autoTitleCapPt);
   const smallFontPt = Math.max(4.5, Number((baseFontPt - 1.0).toFixed(1)));
-  const largeFontPt = Number((baseFontPt + 1.0).toFixed(1));
+  const largeFontPt = Number((baseFontPt + 1.5).toFixed(1));
 
   const currencySymbol = hw.showCurrencySymbol
     ? (hw.currencySymbol || "৳")
@@ -270,7 +255,7 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
     .filter(Boolean)
     .join("");
 
-  const cleanShortInv = String(data.invoiceNo || "").replace(/^INV-?/i, "").slice(-8);
+  const cleanShortInv = formatShortInvoiceNo(data.invoiceNo);
   const displayCustomerName = translateCustomerName(data.customerName, isEn);
   const displayPaymentMode = translatePaymentMode(data.paymentMode, data.due > 0, isEn);
 
@@ -777,7 +762,7 @@ export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewT
     // Meta Info
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(isThermal58 ? 6.5 : 7.5);
-    pdf.text(`Inv: ${data.invoiceNo}`, margin, currentY);
+    pdf.text(`Inv: ${formatShortInvoiceNo(data.invoiceNo)}`, margin, currentY);
     pdf.text(data.invoiceDate || new Date().toLocaleDateString(), pageWidth - margin, currentY, { align: "right" });
     currentY += 3.5;
 
@@ -897,7 +882,7 @@ export async function downloadPwaInvoicePdf(data: PrintInvoiceParams, openInNewT
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8.5);
     pdf.setTextColor(100, 116, 139);
-    pdf.text(`Invoice No: ${data.invoiceNo}`, pageWidth - margin, currentY + 9, { align: "right" });
+    pdf.text(`Invoice No: ${formatShortInvoiceNo(data.invoiceNo)}`, pageWidth - margin, currentY + 9, { align: "right" });
     pdf.text(`Date: ${data.invoiceDate || new Date().toLocaleDateString()}`, pageWidth - margin, currentY + 13, { align: "right" });
 
     currentY += 18;

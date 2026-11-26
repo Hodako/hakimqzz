@@ -615,7 +615,7 @@ export function getPosHardwareSettings(): PosHardwareSettings {
       ? Math.min(250, Math.max(30, Number(saved.printScale)))
       : 100;
 
-    const needsTypoMigration = !saved?.typographyV4Migrated || saved?.fontSizePt > 7.5 || saved?.titleFontSizePt > 10.0;
+    const needsTypoMigration = !saved?.typographyV4Migrated;
     if (needsTypoMigration) {
       if (rawFontPt >= 7.0) rawFontPt = 6.5;
       if (rawTitlePt >= 9.5) rawTitlePt = 8.8;
@@ -768,6 +768,15 @@ export function savePosHardwareSettings(settings: Partial<PosHardwareSettings>):
     window.dispatchEvent(new Event("pos-hardware-settings-changed"));
   }
   return updated;
+}
+
+export function formatShortInvoiceNo(invoiceNo: unknown): string {
+  const cleaned = String(invoiceNo || "")
+    .replace(/^INV-?/i, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+  if (!cleaned) return "00001";
+  return cleaned.slice(-5);
 }
 
 export function findProductsByScannedCode(products: Product[], code: string): Product[] {

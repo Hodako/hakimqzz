@@ -134,7 +134,7 @@ export function InvoicePreviewDialog({
       tagline: settings.customSubtitle || (isEn ? "Exclusive Collection" : "এক্সক্লুসিভ কালেকশন"),
       shopAddress: settings.customAddress || (isEn ? "Shop #12, New Market" : "দোকান নং #১২, নিউ মার্কেট"),
       shopPhoneNumbers: settings.customPhone || "01712-345678",
-      invoiceNo: "INV-SAMPLE-01",
+      invoiceNo: "5SBH4",
       invoiceDate: new Date().toLocaleDateString("en-GB") + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cashierName: isEn ? "Cashier" : "ক্যাশিয়ার",
       customerName: isEn ? "Mr. Rahim" : "জনাব রহিম",
