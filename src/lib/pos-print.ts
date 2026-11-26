@@ -116,7 +116,7 @@ export async function executeDirectSilentPrint(
   // 2. Check if Local Windows POS Hardware Bridge is running on http://127.0.0.1:9123
   try {
     const pingCtrl = new AbortController();
-    const pingTimer = setTimeout(() => pingCtrl.abort(), 750);
+    const pingTimer = setTimeout(() => pingCtrl.abort(), 1500);
     const statusRes = await fetch("http://127.0.0.1:9123/status", { signal: pingCtrl.signal });
     clearTimeout(pingTimer);
     if (!statusRes.ok) return false;

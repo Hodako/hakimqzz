@@ -1,10 +1,10 @@
 /** Usable thermal head width is smaller than the physical roll. */
 export function getPrintableWidthMm(widthMm: number): number {
   if (widthMm >= 148) return widthMm;
-  if (widthMm >= 80) return Math.min(72, widthMm - 6);
-  if (widthMm >= 70) return Math.min(63, widthMm - 6);
-  if (widthMm >= 56) return Math.min(48, widthMm - 8);
-  if (widthMm >= 48) return Math.min(42, widthMm - 6);
+  if (widthMm >= 80) return Math.min(70, widthMm - 8);
+  if (widthMm >= 70) return Math.min(62, widthMm - 8);
+  if (widthMm >= 56) return Math.min(45, widthMm - 12);
+  if (widthMm >= 48) return Math.min(40, widthMm - 8);
   return Math.max(1, widthMm - 4);
 }
 export function getPrintScale(value: number): number {

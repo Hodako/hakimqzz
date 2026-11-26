@@ -410,10 +410,10 @@ async function performSilentPrint(html, printerName, options = {}) {
     const printableWidthMm = isThermalLabel
       ? widthMm
       : widthMm >= 148 ? widthMm
-      : widthMm >= 80 ? Math.min(72, widthMm - 6)
-      : widthMm >= 70 ? Math.min(63, widthMm - 6)
-      : widthMm >= 56 ? Math.min(48, widthMm - 8)
-      : widthMm >= 48 ? Math.min(42, widthMm - 6)
+      : widthMm >= 80 ? Math.min(70, widthMm - 8)
+      : widthMm >= 70 ? Math.min(62, widthMm - 8)
+      : widthMm >= 56 ? Math.min(45, widthMm - 12)
+      : widthMm >= 48 ? Math.min(40, widthMm - 8)
       : Math.max(1, widthMm - 4);
     const layoutWidthMm = printableWidthMm * 100 / scaleFactor;
 
@@ -452,6 +452,7 @@ async function performSilentPrint(html, printerName, options = {}) {
             min-height: 0 !important;
             width: ${layoutWidthMm}mm !important;
             max-width: ${layoutWidthMm}mm !important;
+            overflow-x: hidden !important;
             vertical-align: top !important;
           }
           html { zoom: 1 !important; }
@@ -482,7 +483,8 @@ async function performSilentPrint(html, printerName, options = {}) {
             max-width: 100% !important;
             margin: 0 !important;
             display: flow-root !important;
-            overflow: visible !important;
+            overflow-x: hidden !important;
+            overflow-y: visible !important;
           }
         </style>
       `;
@@ -557,7 +559,7 @@ async function performSilentPrint(html, printerName, options = {}) {
         },
       });
 
-      if (!isInteractive) {
+      if (!isInteractive && isThermalLabel) {
         printWin.showInactive();
       }
 
@@ -583,7 +585,15 @@ async function performSilentPrint(html, printerName, options = {}) {
       await new Promise((r) => setTimeout(r, 200));
 
       const printers = await printWin.webContents.getPrintersAsync();
-      const defaultP = printers.find((p) => p.isDefault)?.name || printers[0]?.name || "";
+      const isVirtualPopupPrinter = (name) =>
+        /microsoft print to pdf|microsoft xps|onenote|fax|send to onenote/i.test(String(name || ""));
+      const physicalPrinters = printers.filter((p) => !isVirtualPopupPrinter(p.name));
+      const defaultP =
+        printers.find((p) => p.isDefault && !isVirtualPopupPrinter(p.name))?.name ||
+        physicalPrinters[0]?.name ||
+        printers.find((p) => p.isDefault)?.name ||
+        printers[0]?.name ||
+        "";
 
       let targetPrinter = printerName || defaultP;
       if (targetPrinter && printers.length > 0) {
@@ -782,7 +792,7 @@ async function performSilentPrint(html, printerName, options = {}) {
               return;
             }
 
-            // Stage <= 1 -> 2: If silent print with specific deviceName failed, retry on Windows default printer
+            // Stage <= 1 -> 2: If silent print with specific deviceName failed, retry on default physical printer
             if (stage <= 1 && cfg.silent && cfg.deviceName) {
               const retryCfg = { ...cfg };
               delete retryCfg.deviceName;
@@ -791,8 +801,14 @@ async function performSilentPrint(html, printerName, options = {}) {
               return;
             }
 
-            // Stage <= 2 -> 3: If silent print still failed (e.g. no default printer / driver rejected), open Windows Print Dialog
-            if (stage <= 2 && cfg.silent) {
+            // Never force an interactive Windows popup dialog when user enabled 1-Click Silent Printing
+            if (useSilent) {
+              finishOnce({ success: false, error: reasonStr || "Silent print failed" });
+              return;
+            }
+
+            // Interactive mode fallback: ensure window is visible if dialog failed with custom pageSize
+            if (stage <= 2) {
               try {
                 if (printWin && !printWin.isDestroyed()) {
                   printWin.center();

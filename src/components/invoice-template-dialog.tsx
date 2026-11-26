@@ -366,6 +366,36 @@ export function InvoiceTemplateDialog({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5 mr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setPrintLanguage("bn");
+                  savePosHardwareSettings({ printLanguage: "bn" });
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  printLanguage === "bn"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                বাংলা
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPrintLanguage("en");
+                  savePosHardwareSettings({ printLanguage: "en" });
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  printLanguage === "en"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                EN
+              </button>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -1055,7 +1085,7 @@ export function InvoiceTemplateDialog({
                   <thead>
                     <tr className="border-b border-dashed border-black text-[9.5px]">
                       <th className="py-0.5 text-left font-bold">{printLanguage === "en" ? "Item" : "পণ্য"}</th>
-                      <th className="py-0.5 text-center font-bold w-10">{printLanguage === "en" ? "Qty" : "পরি."}</th>
+                      <th className="py-0.5 text-center font-bold w-14">{printLanguage === "en" ? "Quantity" : "পরি."}</th>
                       <th className="py-0.5 text-right font-bold w-16">{printLanguage === "en" ? "Amount" : "টাকা"}</th>
                     </tr>
                   </thead>

@@ -214,16 +214,16 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
     : `
       <table style="table-layout: fixed !important; width: 100% !important; max-width: 100% !important; border-collapse: collapse !important; margin: 1.5px 0 !important;">
         <colgroup>
-          <col style="width: 52%;" />
-          <col style="width: 20%;" />
+          <col style="width: 50%;" />
+          <col style="width: 22%;" />
           <col style="width: 28%;" />
         </colgroup>
         ${
           showItemsHeader
             ? `<thead>
                 <tr style="border-bottom: 1px dashed #000000;">
-                  <th style="text-align: left; font-size: ${smallFontPt}pt; width: 54%; word-break: break-word;">${isEn ? "Item" : "পণ্য"}</th>
-                  <th style="text-align: center; font-size: ${smallFontPt}pt; width: 18%;">${isEn ? "Qty" : "পরি."}</th>
+                  <th style="text-align: left; font-size: ${smallFontPt}pt; width: 50%; word-break: break-word;">${isEn ? "Item" : "পণ্য"}</th>
+                  <th style="text-align: center; font-size: ${smallFontPt}pt; width: 22%;">${isEn ? "Quantity" : "পরি."}</th>
                   <th style="text-align: right; font-size: ${smallFontPt}pt; width: 28%;">${isEn ? "Amount" : "টাকা"}</th>
                 </tr>
               </thead>`
@@ -234,13 +234,13 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
             .map(
               (item, idx) => `
             <tr>
-              <td style="padding: 1px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 54%; word-break: break-word; overflow-wrap: break-word; line-height: 1.15;">
+              <td style="padding: 1px 0; text-align: left; vertical-align: top; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 50%; word-break: break-word; overflow-wrap: break-word; line-height: 1.15;">
                 ${idx + 1}. ${escapeHtml(item.product.name)}
               </td>
-              <td style="padding: 1px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseFontPt}pt; font-weight: 600; color: #000000; width: 18%;">
+              <td style="padding: 1px 2px; text-align: center; vertical-align: top; font-family: monospace; font-size: ${baseFontPt}pt; font-weight: 600; color: #000000; width: 22%;">
                 ${item.qty}
               </td>
-              <td style="padding: 1px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 28%; white-space: nowrap;">
+              <td style="padding: 1px 0; text-align: right; vertical-align: top; font-family: monospace; font-weight: 600; font-size: ${baseFontPt}pt; color: #000000; width: 28%;">
                 ${curPrefix}${(Number(item.qty || 0) * Number(item.sellPrice || 0)).toLocaleString()}
               </td>
             </tr>`
@@ -419,6 +419,8 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       color: #000000 !important; 
       font-weight: 600;
       width: ${targetWidth};
+      max-width: ${targetWidth};
+      overflow-x: hidden !important;
       height: auto !important;
       min-height: 0 !important;
       margin: 0 !important; 
@@ -455,7 +457,8 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       font-weight: 600;
       color: #000000 !important;
       display: flow-root !important; /* Prevents margin collapse at top and bottom */
-      overflow: visible !important;
+      overflow-x: hidden !important;
+      overflow-y: visible !important;
     }
     .dashed-line { 
       border-top: 1px dashed #000000 !important; 
@@ -485,7 +488,10 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       display: flex !important;
       flex-wrap: wrap !important;
       align-items: baseline !important;
-      gap: 1px 6px;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow: hidden !important;
+      gap: 1px 4px;
       break-inside: avoid;
     }
     .receipt-row > span {
@@ -493,7 +499,7 @@ export function buildInvoiceHtml(data: PrintInvoiceParams, settingsOverride?: Pa
       max-width: 100%;
       white-space: normal !important;
     }
-    .receipt-row > span:first-child { flex: 1 1 45%; min-width: min(100%, 10ch); }
+    .receipt-row > span:first-child { flex: 1 1 0%; min-width: 0; }
     .receipt-row > span:last-child:not(:first-child) {
       flex: 0 0 auto;
       margin-left: auto;
