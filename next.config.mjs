@@ -21,6 +21,7 @@ const nextConfig = {
   experimental: {
     parallelServerCompiles: false,
     parallelServerBuildTraces: false,
+    optimizePackageImports: ["lucide-react", "recharts", "date-fns"],
   },
   productionBrowserSourceMaps: false,
   ...(isStatic

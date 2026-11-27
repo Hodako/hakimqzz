@@ -1,0 +1,32 @@
+# Heavy installers, APKs, zips, and local desktop packages
+*.apk
+*.exe
+*.zip
+*.aab
+*.jar
+*.keystore
+*.jks
+downloads/
+software/
+dist-electron/
+android/
+android-app/
+ios/
+
+# Sibling projects in workspace (never deploy to Dream Fashion Vercel)
+Classic-World/
+Urobili/
+
+# Local helper servers & Electron packagers
+serve-*.cjs
+downloads-server.cjs
+start-server-*.cjs
+package-electron.cjs
+package-installer.cjs
+package-single-installer.cjs
+
+# Build & local caches
+.next/
+out/
+tsconfig.tsbuildinfo
+*.log

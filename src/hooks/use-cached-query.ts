@@ -45,12 +45,12 @@ export function useCachedQuery<T>(
     initialData: cached,
     initialDataUpdatedAt: cached ? Date.now() - 1000 : undefined,
     placeholderData: keepPreviousData,
-    staleTime: 0,
+    staleTime: 15_000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: true,
-    refetchOnMount: "always",
-    refetchInterval: 3000, // 3-second heartbeat for real-time syncing without overwhelming network
-    refetchIntervalInBackground: true,
+    refetchOnMount: true,
+    refetchInterval: 30_000, // 30s gentle sync; mutations & real-time events still invalidate immediately
+    refetchIntervalInBackground: false,
     ...options,
   });
 }

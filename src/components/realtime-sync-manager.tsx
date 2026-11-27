@@ -71,7 +71,7 @@ export function RealtimeSyncManager() {
       queryKeys.forEach((qk) => {
         const keyStr = qk.join(":");
         const last = lastInvalidateRef.current[keyStr] || 0;
-        if (now - last > 300) {
+        if (now - last > 1000) {
           lastInvalidateRef.current[keyStr] = now;
           qc.invalidateQueries({ queryKey: qk });
         }
@@ -84,12 +84,9 @@ export function RealtimeSyncManager() {
         let isInitial = true;
         const unsub = onSnapshot(
           colRef,
-          (snapshot) => {
+          () => {
             if (isInitial) {
               isInitial = false;
-              if (snapshot.docChanges().length > 0) {
-                invalidateThrottled(queryKeys);
-              }
               return;
             }
             invalidateThrottled(queryKeys);
