@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld("electronPOS", {
   openPrinterProperties: (printerName) => ipcRenderer.invoke("pos:open-printer-properties", { printerName }),
   // Open Windows OS Printers & Scanners Settings
   openWindowsPrinterSettings: () => ipcRenderer.invoke("pos:open-windows-printers-settings"),
+  // Persist POS hardware, font, margin, language & template settings safely in userData disk
+  loadHardwareSettings: () => ipcRenderer.invoke("pos:load-hardware-settings"),
+  saveHardwareSettings: (settings) => ipcRenderer.invoke("pos:save-hardware-settings", settings),
   // Trigger cash drawer kick via ESC/POS
   openCashDrawer: (printerName) => ipcRenderer.invoke("pos:open-cash-drawer", { printerName }),
   // Client-Compute Desktop WhatsApp Integration (runs locally in Electron main process)

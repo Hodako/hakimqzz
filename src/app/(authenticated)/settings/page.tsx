@@ -105,6 +105,7 @@ import {
   type DesktopWhatsAppStatus,
 } from "@/lib/desktop-whatsapp";
 import { getPosPaperConfig, savePosPaperConfig, DEFAULT_POS_CONFIG, type PosPaperSettings } from "@/lib/pos-print";
+import { getPosHardwareSettings, savePosHardwareSettings } from "@/lib/pos-hardware";
 import { PosHardwareSettings } from "@/components/pos-hardware-settings";
 import { LabelPrintingStudio } from "@/components/label-print-dialog";
 import { DEFAULT_EMPLOYEE_PERMISSIONS, type PermissionSet } from "@/lib/permissions";
@@ -516,6 +517,16 @@ export default function SettingsPage() {
 
   // POS Thermal Printer Paper Configuration state
   const [posConfig, setPosConfig] = useState<PosPaperSettings>(DEFAULT_POS_CONFIG);
+  const [printLangSetting, setPrintLangSetting] = useState<"bn" | "en">("bn");
+
+  useEffect(() => {
+    setPrintLangSetting(getPosHardwareSettings().printLanguage === "en" ? "en" : "bn");
+    const onHwChanged = () => {
+      setPrintLangSetting(getPosHardwareSettings().printLanguage === "en" ? "en" : "bn");
+    };
+    window.addEventListener("pos-hardware-settings-changed", onHwChanged);
+    return () => window.removeEventListener("pos-hardware-settings-changed", onHwChanged);
+  }, []);
 
   useEffect(() => {
     setPosConfig(getPosPaperConfig());
@@ -2309,6 +2320,55 @@ export default function SettingsPage() {
           {/* ── TAB 2: POS PRINTING, INVOICE CUSTOMIZATION & LABEL PRINTING ───── */}
           {settingsTab === "printing" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-12">
+                <Card className="p-4 rounded-2xl bg-card border-primary/25 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[11px] font-black">
+                        বাংলা / EN
+                      </span>
+                      <span>{lang === "bn" ? "রসিদ ও ইনভয়েস প্রিন্টিং ভাষা (Print Language)" : "Receipt & Invoice Print Language"}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {lang === "bn"
+                        ? "প্রিন্ট করা রসিদ বাংলা নাকি ইংরেজিতে হবে তা এখান থেকে সাথে সাথে পরিবর্তন করুন।"
+                        : "Switch printed receipt language between Bangla and English."}
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center rounded-xl border border-border bg-muted/40 p-1 shrink-0 self-start sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        savePosHardwareSettings({ printLanguage: "bn" });
+                        setPrintLangSetting("bn");
+                        toast.success(lang === "bn" ? "প্রিন্টিং ভাষা বাংলা নির্ধারিত হয়েছে" : "Print language set to Bangla");
+                      }}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        printLangSetting === "bn"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      বাংলা (Bangla)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        savePosHardwareSettings({ printLanguage: "en" });
+                        setPrintLangSetting("en");
+                        toast.success(lang === "bn" ? "প্রিন্টিং ভাষা English নির্ধারিত হয়েছে" : "Print language set to English");
+                      }}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        printLangSetting === "en"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                </Card>
+              </div>
               <div className="lg:col-span-12">
                 <PosHardwareSettings lang={lang} />
               </div>

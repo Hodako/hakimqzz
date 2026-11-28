@@ -146,7 +146,14 @@ export function InvoiceTemplateDialog({
         (currentHw.savedInvoiceTemplates || []).find((t) => t.id === targetId) ||
         BUILTIN_INVOICE_TEMPLATES.find((t) => t.id === targetId) ||
         BUILTIN_INVOICE_TEMPLATES[0];
-      loadTemplateIntoForm(tpl);
+      loadTemplateIntoForm({
+        ...tpl,
+        paperWidthMm: currentHw.paperWidthMm || tpl.paperWidthMm,
+        fontSizePt: currentHw.fontSizePt || tpl.fontSizePt,
+        titleFontSizePt: currentHw.titleFontSizePt || tpl.titleFontSizePt,
+        printLanguage: currentHw.printLanguage || tpl.printLanguage,
+        customLines: currentHw.customLines?.length ? currentHw.customLines : tpl.customLines,
+      });
     }
   }, [open]);
 
@@ -235,7 +242,8 @@ export function InvoiceTemplateDialog({
       updatedAt: new Date().toISOString(),
     };
 
-    const updatedHw = saveCustomInvoiceTemplate(newTpl);
+    const updatedHw = applyInvoiceTemplate(newTpl);
+    saveCustomInvoiceTemplate(newTpl);
     setHw(updatedHw);
     setActiveTplId(newId);
     setTplName(name.trim());
@@ -246,13 +254,16 @@ export function InvoiceTemplateDialog({
   const handleUpdateCurrent = () => {
     const isBuiltin = BUILTIN_INVOICE_TEMPLATES.some((b) => b.id === activeTplId);
     if (isBuiltin) {
-      // Save as new custom copy if trying to edit builtin
-      handleSaveAsNew();
+      // Also apply current adjustments directly to hardware settings so fonts/language persist
+      const updated = applyInvoiceTemplate(currentWorkingTemplate);
+      setHw(updated);
+      toast.success(isBn ? "ইনভয়েস সেটিংস ও ফন্ট সংরক্ষণ করা হয়েছে!" : "Invoice settings & fonts saved!");
       return;
     }
     const updatedHw = saveCustomInvoiceTemplate(currentWorkingTemplate);
+    applyInvoiceTemplate(currentWorkingTemplate);
     setHw(updatedHw);
-    toast.success(isBn ? "টেমপ্লেট আপডেট করা হয়েছে!" : "Template updated successfully!");
+    toast.success(isBn ? "টেমপ্লেট আপডেট ও সক্রিয় করা হয়েছে!" : "Template updated & activated!");
   };
 
   // Delete custom template
@@ -318,6 +329,22 @@ export function InvoiceTemplateDialog({
         due: 0,
         paymentMode: "CASH",
         terms: customFooterNote.trim(),
+      }, {
+        paperWidthMm,
+        fontSizePt,
+        titleFontSizePt,
+        printLanguage,
+        showCurrencySymbol,
+        currencySymbol,
+        customCashierName,
+        customHeaderTitle: customHeaderTitle.trim() || undefined,
+        customSubtitle: customSubtitle.trim() || undefined,
+        customAddress: customAddress.trim() || undefined,
+        customPhone: customPhone.trim() || undefined,
+        customFooterNote: customFooterNote.trim(),
+        customPolicyNote: customPolicyNote.trim(),
+        visibility,
+        customLines,
       });
       toast.success(isBn ? "টেস্ট ইনভয়েস প্রিন্ট সফল!" : "Test invoice printed!");
     } catch (err: any) {
@@ -664,7 +691,7 @@ export function InvoiceTemplateDialog({
                       <input
                         type="range"
                         min={5.0}
-                        max={12.0}
+                        max={18.0}
                         step={0.5}
                         value={fontSizePt}
                         onChange={(e) => setFontSizePt(Number(e.target.value))}
@@ -680,7 +707,7 @@ export function InvoiceTemplateDialog({
                       <input
                         type="range"
                         min={7.0}
-                        max={16.0}
+                        max={26.0}
                         step={0.5}
                         value={titleFontSizePt}
                         onChange={(e) => setTitleFontSizePt(Number(e.target.value))}

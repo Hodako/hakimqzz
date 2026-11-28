@@ -86,11 +86,40 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
     printers: [],
   });
 
+  const [baseFontDraft, setBaseFontDraft] = useState<string>(String(DEFAULT_HARDWARE_SETTINGS.fontSizePt));
+  const [titleFontDraft, setTitleFontDraft] = useState<string>(String(DEFAULT_HARDWARE_SETTINGS.titleFontSizePt));
+
   useEffect(() => {
-    setHwConfig(getPosHardwareSettings());
-    const onChanged = () => setHwConfig(getPosHardwareSettings());
-    window.addEventListener("pos-hardware-settings-changed", onChanged);
-    return () => window.removeEventListener("pos-hardware-settings-changed", onChanged);
+    const syncFromLocal = () => {
+      const latest = getPosHardwareSettings();
+      setHwConfig(latest);
+      setBaseFontDraft(String(latest.fontSizePt || 6.5));
+      setTitleFontDraft(String(latest.titleFontSizePt || 8.8));
+    };
+    syncFromLocal();
+
+    // Hydrate from permanent Electron desktop disk settings if available
+    try {
+      const electronPOS = (window as any).electronPOS;
+      if (electronPOS && typeof electronPOS.loadHardwareSettings === "function") {
+        electronPOS.loadHardwareSettings().then((diskHw: any) => {
+          if (diskHw && typeof diskHw === "object") {
+            const localHw = getPosHardwareSettings() as any;
+            const diskTs = Number(diskHw._diskSavedAt || 0);
+            const localTs = Number(localHw._diskSavedAt || 0);
+            if (!localTs || diskTs > localTs) {
+              const merged = savePosHardwareSettings(diskHw);
+              setHwConfig(merged);
+              setBaseFontDraft(String(merged.fontSizePt || 6.5));
+              setTitleFontDraft(String(merged.titleFontSizePt || 8.8));
+            }
+          }
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
+    window.addEventListener("pos-hardware-settings-changed", syncFromLocal);
+    return () => window.removeEventListener("pos-hardware-settings-changed", syncFromLocal);
   }, []);
 
   const updateHw = (patch: Partial<PosHwConfig>, silentToast = false) => {
@@ -764,10 +793,23 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
             <Input
               type="number"
               min="4.5"
-              max="16"
+              max="24"
               step="0.5"
-              value={hwConfig.fontSizePt || 7}
-              onChange={(e) => updateHw({ fontSizePt: Math.min(16, Math.max(4.5, Number(e.target.value) || 7)) }, true)}
+              value={baseFontDraft}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setBaseFontDraft(raw);
+                const parsed = parseFloat(raw);
+                if (Number.isFinite(parsed) && parsed >= 4.5 && parsed <= 24) {
+                  updateHw({ fontSizePt: parsed }, true);
+                }
+              }}
+              onBlur={() => {
+                const parsed = parseFloat(baseFontDraft);
+                const clamped = Number.isFinite(parsed) ? Math.min(24, Math.max(4.5, parsed)) : 6.5;
+                setBaseFontDraft(String(clamped));
+                updateHw({ fontSizePt: clamped }, true);
+              }}
               className="h-9 text-xs font-mono font-bold bg-background"
             />
           </div>
@@ -779,10 +821,23 @@ export function PosHardwareSettings({ lang = "en" }: { lang?: "en" | "bn" | stri
             <Input
               type="number"
               min="6"
-              max="24"
+              max="32"
               step="0.5"
-              value={hwConfig.titleFontSizePt || 8.8}
-              onChange={(e) => updateHw({ titleFontSizePt: Math.min(24, Math.max(6, Number(e.target.value) || 8.8)) }, true)}
+              value={titleFontDraft}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setTitleFontDraft(raw);
+                const parsed = parseFloat(raw);
+                if (Number.isFinite(parsed) && parsed >= 6 && parsed <= 32) {
+                  updateHw({ titleFontSizePt: parsed }, true);
+                }
+              }}
+              onBlur={() => {
+                const parsed = parseFloat(titleFontDraft);
+                const clamped = Number.isFinite(parsed) ? Math.min(32, Math.max(6, parsed)) : 8.8;
+                setTitleFontDraft(String(clamped));
+                updateHw({ titleFontSizePt: clamped }, true);
+              }}
               className="h-9 text-xs font-mono font-bold bg-background"
             />
           </div>

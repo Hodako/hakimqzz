@@ -606,20 +606,18 @@ export function getPosHardwareSettings(): PosHardwareSettings {
     const savedLabel = saved?.labelSettings || {};
 
     let rawFontPt = saved?.fontSizePt !== undefined && Number.isFinite(Number(saved.fontSizePt))
-      ? Math.max(4.5, Math.min(20, Number(saved.fontSizePt)))
+      ? Math.max(4.5, Math.min(24, Number(saved.fontSizePt)))
       : 6.5;
     let rawTitlePt = saved?.titleFontSizePt !== undefined && Number.isFinite(Number(saved.titleFontSizePt))
-      ? Math.max(6, Math.min(28, Number(saved.titleFontSizePt)))
+      ? Math.max(6, Math.min(32, Number(saved.titleFontSizePt)))
       : 8.8;
     let rawScale = saved?.printScale !== undefined && Number.isFinite(Number(saved.printScale))
       ? Math.min(250, Math.max(30, Number(saved.printScale)))
       : 100;
 
-    const needsTypoMigration = !saved?.typographyV4Migrated;
-    if (needsTypoMigration) {
-      if (rawFontPt >= 7.0) rawFontPt = 6.5;
-      if (rawTitlePt >= 9.5) rawTitlePt = 8.8;
-      if (rawScale > 100) rawScale = 100;
+    if (!saved?.typographyV4Migrated) {
+      if (saved?.fontSizePt === undefined) rawFontPt = 6.5;
+      if (saved?.titleFontSizePt === undefined) rawTitlePt = 8.8;
     }
 
     const resolved: PosHardwareSettings = {
@@ -680,7 +678,7 @@ export function getPosHardwareSettings(): PosHardwareSettings {
         savedTemplates: Array.isArray(savedLabel?.savedTemplates) ? savedLabel.savedTemplates : [],
       },
     };
-    if (needsTypoMigration && localStorage.getItem(STORAGE_KEY)) {
+    if (!saved?.typographyV4Migrated && localStorage.getItem(STORAGE_KEY)) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(resolved));
       } catch {}
@@ -758,14 +756,21 @@ export function savePosHardwareSettings(settings: Partial<PosHardwareSettings>):
           .trim(),
       }
     : current.labelSettings;
-  const updated: PosHardwareSettings = {
+  const updated: PosHardwareSettings & { _diskSavedAt?: number } = {
     ...current,
     ...settings,
     ...(settings.labelSettings ? { labelSettings: nextLabelSettings } : {}),
+    _diskSavedAt: Date.now(),
   };
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("pos-hardware-settings-changed"));
+    try {
+      const electronPOS = (window as any).electronPOS;
+      if (electronPOS && typeof electronPOS.saveHardwareSettings === "function") {
+        void electronPOS.saveHardwareSettings(updated);
+      }
+    } catch (_) {}
   }
   return updated;
 }

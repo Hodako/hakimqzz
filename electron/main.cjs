@@ -40,6 +40,33 @@ const CLOUD_URL = process.env.POS_CLOUD_URL || "https://hakim.qzz.io";
 const LOCAL_PORT = process.env.PORT || 3141;
 const LOCAL_URL = `http://localhost:${LOCAL_PORT}`;
 
+function getHardwareSettingsFilePath() {
+  return path.join(app.getPath("userData"), "pos-hardware-settings.json");
+}
+
+function readDiskHardwareSettings() {
+  try {
+    const file = getHardwareSettingsFilePath();
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function writeDiskHardwareSettings(settings) {
+  try {
+    if (!settings || typeof settings !== "object") return false;
+    const file = getHardwareSettingsFilePath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ ...settings, _diskSavedAt: Date.now() }, null, 2), "utf8");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Check if an HTTP/HTTPS endpoint is responding
 function checkUrlReady(targetUrl, timeoutMs = 1500) {
   return new Promise((resolve) => {
@@ -162,9 +189,30 @@ async function createWindow() {
   // Intercept window.print() / iframe.contentWindow.print() and route through electronPOS.printSilent
   // while respecting the device's automatePrinting, printerName, and margin preferences!
   mainWindow.webContents.on("did-finish-load", () => {
+    const diskHwJson = JSON.stringify(readDiskHardwareSettings() || null);
     mainWindow.webContents
       .executeJavaScript(`
         (function() {
+          try {
+            const diskHw = ${diskHwJson};
+            if (diskHw && typeof diskHw === "object") {
+              const curRaw = localStorage.getItem("dreamfashion_pos_hardware_v1");
+              if (!curRaw) {
+                localStorage.setItem("dreamfashion_pos_hardware_v1", JSON.stringify(diskHw));
+                window.dispatchEvent(new Event("pos-hardware-settings-changed"));
+              } else {
+                try {
+                  const cur = JSON.parse(curRaw);
+                  const curTs = Number(cur._diskSavedAt || 0);
+                  const diskTs = Number(diskHw._diskSavedAt || 0);
+                  if (diskTs > curTs) {
+                    localStorage.setItem("dreamfashion_pos_hardware_v1", JSON.stringify({ ...cur, ...diskHw }));
+                    window.dispatchEvent(new Event("pos-hardware-settings-changed"));
+                  }
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
           if (window.__posSilentPrintHooked) return;
           window.__posSilentPrintHooked = true;
           function getDevicePrintPrefs() {
@@ -330,31 +378,41 @@ async function createWindow() {
 
 // ── Windows OS Printer & Thermal Printing IPC Handlers ───────────────────────
 
-// 1. Get installed Windows printers and identify default printer
+// 1. Get installed Windows printers and merge live Windows OS default status
 ipcMain.handle("pos:get-printers", async () => {
   try {
+    const winPrinters = await getWindowsPrinters().catch(() => []);
+    const winDefName = winPrinters.find((p) => p.isDefault)?.name || "";
     if (mainWindow && !mainWindow.isDestroyed()) {
       const list = await mainWindow.webContents.getPrintersAsync();
-      if (Array.isArray(list) && list.length > 0) return list;
+      if (Array.isArray(list) && list.length > 0) {
+        if (winDefName) {
+          return list.map((p) => ({
+            ...p,
+            isDefault: p.name.toLowerCase() === winDefName.toLowerCase(),
+          }));
+        }
+        return list;
+      }
     }
-    return await getWindowsPrinters();
+    return winPrinters;
   } catch (err) {
     console.error("[Windows POS] Error fetching printers:", err);
     return await getWindowsPrinters();
   }
 });
 
-// 2. Get default Windows printer
+// 2. Get live default Windows printer
 ipcMain.handle("pos:get-default-printer", async () => {
   try {
+    const winPrinters = await getWindowsPrinters().catch(() => []);
+    const liveDef = winPrinters.find((p) => p.isDefault);
+    if (liveDef) return liveDef;
     let list = [];
     if (mainWindow && !mainWindow.isDestroyed()) {
       list = await mainWindow.webContents.getPrintersAsync();
     }
-    if (!list || list.length === 0) {
-      list = await getWindowsPrinters();
-    }
-    return list.find((p) => p.isDefault) || list[0] || null;
+    return list.find((p) => p.isDefault) || list[0] || winPrinters[0] || null;
   } catch (err) {
     console.error("[Windows POS] Error fetching default printer:", err);
     return null;
@@ -542,8 +600,6 @@ async function performSilentPrint(html, printerName, options = {}) {
       printWin = new BrowserWindow({
         show: isInteractive,
         skipTaskbar: !isInteractive,
-        x: isInteractive ? undefined : -20000,
-        y: isInteractive ? undefined : -20000,
         width: 520,
         height: 820,
         useContentSize: true,
@@ -584,7 +640,19 @@ async function performSilentPrint(html, printerName, options = {}) {
 
       await new Promise((r) => setTimeout(r, 200));
 
-      const printers = await printWin.webContents.getPrintersAsync();
+      const [elecPrinters, winPrinters] = await Promise.all([
+        printWin.webContents.getPrintersAsync().catch(() => []),
+        getWindowsPrinters().catch(() => []),
+      ]);
+      const liveWinDefName = winPrinters.find((p) => p.isDefault)?.name || "";
+      const printers = (elecPrinters.length > 0 ? elecPrinters : winPrinters).map((p) => ({
+        ...p,
+        isDefault: liveWinDefName
+          ? p.name.toLowerCase() === liveWinDefName.toLowerCase()
+          : Boolean(p.isDefault),
+      }));
+      const diskHw = readDiskHardwareSettings() || {};
+      const resolvedPrinterArg = printerName || diskHw.devicePrinterName || "";
       const isVirtualPopupPrinter = (name) =>
         /microsoft print to pdf|microsoft xps|onenote|fax|send to onenote/i.test(String(name || ""));
       const physicalPrinters = printers.filter((p) => !isVirtualPopupPrinter(p.name));
@@ -595,7 +663,7 @@ async function performSilentPrint(html, printerName, options = {}) {
         printers[0]?.name ||
         "";
 
-      let targetPrinter = printerName || defaultP;
+      let targetPrinter = resolvedPrinterArg || defaultP;
       if (targetPrinter && printers.length > 0) {
         const matched = printers.find(
           (p) => p.name.toLowerCase() === String(targetPrinter).trim().toLowerCase()
@@ -855,6 +923,14 @@ ipcMain.handle("pos:print-silent", async (event, options = {}) => {
 // 8. Open cash drawer via raw ESC/POS WinSpool pulse
 ipcMain.handle("pos:open-cash-drawer", async (event, { printerName } = {}) => {
   return await openWindowsCashDrawer(printerName);
+});
+
+// 9. Disk persistence for POS hardware, font, margin, language & template settings
+ipcMain.handle("pos:load-hardware-settings", async () => {
+  return readDiskHardwareSettings();
+});
+ipcMain.handle("pos:save-hardware-settings", async (_event, settings) => {
+  return { success: writeDiskHardwareSettings(settings) };
 });
 
 if (process.platform === "win32") {
